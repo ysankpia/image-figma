@@ -2,6 +2,24 @@
 
 Renderer 的职责只有一个：把 DSL v0.1 渲染成 Figma 节点。
 
+## Public Interface
+
+当前公共入口：
+
+```ts
+renderDesign(dsl, options)
+```
+
+`options` 必须提供 `FigmaAdapter`。Renderer 不直接依赖全局 `figma`，真实 Figma API 只在 adapter 中封装。
+
+返回结果包含：
+
+- `success`
+- `rootNodeId`
+- `renderedElementCount`
+- `warnings`
+- `errors`
+
 ## Responsibilities
 
 Renderer 必须做：
@@ -11,7 +29,7 @@ Renderer 必须做：
 - 建立 asset 索引。
 - 创建 root Frame。
 - 递归渲染 children。
-- 渲染 `frame`、`group`、`text`、`shape`、`image`、`icon`、`line`。
+- 渲染 `frame`、`group`、`text`、`shape`、`image`、`line`。
 - 应用 layout 和基础 style。
 - 加载图片资产。
 - 渲染原图隐藏参考层。
@@ -32,6 +50,7 @@ Renderer 不做：
 - Figma Component。
 - 代码生成。
 - 质量评分。
+- 直接在业务模块里使用全局 `figma`。
 
 ## Rendering Priority
 
@@ -41,6 +60,9 @@ P0：
 - Text。
 - Shape。
 - Image。
+- Line。
+- 原图隐藏参考层。
+- fallback image。
 - layout。
 - fill。
 - radius。
@@ -50,12 +72,9 @@ P0：
 P1：
 
 - Icon。
-- Line。
 - shadow。
 - stroke。
 - font loading。
-- original reference。
-- fallback。
 
 P2：
 
@@ -88,6 +107,11 @@ Renderer 返回结果应包含：
 - 记录 warning。
 - 不中断整页。
 
+如果遇到 icon：
+
+- v0.1 M2 记录 `UNSUPPORTED_ELEMENT_TYPE` warning。
+- 继续渲染其他元素。
+
 ## Layer Policy
 
 - root Frame 使用页面尺寸。
@@ -95,3 +119,13 @@ Renderer 返回结果应包含：
 - 原图参考层默认隐藏。
 - fallback 区域作为 image 渲染。
 - children 按 DSL 顺序渲染，保持图层顺序可预测。
+
+## Dev Harness
+
+当前 `figma-plugin/` 只提供开发烟测插件：
+
+- 入口：`figma-plugin/src/dev-main.ts`
+- 构建产物：`figma-plugin/dist/dev-main.global.js`
+- Manifest：`figma-plugin/manifest.json`
+
+它加载 `mobile-home.dsl.json`，调用 Renderer，并把 root Frame 写入当前 Figma 页面。它不是正式插件 UI。

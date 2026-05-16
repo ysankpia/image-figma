@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了第一批 `@image-figma/dsl-schema` 合同包。
+当前仓库已经初始化最小 monorepo，并实现了第一批 `@image-figma/dsl-schema` 合同包和 `@image-figma/image-to-figma-renderer`。
 
 ## Prerequisites
 
@@ -40,13 +40,34 @@ pnpm --filter @image-figma/dsl-schema run typecheck
 pnpm --filter @image-figma/dsl-schema run test
 ```
 
-当前还没有后端服务、Figma 插件 UI 或 Renderer 可启动。
+只检查 Renderer 包：
+
+```bash
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+```
+
+构建 Figma dev harness：
+
+```bash
+pnpm --filter @image-figma/figma-plugin run build
+```
+
+在 Figma 中验证：
+
+1. 打开 Figma。
+2. 进入插件开发模式。
+3. 加载 `figma-plugin/manifest.json`。
+4. 运行 `Image-to-Figma Dev Harness`。
+5. 当前页面应生成 `mobile_home` root Frame。
+
+当前还没有后端服务或正式 Figma 插件 UI。
 
 后续目标命令应覆盖：
 
 ```text
 启动后端
-启动插件 UI 构建
+启动正式插件 UI 构建
 运行 DSL 测试
 运行 Renderer 测试
 运行 API 测试

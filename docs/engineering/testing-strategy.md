@@ -34,10 +34,25 @@ Renderer：
 
 - 假 DSL 生成 root Frame。
 - Text、Shape、Image 可渲染。
+- Line 可渲染。
 - 单元素失败不会中断整页。
 - 图片加载失败产生 warning。
 - 原图参考层默认隐藏。
 - fallback 图片能显示。
+- icon 在 M2 返回 unsupported warning。
+
+当前命令：
+
+```bash
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+```
+
+Figma dev harness：
+
+- 构建命令：`pnpm --filter @image-figma/figma-plugin run build`
+- 在 Figma 开发模式加载 `figma-plugin/manifest.json`
+- 运行后应在当前页面生成示例 root Frame
 
 Backend API：
 
@@ -57,6 +72,8 @@ Plugin UI：
 - DoneView 显示成功。
 - ErrorView 显示失败。
 - UI 和 Main 消息流正确。
+
+当前还没有正式 Plugin UI。`figma-plugin/` 只有 Renderer 烟测 harness。
 
 End-to-End：
 

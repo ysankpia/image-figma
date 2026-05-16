@@ -1,0 +1,8 @@
+{
+  "name": "Image-to-Figma Dev Harness",
+  "id": "image-to-figma-dev-harness",
+  "api": "1.0.0",
+  "main": "dist/dev-main.global.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page"
+}

@@ -94,7 +94,7 @@ function repairRadiusObject(style: DSLStyle, path: string, elementId: string, re
 }
 
 function cloneDSL(dsl: DesignDSL): DesignDSL {
-  return structuredClone(dsl);
+  return JSON.parse(JSON.stringify(dsl)) as DesignDSL;
 }
 
 function clamp(value: number, min: number, max: number): number {

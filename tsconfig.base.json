@@ -11,6 +11,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+    "baseUrl": ".",
+    "paths": {
+      "@image-figma/dsl-schema": ["packages/dsl-schema/src/index.ts"],
+      "@image-figma/image-to-figma-renderer": ["packages/image-to-figma-renderer/src/index.ts"]
+    }
   }
 }

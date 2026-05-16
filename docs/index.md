@@ -58,6 +58,7 @@
 - 已完成计划：[plans/completed/](plans/completed/)
 - ADR 模板：[decisions/adr-template.md](decisions/adr-template.md)
 - Monorepo 初始化决策：[decisions/0003-initialize-pnpm-monorepo.md](decisions/0003-initialize-pnpm-monorepo.md)
+- Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

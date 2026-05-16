@@ -1,0 +1,20 @@
+{
+  "name": "@image-figma/figma-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/dev-main.ts --format iife --global-name ImageFigmaDevPlugin --platform browser --target es2020 --out-dir dist --no-splitting",
+    "check": "pnpm run typecheck && pnpm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run typecheck"
+  },
+  "dependencies": {
+    "@image-figma/dsl-schema": "workspace:*",
+    "@image-figma/image-to-figma-renderer": "workspace:*"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.121.0",
+    "tsup": "^8.5.1"
+  }
+}
