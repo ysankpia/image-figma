@@ -306,3 +306,50 @@ def get_task_text_bindings(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/component-structures")
+def get_task_component_structures(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_component_structure_result(task_id)
+    if result is None:
+        raise ApiError(
+            "COMPONENT_STRUCTURE_NOT_FOUND",
+            "Component structure result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="component_structure_lookup",
+            task_id=task_id,
+        )
+
+    structure_path = Path(result["structure_path"] or "")
+    if not structure_path.exists():
+        raise ApiError(
+            "COMPONENT_STRUCTURE_NOT_FOUND",
+            "Component structure file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="component_structure_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(structure_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "components": document.get("components", []),
+        "groups": document.get("groups", []),
+        "unstructuredContainerIds": document.get("unstructuredContainerIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

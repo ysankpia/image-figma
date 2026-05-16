@@ -23,6 +23,7 @@
 - 接入文字替换覆盖率扩展 harness。
 - 接入 UI-aware text replacement sampling。
 - 接入 text-primitive binding harness。
+- 接入 component structure harness。
 - 做样例验收。
 
 不包含：
@@ -52,8 +53,9 @@
 13. 接入 text replacement quality gate。状态：完成第一版。
 14. 接入 UI-aware text replacement sampling，减少 `complex_background` 误杀。状态：完成第一版。
 15. 接入 text-primitive binding harness，为组件化前的归属关系打基础。状态：完成第一版。
-16. 加入更细资产裁切、original reference 和 fallback。
-17. 用固定样例做 MVP 收敛。
+16. 接入 component structure harness，把 M15 bindings 聚合为 component candidates 和 layout groups。状态：完成第一版。
+17. 加入更细资产裁切、original reference 和 fallback。
+18. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -125,6 +127,10 @@
 - SQLite `text_binding_results`。
 - `GET /api/tasks/{taskId}/text-bindings`。
 - text-to-container binding 报告，包含 inferred UI containers、bindings 和 unboundTextIds。
+- ComponentStructureDocument v0.1 合同。
+- SQLite `component_structure_results`。
+- `GET /api/tasks/{taskId}/component-structures`。
+- component structure 报告，包含 component candidates、layout groups 和 unstructuredContainerIds。
 - 单元测试。
 
 验证命令：

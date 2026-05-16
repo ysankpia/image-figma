@@ -78,6 +78,20 @@ M15 text binding result 至少包含：
 - `errorCode`
 - `bindingPath`
 
+M16 component structure result 至少包含：
+
+- `taskId`
+- `status`
+- `componentCount`
+- `groupCount`
+- `unstructuredCount`
+- component role summary
+- group role summary
+- layout summary
+- `warningCount`
+- `errorCode`
+- `structurePath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -91,6 +105,8 @@ M15 text binding result 至少包含：
 - text replacement strategy 命中分布。
 - text binding bound/unbound/container 数量。
 - text binding role/relationship 分布。
+- component structure component/group/unstructured 数量。
+- component structure role/group/layout 分布。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -105,7 +121,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -123,6 +139,7 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - DSL patch JSON。
 - text replacement JSON。
 - text binding JSON。
+- component structure JSON。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

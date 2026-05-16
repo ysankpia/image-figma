@@ -47,10 +47,17 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     assert dsl["meta"]["fallbackCount"] == 3
     assert dsl["meta"]["elementCount"] == 6
     assert dsl["meta"]["notes"] == "deterministic_region_dsl+m9_patch_debug"
-    assert dsl["meta"]["qualityFlags"] == ["m9_hidden_text_candidates", "m15_text_primitive_binding"]
+    assert dsl["meta"]["qualityFlags"] == [
+        "m9_hidden_text_candidates",
+        "m15_text_primitive_binding",
+        "m16_component_structure_harness",
+    ]
     assert dsl["meta"]["textPrimitiveBindingCount"] == 0
     assert dsl["meta"]["textPrimitiveContainerCount"] == 3
     assert dsl["meta"]["textPrimitiveUnboundCount"] == 2
+    assert dsl["meta"]["componentStructureCount"] == 0
+    assert dsl["meta"]["componentStructureGroupCount"] == 0
+    assert dsl["meta"]["componentStructureUnstructuredCount"] == 0
 
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert set(assets) == {

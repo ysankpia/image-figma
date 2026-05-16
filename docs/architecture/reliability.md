@@ -61,6 +61,13 @@ M15 text binding 是可观测的非关键路径：
 - binding validation failed 时 `/dsl` 回退 M14 输出，只是不追加 M15 meta。
 - inferred containers 只存在于 binding report，不回写 visual primitives。
 
+M16 component structure 是可观测的非关键路径：
+
+- 默认 `COMPONENT_STRUCTURE_ENABLED=true`，但不改变可见 DSL。
+- structure failed/skipped 写入 `component_structure_results` 和 `error_logs`。
+- structure validation failed 时 `/dsl` 回退 M15 输出，只是不追加 M16 meta。
+- component candidates 和 layout groups 只存在于 structure report，不创建 Figma Component/Instance，不删除 fallback region。
+
 整页失败只发生在：
 
 - PNG 无法读取。

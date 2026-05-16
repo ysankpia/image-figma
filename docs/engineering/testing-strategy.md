@@ -103,6 +103,8 @@ Backend API：
 - M14 decision 必须输出 `strategy.attempts`，`meta.strategySummary` 和 `rescuedFromComplexBackgroundCount` 必须可用于解释 `complex_background` 误杀是否被恢复。
 - M15 text binding 必须覆盖默认生成报告、`TEXT_BINDING_ENABLED=false` 不生成报告、`/text-bindings` API、DSL meta、不新增可见节点，以及 page header、hero profile、badge/status、activity card、summary stat card、primary/outline button、card、legend、tip、bottom nav 绑定规则。
 - M15 回归必须保护 primary button 不吞 summary/stat 文本、outline button 优先于 preview card、card title/subtitle/body 按同容器内 row 顺序和相对字号判定。
+- M16 component structure 必须覆盖默认生成报告、`COMPONENT_STRUCTURE_ENABLED=false` 不生成报告、`/component-structures` API、DSL meta、不新增可见节点，以及 page header、hero profile、activity card、summary stat group、primary/outline button、shortcut grid、preview section、tip card、bottom nav group、page structure 聚合规则。
+- M16 回归必须保护 fallback region 不生成高置信业务 component，低于 `COMPONENT_STRUCTURE_MIN_CONFIDENCE` 的 container 进入 `unstructuredContainerIds`，component/group 引用的 M15 binding/container id 必须可校验。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

@@ -15,6 +15,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `dsl_patch_results`
 - `text_replacement_results`
 - `text_binding_results`
+- `component_structure_results`
 
 后续建议表：
 
@@ -49,7 +50,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M13 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M16 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -232,6 +233,26 @@ Replacement payload 本体写入 `backend/storage/text_replacements/{taskId}.jso
 - `created_at`
 
 Binding payload 本体写入 `backend/storage/text_bindings/{taskId}.json`。它保存 `containers`、`bindings`、`unboundTextIds` 和统计 meta。`inferred_from_text_cluster` containers 只存在于 binding payload，不回写 M8 visual primitives。
+
+## component_structure_results
+
+用途：记录 M16 component structure 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `structure_path`
+- `component_count`
+- `group_count`
+- `unstructured_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Component structure payload 本体写入 `backend/storage/component_structures/{taskId}.json`。它保存 `components`、`groups`、`unstructuredContainerIds` 和统计 meta。M16 只消费 M15 binding facts，输出 component candidates 和 layout groups；不会把 inferred components 写回 M8 visual primitives，也不会创建 Figma Component/Instance。
 
 ## model_call_logs
 

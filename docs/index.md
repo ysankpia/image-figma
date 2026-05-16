@@ -21,6 +21,7 @@
 - 当前文字替换质量控制计划：[plans/active/013-text-replacement-quality-control.md](plans/active/013-text-replacement-quality-control.md)
 - 当前 UI-aware 文字采样计划：[plans/active/014-ui-aware-text-replacement-sampling.md](plans/active/014-ui-aware-text-replacement-sampling.md)
 - 当前 text-primitive binding 计划：[plans/active/015-text-primitive-binding-harness.md](plans/active/015-text-primitive-binding-harness.md)
+- 当前 component structure 计划：[plans/active/016-component-structure-harness.md](plans/active/016-component-structure-harness.md)
 
 ## By Task Type
 
@@ -86,6 +87,7 @@
 - M13 文字替换质量门禁决策：[decisions/0016-use-quality-gate-before-formal-text-replacement.md](decisions/0016-use-quality-gate-before-formal-text-replacement.md)
 - M14 UI-aware 文字采样决策：[decisions/0017-use-ui-aware-sampling-before-formal-text-reconstruction.md](decisions/0017-use-ui-aware-sampling-before-formal-text-reconstruction.md)
 - M15 text-primitive binding 决策：[decisions/0018-bind-text-to-visual-primitives-before-components.md](decisions/0018-bind-text-to-visual-primitives-before-components.md)
+- M16 component structure 决策：[decisions/0019-use-component-structure-report-before-dsl-grouping.md](decisions/0019-use-component-structure-report-before-dsl-grouping.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

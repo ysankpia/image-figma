@@ -41,6 +41,8 @@ class Settings:
     text_replacement_max_rescue_strategies: int = 4
     text_binding_enabled: bool = True
     text_binding_min_confidence: float = 0.70
+    component_structure_enabled: bool = True
+    component_structure_min_confidence: float = 0.70
 
 
 def get_settings() -> Settings:
@@ -82,6 +84,8 @@ def get_settings() -> Settings:
         text_replacement_max_rescue_strategies=int(os.getenv("TEXT_REPLACEMENT_MAX_RESCUE_STRATEGIES", "4")),
         text_binding_enabled=parse_bool(os.getenv("TEXT_BINDING_ENABLED", "true")),
         text_binding_min_confidence=float(os.getenv("TEXT_BINDING_MIN_CONFIDENCE", "0.70")),
+        component_structure_enabled=parse_bool(os.getenv("COMPONENT_STRUCTURE_ENABLED", "true")),
+        component_structure_min_confidence=float(os.getenv("COMPONENT_STRUCTURE_MIN_CONFIDENCE", "0.70")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

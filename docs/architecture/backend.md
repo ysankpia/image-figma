@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M15 当前管线：
+M16 当前管线：
 
 ```text
 receive multipart PNG
@@ -36,12 +36,14 @@ receive multipart PNG
 -> score replacement quality and block risky replacements
 -> optionally merge non-high-risk visible text replacements when TEXT_REPLACEMENT_MODE=apply
 -> bind OCR/replacement text to visual primitives or inferred UI containers
+-> aggregate bindings into component candidates and layout groups
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
 -> save patch JSON
 -> save text replacement JSON
 -> save text binding JSON
+-> save component structure JSON
 -> mark task completed
 ```
 
@@ -75,6 +77,7 @@ backend/storage/
   patches/
   text_replacements/
   text_bindings/
+  component_structures/
   logs/
 ```
 
@@ -82,12 +85,12 @@ backend/storage/
 
 ## Task State
 
-M15 当前只实际写入：
+M16 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M15 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M16 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -162,7 +165,7 @@ OpenAI provider 规则：
 
 ## AI Strategy
 
-M15 之后的普通页面目标管线：
+M16 之后的普通页面目标管线：
 
 ```text
 OCR boxes
@@ -204,9 +207,11 @@ M14 增加 UI-aware text replacement sampling：标准 perimeter sampling 仍先
 
 M15 增加 text-primitive binding harness：后端把 M14 可用 text candidate 绑定到现有 visual primitives 或 M15 推断出的 UI containers，写入 `backend/storage/text_bindings/{taskId}.json` 并通过 `/api/tasks/{taskId}/text-bindings` 暴露。默认 fake visual primitive provider 只有 fallback regions，因此 M15 会生成 `inferred_from_text_cluster` 容器，例如 page header、hero profile、badge、status badge、activity card、summary stat card、primary button、outline button、shortcut card、preview card、legend group、tip card 和 bottom nav item。推断容器只存在于 binding report，不回写 visual primitives，也不改变 Figma 可见输出。`primary_button` 需要明确 action 背景证据，不能只靠居中和字号吞掉 summary/stat 文本；`card_title`、`card_subtitle` 和 `card_body` 按同容器内 y 顺序与相对字号判断。
 
+M16 增加 component structure harness：后端把 M15 containers/bindings 聚合为 component candidates 和 layout groups，写入 `backend/storage/component_structures/{taskId}.json` 并通过 `/api/tasks/{taskId}/component-structures` 暴露。第一版 component role 覆盖 page header、hero profile、badge/status badge、activity card、summary stat card、primary/outline button、shortcut card、preview card、legend group、tip card、bottom nav 和 bottom nav item；group role 覆盖 summary stat group、shortcut grid、preview section、bottom nav group 和 page structure。M16 不按中文文案或单张图绝对坐标推断，只消费 M15 的 role、relationship、bbox、confidence 和 source。M16 只追加 DSL meta，不新增可见节点，不创建 Figma Component/Instance，不删除 fallback region。
+
 ## Backend Non-Goals
 
-M15 不做：
+M16 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -226,6 +231,7 @@ M15 不做：
 - 删除 fallback region。
 - 复杂纹理背景强行文字替换。
 - 图标、头像、圆形组件、卡片组件重建。
-- fallback 删除和组件化重建。
+- fallback 删除和正式组件化重建。
 - 把 inferred containers 写回 visual primitives。
 - 通过 binding 结果重组 Figma 图层。
+- 通过 component structure 结果创建 Figma group、component 或 Auto Layout。

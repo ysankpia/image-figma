@@ -7,6 +7,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, status
 
+from ..component_structure import (
+    apply_component_structure_metadata,
+    build_component_structure_document,
+    build_failed_component_structure_document,
+)
 from ..database import json_dumps
 from ..dsl_patch import (
     DSLPatchDocument,
@@ -21,6 +26,7 @@ from ..ocr import OCRDocument, build_failed_ocr_document, extract_ocr
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
 from ..text_binding import (
+    TextPrimitiveBindingDocument,
     apply_text_binding_metadata,
     build_failed_text_binding_document,
     build_text_binding_document,
@@ -149,13 +155,23 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
         ocr_document = save_ocr_result(task_id, image, upload_path, now)
         patched_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
         replacement_document, replaced_dsl = save_text_replacement_result(task_id, image, data, ocr_document, patched_dsl, now)
-        final_dsl = save_text_binding_result(
+        binding_document, bound_dsl = save_text_binding_result(
             task_id,
             image,
             ocr_document,
             primitive_document,
             replacement_document,
             replaced_dsl,
+            now,
+        )
+        final_dsl = save_component_structure_result(
+            task_id,
+            image,
+            ocr_document,
+            primitive_document,
+            replacement_document,
+            binding_document,
+            bound_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -560,9 +576,15 @@ def save_text_binding_result(
     replacement_document: TextReplacementDocument,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[TextPrimitiveBindingDocument, dict[str, object]]:
     if not state.settings.text_binding_enabled:
-        return input_dsl
+        document = build_failed_text_binding_document(
+            task_id=task_id,
+            image=image,
+            code="TEXT_BINDING_NOT_ENABLED",
+            message="Text binding is disabled.",
+        )
+        return document, input_dsl
 
     failed_logged = False
     try:
@@ -628,6 +650,93 @@ def save_text_binding_result(
             "container_count": len(document.containers),
             "binding_count": len(document.bindings),
             "unbound_count": len(document.unboundTextIds),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_component_structure_result(
+    task_id: str,
+    image: PngMetadata,
+    ocr_document: OCRDocument,
+    primitive_document: VisualPrimitiveDocument,
+    replacement_document: TextReplacementDocument,
+    binding_document: TextPrimitiveBindingDocument,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.component_structure_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        document = build_component_structure_document(
+            task_id=task_id,
+            image=image,
+            ocr_document=ocr_document,
+            primitive_document=primitive_document,
+            replacement_document=replacement_document,
+            binding_document=binding_document,
+            dsl=input_dsl,
+            settings=state.settings,
+        )
+        final_dsl = apply_component_structure_metadata(input_dsl, document)
+        validation_errors = validate_enhanced_dsl(final_dsl)
+        if validation_errors:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="component_structure",
+                error_code="COMPONENT_STRUCTURE_VALIDATION_FAILED",
+                message="Component structure validation failed.",
+                detail=json_dumps(validation_errors),
+            )
+            failed_logged = True
+            document = build_failed_component_structure_document(
+                task_id=task_id,
+                image=image,
+                code="COMPONENT_STRUCTURE_VALIDATION_FAILED",
+                message="Component structure validation failed.",
+            )
+            final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="component_structure",
+            error_code="COMPONENT_STRUCTURE_FAILED",
+            message="Component structure failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_component_structure_document(
+            task_id=task_id,
+            image=image,
+            code="COMPONENT_STRUCTURE_FAILED",
+            message="Component structure failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="component_structure",
+            error_code=document.error["code"] if document.error else "COMPONENT_STRUCTURE_FAILED",
+            message=document.error["message"] if document.error else "Component structure failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    structure_path = state.storage.save_component_structure(task_id, json_dumps(document.to_dict()))
+    state.database.insert_component_structure_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "structure_path": str(structure_path),
+            "component_count": len(document.components),
+            "group_count": len(document.groups),
+            "unstructured_count": len(document.unstructuredContainerIds),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,
