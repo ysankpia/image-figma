@@ -127,6 +127,20 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS text_binding_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  binding_path TEXT,
+                  container_count INTEGER NOT NULL,
+                  binding_count INTEGER NOT NULL,
+                  unbound_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -270,6 +284,26 @@ class Database:
     def get_text_replacement_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM text_replacement_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_text_binding_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO text_binding_results (
+                  task_id, status, binding_path, container_count, binding_count,
+                  unbound_count, warning_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :binding_path, :container_count, :binding_count,
+                  :unbound_count, :warning_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_text_binding_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM text_binding_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

@@ -14,6 +14,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `ocr_results`
 - `dsl_patch_results`
 - `text_replacement_results`
+- `text_binding_results`
 
 后续建议表：
 
@@ -211,6 +212,26 @@ Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
 - `created_at`
 
 Replacement payload 本体写入 `backend/storage/text_replacements/{taskId}.json`。默认 `debug` 只保存 accepted/rejected decisions、sampling strategy 和 quality/application 报告；`apply` 把非 high-risk 的 accepted replacement 合并进最终 DSL。SQLite 不单独保存 applied/blocked/rescued/strategy 计数，这些统计写在 JSON `meta` 中。
+
+## text_binding_results
+
+用途：记录 M15 text-primitive binding 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `binding_path`
+- `container_count`
+- `binding_count`
+- `unbound_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Binding payload 本体写入 `backend/storage/text_bindings/{taskId}.json`。它保存 `containers`、`bindings`、`unboundTextIds` 和统计 meta。`inferred_from_text_cluster` containers 只存在于 binding payload，不回写 M8 visual primitives。
 
 ## model_call_logs
 

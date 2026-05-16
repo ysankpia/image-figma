@@ -39,6 +39,8 @@ class Settings:
     text_replacement_ui_aware_sampling: bool = True
     text_replacement_local_bg_tolerance: int = 24
     text_replacement_max_rescue_strategies: int = 4
+    text_binding_enabled: bool = True
+    text_binding_min_confidence: float = 0.70
 
 
 def get_settings() -> Settings:
@@ -78,6 +80,8 @@ def get_settings() -> Settings:
         text_replacement_ui_aware_sampling=parse_bool(os.getenv("TEXT_REPLACEMENT_UI_AWARE_SAMPLING", "true")),
         text_replacement_local_bg_tolerance=int(os.getenv("TEXT_REPLACEMENT_LOCAL_BG_TOLERANCE", "24")),
         text_replacement_max_rescue_strategies=int(os.getenv("TEXT_REPLACEMENT_MAX_RESCUE_STRATEGIES", "4")),
+        text_binding_enabled=parse_bool(os.getenv("TEXT_BINDING_ENABLED", "true")),
+        text_binding_min_confidence=float(os.getenv("TEXT_BINDING_MIN_CONFIDENCE", "0.70")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

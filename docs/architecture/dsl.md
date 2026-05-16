@@ -159,6 +159,8 @@ M13 在 M12 decision 后增加 quality gate。`decision=accepted` 且非 high-ri
 
 M14 在 M13 quality gate 前增加 UI-aware sampling。它不改变 DSL 节点形状，只让更多安全的 OCR text candidate 从 `complex_background` 误杀中进入 accepted replacement。`TEXT_REPLACEMENT_MODE=apply` 时仍追加同样的 `text_replacement_cover` shape 和 `visible_text_replacement` text，并在 DSL meta 中可记录 `m14_ui_aware_text_sampling` 和 `textReplacementRescuedCount`。fallback region、hidden candidate text 和 original reference 仍保留。
 
+M15 新增 text-primitive binding harness。它生成独立 `/text-bindings` 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers。M15 不新增可见 DSL 节点，不重组图层；DSL meta 只记录 `m15_text_primitive_binding`、`textPrimitiveBindingCount`、`textPrimitiveContainerCount` 和 `textPrimitiveUnboundCount`。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

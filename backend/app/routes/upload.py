@@ -20,7 +20,13 @@ from ..errors import ApiError, success_response
 from ..ocr import OCRDocument, build_failed_ocr_document, extract_ocr
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
+from ..text_binding import (
+    apply_text_binding_metadata,
+    build_failed_text_binding_document,
+    build_text_binding_document,
+)
 from ..text_replacement import (
+    TextReplacementDocument,
     apply_text_replacements,
     build_failed_text_replacement_document,
     build_text_replacement_document,
@@ -142,7 +148,16 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
         primitive_document = save_primitive_result(task_id, image, region_assets, region_inputs, now)
         ocr_document = save_ocr_result(task_id, image, upload_path, now)
         patched_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
-        final_dsl = save_text_replacement_result(task_id, image, data, ocr_document, patched_dsl, now)
+        replacement_document, replaced_dsl = save_text_replacement_result(task_id, image, data, ocr_document, patched_dsl, now)
+        final_dsl = save_text_binding_result(
+            task_id,
+            image,
+            ocr_document,
+            primitive_document,
+            replacement_document,
+            replaced_dsl,
+            now,
+        )
         dsl_path = state.storage.dsl_path(task_id)
         dsl_path.write_text(json.dumps(final_dsl, ensure_ascii=False, indent=2), encoding="utf-8")
         state.database.insert_dsl_result(
@@ -450,10 +465,17 @@ def save_text_replacement_result(
     ocr_document: OCRDocument,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[TextReplacementDocument, dict[str, object]]:
     mode = normalize_replacement_mode(state.settings.text_replacement_mode)
     if mode == "off":
-        return input_dsl
+        document = build_failed_text_replacement_document(
+            task_id=task_id,
+            image=image,
+            mode=mode,
+            code="TEXT_REPLACEMENT_NOT_ENABLED",
+            message="Text replacement is disabled.",
+        )
+        return document, input_dsl
 
     failed_logged = False
     try:
@@ -521,6 +543,91 @@ def save_text_replacement_result(
             "replacement_path": str(replacement_path),
             "accepted_count": accepted_count,
             "rejected_count": rejected_count,
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_text_binding_result(
+    task_id: str,
+    image: PngMetadata,
+    ocr_document: OCRDocument,
+    primitive_document: VisualPrimitiveDocument,
+    replacement_document: TextReplacementDocument,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.text_binding_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        document = build_text_binding_document(
+            task_id=task_id,
+            image=image,
+            ocr_document=ocr_document,
+            primitive_document=primitive_document,
+            replacement_document=replacement_document,
+            dsl=input_dsl,
+            settings=state.settings,
+        )
+        final_dsl = apply_text_binding_metadata(input_dsl, document)
+        validation_errors = validate_enhanced_dsl(final_dsl)
+        if validation_errors:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="text_binding",
+                error_code="TEXT_BINDING_VALIDATION_FAILED",
+                message="Text binding validation failed.",
+                detail=json_dumps(validation_errors),
+            )
+            failed_logged = True
+            document = build_failed_text_binding_document(
+                task_id=task_id,
+                image=image,
+                code="TEXT_BINDING_VALIDATION_FAILED",
+                message="Text binding validation failed.",
+            )
+            final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="text_binding",
+            error_code="TEXT_BINDING_FAILED",
+            message="Text binding failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_text_binding_document(
+            task_id=task_id,
+            image=image,
+            code="TEXT_BINDING_FAILED",
+            message="Text binding failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="text_binding",
+            error_code=document.error["code"] if document.error else "TEXT_BINDING_FAILED",
+            message=document.error["message"] if document.error else "Text binding failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    binding_path = state.storage.save_text_binding(task_id, json_dumps(document.to_dict()))
+    state.database.insert_text_binding_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "binding_path": str(binding_path),
+            "container_count": len(document.containers),
+            "binding_count": len(document.bindings),
+            "unbound_count": len(document.unboundTextIds),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

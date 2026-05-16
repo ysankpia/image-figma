@@ -101,6 +101,7 @@ Backend API：
 - M13 必须覆盖 accepted high-risk 被 quality gate blocked、accepted medium-risk 仍 applied、rejected high risk、region/reason summary，以及首页样例 OCR 已识别但 replacement 拒绝的回归。
 - M14 UI-aware sampling 必须覆盖标准采样仍可用、复杂纹理仍拒绝、badge/status badge rescue、legend 三标签一致 rescue、outline button rescue、card/tip rescue、bottom nav label rescue、关闭 `TEXT_REPLACEMENT_UI_AWARE_SAMPLING` 后回退 M13 行为。
 - M14 decision 必须输出 `strategy.attempts`，`meta.strategySummary` 和 `rescuedFromComplexBackgroundCount` 必须可用于解释 `complex_background` 误杀是否被恢复。
+- M15 text binding 必须覆盖默认生成报告、`TEXT_BINDING_ENABLED=false` 不生成报告、`/text-bindings` API、DSL meta、不新增可见节点，以及 badge/status/button/card/legend/tip/bottom nav 绑定规则。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

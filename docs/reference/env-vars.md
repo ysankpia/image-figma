@@ -27,6 +27,8 @@
 | `TEXT_REPLACEMENT_UI_AWARE_SAMPLING` | 是否开启 M14 UI-aware 多策略采样，减少 badge、图例、按钮、卡片和底栏文本的 `complex_background` 误杀 | `true` | 否 |
 | `TEXT_REPLACEMENT_LOCAL_BG_TOLERANCE` | M14 局部背景采样容差，不改变全局 solid background 容差 | `24` | 否 |
 | `TEXT_REPLACEMENT_MAX_RESCUE_STRATEGIES` | 单个 OCR candidate 最多尝试的 M14 rescue 采样策略数 | `4` | 否 |
+| `TEXT_BINDING_ENABLED` | 是否生成 M15 text binding 报告；不改变 Figma 可见输出 | `true` | 否 |
+| `TEXT_BINDING_MIN_CONFIDENCE` | M15 text-to-container binding 最低置信度，低于该值进入 `unboundTextIds` | `0.70` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -46,3 +48,5 @@
 `BAIDU_PADDLE_OCR_TOKEN` 是 bearer token，必须只通过本地环境变量或未提交的 `.env` 提供，不能写入仓库。
 
 `DSL_PATCH_MODE=apply` 仍不做可见文字替换。M14 可见替换由 `TEXT_REPLACEMENT_MODE=apply` 单独控制，默认 `debug` 只记录 decisions、sampling strategy、quality 和 application。
+
+M15 binding 由 `TEXT_BINDING_ENABLED` 控制，默认开启并只生成 `/text-bindings` 报告和 DSL meta。它不会重组图层、删除 fallback 或把 inferred containers 写回 visual primitives。

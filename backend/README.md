@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, and serves local asset URLs.
 
 ## Run
 
@@ -52,6 +52,7 @@ Debug endpoints:
 curl http://localhost:8000/api/tasks/{taskId}/ocr
 curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
+curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 ```
 
 Visible text replacement is debug-only by default:
@@ -61,3 +62,12 @@ TEXT_REPLACEMENT_MODE=debug
 ```
 
 Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and blocks only high-risk accepted replacements; medium-risk replacements are applied with caution metadata. M14 UI-aware sampling is enabled by default with `TEXT_REPLACEMENT_UI_AWARE_SAMPLING=true` and records the sampling strategy used for badge, legend, outline button, card/tip, and bottom nav text. `GET /api/tasks/{taskId}/text-replacements` explains accepted, rejected, applied, blocked, and strategy decisions.
+
+M15 text binding is enabled by default:
+
+```bash
+TEXT_BINDING_ENABLED=true
+TEXT_BINDING_MIN_CONFIDENCE=0.70
+```
+
+It writes `backend/storage/text_bindings/{taskId}.json` and exposes `GET /api/tasks/{taskId}/text-bindings`. Binding reports connect OCR/replacement text to visual primitives or inferred UI containers for M16. They do not change Figma-visible output or write inferred containers back into visual primitives.

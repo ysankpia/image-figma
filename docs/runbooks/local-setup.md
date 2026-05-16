@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制和 M14 UI-aware sampling。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling 和 M15 text-primitive binding。
 
 ## Prerequisites
 
@@ -145,6 +145,7 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 curl http://localhost:8000/api/tasks/{taskId}/ocr
 curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
+curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -161,8 +162,11 @@ cd backend
 TEXT_REPLACEMENT_MODE=apply \
 TEXT_REPLACEMENT_ENABLE_COLORED_BG=true \
 TEXT_REPLACEMENT_UI_AWARE_SAMPLING=true \
+TEXT_BINDING_ENABLED=true \
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+M15 text binding 默认开启，只生成 `/text-bindings` 报告和 DSL meta，不改变 Figma 可见输出。它的 inferred containers 是 M16 输入，不会写回 `/primitives`。
 
 如果要确认完全回退 M7 base DSL：
 
@@ -221,6 +225,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - 默认 `/api/tasks/{taskId}/ocr` 返回 `provider: "fake"`；启用百度后返回 `provider: "baidu_ppocrv5"` 和 `model: "PP-OCRv5"`。
 - `/api/tasks/{taskId}/dsl-patch` 返回 `mode: "debug"`。
 - `/api/tasks/{taskId}/text-replacements` 默认返回 `mode: "debug"`，包含 accepted/rejected decisions。
+- `/api/tasks/{taskId}/text-bindings` 默认返回 `status: "completed"`，包含 containers、bindings 或 unboundTextIds。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

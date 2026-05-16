@@ -54,6 +54,13 @@ M14 text replacement 是可观测的非关键路径：
 - replacement validation failed 时 `/dsl` 回退 M10/M9 输出。
 - fallback region 必须始终保留。
 
+M15 text binding 是可观测的非关键路径：
+
+- 默认 `TEXT_BINDING_ENABLED=true`，但不改变可见 DSL。
+- binding failed/skipped 写入 `text_binding_results` 和 `error_logs`。
+- binding validation failed 时 `/dsl` 回退 M14 输出，只是不追加 M15 meta。
+- inferred containers 只存在于 binding report，不回写 visual primitives。
+
 整页失败只发生在：
 
 - PNG 无法读取。

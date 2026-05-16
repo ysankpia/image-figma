@@ -259,3 +259,50 @@ def get_task_text_replacements(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/text-bindings")
+def get_task_text_bindings(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_text_binding_result(task_id)
+    if result is None:
+        raise ApiError(
+            "TEXT_BINDING_NOT_FOUND",
+            "Text binding result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="text_binding_lookup",
+            task_id=task_id,
+        )
+
+    binding_path = Path(result["binding_path"] or "")
+    if not binding_path.exists():
+        raise ApiError(
+            "TEXT_BINDING_NOT_FOUND",
+            "Text binding file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="text_binding_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(binding_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "containers": document.get("containers", []),
+        "bindings": document.get("bindings", []),
+        "unboundTextIds": document.get("unboundTextIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

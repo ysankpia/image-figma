@@ -15,6 +15,7 @@ class Storage:
         self.ocr_dir = root / "ocr"
         self.patches_dir = root / "patches"
         self.text_replacements_dir = root / "text_replacements"
+        self.text_bindings_dir = root / "text_bindings"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -27,6 +28,7 @@ class Storage:
             self.ocr_dir,
             self.patches_dir,
             self.text_replacements_dir,
+            self.text_bindings_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -57,6 +59,9 @@ class Storage:
 
     def text_replacement_path(self, task_id: str) -> Path:
         return self.text_replacements_dir / f"{task_id}.json"
+
+    def text_binding_path(self, task_id: str) -> Path:
+        return self.text_bindings_dir / f"{task_id}.json"
 
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
@@ -105,6 +110,12 @@ class Storage:
 
     def save_text_replacement(self, task_id: str, data: str) -> Path:
         path = self.text_replacement_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_text_binding(self, task_id: str, data: str) -> Path:
+        path = self.text_binding_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path
