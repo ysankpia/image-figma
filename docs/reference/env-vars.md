@@ -6,7 +6,7 @@
 
 | 名称 | 用途 | 默认值 | 是否必需 |
 | --- | --- | --- | --- |
-| `API_BASE_URL` | 插件调用后端 API | `http://localhost:8000/api` | M5 后是 |
+| `API_BASE_URL` | 插件调用后端 API | `http://localhost:8000/api` | 当前插件硬编码同值，后续设置页再读取 |
 | `PUBLIC_BASE_URL` | 后端生成 `/files/...` URL | `http://localhost:8000` | 否 |
 | `OPENAI_API_KEY` | AI 视觉模型调用 | 无 | 接入 AI 后是 |
 | `STORAGE_ROOT` | 本地文件存储根目录 | `backend/storage` | 否 |

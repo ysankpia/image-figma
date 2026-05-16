@@ -96,6 +96,18 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `ASSET_NOT_FOUND`
 - `INTERNAL_ERROR`
 
+## Plugin M5 Usage
+
+M5 插件使用：
+
+```text
+POST /api/upload
+GET /api/tasks/{taskId}
+GET /api/tasks/{taskId}/dsl
+```
+
+即使 M4 后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
+
 ## Optional Endpoints
 
 以下接口不进入 P0：

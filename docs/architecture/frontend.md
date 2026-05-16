@@ -4,21 +4,18 @@ Figma 插件分为 UI 和 Main 两层。
 
 ## Plugin UI
 
-M3 当前 Plugin UI 使用静态 `ui.html`、内联 CSS/JS 和 TypeScript Main。这个选择来自现有已审核 Figma 插件的壳子经验，目的是先用最少移动部件打通 UI -> Main -> Renderer -> Figma Canvas。
+M5 当前 Plugin UI 使用静态 `ui.html`、内联 CSS/JS 和 TypeScript Main。这个选择来自现有已审核 Figma 插件的壳子经验，目的是先用最少移动部件打通 UI -> Main -> Backend -> Renderer -> Figma Canvas。
 
 React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览、进度、错误恢复和设置页变复杂，再单独评估是否引入 React/Vite。
 
 职责：
 
-- M3：触发 sample DSL 生成。
-- M3：显示渲染中、成功、失败和 warning。
 - 上传 PNG。
-- 显示预览。
 - 显示文件信息。
-- 显示质量风险提示。
 - 触发开始生成。
 - 显示进度。
 - 显示完成或失败。
+- 保留 sample DSL 生成作为开发备用入口。
 
 不负责：
 
@@ -45,16 +42,17 @@ Plugin Main 运行在 Figma 插件主线程。
 
 ## Views
 
-M3 只需要一个静态工具面板：
+M5 当前静态工具面板：
 
-- `Generate sample design`。
+- `Choose PNG`。
+- `Generate from PNG`。
+- `Sample` 开发备用入口。
 - 当前状态。
 - warning 列表。
 - 关闭按钮。
 
-后续 v0.1 正式上传流程再补：
+后续 v0.1 完整产品流程再补：
 
-- `UploadView`
 - `PreviewView`
 - `ProgressView`
 - `DoneView`
@@ -79,12 +77,18 @@ UI clicks Generate sample design
 ```text
 UI selects PNG
 -> Main uploads PNG
--> UI shows preview
--> UI starts generation
 -> Main polls task
 -> Main fetches DSL
 -> Main calls Renderer
 -> Main reports done or error
+```
+
+M5 保留开发备用流：
+
+```text
+UI clicks Sample
+-> Main loads bundled mobile-home DSL
+-> Main calls Renderer
 ```
 
 ## User Language

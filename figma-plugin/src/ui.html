@@ -150,8 +150,47 @@
       .warning-card {
         display: flex;
         min-height: 0;
-        flex: 1;
+        flex: 0 1 176px;
         flex-direction: column;
+      }
+
+      .upload-card {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .file-button {
+        flex: none;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #ffffff;
+        color: var(--body);
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .file-meta {
+        min-width: 0;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .warning-header {
@@ -231,7 +270,11 @@
         border: 1px solid var(--line);
         background: var(--panel);
         color: var(--body);
-        flex: 0 0 96px;
+        flex: 0 0 86px;
+      }
+
+      .button-dev {
+        flex: 0 0 118px;
       }
     </style>
   </head>
@@ -242,7 +285,7 @@
           <div class="mark">IF</div>
           <div>
             <h1>Image-to-Figma Design</h1>
-            <p class="subtitle">Render the bundled sample design into the current Figma page.</p>
+            <p class="subtitle">Upload one PNG and generate an editable Figma draft.</p>
           </div>
         </div>
       </header>
@@ -253,7 +296,15 @@
             <span class="status-dot"></span>
             <p id="statusTitle" class="status-title">Ready</p>
           </div>
-          <p id="statusDetail" class="status-detail">Generate the bundled sample to verify the plugin path.</p>
+          <p id="statusDetail" class="status-detail">Choose a PNG to start, or use Sample for a renderer smoke test.</p>
+        </section>
+
+        <section class="upload-card">
+          <input id="fileInput" class="file-input" type="file" accept="image/png,.png" />
+          <div class="file-row">
+            <button id="chooseFileButton" class="file-button" type="button">Choose PNG</button>
+            <div id="fileMeta" class="file-meta">No file selected.</div>
+          </div>
         </section>
 
         <section class="warning-card">
@@ -265,23 +316,76 @@
       </section>
 
       <footer class="actions">
-        <button id="renderButton" class="button button-primary" type="button">Generate sample design</button>
+        <button id="renderButton" class="button button-primary" type="button" disabled>Generate from PNG</button>
+        <button id="sampleButton" class="button button-secondary button-dev" type="button">Sample</button>
         <button id="closeButton" class="button button-secondary" type="button">Close</button>
       </footer>
     </main>
 
     <script>
       const renderButton = document.getElementById("renderButton");
+      const sampleButton = document.getElementById("sampleButton");
       const closeButton = document.getElementById("closeButton");
+      const fileInput = document.getElementById("fileInput");
+      const chooseFileButton = document.getElementById("chooseFileButton");
+      const fileMeta = document.getElementById("fileMeta");
       const statusCard = document.getElementById("statusCard");
       const statusTitle = document.getElementById("statusTitle");
       const statusDetail = document.getElementById("statusDetail");
       const warningHeader = document.getElementById("warningHeader");
       const warningList = document.getElementById("warningList");
+      let selectedFile = null;
 
-      renderButton.addEventListener("click", () => {
-        renderButton.disabled = true;
-        setStatus("Rendering", "Writing the sample design to Figma.", "normal");
+      chooseFileButton.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        if (!file) {
+          selectedFile = null;
+          fileMeta.textContent = "No file selected.";
+          updateButtons(false);
+          return;
+        }
+        if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+          selectedFile = null;
+          fileMeta.textContent = "Choose a PNG file.";
+          updateButtons(false);
+          setStatus("Failed", "Only PNG files are supported.", "error");
+          return;
+        }
+        selectedFile = file;
+        fileMeta.textContent = `${file.name} / ${formatBytes(file.size)}`;
+        updateButtons(false);
+        setStatus("Ready", "PNG selected. Generate when ready.", "normal");
+      });
+
+      renderButton.addEventListener("click", async () => {
+        if (!selectedFile) {
+          setStatus("Failed", "Choose a PNG file first.", "error");
+          return;
+        }
+        updateButtons(true);
+        setStatus("Uploading", "Uploading PNG.", "normal");
+        setWarnings([]);
+        try {
+          const bytes = await selectedFile.arrayBuffer();
+          postPluginMessage({
+            type: "render-uploaded-png",
+            fileName: selectedFile.name,
+            mimeType: "image/png",
+            bytes
+          });
+        } catch (error) {
+          updateButtons(false);
+          setStatus("Failed", error instanceof Error ? error.message : "Could not read PNG file.", "error");
+        }
+      });
+
+      sampleButton.addEventListener("click", () => {
+        updateButtons(true);
+        setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
         setWarnings([]);
         postPluginMessage({ type: "render-sample" });
       });
@@ -301,13 +405,17 @@
         }
 
         if (message.type === "render-started") {
-          renderButton.disabled = true;
-          setStatus("Rendering", "Writing the sample design to Figma.", "normal");
+          updateButtons(true);
+          if (message.source === "upload") {
+            setStatus("Uploading", "Uploading PNG.", "normal");
+          } else {
+            setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
+          }
           return;
         }
 
         if (message.type === "render-succeeded") {
-          renderButton.disabled = false;
+          updateButtons(false);
           setStatus(
             "Rendered",
             `${message.renderedElementCount} elements rendered. ${message.warningCount} warnings.`,
@@ -318,14 +426,14 @@
         }
 
         if (message.type === "render-failed") {
-          renderButton.disabled = false;
+          updateButtons(false);
           setStatus("Failed", message.message || "Rendering failed.", "error");
           setWarnings([...(message.errors || []), ...(message.warnings || [])]);
           return;
         }
 
         if (message.type === "status") {
-          setStatus(message.tone === "error" ? "Failed" : "Status", message.message, message.tone);
+          setStatus(statusTitleFor(message), message.message, message.tone);
         }
       };
 
@@ -368,6 +476,41 @@
           item.append(code, message);
           warningList.appendChild(item);
         }
+      }
+
+      function updateButtons(isBusy) {
+        renderButton.disabled = isBusy || !selectedFile;
+        sampleButton.disabled = isBusy;
+        chooseFileButton.disabled = isBusy;
+      }
+
+      function formatBytes(size) {
+        if (size < 1024) {
+          return `${size} B`;
+        }
+        if (size < 1024 * 1024) {
+          return `${Math.round(size / 1024)} KB`;
+        }
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function statusTitleFor(message) {
+        if (message.tone === "error") {
+          return "Failed";
+        }
+        if (message.message === "Uploading PNG.") {
+          return "Uploading";
+        }
+        if (message.message === "Processing uploaded PNG." || message.message === "Fetching generated design.") {
+          return "Processing";
+        }
+        if (message.message === "Writing design to Figma.") {
+          return "Writing to Figma";
+        }
+        if (message.message === "Writing sample design to Figma.") {
+          return "Rendering";
+        }
+        return "Status";
       }
     </script>
   </body>

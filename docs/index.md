@@ -10,6 +10,7 @@
 - 下一步 MVP 启动计划：[plans/active/002-mvp-bootstrap.md](plans/active/002-mvp-bootstrap.md)
 - 当前插件最小闭环计划：[plans/active/003-plugin-minimum-flow.md](plans/active/003-plugin-minimum-flow.md)
 - 当前后端假任务流计划：[plans/active/004-backend-fake-task-flow.md](plans/active/004-backend-fake-task-flow.md)
+- 当前插件后端上传计划：[plans/active/005-plugin-backend-upload-flow.md](plans/active/005-plugin-backend-upload-flow.md)
 
 ## By Task Type
 
@@ -63,6 +64,7 @@
 - Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)
 - M3 插件 UI 决策：[decisions/0005-use-static-html-for-m3-plugin-ui.md](decisions/0005-use-static-html-for-m3-plugin-ui.md)
 - M4 后端决策：[decisions/0006-use-fastapi-sqlite-for-m4-backend.md](decisions/0006-use-fastapi-sqlite-for-m4-backend.md)
+- M5 插件后端接入决策：[decisions/0007-plugin-uses-backend-api-after-m4.md](decisions/0007-plugin-uses-backend-api-after-m4.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

@@ -1,11 +1,17 @@
 export type PluginToMainMessage =
   | { type: "request-plugin-state" }
+  | {
+      type: "render-uploaded-png";
+      fileName: string;
+      mimeType: "image/png";
+      bytes: ArrayBuffer | Uint8Array | number[];
+    }
   | { type: "render-sample" }
   | { type: "cancel" };
 
 export type MainToPluginMessage =
   | { type: "plugin-state"; state: PluginState }
-  | { type: "render-started" }
+  | { type: "render-started"; source: "upload" | "sample" }
   | {
       type: "render-succeeded";
       renderedElementCount: number;
@@ -22,8 +28,9 @@ export type MainToPluginMessage =
 
 export type PluginState = {
   pluginName: "Image-to-Figma Design";
-  mode: "sample";
+  mode: "upload";
   rendererReady: boolean;
+  apiBaseUrl: string;
 };
 
 export type PluginRenderMessage = {

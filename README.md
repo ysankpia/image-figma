@@ -2,7 +2,7 @@
 
 Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figma 画布中的可编辑设计稿。
 
-当前仓库处于文档 harness 阶段，还没有代码实现。现在的核心工作是把产品范围、系统边界、DSL/API/Renderer 合同、验收标准和后续计划写进仓库文件，让后续实现不再依赖聊天上下文。
+当前仓库已经进入 MVP 工程阶段。已完成文档 harness、pnpm monorepo、DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 假任务流，以及插件上传 PNG 后调用后端获取 DSL 并写入 Figma 的第一版链路。
 
 一期 MVP 只验证一条主链路：
 
@@ -16,11 +16,10 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 
 下一步执行顺序：
 
-1. 完成并维护文档 harness。
-2. 初始化工程骨架。
-3. 实现 DSL Schema 与示例 DSL。
-4. 实现 Renderer 用假 DSL 写入 Figma。
-5. 实现插件最小 UI 与后端 API。
-6. 接入真实 PNG -> DSL 识别管线。
+1. 保持文档、ADR 和计划与实现同步。
+2. 继续验证插件上传链路和 Figma 手动烟测。
+3. 接入真实 PNG -> DSL 识别管线。
+4. 做资产裁切、original reference 和 fallback 收敛。
+5. 用固定样例做 MVP 验收。
 
 从 [docs/index.md](docs/index.md) 开始阅读。

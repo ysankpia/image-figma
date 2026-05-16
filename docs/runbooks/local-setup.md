@@ -87,11 +87,13 @@ pnpm --filter @image-figma/figma-plugin run build:dev
 3. 加载 `figma-plugin/manifest.json`。
 4. 运行 `Image-to-Figma Design`。
 5. 插件应打开 `420 x 560` 工具面板。
-6. 点击 `Generate sample design`。
-7. 当前页面应生成 `mobile_home` root Frame。
-8. UI 应显示生成节点数和 warning 数。
+6. 启动后端：`cd backend && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`。
+7. 选择一个 PNG。
+8. 点击 `Generate from PNG`。
+9. 当前页面应生成 `mobile_home` root Frame。
+10. UI 应显示生成节点数和 warning 数。
 
-当前 M4 后端已经提供 `http://localhost:8000/api` 和 `/files/...`。插件 M3 sample 仍不自动调用后端；M5 才会把插件接入 API。
+当前 M5 插件主链路会调用 `http://localhost:8000/api`。`Sample` 按钮保留为开发备用入口，不调用后端。
 
 `localhost` 只配置在 `manifest.json` 的 `networkAccess.devAllowedDomains`。Figma 不允许把 localhost 放进正式 `allowedDomains`，除非同时提供审核用 `reasoning` 字段。开发期如果要阻断正式网络域名，`allowedDomains` 必须写成 `["none"]`，不能写空数组。
 

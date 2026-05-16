@@ -57,10 +57,11 @@ Figma Plugin：
 - 在 Figma 开发模式加载 `figma-plugin/manifest.json`
 - manifest 中 `localhost` 只能出现在 `networkAccess.devAllowedDomains`
 - manifest 中阻断正式网络访问时使用 `networkAccess.allowedDomains: ["none"]`
-- 运行后点击 `Generate sample design`
+- 运行后选择 PNG 并点击 `Generate from PNG`
 - 当前页面应生成示例 root Frame
 - UI 应显示成功、失败或 warning 列表
-- 如 `localhost:8000` 没有图片服务，图片加载失败只能产生 warning，不能阻断整页渲染
+- 后端运行时，banner image 不应出现 `IMAGE_LOAD_FAILED`
+- 停掉后端后，UI 应显示后端请求失败
 
 Backend API：
 
@@ -83,17 +84,15 @@ uv run pytest
 
 Plugin UI：
 
-M3 当前验证：
-
 - UI 能发送 `request-plugin-state`。
 - UI 能发送 `render-sample`。
+- UI 能选择 PNG 并发送 `render-uploaded-png`。
 - Main 能返回 `render-started`。
 - Main 能返回 `render-succeeded` 或 `render-failed`。
 - UI 能展示 rendered element count、warning count 和错误摘要。
 
 后续正式上传流程再验证：
 
-- UploadView 能选择 PNG。
 - PreviewView 显示文件信息。
 - ProgressView 显示生成中。
 - DoneView 显示成功。
