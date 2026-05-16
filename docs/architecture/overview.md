@@ -46,7 +46,7 @@ docs/
 - 存储：本地文件存储。
 - PNG region slicer：Python 标准库。
 - Visual primitives：M8 已建立合同和 fake/OpenAI provider 边界，结果不进入 DSL。
-- OCR：后续再接入，不属于 M8。
+- OCR/DSL patch：M9 已建立 fake OCR 和 hidden candidate patch harness，不做可见替换。
 
 ## Major Modules
 
@@ -55,8 +55,8 @@ docs/
 - DSL Schema：定义后端和 Renderer 的稳定合同。
 - Renderer：把 DSL 转成 Figma 节点。
 - Backend API：上传、任务状态、DSL、资产、健康检查。
-- Processing Pipeline：预处理、裁切、visual primitive candidates、后续 OCR/AI/CV、DSL Builder、校验和基础修复。
-- Storage：原图、资产、DSL 结果、primitive 结果、日志。
+- Processing Pipeline：预处理、裁切、visual primitive candidates、OCR candidates、DSL patch、DSL Builder、校验和基础修复。
+- Storage：原图、资产、DSL 结果、primitive 结果、OCR 结果、patch 结果、日志。
 
 ## Module Boundaries
 
@@ -66,4 +66,4 @@ Renderer 只消费 DSL，不做 OCR、AI、图片裁切、DSL 生成、质量评
 
 插件 UI 不理解 OCR、AI、DSL 内部细节，只展示上传、预览、进度、完成、失败。
 
-DSL 是 Renderer 的唯一输入合同。M8 visual primitives 是候选调试合同，不是 DSL 权威。后端和 Renderer 的任何协议变化必须先更新 [dsl.md](dsl.md) 和 [api-contracts.md](api-contracts.md)。
+DSL 是 Renderer 的唯一输入合同。Visual primitives、OCR 和 DSL patch 是候选调试合同，不是未经校验的 DSL 权威。后端和 Renderer 的任何协议变化必须先更新 [dsl.md](dsl.md) 和 [api-contracts.md](api-contracts.md)。

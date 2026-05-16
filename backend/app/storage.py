@@ -12,11 +12,21 @@ class Storage:
         self.assets_dir = root / "assets"
         self.dsl_dir = root / "dsl"
         self.primitives_dir = root / "primitives"
+        self.ocr_dir = root / "ocr"
+        self.patches_dir = root / "patches"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
     def ensure_dirs(self) -> None:
-        for directory in [self.uploads_dir, self.assets_dir, self.dsl_dir, self.primitives_dir, self.logs_dir]:
+        for directory in [
+            self.uploads_dir,
+            self.assets_dir,
+            self.dsl_dir,
+            self.primitives_dir,
+            self.ocr_dir,
+            self.patches_dir,
+            self.logs_dir,
+        ]:
             directory.mkdir(parents=True, exist_ok=True)
 
     def upload_path(self, task_id: str) -> Path:
@@ -31,8 +41,17 @@ class Storage:
     def dsl_path(self, task_id: str) -> Path:
         return self.dsl_dir / f"{task_id}.json"
 
+    def base_dsl_path(self, task_id: str) -> Path:
+        return self.dsl_dir / f"{task_id}.base.json"
+
     def primitive_path(self, task_id: str) -> Path:
         return self.primitives_dir / f"{task_id}.json"
+
+    def ocr_path(self, task_id: str) -> Path:
+        return self.ocr_dir / f"{task_id}.json"
+
+    def patch_path(self, task_id: str) -> Path:
+        return self.patches_dir / f"{task_id}.json"
 
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
@@ -63,6 +82,18 @@ class Storage:
 
     def save_primitives(self, task_id: str, data: str) -> Path:
         path = self.primitive_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_ocr(self, task_id: str, data: str) -> Path:
+        path = self.ocr_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_patch(self, task_id: str, data: str) -> Path:
+        path = self.patch_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

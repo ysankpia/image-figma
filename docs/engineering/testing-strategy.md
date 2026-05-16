@@ -84,6 +84,11 @@ Backend API：
 - M8 上传后生成 primitive JSON 文件。
 - `GET /api/tasks/{taskId}/primitives` 可返回 fake primitives。
 - primitive extraction 失败不影响 DSL 查询。
+- M9 上传后生成 OCR JSON 和 DSL patch JSON。
+- `GET /api/tasks/{taskId}/ocr` 可返回 fake OCR blocks。
+- `GET /api/tasks/{taskId}/dsl-patch` 可返回 patch document。
+- `DSL_PATCH_MODE=debug` 时 `/dsl` 返回 hidden text candidates。
+- `DSL_PATCH_MODE=off` 时 `/dsl` 返回 M7 base DSL。
 
 当前命令：
 
@@ -112,6 +117,18 @@ Visual Primitives：
 - OpenAI provider 缺 key、异常、空结果时，上传仍 completed，primitive result 为 `failed` 或 `partial`。
 - OpenAI provider 测试使用 monkeypatch fake client，不打真实网络。
 
+OCR And DSL Patch:
+
+- 默认 fake OCR provider 不需要外部依赖。
+- OCR bbox 使用整图像素坐标。
+- OCR 空文本必须丢弃。
+- OCR bbox 轻微越界必须 clamp 并记录 warning。
+- 严重非法 OCR bbox 必须丢弃。
+- duplicate OCR id 必须丢弃。
+- DSL patch 只添加 hidden `candidate_text`。
+- patch 后 fallback region 和 `original_ref` 不能被删除。
+- patch validation 失败必须回退 base DSL。
+
 Plugin UI：
 
 - UI 能发送 `request-plugin-state`。
@@ -132,7 +149,7 @@ Plugin UI：
 End-to-End：
 
 - 单张 PNG -> taskId -> DSL -> Renderer -> Figma root Frame。
-- M8 当前不要求主要文字可编辑。
+- M9 当前不要求主要文字可见可编辑。
 - 图片资产显示。
 - 复杂区域 fallback。
 

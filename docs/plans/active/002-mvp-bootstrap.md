@@ -18,7 +18,7 @@
 - 实现 Figma 插件最小 UI。
 - 实现后端上传、任务、假 DSL。
 - 建立 visual primitive contract harness。
-- 后续接入 OCR boxes + visual primitives -> DSL patch builder。
+- 接入 OCR boxes + visual primitives -> DSL patch builder。
 - 做样例验收。
 
 不包含：
@@ -42,7 +42,7 @@
 7. 接入真实 PNG -> deterministic DSL Builder。状态：完成第一版。
 8. 接入 deterministic region slicer，把整图 fallback 拆成稳定区域。状态：完成第一版。
 9. 建立 visual primitive contract harness，AI/OCR/CV 只产生可验证候选，不直接生成 DSL。状态：完成第一版。
-10. 接入 OCR boxes + visual primitives -> DSL patch builder。
+10. 接入 OCR boxes + visual primitives -> DSL patch builder。状态：完成第一版。
 11. 加入更细资产裁切、original reference 和 fallback。
 12. 用固定样例做 MVP 收敛。
 
@@ -52,7 +52,7 @@
 - 插件能通过后端拿到 DSL。
 - 真实 PNG 能生成可校验 DSL。
 - visual primitive candidates 可查询且不污染 DSL。
-- 后续主要文字可编辑。
+- 后续主要文字可见可编辑。
 - 图片资产能显示。
 - 复杂区域能 fallback。
 - 失败能定位阶段和错误码。
@@ -94,6 +94,13 @@
 - 可选 OpenAI primitive provider。
 - SQLite `primitive_results`。
 - `GET /api/tasks/{taskId}/primitives`。
+- OCRDocument v0.1 合同。
+- 默认 fake OCR provider。
+- DSLPatchDocument v0.1 合同。
+- SQLite `ocr_results` 和 `dsl_patch_results`。
+- `GET /api/tasks/{taskId}/ocr`。
+- `GET /api/tasks/{taskId}/dsl-patch`。
+- hidden `candidate_text` debug 合并。
 - 单元测试。
 
 验证命令：

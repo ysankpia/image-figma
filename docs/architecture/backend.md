@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M8 当前管线：
+M9 当前管线：
 
 ```text
 receive multipart PNG
@@ -29,8 +29,12 @@ receive multipart PNG
 -> crop header/content/bottom region assets when supported
 -> build deterministic region DSL
 -> extract visual primitive candidates
+-> extract fake OCR candidates
+-> build DSL patch
 -> save DSL JSON
 -> save primitive JSON
+-> save OCR JSON
+-> save patch JSON
 -> mark task completed
 ```
 
@@ -60,6 +64,8 @@ backend/storage/
   assets/
   dsl/
   primitives/
+  ocr/
+  patches/
   logs/
 ```
 
@@ -67,12 +73,12 @@ backend/storage/
 
 ## Task State
 
-M8 当前只实际写入：
+M9 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M8 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M9 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -147,7 +153,7 @@ OpenAI provider 规则：
 
 ## AI Strategy
 
-M8 之后的普通页面目标管线：
+M9 之后的普通页面目标管线：
 
 ```text
 OCR boxes
@@ -165,9 +171,24 @@ OCR boxes
 
 不做多轮复杂分析、多模型对比、评分后自动修复。
 
+## OCR And DSL Patch Harness
+
+M9 引入 fake OCR 和 DSL patch，但仍不做完整识别还原：
+
+- `OCR_PROVIDER=fake`。
+- OCR bbox 使用整图像素坐标 `[x, y, width, height]`。
+- OCR 结果写入 `backend/storage/ocr/{taskId}.json`。
+- DSL patch 写入 `backend/storage/patches/{taskId}.json`。
+- 默认 `DSL_PATCH_MODE=debug`。
+- patch 只添加 hidden `candidate_text`。
+- candidate text `style.visible` 固定为 `false`，避免双层文字。
+- patch validation 失败时 `/dsl` 回退 deterministic base DSL。
+
+M9 不用 OCR 文字猜字体、颜色、层级或背景。可见文字替换留到 M10。
+
 ## Backend Non-Goals
 
-M8 不做：
+M9 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -177,7 +198,9 @@ M8 不做：
 - Redis 缓存。
 - 微服务拆分。
 - 正式对象存储策略。
-- OCR。
+- 真实 OCR provider。
 - AI 直接生成 DSL。
+- AI 直接生成 patch。
 - OCR/AI 语义裁切。
 - 可编辑文字生成。
+- 可见文字替换。

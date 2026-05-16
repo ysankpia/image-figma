@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves fake OCR and DSL patch candidates, and serves local asset URLs.
 
 ## Run
 
@@ -27,4 +27,20 @@ Optional OpenAI smoke must be explicitly enabled:
 
 ```bash
 VISUAL_PRIMITIVE_PROVIDER=openai OPENAI_API_KEY=... uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+## M9 OCR And Patch
+
+Default OCR and patch harness:
+
+```bash
+OCR_PROVIDER=fake
+DSL_PATCH_MODE=debug
+```
+
+Debug endpoints:
+
+```bash
+curl http://localhost:8000/api/tasks/{taskId}/ocr
+curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 ```

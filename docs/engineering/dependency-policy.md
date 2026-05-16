@@ -38,7 +38,7 @@
 - `openai`：可选 M8 visual primitive provider；默认 fake provider 不调用外部模型。
 - `pytest`、`httpx`：后端 API 测试。
 
-这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环、后端 deterministic fallback 链路和可选 visual primitive smoke，没有引入 React/Vite、ORM、队列或 CI。
+这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环、后端 deterministic fallback 链路、OCR/DSL patch harness 和可选 visual primitive smoke，没有引入 React/Vite、ORM、队列或 CI。
 
 M7 PNG region slicer 使用 Python 标准库完成 PNG metadata 解析和 crop：
 
@@ -58,6 +58,8 @@ M8 当前只有可选 OpenAI provider：
 - `openai` SDK 只用于 Responses API structured JSON output。
 - 模型输出只写入 visual primitive candidate document，不直接生成 DSL。
 - provider 失败必须降级为 primitive result `failed` 或 `partial`，不能让上传任务失败。
+
+M9 OCR provider 当前只有 `fake`，不新增 OCR SDK。真实 OCR 依赖必须等 provider 方案明确后再引入。
 
 模型调用必须有：
 

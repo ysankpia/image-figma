@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路和 M8 visual primitive contract harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness 和 M9 OCR/DSL patch harness。
 
 ## Prerequisites
 
@@ -118,7 +118,28 @@ OPENAI_VISION_MODEL=gpt-5.5 \
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-即使 OpenAI provider 失败，上传任务和 `/api/tasks/{taskId}/dsl` 也应继续使用 M7 deterministic DSL 成功返回。
+即使 OpenAI provider 失败，上传任务和 `/api/tasks/{taskId}/dsl` 也应继续成功；M9 patch 失败时会回退 base DSL。
+
+M9 OCR 和 patch 默认配置：
+
+```bash
+OCR_PROVIDER=fake
+DSL_PATCH_MODE=debug
+```
+
+上传后可以查询：
+
+```bash
+curl http://localhost:8000/api/tasks/{taskId}/ocr
+curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
+```
+
+如果要确认完全回退 M7 base DSL：
+
+```bash
+cd backend
+DSL_PATCH_MODE=off uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
 
 `localhost` 只配置在 `manifest.json` 的 `networkAccess.devAllowedDomains`。Figma 不允许把 localhost 放进正式 `allowedDomains`，除非同时提供审核用 `reasoning` 字段。开发期如果要阻断正式网络域名，`allowedDomains` 必须写成 `["none"]`，不能写空数组。
 
@@ -163,10 +184,12 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 
 - task completed。
 - DSL root frame 为 `941 x 1672`。
-- `meta.notes` 为 `deterministic_region_dsl`。
+- `meta.notes` 默认为 `deterministic_region_dsl+m9_patch_debug`。
 - `meta.platformHint` 为 `mobile`。
-- root children 包含 `original_ref`、`fallback_region_header`、`fallback_region_content`、`fallback_region_bottom`。
+- root children 包含 `original_ref`、`fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 和 hidden `candidate_text`。
 - `/api/tasks/{taskId}/primitives` 返回 `provider: "fake"` 和 `vp_region_header/content/bottom`。
+- `/api/tasks/{taskId}/ocr` 返回 `provider: "fake"`。
+- `/api/tasks/{taskId}/dsl-patch` 返回 `mode: "debug"`。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

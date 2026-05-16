@@ -140,9 +140,20 @@ M7 deterministic region DSL 默认使用三段 region fallback：
 - `meta.notes`：`deterministic_fallback_dsl`。
 - `meta.qualityFlags`：包含 `region_crop_unsupported`。
 
-M8 仍不识别文字、图标或真实布局。M8 新增的是独立 visual primitive candidate 结果，不会合并进 DSL，不改变 Renderer 输入。
+M8 不识别文字、图标或真实布局。M8 新增的是独立 visual primitive candidate 结果，不会合并进 DSL。
 
-后续 M9 才允许把 OCR boxes 和 visual primitives 转成 DSL patch。这个 patch 必须经过 DSL validator，不能让模型输出直接成为 DSL 权威。
+M9 新增 OCR/DSL patch harness。默认 `/api/tasks/{taskId}/dsl` 会包含 hidden `candidate_text`：
+
+- `type: "text"`。
+- `role: "candidate_text"`。
+- `style.visible: false`。
+- `meta.source: "ocr"`。
+- `meta.candidate: true`。
+- `meta.reason: "m9_ocr_candidate_hidden_by_default"`。
+
+这些 text candidates 是调试和后续 M10 可见替换的输入，不代表已经完成可编辑还原。fallback region 不删除、不移动。
+
+OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair
 

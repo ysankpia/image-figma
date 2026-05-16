@@ -11,6 +11,8 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `dsl_results`
 - `error_logs`
 - `primitive_results`
+- `ocr_results`
+- `dsl_patch_results`
 
 后续建议表：
 
@@ -45,7 +47,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M8 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M9 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -75,12 +77,12 @@ M8 只写入 `completed`。后续接真实处理管线再补 `pending`、`upload
 - `fallback`
 - `icon`
 
-M8 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
+M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
 当前上传成功路径会写入：
 
 - `asset_original`：原始上传 PNG。
-- `asset_banner`：兼容旧查询的 full-image fallback 资产，M8 成功切分时不进入 DSL。
+- `asset_banner`：兼容旧查询的 full-image fallback 资产，M9 成功切分时不进入 DSL。
 - `asset_region_header`：顶部 region crop。
 - `asset_region_content`：中部 region crop。
 - `asset_region_bottom`：底部 region crop。
@@ -151,9 +153,47 @@ primitive payload 本体写入 `backend/storage/primitives/{taskId}.json`，SQLi
 
 primitive extraction 失败时仍写入一条 `primitive_results`，`status` 为 `failed`，并在 `error_logs` 记录 `primitive_extract` 阶段错误。这样上传主链路能继续返回 DSL，同时调试端能看到失败原因。
 
+## ocr_results
+
+用途：记录 M9 OCR candidate 文件和 provider 状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `provider`
+- `model`
+- `status`
+- `ocr_path`
+- `block_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+OCR payload 本体写入 `backend/storage/ocr/{taskId}.json`。
+
+## dsl_patch_results
+
+用途：记录 M9 DSL patch 文件、模式和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `mode`
+- `status`
+- `patch_path`
+- `patch_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
+
 ## model_call_logs
 
-用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M8 不创建该表；OpenAI provider 当前只把 primitive extraction 的结果摘要写入 `primitive_results`，失败细节写入 `error_logs`。
+用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M9 不创建该表；OpenAI provider 当前只把 primitive extraction 的结果摘要写入 `primitive_results`，失败细节写入 `error_logs`。
 
 核心字段：
 

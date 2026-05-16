@@ -36,6 +36,13 @@ M8 primitive extraction 是可观测的非关键路径：
 - primitive failure 写入 `error_logs` 和 `primitive_results`。
 - primitive failure 不影响 `/api/tasks/{taskId}/dsl`。
 
+M9 OCR 和 DSL patch 也是可观测的非关键路径：
+
+- OCR failed 时写入 `ocr_results` 和 `error_logs`。
+- Patch failed 时写入 `dsl_patch_results` 和 `error_logs`。
+- Patch validation failed 时 `/dsl` 回退 base DSL。
+- Hidden text candidates 不允许破坏 fallback 视觉输出。
+
 整页失败只发生在：
 
 - PNG 无法读取。

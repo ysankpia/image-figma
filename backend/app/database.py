@@ -87,6 +87,32 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS ocr_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  provider TEXT NOT NULL,
+                  model TEXT,
+                  status TEXT NOT NULL,
+                  ocr_path TEXT,
+                  block_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS dsl_patch_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  mode TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  patch_path TEXT,
+                  patch_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -170,6 +196,46 @@ class Database:
     def get_primitive_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM primitive_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_ocr_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO ocr_results (
+                  task_id, provider, model, status, ocr_path, block_count,
+                  error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :provider, :model, :status, :ocr_path, :block_count,
+                  :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_ocr_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM ocr_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_dsl_patch_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO dsl_patch_results (
+                  task_id, mode, status, patch_path, patch_count, warning_count,
+                  error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :mode, :status, :patch_path, :patch_count, :warning_count,
+                  :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_dsl_patch_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM dsl_patch_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

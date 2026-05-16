@@ -45,8 +45,9 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     assert dsl["meta"]["source"] == "png"
     assert dsl["meta"]["platformHint"] == "mobile"
     assert dsl["meta"]["fallbackCount"] == 3
-    assert dsl["meta"]["elementCount"] == 4
-    assert dsl["meta"]["notes"] == "deterministic_region_dsl"
+    assert dsl["meta"]["elementCount"] == 6
+    assert dsl["meta"]["notes"] == "deterministic_region_dsl+m9_patch_debug"
+    assert dsl["meta"]["qualityFlags"] == ["m9_hidden_text_candidates"]
 
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert set(assets) == {
@@ -78,6 +79,8 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         "fallback_region_header",
         "fallback_region_content",
         "fallback_region_bottom",
+        "text_ocr_text_001",
+        "text_ocr_text_002",
     }
     assert not {"title", "search_card", "search_icon", "divider"}.intersection(children)
     assert children["original_ref"]["source"]["assetId"] == "asset_original"
@@ -120,6 +123,14 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
             child["layout"]["height"],
         ]
 
+    for text_id in ("text_ocr_text_001", "text_ocr_text_002"):
+        child = children[text_id]
+        assert child["type"] == "text"
+        assert child["role"] == "candidate_text"
+        assert child["style"]["visible"] is False
+        assert child["meta"]["candidate"] is True
+        assert child["meta"]["source"] == "ocr"
+
     original_file = client.get(f"/files/uploads/{task_id}/original.png")
     assert original_file.status_code == 200
     assert original_file.content.startswith(b"\x89PNG\r\n\x1a\n")
@@ -147,15 +158,15 @@ def test_upload_falls_back_to_full_image_when_crop_format_is_unsupported(
     dsl = dsl_response.json()["data"]["dsl"]
 
     assert dsl["meta"]["fallbackCount"] == 1
-    assert dsl["meta"]["elementCount"] == 2
-    assert dsl["meta"]["notes"] == "deterministic_fallback_dsl"
-    assert dsl["meta"]["qualityFlags"] == ["region_crop_unsupported"]
+    assert dsl["meta"]["elementCount"] == 4
+    assert dsl["meta"]["notes"] == "deterministic_fallback_dsl+m9_patch_debug"
+    assert dsl["meta"]["qualityFlags"] == ["region_crop_unsupported", "m9_hidden_text_candidates"]
 
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert set(assets) == {"asset_original", "asset_banner"}
 
     children = {child["id"]: child for child in dsl["root"]["children"]}
-    assert set(children) == {"original_ref", "fallback_full_image"}
+    assert set(children) == {"original_ref", "fallback_full_image", "text_ocr_text_001", "text_ocr_text_002"}
     assert children["fallback_full_image"]["source"]["assetId"] == "asset_banner"
     assert children["fallback_full_image"]["meta"] == {
         "fallback": True,

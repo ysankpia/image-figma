@@ -1,6 +1,6 @@
 # 外部 API
 
-当前仓库默认不调用外部 API。M8 增加了可选 OpenAI provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。
+当前仓库默认不调用外部 API。M8 增加了可选 OpenAI primitive provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。M9 OCR provider 仍是本地 fake，不调用外部 OCR。
 
 ## Figma Plugin API
 
@@ -18,9 +18,14 @@
 
 ## OCR Provider
 
-候选：
+当前：
+
+- `OCR_PROVIDER=fake`。
+
+后续候选：
 
 - PaddleOCR。
+- Apple Vision。
 - 等价 OCR 服务。
 
 输出必须标准化为 text、bbox、confidence、lineId、blockId。

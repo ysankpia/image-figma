@@ -16,7 +16,7 @@ Renderer 只通过 Figma Plugin API 写图层，不调用后端。
 
 ## OCR
 
-M8 尚未接 OCR。OCR 后续用于：
+M9 已建立 fake OCR contract harness。当前不是完整 OCR 产品化。
 
 ```text
 PNG -> text boxes
@@ -38,6 +38,13 @@ OCR 输出至少包含：
 - `blockId`
 
 价格、手机号、订单号、日期、金额、库存等敏感文本以 OCR 为准，AI 不应自由改写。
+
+当前 M9 规则：
+
+- 默认 `OCR_PROVIDER=fake`。
+- 不调用 PaddleOCR、Apple Vision 或 OpenAI OCR。
+- OCR 输出只进入 DSL patch builder。
+- patch 默认生成 hidden `candidate_text`，不做可见文字替换。
 
 ## AI / CV
 
@@ -63,6 +70,16 @@ AI / CV 用于：
 - AI 直接生成 DSL 并交给 Renderer。
 - AI 抄写完整文字内容。
 - AI 失败导致上传主链路失败。
+
+## DSL Patch
+
+M9 DSL patch builder 用于把 OCR boxes 和 visual primitives 转为可验证 patch：
+
+- 默认 `DSL_PATCH_MODE=debug`。
+- `off` 返回 M7 base DSL。
+- `debug` 返回带 hidden text candidates 的 enhanced DSL。
+- `apply` 在 M9 保留但不做可见替换。
+- patch 失败回退 base DSL。
 
 ## Storage
 

@@ -7,12 +7,21 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, File, UploadFile, status
 
 from ..database import json_dumps
+from ..dsl_patch import (
+    DSLPatchDocument,
+    apply_dsl_patch,
+    build_dsl_patch,
+    build_failed_patch_document,
+    validate_enhanced_dsl,
+)
 from ..dsl_factory import DslRegionAsset, build_deterministic_dsl
 from ..errors import ApiError, success_response
+from ..ocr import OCRDocument, build_failed_ocr_document, extract_ocr
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
 from ..visual_primitives import (
     PrimitiveRegionInput,
+    VisualPrimitiveDocument,
     build_failed_primitive_document,
     extract_visual_primitives,
 )
@@ -56,7 +65,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
         banner_path = state.storage.create_banner_asset(task_id, upload_path)
         region_assets, quality_flags = create_region_assets(task_id, data, image)
         region_inputs = create_region_inputs(task_id, image, region_assets, str(banner_path))
-        dsl = build_deterministic_dsl(
+        base_dsl = build_deterministic_dsl(
             task_id=task_id,
             original_url=state.storage.original_url(task_id),
             fallback_url=state.storage.banner_url(task_id),
@@ -64,8 +73,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             regions=region_assets,
             quality_flags=quality_flags,
         )
-        dsl_path = state.storage.dsl_path(task_id)
-        dsl_path.write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
+        state.storage.base_dsl_path(task_id).write_text(json.dumps(base_dsl, ensure_ascii=False, indent=2), encoding="utf-8")
 
         state.database.insert_task(
             {
@@ -124,7 +132,11 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                     "created_at": now,
                 }
             )
-        save_primitive_result(task_id, image, region_assets, region_inputs, now)
+        primitive_document = save_primitive_result(task_id, image, region_assets, region_inputs, now)
+        ocr_document = save_ocr_result(task_id, image, now)
+        final_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
+        dsl_path = state.storage.dsl_path(task_id)
+        dsl_path.write_text(json.dumps(final_dsl, ensure_ascii=False, indent=2), encoding="utf-8")
         state.database.insert_dsl_result(
             {
                 "task_id": task_id,
@@ -233,7 +245,7 @@ def save_primitive_result(
     region_assets: list[DslRegionAsset],
     region_inputs: list[PrimitiveRegionInput],
     created_at: str,
-) -> None:
+) -> VisualPrimitiveDocument:
     failed_logged = False
     try:
         document = extract_visual_primitives(
@@ -287,3 +299,137 @@ def save_primitive_result(
             "created_at": created_at,
         }
     )
+    return document
+
+
+def save_ocr_result(task_id: str, image: PngMetadata, created_at: str) -> OCRDocument:
+    failed_logged = False
+    try:
+        document = extract_ocr(task_id=task_id, image=image, settings=state.settings)
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="ocr_extract",
+            error_code="OCR_EXTRACTION_FAILED",
+            message="OCR extraction failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_ocr_document(
+            task_id=task_id,
+            image=image,
+            provider=state.settings.ocr_provider,
+            model=None,
+            code="OCR_EXTRACTION_FAILED",
+            message="OCR extraction failed.",
+        )
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="ocr_extract",
+            error_code=document.error["code"] if document.error else "OCR_EXTRACTION_FAILED",
+            message=document.error["message"] if document.error else "OCR extraction failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    ocr_path = state.storage.save_ocr(task_id, json_dumps(document.to_dict()))
+    state.database.insert_ocr_result(
+        {
+            "task_id": task_id,
+            "provider": document.provider,
+            "model": document.model,
+            "status": document.status,
+            "ocr_path": str(ocr_path),
+            "block_count": len(document.blocks),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document
+
+
+def save_dsl_patch_result(
+    task_id: str,
+    base_dsl: dict[str, object],
+    ocr_document: OCRDocument,
+    primitive_document: VisualPrimitiveDocument,
+    created_at: str,
+) -> dict[str, object]:
+    mode = state.settings.dsl_patch_mode
+    failed_logged = False
+    try:
+        if ocr_document.status == "failed":
+            document = build_failed_patch_document(
+                task_id=task_id,
+                mode=mode,
+                code="OCR_EXTRACTION_FAILED",
+                message="DSL patch skipped because OCR extraction failed.",
+            )
+            final_dsl = base_dsl
+        else:
+            document = build_dsl_patch(
+                base_dsl=base_dsl,
+                ocr_document=ocr_document,
+                primitive_document=primitive_document,
+                mode=mode,
+            )
+            final_dsl = apply_dsl_patch(base_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="dsl_patch_validate",
+                    error_code="DSL_PATCH_VALIDATION_FAILED",
+                    message="DSL patch validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_patch_document(
+                    task_id=task_id,
+                    mode=mode,
+                    code="DSL_PATCH_VALIDATION_FAILED",
+                    message="DSL patch validation failed.",
+                )
+                final_dsl = base_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="dsl_patch_build",
+            error_code="DSL_PATCH_BUILD_FAILED",
+            message="DSL patch build failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_patch_document(
+            task_id=task_id,
+            mode=mode,
+            code="DSL_PATCH_BUILD_FAILED",
+            message="DSL patch build failed.",
+        )
+        final_dsl = base_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="dsl_patch_build",
+            error_code=document.error["code"] if document.error else "DSL_PATCH_BUILD_FAILED",
+            message=document.error["message"] if document.error else "DSL patch build failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    patch_path = state.storage.save_patch(task_id, json_dumps(document.to_dict()))
+    state.database.insert_dsl_patch_result(
+        {
+            "task_id": task_id,
+            "mode": document.mode,
+            "status": document.status,
+            "patch_path": str(patch_path),
+            "patch_count": len(document.patches),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return final_dsl

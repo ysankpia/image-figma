@@ -58,12 +58,13 @@ def test_upload_creates_fake_visual_primitives_without_api_key(
     assert dsl_response.status_code == 200
     child_ids = {child["id"] for child in dsl_response.json()["data"]["dsl"]["root"]["children"]}
     assert "vp_region_header" not in child_ids
-    assert child_ids == {
+    assert {
         "original_ref",
         "fallback_region_header",
         "fallback_region_content",
         "fallback_region_bottom",
-    }
+    }.issubset(child_ids)
+    assert {"text_ocr_text_001", "text_ocr_text_002"}.issubset(child_ids)
 
 
 def test_missing_task_primitives_returns_task_not_found(client: TestClient) -> None:
@@ -236,6 +237,8 @@ def test_openai_provider_region_failure_returns_failed_document(monkeypatch, tmp
         max_upload_bytes=10,
         cors_allow_origins=["*"],
         visual_primitive_provider="openai",
+        ocr_provider="fake",
+        dsl_patch_mode="debug",
         openai_api_key="test-key",
         openai_vision_model="gpt-test",
         openai_timeout_seconds=1,
@@ -290,6 +293,8 @@ def test_openai_provider_normalizes_region_payload(monkeypatch, tmp_path) -> Non
         max_upload_bytes=10,
         cors_allow_origins=["*"],
         visual_primitive_provider="openai",
+        ocr_provider="fake",
+        dsl_patch_mode="debug",
         openai_api_key="test-key",
         openai_vision_model="gpt-test",
         openai_timeout_seconds=1,

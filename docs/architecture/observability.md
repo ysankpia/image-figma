@@ -33,6 +33,18 @@ M8 primitive result 至少包含：
 - `errorCode`
 - `primitivePath`
 
+M9 OCR/patch result 至少包含：
+
+- `taskId`
+- `provider` 或 `mode`
+- `status`
+- `blockCount`
+- `patchCount`
+- `warningCount`
+- `errorCode`
+- `ocrPath`
+- `patchPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -41,6 +53,7 @@ M8 primitive result 至少包含：
 - OCR 耗时。
 - AI 调用耗时。
 - primitive extraction 成功/失败数量。
+- DSL patch build 成功/失败数量。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -55,7 +68,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> dsl_build -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -69,6 +82,8 @@ upload -> preprocess -> asset_crop -> primitive_extract -> dsl_build -> dsl_vali
 - OCR 摘要。
 - AI 输出摘要。
 - visual primitive JSON。
+- OCR JSON。
+- DSL patch JSON。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

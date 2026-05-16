@@ -10,6 +10,8 @@
 | `PUBLIC_BASE_URL` | 后端生成 `/files/...` URL | `http://localhost:8000` | 否 |
 | `CORS_ALLOW_ORIGINS` | 允许浏览器/Figma 插件调用后端的 Origin，逗号分隔 | `*` | 否 |
 | `VISUAL_PRIMITIVE_PROVIDER` | M8 primitive provider，支持 `fake`、`openai` | `fake` | 否 |
+| `OCR_PROVIDER` | M9 OCR provider，目前只支持 `fake` | `fake` | 否 |
+| `DSL_PATCH_MODE` | M9 DSL patch 模式，支持 `off`、`debug`、`apply` | `debug` | 否 |
 | `OPENAI_API_KEY` | OpenAI primitive provider 密钥 | 无 | 仅 `VISUAL_PRIMITIVE_PROVIDER=openai` 时需要 |
 | `OPENAI_VISION_MODEL` | OpenAI primitive provider 使用的视觉模型 | `gpt-5.5` | 否 |
 | `OPENAI_TIMEOUT_SECONDS` | OpenAI 请求超时秒数 | `30` | 否 |
@@ -20,3 +22,5 @@
 真实密钥不得写入仓库。
 
 默认 `fake` provider 不调用 OpenAI，也不需要 `OPENAI_API_KEY`。
+
+M9 中 `DSL_PATCH_MODE=apply` 只保留配置入口，行为仍不做可见文字替换；真正可见替换放到 M10。
