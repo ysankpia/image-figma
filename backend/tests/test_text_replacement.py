@@ -72,8 +72,8 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert replacement["status"] == "completed"
         assert replacement["mode"] == "apply"
         assert replacement["meta"]["acceptedCount"] == 2
-        assert replacement["meta"]["appliedCount"] == 1
-        assert replacement["meta"]["blockedAcceptedCount"] == 1
+        assert replacement["meta"]["appliedCount"] == 2
+        assert replacement["meta"]["blockedAcceptedCount"] == 0
         assert replacement["meta"]["qualityNotes"] == "text_replacement_quality_control"
         first_decision = replacement["decisions"][0]
         assert first_decision["quality"]["risk"] == "low"
@@ -81,8 +81,8 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert first_decision["application"] == {"status": "applied", "reason": "quality_gate_passed"}
         second_decision = replacement["decisions"][1]
         assert second_decision["quality"]["risk"] == "medium"
-        assert second_decision["quality"]["applyEligible"] is False
-        assert second_decision["application"] == {"status": "blocked", "reason": "quality_gate_blocked"}
+        assert second_decision["quality"]["applyEligible"] is True
+        assert second_decision["application"] == {"status": "applied", "reason": "quality_gate_passed"}
 
         dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
         children = {child["id"]: child for child in dsl["root"]["children"]}
@@ -93,8 +93,8 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert "text_ocr_text_001" in children
         assert "cover_ocr_text_001" in children
         assert "visible_text_ocr_text_001" in children
-        assert "cover_ocr_text_002" not in children
-        assert "visible_text_ocr_text_002" not in children
+        assert "cover_ocr_text_002" in children
+        assert "visible_text_ocr_text_002" in children
         assert children["cover_ocr_text_001"]["type"] == "shape"
         assert children["cover_ocr_text_001"]["role"] == "text_replacement_cover"
         assert children["visible_text_ocr_text_001"]["type"] == "text"
@@ -102,9 +102,9 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert children["visible_text_ocr_text_001"]["style"]["visible"] is True
         assert children["visible_text_ocr_text_001"]["style"]["lineHeight"] >= children["visible_text_ocr_text_001"]["style"]["fontSize"]
         assert children["text_ocr_text_001"]["style"]["visible"] is False
-        assert dsl["meta"]["textReplacementCount"] == 1
-        assert dsl["meta"]["textReplacementAppliedCount"] == 1
-        assert dsl["meta"]["textReplacementBlockedCount"] == 1
+        assert dsl["meta"]["textReplacementCount"] == 2
+        assert dsl["meta"]["textReplacementAppliedCount"] == 2
+        assert dsl["meta"]["textReplacementBlockedCount"] == 0
         assert "m11_visible_text_replacements" in dsl["meta"]["qualityFlags"]
         assert "m12_text_replacement_coverage_expansion" in dsl["meta"]["qualityFlags"]
         assert "m13_text_replacement_quality_control" in dsl["meta"]["qualityFlags"]
@@ -250,7 +250,7 @@ def test_complex_and_dark_background_are_rejected() -> None:
     assert dark_document.decisions[0].reason == "dark_background"
 
 
-def test_accepted_hero_region_is_reported_but_blocked_by_quality_gate() -> None:
+def test_accepted_medium_risk_region_is_reported_but_still_applied() -> None:
     settings = make_settings(text_replacement_mode="apply")
     image = PngMetadata(320, 1000, 8, 2, 0, 0, 0)
     ocr = OCRDocument(
@@ -276,8 +276,58 @@ def test_accepted_hero_region_is_reported_but_blocked_by_quality_gate() -> None:
     assert decision.decision == "accepted"
     assert decision.quality["region"] == "hero"
     assert decision.quality["risk"] == "medium"
-    assert decision.quality["applyEligible"] is False
+    assert decision.quality["applyEligible"] is True
     assert "hero_region_caution" in decision.quality["reasons"]
+    assert decision.application == {"status": "applied", "reason": "quality_gate_passed"}
+    assert document.meta["acceptedCount"] == 1
+    assert document.meta["appliedCount"] == 1
+    assert document.meta["blockedAcceptedCount"] == 0
+
+    enhanced = apply_text_replacements(
+        {
+            "version": "0.1",
+            "taskId": "task_1",
+            "assets": [],
+            "root": {"id": "root", "type": "frame", "layout": {"x": 0, "y": 0, "width": 320, "height": 1000}, "children": []},
+            "meta": {"qualityFlags": []},
+        },
+        document,
+        ocr,
+    )
+    children = {child["id"]: child for child in enhanced["root"]["children"]}
+    assert "cover_hero_text" in children
+    assert "visible_text_hero_text" in children
+    assert enhanced["meta"]["textReplacementAppliedCount"] == 1
+    assert enhanced["meta"]["textReplacementBlockedCount"] == 0
+
+
+def test_accepted_high_risk_replacement_is_reported_but_blocked_by_quality_gate() -> None:
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(320, 1000, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 320, "height": 1000},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("tiny_safe", "A", [80, 220, 12, 10], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(320, 1000, (247, 248, 250), [([80, 220, 12, 10], (20, 20, 20))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.quality["risk"] == "high"
+    assert decision.quality["applyEligible"] is False
+    assert "large_cover_area" in decision.quality["reasons"]
     assert decision.application == {"status": "blocked", "reason": "quality_gate_blocked"}
     assert document.meta["acceptedCount"] == 1
     assert document.meta["appliedCount"] == 0
@@ -295,8 +345,8 @@ def test_accepted_hero_region_is_reported_but_blocked_by_quality_gate() -> None:
         ocr,
     )
     children = {child["id"]: child for child in enhanced["root"]["children"]}
-    assert "cover_hero_text" not in children
-    assert "visible_text_hero_text" not in children
+    assert "cover_tiny_safe" not in children
+    assert "visible_text_tiny_safe" not in children
     assert enhanced["meta"]["textReplacementAppliedCount"] == 0
     assert enhanced["meta"]["textReplacementBlockedCount"] == 1
 

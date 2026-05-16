@@ -16,7 +16,7 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 -> Figma 可编辑设计稿
 ```
 
-当前 M13 默认仍使用 fake OCR 和 `TEXT_REPLACEMENT_MODE=debug`；显式设置 `OCR_PROVIDER=baidu_ppocrv5` 和百度 token 后，上传链路会生成真实 OCR candidates。`TEXT_REPLACEMENT_MODE=apply` 只写入通过 quality gate 的低风险 visible text replacement，fallback region 始终保留。`GET /api/tasks/{taskId}/ocr`、`/primitives`、`/dsl-patch`、`/text-replacements` 用于调试后续识别合并和 replacement 质量决策。
+当前 M13 默认仍使用 fake OCR 和 `TEXT_REPLACEMENT_MODE=debug`；显式设置 `OCR_PROVIDER=baidu_ppocrv5` 和百度 token 后，上传链路会生成真实 OCR candidates。`TEXT_REPLACEMENT_MODE=apply` 会写入通过 quality gate 的 accepted visible text replacement；M13 只阻断 high-risk replacement，medium-risk replacement 会保留风险报告但仍可应用。fallback region 始终保留。`GET /api/tasks/{taskId}/ocr`、`/primitives`、`/dsl-patch`、`/text-replacements` 用于调试后续识别合并和 replacement 质量决策。
 
 下一步执行顺序：
 

@@ -60,4 +60,4 @@ Visible text replacement is debug-only by default:
 TEXT_REPLACEMENT_MODE=debug
 ```
 
-Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and applies only accepted replacements that pass the M13 quality gate. `GET /api/tasks/{taskId}/text-replacements` explains accepted, rejected, applied, and blocked decisions.
+Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and blocks only high-risk accepted replacements; medium-risk replacements are applied with caution metadata. `GET /api/tasks/{taskId}/text-replacements` explains accepted, rejected, applied, and blocked decisions.

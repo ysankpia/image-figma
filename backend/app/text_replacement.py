@@ -470,7 +470,7 @@ def evaluate_replacement_quality(decision: TextReplacementDecision, image: PngMe
     return {
         "score": score,
         "risk": risk,
-        "applyEligible": decision.decision == "accepted" and risk == "low",
+        "applyEligible": decision.decision == "accepted" and risk != "high",
         "reasons": reasons,
         "region": region,
     }

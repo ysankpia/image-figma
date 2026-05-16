@@ -31,9 +31,9 @@ receive multipart PNG
 -> extract visual primitive candidates
 -> extract OCR candidates
 -> build hidden candidate DSL patch
--> evaluate low-risk text replacements
+-> evaluate text replacement candidates
 -> score replacement quality and block risky replacements
--> optionally merge low-risk visible text replacements when TEXT_REPLACEMENT_MODE=apply
+-> optionally merge non-high-risk visible text replacements when TEXT_REPLACEMENT_MODE=apply
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -194,7 +194,7 @@ M9 引入 OCR 合同和 DSL patch；M10 新增可选百度 PP-OCRv5 异步 OCR p
 
 M12 扩展文字替换覆盖率：默认 `TEXT_REPLACEMENT_MODE=debug` 只记录 accepted/rejected 决策；`apply` 给低复杂度背景上的高置信 OCR block 添加 cover shape 和 visible text。M12 支持浅底深字、部分彩色/深色底浅字、保守 OCR block 合并和更稳的字号/行高。fallback region、original reference 和 hidden candidate text 都保留。
 
-M13 增加 text replacement quality gate：每个 decision 会记录 `quality` 和 `application`，说明基础 replacement 是否 accepted、风险等级、粗略 region、阻断原因和 apply 状态。`TEXT_REPLACEMENT_MODE=apply` 只写入 `quality.applyEligible=true` 的 accepted replacement。M13 不放宽 `complex_background`，不修复所有覆盖率问题。
+M13 增加 text replacement quality gate：每个 decision 会记录 `quality` 和 `application`，说明基础 replacement 是否 accepted、风险等级、粗略 region、阻断原因和 apply 状态。`TEXT_REPLACEMENT_MODE=apply` 阻断 high-risk accepted replacement；medium-risk replacement 记录 caution 但仍可应用。M13 不放宽 `complex_background`，不修复所有覆盖率问题。
 
 ## Backend Non-Goals
 

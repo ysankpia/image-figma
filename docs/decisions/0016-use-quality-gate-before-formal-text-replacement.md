@@ -13,8 +13,8 @@ M13 先增加 text replacement quality gate：
 
 - 保留 M12 基础 decision。
 - 每个 decision 增加 quality score、risk、region 和 reason summary。
-- apply 时只写入低风险 accepted replacement。
-- 中高风险 accepted replacement 被记录但不进入 DSL。
+- apply 时写入非 high-risk 的 accepted replacement。
+- high-risk accepted replacement 被记录但不进入 DSL；medium-risk replacement 记录 caution 但仍可应用，避免粗略区域分类造成大面积回退。
 - rejected replacement 继续 rejected，不在 M13 放宽。
 
 ## Consequences
@@ -28,4 +28,4 @@ M13 先增加 text replacement quality gate：
 代价：
 
 - M13 不会显著提高可编辑文字覆盖率。
-- 一些 M12 可替换文本可能因质量门禁被阻断，需要后续按区域优化。
+- 一些 M12 可替换文本可能因 high-risk 门禁被阻断，需要后续按区域优化。

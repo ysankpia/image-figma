@@ -45,7 +45,7 @@
 - 保持模块边界清楚，不把后端识别、Renderer 和插件 UI 混在一起。
 - 优先小而稳定的实现，不为未来功能提前加抽象。
 - 复杂区域优先 fallback，不能让局部失败拖垮整页生成。
-- M13 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时只对 quality gate 通过的低风险 accepted 文字做可见替换。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策、质量门禁和校验。
+- M13 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时对 quality gate 通过的 accepted 文字做可见替换；high-risk replacement 阻断，medium-risk replacement 记录风险但仍可应用。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策、质量门禁和校验。
 - 上传主链路默认返回带 hidden `candidate_text` 的 enhanced DSL，但 fallback 视觉输出必须保持稳定。
 - 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。
 

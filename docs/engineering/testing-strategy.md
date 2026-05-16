@@ -97,8 +97,8 @@ Backend API：
 - M12 apply 必须保留 fallback region、original_ref 和 hidden candidate_text。
 - M12 必须覆盖浅底深字、彩色/深色底浅字、低对比拒绝、无稳定前景色拒绝、短中文 bbox 字号约束和保守 OCR block 合并。
 - M13 text replacement 必须给每个 decision 输出 quality/application 字段。
-- M13 apply 只能写入 `quality.applyEligible=true` 的 accepted replacement。
-- M13 必须覆盖 accepted 但被 quality gate blocked、rejected high risk、region/reason summary，以及首页样例 OCR 已识别但 replacement 拒绝的回归。
+- M13 apply 只能阻断 high-risk accepted replacement，medium-risk replacement 应记录 caution 但仍可应用。
+- M13 必须覆盖 accepted high-risk 被 quality gate blocked、accepted medium-risk 仍 applied、rejected high risk、region/reason summary，以及首页样例 OCR 已识别但 replacement 拒绝的回归。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

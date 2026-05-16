@@ -47,8 +47,8 @@ M10 OCR 和 DSL patch 也是可观测的非关键路径：
 M13 text replacement 是可观测的非关键路径：
 
 - 默认 `TEXT_REPLACEMENT_MODE=debug` 不改变可见 DSL。
-- `TEXT_REPLACEMENT_MODE=apply` 只写入通过 quality gate 的 replacement。
-- 中高风险 accepted replacement 会被记录为 blocked，不进入 DSL。
+- `TEXT_REPLACEMENT_MODE=apply` 只阻断 high-risk replacement。
+- high-risk accepted replacement 会被记录为 blocked，不进入 DSL；medium-risk replacement 会记录 caution 但仍可应用。
 - replacement failed/skipped 写入 `text_replacement_results` 和 `error_logs`。
 - replacement validation failed 时 `/dsl` 回退 M10/M9 输出。
 - fallback region 必须始终保留。
