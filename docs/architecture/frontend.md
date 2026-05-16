@@ -4,10 +4,14 @@ Figma 插件分为 UI 和 Main 两层。
 
 ## Plugin UI
 
-Plugin UI 使用 React + TypeScript + Vite。
+M3 当前 Plugin UI 使用静态 `ui.html`、内联 CSS/JS 和 TypeScript Main。这个选择来自现有已审核 Figma 插件的壳子经验，目的是先用最少移动部件打通 UI -> Main -> Renderer -> Figma Canvas。
+
+React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览、进度、错误恢复和设置页变复杂，再单独评估是否引入 React/Vite。
 
 职责：
 
+- M3：触发 sample DSL 生成。
+- M3：显示渲染中、成功、失败和 warning。
 - 上传 PNG。
 - 显示预览。
 - 显示文件信息。
@@ -41,7 +45,14 @@ Plugin Main 运行在 Figma 插件主线程。
 
 ## Views
 
-v0.1 只需要：
+M3 只需要一个静态工具面板：
+
+- `Generate sample design`。
+- 当前状态。
+- warning 列表。
+- 关闭按钮。
+
+后续 v0.1 正式上传流程再补：
 
 - `UploadView`
 - `PreviewView`
@@ -52,6 +63,18 @@ v0.1 只需要：
 不做设置页、账号页、历史页、质量报告页、批量上传页。
 
 ## Message Flow
+
+M3 当前流：
+
+```text
+UI clicks Generate sample design
+-> Main receives render-sample
+-> Main loads bundled mobile-home DSL
+-> Main calls Renderer
+-> Main reports success, warnings, or failure
+```
+
+后续接入后端后的完整流：
 
 ```text
 UI selects PNG

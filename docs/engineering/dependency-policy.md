@@ -15,7 +15,7 @@
 后续实现的默认技术选择：
 
 - Monorepo：pnpm workspace，当前已初始化。
-- 插件：TypeScript；正式 UI 后续再引入 React/Vite。
+- 插件：TypeScript + 静态 `ui.html`；React/Vite 只在后续 UI 复杂度真实需要时再评估。
 - 共享包：TypeScript，当前已实现 `@image-figma/dsl-schema` 和 `@image-figma/image-to-figma-renderer`。
 - 后端：Python、FastAPI、Pydantic。
 - 数据库：SQLite。
@@ -29,10 +29,10 @@
 - `vitest`：`dsl-schema` 单元测试。
 - `@types/node`：测试和 Node 工具类型。
 - `ajv`：测试 JSON Schema 与示例 DSL 的兼容性。
-- `@figma/plugin-typings`：Figma dev harness 类型。
-- `tsup`：构建当前无 UI 的 Figma dev harness。
+- `@figma/plugin-typings`：Figma 插件 Main 类型。
+- `tsup`：构建 Figma 插件 Main 和 dev harness。
 
-这些依赖只服务 DSL 合同、Renderer 和 Figma 烟测 harness，没有引入正式 UI 框架、后端框架或 CI。
+这些依赖只服务 DSL 合同、Renderer 和 Figma 插件最小闭环，没有引入 React/Vite、后端框架或 CI。
 
 ## AI/OCR Dependencies
 

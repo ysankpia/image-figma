@@ -48,11 +48,16 @@ pnpm --filter @image-figma/image-to-figma-renderer run typecheck
 pnpm --filter @image-figma/image-to-figma-renderer run test
 ```
 
-Figma dev harness：
+Figma Plugin：
 
 - 构建命令：`pnpm --filter @image-figma/figma-plugin run build`
+- 类型检查：`pnpm --filter @image-figma/figma-plugin run typecheck`
+- 构建时扫描 `dist/main.global.js`，避免残留 Figma sandbox 风险语法。
 - 在 Figma 开发模式加载 `figma-plugin/manifest.json`
-- 运行后应在当前页面生成示例 root Frame
+- 运行后点击 `Generate sample design`
+- 当前页面应生成示例 root Frame
+- UI 应显示成功、失败或 warning 列表
+- 如 `localhost:8000` 没有图片服务，图片加载失败只能产生 warning，不能阻断整页渲染
 
 Backend API：
 
@@ -66,14 +71,22 @@ Backend API：
 
 Plugin UI：
 
+M3 当前验证：
+
+- UI 能发送 `request-plugin-state`。
+- UI 能发送 `render-sample`。
+- Main 能返回 `render-started`。
+- Main 能返回 `render-succeeded` 或 `render-failed`。
+- UI 能展示 rendered element count、warning count 和错误摘要。
+
+后续正式上传流程再验证：
+
 - UploadView 能选择 PNG。
 - PreviewView 显示文件信息。
 - ProgressView 显示生成中。
 - DoneView 显示成功。
 - ErrorView 显示失败。
 - UI 和 Main 消息流正确。
-
-当前还没有正式 Plugin UI。`figma-plugin/` 只有 Renderer 烟测 harness。
 
 End-to-End：
 

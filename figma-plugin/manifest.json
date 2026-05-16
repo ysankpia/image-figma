@@ -1,8 +1,13 @@
 {
-  "name": "Image-to-Figma Dev Harness",
-  "id": "image-to-figma-dev-harness",
+  "name": "Image-to-Figma Design",
+  "id": "image-to-figma-design",
   "api": "1.0.0",
-  "main": "dist/dev-main.global.js",
+  "main": "dist/main.global.js",
+  "ui": "dist/ui.html",
   "editorType": ["figma"],
-  "documentAccess": "dynamic-page"
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["http://localhost:8000"],
+    "devAllowedDomains": ["http://localhost:8000"]
+  }
 }

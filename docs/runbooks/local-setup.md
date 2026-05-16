@@ -47,10 +47,16 @@ pnpm --filter @image-figma/image-to-figma-renderer run typecheck
 pnpm --filter @image-figma/image-to-figma-renderer run test
 ```
 
-构建 Figma dev harness：
+构建 Figma 插件：
 
 ```bash
 pnpm --filter @image-figma/figma-plugin run build
+```
+
+只构建底层 dev harness：
+
+```bash
+pnpm --filter @image-figma/figma-plugin run build:dev
 ```
 
 在 Figma 中验证：
@@ -58,16 +64,18 @@ pnpm --filter @image-figma/figma-plugin run build
 1. 打开 Figma。
 2. 进入插件开发模式。
 3. 加载 `figma-plugin/manifest.json`。
-4. 运行 `Image-to-Figma Dev Harness`。
-5. 当前页面应生成 `mobile_home` root Frame。
+4. 运行 `Image-to-Figma Design`。
+5. 插件应打开 `420 x 560` 工具面板。
+6. 点击 `Generate sample design`。
+7. 当前页面应生成 `mobile_home` root Frame。
+8. UI 应显示生成节点数和 warning 数。
 
-当前还没有后端服务或正式 Figma 插件 UI。
+当前还没有后端服务。示例 DSL 的图片 URL 指向 `http://localhost:8000`，如果本地没有文件服务，图片加载失败应显示为 warning，不应阻断文字、shape 和 line 渲染。
 
 后续目标命令应覆盖：
 
 ```text
 启动后端
-启动正式插件 UI 构建
 运行 DSL 测试
 运行 Renderer 测试
 运行 API 测试

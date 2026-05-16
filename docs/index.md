@@ -8,6 +8,7 @@
 - Agent 工作规则：[../AGENTS.md](../AGENTS.md)
 - 当前文档整理计划：[plans/active/001-doc-harness.md](plans/active/001-doc-harness.md)
 - 下一步 MVP 启动计划：[plans/active/002-mvp-bootstrap.md](plans/active/002-mvp-bootstrap.md)
+- 当前插件最小闭环计划：[plans/active/003-plugin-minimum-flow.md](plans/active/003-plugin-minimum-flow.md)
 
 ## By Task Type
 
@@ -59,6 +60,7 @@
 - ADR 模板：[decisions/adr-template.md](decisions/adr-template.md)
 - Monorepo 初始化决策：[decisions/0003-initialize-pnpm-monorepo.md](decisions/0003-initialize-pnpm-monorepo.md)
 - Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)
+- M3 插件 UI 决策：[decisions/0005-use-static-html-for-m3-plugin-ui.md](decisions/0005-use-static-html-for-m3-plugin-ui.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

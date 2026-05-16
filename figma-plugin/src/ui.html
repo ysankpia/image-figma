@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --text: #111827;
+        --body: #374151;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --accent: #2563eb;
+        --accent-strong: #1d4ed8;
+        --success: #15803d;
+        --success-soft: #ecfdf5;
+        --danger: #dc2626;
+        --danger-soft: #fef2f2;
+        --warning: #b45309;
+        --warning-soft: #fffbeb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 420px;
+        min-height: 560px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      }
+
+      button {
+        border: 0;
+        font: inherit;
+      }
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: 560px;
+      }
+
+      .header {
+        flex: none;
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+
+      .mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 10px;
+        background: #111827;
+        color: #ffffff;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .content {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+        padding: 14px 16px;
+      }
+
+      .status-card,
+      .warning-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .status-card {
+        padding: 14px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+
+      .status-card[data-tone="normal"] .status-dot {
+        background: var(--accent);
+      }
+
+      .status-card[data-tone="success"] {
+        border-color: #bbf7d0;
+        background: var(--success-soft);
+      }
+
+      .status-card[data-tone="success"] .status-dot {
+        background: var(--success);
+      }
+
+      .status-card[data-tone="error"] {
+        border-color: #fecaca;
+        background: var(--danger-soft);
+      }
+
+      .status-card[data-tone="error"] .status-dot {
+        background: var(--danger);
+      }
+
+      .status-title {
+        margin: 0;
+        font-weight: 650;
+      }
+
+      .status-detail {
+        margin: 7px 0 0 19px;
+        color: var(--body);
+      }
+
+      .warning-card {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+
+      .warning-header {
+        flex: none;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        color: var(--body);
+        font-weight: 650;
+      }
+
+      .warning-list {
+        flex: 1;
+        min-height: 0;
+        margin: 0;
+        overflow: auto;
+        padding: 8px 10px;
+        list-style: none;
+      }
+
+      .warning-empty {
+        color: var(--muted);
+      }
+
+      .warning-item {
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+        border-radius: 6px;
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+
+      .warning-item + .warning-item {
+        margin-top: 8px;
+      }
+
+      .warning-code {
+        color: #78350f;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .actions {
+        display: flex;
+        flex: none;
+        gap: 8px;
+        padding: 0 16px 16px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 36px;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        border-radius: 7px;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .button:disabled {
+        cursor: not-allowed;
+        opacity: 0.62;
+      }
+
+      .button-primary {
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      .button-primary:not(:disabled):hover {
+        background: var(--accent-strong);
+      }
+
+      .button-secondary {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--body);
+        flex: 0 0 96px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <div class="brand">
+          <div class="mark">IF</div>
+          <div>
+            <h1>Image-to-Figma Design</h1>
+            <p class="subtitle">Render the bundled sample design into the current Figma page.</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="content">
+        <section id="statusCard" class="status-card" data-tone="normal">
+          <div class="status-row">
+            <span class="status-dot"></span>
+            <p id="statusTitle" class="status-title">Ready</p>
+          </div>
+          <p id="statusDetail" class="status-detail">Generate the bundled sample to verify the plugin path.</p>
+        </section>
+
+        <section class="warning-card">
+          <div id="warningHeader" class="warning-header">Warnings</div>
+          <ul id="warningList" class="warning-list">
+            <li class="warning-empty">No warnings yet.</li>
+          </ul>
+        </section>
+      </section>
+
+      <footer class="actions">
+        <button id="renderButton" class="button button-primary" type="button">Generate sample design</button>
+        <button id="closeButton" class="button button-secondary" type="button">Close</button>
+      </footer>
+    </main>
+
+    <script>
+      const renderButton = document.getElementById("renderButton");
+      const closeButton = document.getElementById("closeButton");
+      const statusCard = document.getElementById("statusCard");
+      const statusTitle = document.getElementById("statusTitle");
+      const statusDetail = document.getElementById("statusDetail");
+      const warningHeader = document.getElementById("warningHeader");
+      const warningList = document.getElementById("warningList");
+
+      renderButton.addEventListener("click", () => {
+        renderButton.disabled = true;
+        setStatus("Rendering", "Writing the sample design to Figma.", "normal");
+        setWarnings([]);
+        postPluginMessage({ type: "render-sample" });
+      });
+
+      closeButton.addEventListener("click", () => {
+        postPluginMessage({ type: "cancel" });
+      });
+
+      window.onmessage = (event) => {
+        const message = event.data.pluginMessage;
+        if (!message || typeof message.type !== "string") {
+          return;
+        }
+
+        if (message.type === "plugin-state") {
+          return;
+        }
+
+        if (message.type === "render-started") {
+          renderButton.disabled = true;
+          setStatus("Rendering", "Writing the sample design to Figma.", "normal");
+          return;
+        }
+
+        if (message.type === "render-succeeded") {
+          renderButton.disabled = false;
+          setStatus(
+            "Rendered",
+            `${message.renderedElementCount} elements rendered. ${message.warningCount} warnings.`,
+            "success"
+          );
+          setWarnings(message.warnings || []);
+          return;
+        }
+
+        if (message.type === "render-failed") {
+          renderButton.disabled = false;
+          setStatus("Failed", message.message || "Rendering failed.", "error");
+          setWarnings([...(message.errors || []), ...(message.warnings || [])]);
+          return;
+        }
+
+        if (message.type === "status") {
+          setStatus(message.tone === "error" ? "Failed" : "Status", message.message, message.tone);
+        }
+      };
+
+      postPluginMessage({ type: "request-plugin-state" });
+
+      function postPluginMessage(message) {
+        parent.postMessage({ pluginMessage: message }, "*");
+      }
+
+      function setStatus(title, detail, tone) {
+        statusCard.dataset.tone = tone || "normal";
+        statusTitle.textContent = title;
+        statusDetail.textContent = detail || "";
+      }
+
+      function setWarnings(warnings) {
+        const items = Array.isArray(warnings) ? warnings : [];
+        warningHeader.textContent = `Warnings (${items.length})`;
+        warningList.textContent = "";
+
+        if (items.length === 0) {
+          const empty = document.createElement("li");
+          empty.className = "warning-empty";
+          empty.textContent = "No warnings.";
+          warningList.appendChild(empty);
+          return;
+        }
+
+        for (const warning of items) {
+          const item = document.createElement("li");
+          item.className = "warning-item";
+
+          const code = document.createElement("span");
+          code.className = "warning-code";
+          code.textContent = warning.elementId ? `${warning.code} / ${warning.elementId}` : warning.code;
+
+          const message = document.createElement("span");
+          message.textContent = warning.message || "No detail.";
+
+          item.append(code, message);
+          warningList.appendChild(item);
+        }
+      }
+    </script>
+  </body>
+</html>
