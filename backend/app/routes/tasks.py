@@ -448,3 +448,49 @@ def get_task_layer_separation_candidates(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/asset-slice-candidates")
+def get_task_asset_slice_candidates(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_asset_slice_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ASSET_SLICE_NOT_FOUND",
+            "Asset slice result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="asset_slice_lookup",
+            task_id=task_id,
+        )
+
+    slice_path = Path(result["slice_path"] or "")
+    if not slice_path.exists():
+        raise ApiError(
+            "ASSET_SLICE_NOT_FOUND",
+            "Asset slice file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="asset_slice_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(slice_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "slices": document.get("slices", []),
+        "blockedComponentIds": document.get("blockedComponentIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

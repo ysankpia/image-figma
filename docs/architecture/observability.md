@@ -122,6 +122,20 @@ M18 layer separation result 至少包含：
 - `errorCode`
 - `separationPath`
 
+M19 asset slice result 至少包含：
+
+- `taskId`
+- `status`
+- `sliceCount`
+- `filledSliceCount`
+- `blockedCount`
+- `failedSliceCount`
+- role summary
+- strategy summary
+- `warningCount`
+- `errorCode`
+- `slicePath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：

@@ -19,6 +19,7 @@ class Storage:
         self.component_structures_dir = root / "component_structures"
         self.component_annotations_dir = root / "component_annotations"
         self.layer_separation_candidates_dir = root / "layer_separation_candidates"
+        self.asset_slice_candidates_dir = root / "asset_slice_candidates"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -35,6 +36,7 @@ class Storage:
             self.component_structures_dir,
             self.component_annotations_dir,
             self.layer_separation_candidates_dir,
+            self.asset_slice_candidates_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -78,6 +80,12 @@ class Storage:
     def layer_separation_path(self, task_id: str) -> Path:
         return self.layer_separation_candidates_dir / f"{task_id}.json"
 
+    def asset_slice_path(self, task_id: str) -> Path:
+        return self.asset_slice_candidates_dir / f"{task_id}.json"
+
+    def asset_slice_image_path(self, task_id: str, filename: str) -> Path:
+        return self.assets_dir / task_id / "slices" / filename
+
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
 
@@ -86,6 +94,9 @@ class Storage:
 
     def region_url(self, task_id: str, region_name: str) -> str:
         return f"{self.public_base_url}/files/assets/{task_id}/{region_name}.png"
+
+    def asset_slice_image_url(self, task_id: str, filename: str) -> str:
+        return f"{self.public_base_url}/files/assets/{task_id}/slices/{filename}"
 
     def save_upload(self, task_id: str, data: bytes) -> Path:
         path = self.upload_path(task_id)
@@ -151,4 +162,16 @@ class Storage:
         path = self.layer_separation_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_asset_slice(self, task_id: str, data: str) -> Path:
+        path = self.asset_slice_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_asset_slice_image(self, task_id: str, filename: str, data: bytes) -> Path:
+        path = self.asset_slice_image_path(task_id, filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
         return path

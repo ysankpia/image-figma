@@ -36,6 +36,15 @@ class PngPixels:
 
 
 @dataclass(frozen=True)
+class PngFillOperation:
+    x: int
+    y: int
+    width: int
+    height: int
+    rgb: tuple[int, int, int]
+
+
+@dataclass(frozen=True)
 class BackgroundSample:
     bbox: list[int]
     color: str
@@ -139,6 +148,59 @@ def crop_png(data: bytes, region: PngRegion) -> bytes:
             png_chunk(b"IEND", b""),
         ]
     )
+
+
+def encode_rgb_png(width: int, height: int, rows: list[bytes]) -> bytes:
+    if width <= 0 or height <= 0:
+        raise UnsupportedPngCropError("PNG dimensions must be positive.")
+    if len(rows) != height:
+        raise UnsupportedPngCropError("PNG row count does not match height.")
+    stride = width * 3
+    for row in rows:
+        if len(row) != stride:
+            raise UnsupportedPngCropError("PNG row length does not match width.")
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    compressed = zlib.compress(b"".join(b"\x00" + row for row in rows))
+    return b"".join(
+        [
+            PNG_SIGNATURE,
+            png_chunk(b"IHDR", ihdr),
+            png_chunk(b"IDAT", compressed),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def crop_and_fill_png(data: bytes, region: PngRegion, fill_operations: list[PngFillOperation]) -> bytes:
+    pixels = decode_png_pixels(data)
+    if region.x < 0 or region.y < 0 or region.width <= 0 or region.height <= 0:
+        raise UnsupportedPngCropError("Crop region is invalid.")
+    if region.x + region.width > pixels.width or region.y + region.height > pixels.height:
+        raise UnsupportedPngCropError("Crop region exceeds image bounds.")
+
+    cropped_rows: list[bytearray] = []
+    for row_index in range(region.y, region.y + region.height):
+        row = pixels.rows[row_index]
+        start = region.x * 3
+        end = start + region.width * 3
+        cropped_rows.append(bytearray(row[start:end]))
+
+    for operation in fill_operations:
+        if operation.x < 0 or operation.y < 0 or operation.width <= 0 or operation.height <= 0:
+            raise UnsupportedPngCropError("Fill region is invalid.")
+        if operation.x + operation.width > region.width or operation.y + operation.height > region.height:
+            raise UnsupportedPngCropError("Fill region exceeds crop bounds.")
+        if any(channel < 0 or channel > 255 for channel in operation.rgb):
+            raise UnsupportedPngCropError("Fill color channel is out of range.")
+        fill_bytes = bytes(operation.rgb)
+        for row_index in range(operation.y, operation.y + operation.height):
+            row = cropped_rows[row_index]
+            for column in range(operation.x, operation.x + operation.width):
+                offset = column * 3
+                row[offset : offset + 3] = fill_bytes
+
+    return encode_rgb_png(region.width, region.height, [bytes(row) for row in cropped_rows])
 
 
 def decode_png_pixels(data: bytes) -> PngPixels:

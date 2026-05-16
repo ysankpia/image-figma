@@ -26,6 +26,7 @@
 - 接入 component structure harness。
 - 接入 DSL component annotation/layer naming harness。
 - 接入 component-aware layer separation candidate harness。
+- 接入 local asset slice/simple fill experiment harness。
 - 做样例验收。
 
 不包含：
@@ -58,8 +59,9 @@
 16. 接入 component structure harness，把 M15 bindings 聚合为 component candidates 和 layout groups。状态：完成第一版。
 17. 接入 DSL component annotation/layer naming harness，把 M16 结构安全挂回已有 DSL element 的 `name/meta`。状态：完成第一版。
 18. 接入 component-aware layer separation candidate harness，先生成分层策略报告和 simple fill candidate，不改变画布。状态：完成第一版。
-19. 加入更细资产裁切、original reference 和 fallback。
-20. 用固定样例做 MVP 收敛。
+19. 接入 local asset slice/simple fill experiment harness，生成候选 PNG 资产但不改变画布。状态：完成第一版。
+20. 加入 partial fallback replacement 实验，基于 M19 资产做局部替换验证。
+21. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -145,6 +147,12 @@
 - `GET /api/tasks/{taskId}/layer-separation-candidates`。
 - layer separation candidate 报告，包含 candidates、fallbackContexts、blockedComponentIds 和 simple fill candidate 统计。
 - DSL 顶层 M18 meta，且不改任何已有 element。
+- AssetSliceCandidateDocument v0.1 合同。
+- SQLite `asset_slice_results`。
+- `GET /api/tasks/{taskId}/asset-slice-candidates`。
+- local asset slice candidate 报告，包含 slices、blockedComponentIds 和 original/filled slice 统计。
+- 本地 `assets/{taskId}/slices/*.png` 实验资产。
+- DSL 顶层 M19 meta，且不改任何已有 element 或 DSL assets。
 - 单元测试。
 
 验证命令：

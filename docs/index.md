@@ -24,6 +24,7 @@
 - 当前 component structure 计划：[plans/active/016-component-structure-harness.md](plans/active/016-component-structure-harness.md)
 - 当前 DSL component annotation 计划：[plans/active/017-dsl-component-annotation-layer-naming.md](plans/active/017-dsl-component-annotation-layer-naming.md)
 - 当前 component-aware layer separation candidate 计划：[plans/active/018-component-aware-layer-separation-candidates.md](plans/active/018-component-aware-layer-separation-candidates.md)
+- 当前 local asset slice/simple fill 计划：[plans/active/019-local-asset-slice-simple-fill-experiment.md](plans/active/019-local-asset-slice-simple-fill-experiment.md)
 
 ## By Task Type
 
@@ -92,6 +93,7 @@
 - M16 component structure 决策：[decisions/0019-use-component-structure-report-before-dsl-grouping.md](decisions/0019-use-component-structure-report-before-dsl-grouping.md)
 - M17 DSL component annotation 决策：[decisions/0020-annotate-dsl-before-slicing-or-componentization.md](decisions/0020-annotate-dsl-before-slicing-or-componentization.md)
 - M18 layer separation candidate 决策：[decisions/0021-use-layer-separation-candidates-before-asset-slicing.md](decisions/0021-use-layer-separation-candidates-before-asset-slicing.md)
+- M19 local asset slice 决策：[decisions/0022-generate-slice-candidates-before-partial-fallback-replacement.md](decisions/0022-generate-slice-candidates-before-partial-fallback-replacement.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

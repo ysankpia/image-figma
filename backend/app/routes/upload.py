@@ -7,6 +7,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, status
 
+from ..asset_slice import (
+    AssetSliceStorageAdapter,
+    apply_asset_slice_metadata,
+    build_asset_slice_document,
+    build_failed_asset_slice_document,
+    build_skipped_asset_slice_document,
+    slice_asset_records,
+)
 from ..component_annotation import (
     ComponentAnnotationDocument,
     apply_component_annotations,
@@ -30,6 +38,7 @@ from ..dsl_patch import (
 from ..dsl_factory import DslRegionAsset, build_deterministic_dsl
 from ..errors import ApiError, success_response
 from ..layer_separation import (
+    LayerSeparationDocument,
     apply_layer_separation_metadata,
     build_failed_layer_separation_document,
     build_layer_separation_document,
@@ -197,7 +206,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             structured_dsl,
             now,
         )
-        final_dsl = save_layer_separation_result(
+        separation_document, separated_dsl = save_layer_separation_result(
             task_id,
             image,
             data,
@@ -206,6 +215,15 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             structure_document,
             annotation_document,
             annotated_dsl,
+            now,
+        )
+        final_dsl = save_asset_slice_result(
+            task_id,
+            image,
+            data,
+            structure_document,
+            separation_document,
+            separated_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -887,9 +905,9 @@ def save_layer_separation_result(
     annotation_document: ComponentAnnotationDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[LayerSeparationDocument | None, dict[str, object]]:
     if not state.settings.layer_separation_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -968,6 +986,117 @@ def save_layer_separation_result(
             "repair_required_count": int(document.meta.get("repairRequiredCount", 0)),
             "embedded_text_count": int(document.meta.get("embeddedTextCount", 0)),
             "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_asset_slice_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    structure_document: ComponentStructureDocument,
+    layer_separation_document: LayerSeparationDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.asset_slice_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if layer_separation_document is None:
+            document = build_skipped_asset_slice_document(
+                task_id=task_id,
+                image=image,
+                code="layer_separation_not_completed",
+                message="Asset slice generation skipped because layer separation did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_asset_slice_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                layer_separation_document=layer_separation_document,
+                structure_document=structure_document,
+                dsl=input_dsl,
+                settings=state.settings,
+                storage=AssetSliceStorageAdapter(
+                    assets_root=state.storage.assets_dir,
+                    public_base_url=state.settings.public_base_url,
+                ),
+            )
+            final_dsl = apply_asset_slice_metadata(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="asset_slice",
+                    error_code="ASSET_SLICE_VALIDATION_FAILED",
+                    message="Asset slice validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_asset_slice_document(
+                    task_id=task_id,
+                    image=image,
+                    code="ASSET_SLICE_VALIDATION_FAILED",
+                    message="Asset slice validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="asset_slice",
+            error_code="ASSET_SLICE_FAILED",
+            message="Asset slice generation failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_asset_slice_document(
+            task_id=task_id,
+            image=image,
+            code="ASSET_SLICE_FAILED",
+            message="Asset slice generation failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="asset_slice",
+            error_code=document.error["code"] if document.error else "ASSET_SLICE_FAILED",
+            message=document.error["message"] if document.error else "Asset slice generation failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in slice_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="asset_slice",
+                error_code="asset_db_insert_failed",
+                message="Asset slice asset database insert failed.",
+                detail=str(error),
+            )
+
+    slice_path = state.storage.save_asset_slice(task_id, json_dumps(document.to_dict()))
+    state.database.insert_asset_slice_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "slice_path": str(slice_path),
+            "slice_count": int(document.meta.get("sliceCount", 0)),
+            "filled_slice_count": int(document.meta.get("filledSliceCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "failed_slice_count": int(document.meta.get("failedSliceCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

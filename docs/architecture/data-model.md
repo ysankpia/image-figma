@@ -18,6 +18,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `component_structure_results`
 - `component_annotation_results`
 - `layer_separation_results`
+- `asset_slice_results`
 
 后续建议表：
 
@@ -81,6 +82,8 @@ M18 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploa
 - `banner`
 - `fallback`
 - `icon`
+- `asset_slice_candidate`
+- `asset_slice_filled_candidate`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -91,6 +94,7 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_region_header`：顶部 region crop。
 - `asset_region_content`：中部 region crop。
 - `asset_region_bottom`：底部 region crop。
+- `asset_slice_*`：M19 生成的实验 slice PNG，只通过 `/asset-slice-candidates` 暴露，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -297,6 +301,27 @@ Component annotation payload 本体写入 `backend/storage/component_annotations
 - `created_at`
 
 Layer separation payload 本体写入 `backend/storage/layer_separation_candidates/{taskId}.json`。它保存 `candidates`、`fallbackContexts`、`blockedComponentIds` 和统计 meta。M18 只消费 M14/M15/M16/M17 facts 和已有 PNG 采样能力，输出分层策略候选与 simple fill candidate；不会切图、不会生成填充 PNG、不会删除 fallback、不会修改已有 DSL element，也不会引入 Pillow/OpenCV。
+
+## asset_slice_results
+
+用途：记录 M19 local asset slice candidate 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `slice_path`
+- `slice_count`
+- `filled_slice_count`
+- `blocked_count`
+- `failed_slice_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Asset slice payload 本体写入 `backend/storage/asset_slice_candidates/{taskId}.json`。它保存 `slices`、`blockedComponentIds` 和统计 meta。生成的 PNG 写入 `backend/storage/assets/{taskId}/slices/`，并以 `asset_slice_candidate` 或 `asset_slice_filled_candidate` role 登记到 `assets` 表。M19 不把这些实验 slice 写入 DSL `assets` 数组，不改变 Figma 可见输出。
 
 ## model_call_logs
 

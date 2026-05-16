@@ -6,11 +6,14 @@ import zlib
 import pytest
 
 from app.png_tools import (
+    PngFillOperation,
     PngMetadata,
     PngRegion,
     UnsupportedPngCropError,
+    crop_and_fill_png,
     crop_png,
     decode_png_pixels,
+    encode_rgb_png,
     plan_regions,
     read_png_metadata,
     sample_rect_edges,
@@ -79,6 +82,51 @@ def test_crop_png_rejects_unsupported_color_type_after_metadata_is_readable() ->
 
     with pytest.raises(UnsupportedPngCropError):
         crop_png(bytes(png), PngRegion("header", 0, 0, 20, 7))
+
+
+def test_encode_rgb_png_writes_readable_png() -> None:
+    rows = [bytes((12, 34, 56)) * 5 for _ in range(4)]
+
+    png = encode_rgb_png(5, 4, rows)
+
+    metadata = read_png_metadata(png)
+    pixels = decode_png_pixels(png)
+    assert metadata == PngMetadata(5, 4, 8, 2, 0, 0, 0)
+    assert pixels.rows == rows
+
+
+def test_crop_and_fill_png_fills_crop_local_bbox() -> None:
+    rows = [bytearray(bytes((247, 248, 250)) * 8) for _ in range(8)]
+    png = make_png_from_rows(8, 8, [bytes(row) for row in rows])
+
+    filled = crop_and_fill_png(
+        png,
+        PngRegion("slice", 2, 2, 4, 4),
+        [PngFillOperation(1, 1, 2, 2, (22, 119, 255))],
+    )
+
+    pixels = decode_png_pixels(filled)
+    assert pixels.width == 4
+    assert pixels.height == 4
+    for row_index in range(4):
+        for column in range(4):
+            offset = column * 3
+            rgb = tuple(pixels.rows[row_index][offset : offset + 3])
+            if 1 <= row_index < 3 and 1 <= column < 3:
+                assert rgb == (22, 119, 255)
+            else:
+                assert rgb == (247, 248, 250)
+
+
+def test_crop_and_fill_png_rejects_fill_outside_crop() -> None:
+    png = make_rgb_png(8, 8, (247, 248, 250))
+
+    with pytest.raises(UnsupportedPngCropError):
+        crop_and_fill_png(
+            png,
+            PngRegion("slice", 2, 2, 4, 4),
+            [PngFillOperation(3, 3, 2, 2, (22, 119, 255))],
+        )
 
 
 def test_decode_png_pixels_and_sample_rgb_background() -> None:

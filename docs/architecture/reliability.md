@@ -87,6 +87,16 @@ M18 layer separation candidate 是可观测的非关键路径：
 - PNG pixel decode unsupported 只记录 warning，不让上传失败。
 - M18 不做 AI inpainting，不引入 Pillow/OpenCV，不重建图标、圆形、三角形、五角星或复杂图形。
 
+M19 local asset slice candidate 是可观测的非关键路径：
+
+- 默认 `ASSET_SLICE_ENABLED=true`，但不改变 Figma 可见输出。
+- asset slice failed/skipped 写入 `asset_slice_results` 和 `error_logs`。
+- asset slice validation failed 时 `/dsl` 回退 M18 输出，只是不追加 M19 meta。
+- M19 只修改 DSL 顶层 `meta`；不能修改任何已有 element，也不能修改 DSL `assets` 数组。
+- 生成的 slice PNG 只作为实验资产存在于 storage 和 `/asset-slice-candidates` 报告里。
+- 单个 slice crop/fill 失败不能让 upload 失败。
+- M19 不做正式局部 fallback 替换，不删除 fallback，不做 AI inpainting，不引入 Pillow/OpenCV，不重建图标、圆形、三角形、五角星或复杂图形。
+
 整页失败只发生在：
 
 - PNG 无法读取。

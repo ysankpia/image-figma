@@ -47,6 +47,8 @@ docs/
 - PNG region slicer：Python 标准库。
 - Visual primitives：M8 已建立合同和 fake/OpenAI provider 边界，结果不进入 DSL。
 - OCR/DSL patch/text replacement：M9 已建立 OCR 和 hidden candidate patch harness，M10 可选接入百度 PP-OCRv5 异步 OCR，M11 建立低风险文字替换基座，M12 默认 debug 记录覆盖率扩展决策，apply 时替换低复杂度背景文字。
+- Structure harness：M15-M17 生成 text binding、component structure 和 DSL annotation/layer naming 报告。
+- Layer and asset harness：M18 生成 layer separation candidates，M19 生成本地 asset slice candidates；两者都不改变 Figma 可见输出。
 
 ## Major Modules
 
@@ -55,8 +57,8 @@ docs/
 - DSL Schema：定义后端和 Renderer 的稳定合同。
 - Renderer：把 DSL 转成 Figma 节点。
 - Backend API：上传、任务状态、DSL、资产、健康检查。
-- Processing Pipeline：预处理、裁切、visual primitive candidates、OCR candidates、DSL patch、DSL Builder、校验和基础修复。
-- Storage：原图、资产、DSL 结果、primitive 结果、OCR 结果、patch 结果、text replacement 结果、日志。
+- Processing Pipeline：预处理、裁切、visual primitive candidates、OCR candidates、DSL patch、text replacement、binding、structure、annotation、layer separation、asset slice candidate、DSL Builder、校验和基础修复。
+- Storage：原图、资产、DSL 结果、primitive 结果、OCR 结果、patch 结果、text replacement 结果、binding/structure/annotation/layer separation/asset slice 报告、日志。
 
 ## Module Boundaries
 

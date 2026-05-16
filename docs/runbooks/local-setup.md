@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming 和 M18 layer separation candidate harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate 和 M19 local asset slice/simple fill experiment harness。
 
 ## Prerequisites
 
@@ -194,6 +194,18 @@ LAYER_SEPARATION_MAX_COMPONENT_AREA_RATIO=0.35
 
 M18 用于判断 component 后续是否适合 shape + editable text、image slice with simple fill candidate、future repair、embedded text 或 no text。它不切图、不生成填充 PNG、不删除 fallback、不修改已有 DSL element、不做 AI inpainting、不引入 Pillow/OpenCV，也不做图标、圆形、三角形、五角星或复杂图形重建。
 
+M19 local asset slice candidate 默认开启，生成 `/asset-slice-candidates` 报告和本地实验 PNG，并只更新 DSL 顶层 meta：
+
+```bash
+ASSET_SLICE_ENABLED=true
+ASSET_SLICE_MAX_CANDIDATES=24
+ASSET_SLICE_MIN_CONFIDENCE=0.70
+ASSET_SLICE_MAX_AREA_RATIO=0.25
+ASSET_SLICE_GENERATE_FILLED=true
+```
+
+M19 基于 M18 低风险候选生成 original slice 和可选 filled slice，写入 `backend/storage/assets/{taskId}/slices/`。这些 slice 不进入 DSL `assets`，不会改变 Figma 可见输出。M19 不删除 fallback、不做正式局部替换、不做 AI inpainting、不引入 Pillow/OpenCV，也不做图标、圆形、三角形、五角星或复杂图形重建。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash
@@ -255,6 +267,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/component-structures` 默认返回 `status: "completed"`，包含 components、groups 或 unstructuredContainerIds。
 - `/api/tasks/{taskId}/component-annotations` 默认返回 `status: "completed"`，包含 annotations、groupHints、unannotatedElementIds 或 unresolvedComponentIds。
 - `/api/tasks/{taskId}/layer-separation-candidates` 默认返回 `status: "completed"`，包含 candidates、fallbackContexts、blockedComponentIds 和 meta。
+- `/api/tasks/{taskId}/asset-slice-candidates` 默认返回 `status: "completed"`，包含 slices、blockedComponentIds 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

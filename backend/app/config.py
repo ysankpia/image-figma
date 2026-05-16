@@ -50,6 +50,11 @@ class Settings:
     layer_separation_min_confidence: float = 0.70
     layer_separation_simple_fill_tolerance: int = 24
     layer_separation_max_component_area_ratio: float = 0.35
+    asset_slice_enabled: bool = True
+    asset_slice_max_candidates: int = 24
+    asset_slice_min_confidence: float = 0.70
+    asset_slice_max_area_ratio: float = 0.25
+    asset_slice_generate_filled: bool = True
 
 
 def get_settings() -> Settings:
@@ -100,6 +105,11 @@ def get_settings() -> Settings:
         layer_separation_min_confidence=float(os.getenv("LAYER_SEPARATION_MIN_CONFIDENCE", "0.70")),
         layer_separation_simple_fill_tolerance=int(os.getenv("LAYER_SEPARATION_SIMPLE_FILL_TOLERANCE", "24")),
         layer_separation_max_component_area_ratio=float(os.getenv("LAYER_SEPARATION_MAX_COMPONENT_AREA_RATIO", "0.35")),
+        asset_slice_enabled=parse_bool(os.getenv("ASSET_SLICE_ENABLED", "true")),
+        asset_slice_max_candidates=int(os.getenv("ASSET_SLICE_MAX_CANDIDATES", "24")),
+        asset_slice_min_confidence=float(os.getenv("ASSET_SLICE_MIN_CONFIDENCE", "0.70")),
+        asset_slice_max_area_ratio=float(os.getenv("ASSET_SLICE_MAX_AREA_RATIO", "0.25")),
+        asset_slice_generate_filled=parse_bool(os.getenv("ASSET_SLICE_GENERATE_FILLED", "true")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

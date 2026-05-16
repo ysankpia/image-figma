@@ -110,6 +110,8 @@ Backend API：
 - Renderer 必须覆盖显式 DSL `element.name` 会成为 Figma node name，M17 不需要改 Renderer 协议。
 - M18 layer separation 必须覆盖默认生成报告、`LAYER_SEPARATION_ENABLED=false` 不生成报告、`/layer-separation-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element。
 - M18 回归必须保护 primary button/badge/status/outline/bottom nav label 的 simple fill candidate、tip/shortcut/preview 的 simple fill 或 repair required、fallback region 只进 fallbackContexts、component bbox 过大或 bottom nav fill target 侵入 icon 区域时 blocked。
+- M19 asset slice 必须覆盖默认生成报告、`ASSET_SLICE_ENABLED=false` 不生成报告、`/asset-slice-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
+- M19 回归必须保护 tip/shortcut 等低风险 slice role 能生成 original/filled slice PNG，primary button/badge/status/bottom nav 等 shape/text role 默认跳过，bbox 过大或 fill target 超出 crop 时 blocked 或 original-only，fallback region 不生成业务 slice。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
@@ -127,6 +129,7 @@ PNG cropper / sampler：
 - 不支持格式抛出明确异常，由上传链路降级为整图 fallback 或跳过 text replacement。
 - RGB/RGBA PNG pixel decode 和背景采样必须覆盖。
 - M14 局部 edge/dominant background sampling 必须能跳过图例色块、按钮边框和少量文字前景像素。
+- M19 `encode_rgb_png` 和 `crop_and_fill_png` 必须覆盖可读 PNG 输出、solid fill 生效和 fill 越界拒绝。
 
 Visual Primitives：
 

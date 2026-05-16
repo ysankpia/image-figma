@@ -185,6 +185,21 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS asset_slice_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  slice_path TEXT,
+                  slice_count INTEGER NOT NULL,
+                  filled_slice_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  failed_slice_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -410,6 +425,28 @@ class Database:
     def get_layer_separation_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM layer_separation_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_asset_slice_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO asset_slice_results (
+                  task_id, status, slice_path, slice_count, filled_slice_count,
+                  blocked_count, failed_slice_count, warning_count, error_code,
+                  error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :slice_path, :slice_count, :filled_slice_count,
+                  :blocked_count, :failed_slice_count, :warning_count, :error_code,
+                  :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_asset_slice_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM asset_slice_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,
