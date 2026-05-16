@@ -134,6 +134,12 @@ class BackgroundEvidence:
     bbox: list[int] | None
 
 
+@dataclass(frozen=True)
+class FillTarget:
+    bbox: list[int]
+    background: dict[str, Any] | None
+
+
 def build_layer_separation_document(
     *,
     task_id: str,
@@ -314,7 +320,7 @@ def build_candidate_for_component(
     else:
         reasons.append("missing_text_background_sample")
 
-    fill_targets = fill_target_bboxes(
+    fill_targets = fill_targets_for_component(
         decisions=decisions,
         cover_ids=cover_ids,
         elements=elements,
@@ -494,19 +500,19 @@ def cover_background_evidence(
     return None
 
 
-def fill_target_bboxes(
+def fill_targets_for_component(
     *,
     decisions: list[TextReplacementDecision],
     cover_ids: list[str],
     elements: dict[str, dict[str, Any]],
     image: PngMetadata,
-) -> list[list[int]]:
-    targets: list[list[int]] = []
+) -> list[FillTarget]:
+    targets: list[FillTarget] = []
     for decision in decisions:
         bbox = decision.expandedBBox or decision.bbox
         normalized = normalize_bbox(bbox, image)
         if normalized is not None:
-            targets.append(normalized)
+            targets.append(FillTarget(normalized, decision.background))
     for cover_id in cover_ids:
         element = elements.get(cover_id)
         if element is None:
@@ -524,8 +530,8 @@ def fill_target_bboxes(
             image,
         )
         if normalized is not None:
-            targets.append(normalized)
-    return unique_bboxes(targets)
+            targets.append(FillTarget(normalized, cover_background_dict(element)))
+    return unique_fill_targets(targets)
 
 
 def simple_fill_candidate_is_safe(
@@ -534,13 +540,14 @@ def simple_fill_candidate_is_safe(
     role: str,
     evidence: BackgroundEvidence,
     decisions: list[TextReplacementDecision],
-    fill_targets: list[list[int]],
+    fill_targets: list[FillTarget],
     image: PngMetadata,
     settings: Settings,
 ) -> bool:
     if component.confidence < settings.layer_separation_min_confidence:
         return False
-    if not fill_targets:
+    target_bboxes = [target.bbox for target in fill_targets]
+    if not target_bboxes:
         return False
     if evidence.kind not in {"solid", "low_complexity"}:
         return False
@@ -553,11 +560,13 @@ def simple_fill_candidate_is_safe(
         for decision in decisions
     ) and evidence.source != "text_replacement_cover_fill":
         return False
+    if not fill_targets_have_consistent_background(fill_targets, evidence, settings):
+        return False
     max_fill_area = image.width * image.height * 0.05
-    for target in fill_targets:
+    for target in target_bboxes:
         if not bbox_in_bounds(target, image) or target[2] * target[3] > max_fill_area:
             return False
-    if role == "bottom_nav_item" and bottom_nav_fill_invades_icon(fill_targets, component.bbox):
+    if role == "bottom_nav_item" and bottom_nav_fill_invades_icon(target_bboxes, component.bbox):
         return False
     return True
 
@@ -566,11 +575,12 @@ def blocking_reasons(
     *,
     component: ComponentStructureItem,
     role: str,
-    fill_targets: list[list[int]],
+    fill_targets: list[FillTarget],
     image: PngMetadata,
     settings: Settings,
 ) -> list[str]:
     reasons: list[str] = []
+    target_bboxes = [target.bbox for target in fill_targets]
     if component.confidence < settings.layer_separation_min_confidence:
         reasons.append("component_confidence_low")
     if not bbox_in_bounds(component.bbox, image):
@@ -579,9 +589,9 @@ def blocking_reasons(
         reasons.append("component_bbox_too_small")
     elif component.bbox[2] * component.bbox[3] / max(1, image.width * image.height) > settings.layer_separation_max_component_area_ratio:
         reasons.append("component_bbox_too_large")
-    if fill_targets and role == "bottom_nav_item" and bottom_nav_fill_invades_icon(fill_targets, component.bbox):
+    if target_bboxes and role == "bottom_nav_item" and bottom_nav_fill_invades_icon(target_bboxes, component.bbox):
         reasons.append("near_bottom_nav_icon")
-    if fill_targets and min(target[1] for target in fill_targets) < 44:
+    if target_bboxes and min(target[1] for target in target_bboxes) < 44:
         reasons.append("near_status_bar")
     return reasons
 
@@ -602,7 +612,7 @@ def classify_component_strategy(
         return "shape_background_plus_editable_text", "candidate", "editable_text_over_fill", "low"
     if simple_fill_ok:
         return "image_slice_with_simple_fill_candidate", "candidate", "editable_text_over_fill", "low"
-    if evidence.kind in {"complex", "unknown"} and role in SLICE_TEXT_ROLES | {"legend_group"}:
+    if role in SLICE_TEXT_ROLES | {"legend_group"}:
         return "image_slice_with_repair_required", "candidate", "editable_text_over_repaired_background", "medium"
     return "image_slice_with_embedded_text", "candidate", "embedded_text", "medium"
 
@@ -818,7 +828,7 @@ def background_to_contract(evidence: BackgroundEvidence) -> dict[str, Any]:
 def fill_candidate_contract(
     enabled: bool,
     evidence: BackgroundEvidence,
-    fill_targets: list[list[int]],
+    fill_targets: list[FillTarget],
 ) -> dict[str, Any]:
     if not enabled:
         return {
@@ -832,7 +842,7 @@ def fill_candidate_contract(
     return {
         "enabled": True,
         "mode": "solid_color_fill",
-        "targetBBoxes": fill_targets,
+        "targetBBoxes": [target.bbox for target in fill_targets],
         "color": evidence.color,
         "confidence": round(min(0.99, evidence.confidence + 0.04), 3),
         "source": "m14_expanded_bbox" if evidence.source == "m14_text_replacement_background" else evidence.source,
@@ -902,6 +912,47 @@ def hex_to_rgb(value: str) -> list[int] | None:
         return None
 
 
+def cover_background_dict(element: dict[str, Any]) -> dict[str, Any] | None:
+    fill = (element.get("style") or {}).get("fill") if isinstance(element.get("style"), dict) else None
+    if not isinstance(fill, str) or not fill.startswith("#"):
+        return None
+    return {
+        "color": fill,
+        "meanRgb": hex_to_rgb(fill),
+        "maxChannelDelta": 0,
+        "confidence": 0.82,
+    }
+
+
+def fill_targets_have_consistent_background(
+    targets: list[FillTarget],
+    evidence: BackgroundEvidence,
+    settings: Settings,
+) -> bool:
+    if evidence.mean_rgb is None:
+        return False
+    comparable: list[list[int]] = []
+    for target in targets:
+        background = target.background
+        if not isinstance(background, dict):
+            return False
+        rgb = coerce_rgb(background.get("meanRgb"))
+        if rgb is None:
+            rgb = hex_to_rgb(str(background.get("color") or ""))
+        if rgb is None:
+            return False
+        try:
+            max_delta = int(background.get("maxChannelDelta", 999))
+            confidence = float(background.get("confidence", 0))
+        except (TypeError, ValueError):
+            return False
+        if max_delta > settings.layer_separation_simple_fill_tolerance or confidence < 0.65:
+            return False
+        comparable.append(rgb)
+    tolerance = settings.layer_separation_simple_fill_tolerance
+    return all(rgb_distance(rgb, evidence.mean_rgb) <= tolerance for rgb in comparable)
+
+
 def normalize_bbox(bbox: list[Any], image: PngMetadata) -> list[int] | None:
     if len(bbox) != 4:
         return None
@@ -952,6 +1003,18 @@ def unique_bboxes(bboxes: list[list[int]]) -> list[list[int]]:
     return result
 
 
+def unique_fill_targets(targets: list[FillTarget]) -> list[FillTarget]:
+    result: list[FillTarget] = []
+    seen: set[tuple[int, int, int, int]] = set()
+    for target in targets:
+        key = tuple(target.bbox)
+        if key in seen:
+            continue
+        result.append(target)
+        seen.add(key)
+    return result
+
+
 def unique_preserve_order(values: list[str]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -975,3 +1038,7 @@ def summarize_risks(candidates: list[LayerSeparationCandidate]) -> dict[str, int
     for candidate in candidates:
         summary[candidate.risk] = summary.get(candidate.risk, 0) + 1
     return summary
+
+
+def rgb_distance(left: list[int], right: list[int]) -> int:
+    return max(abs(left[index] - right[index]) for index in range(3))

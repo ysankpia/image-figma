@@ -214,6 +214,64 @@ def test_complex_preview_background_requires_repair_before_slice() -> None:
     assert "repair_required_before_slice" in preview.reasons
 
 
+def test_mixed_background_component_does_not_get_single_color_fill() -> None:
+    image, ocr, replacement, binding, structure, dsl = home_like_annotation_inputs()
+    preview_binding_ids = next(component.bindingIds for component in structure.components if component.id == "component_preview_card_001")
+    preview_ocr_ids = {item.ocrBlockId for item in binding.bindings if item.id in preview_binding_ids}
+    for index, decision in enumerate(decision for decision in replacement.decisions if decision.ocrBlockId in preview_ocr_ids):
+        decision.decision = "accepted"
+        decision.quality["applyEligible"] = True
+        decision.application = {"status": "applied", "reason": "quality_gate_passed"}
+        if decision.background is None:
+            decision.background = {}
+        if index == 0:
+            decision.background.update(
+                {
+                    "color": "#1468E6",
+                    "meanRgb": [20, 104, 230],
+                    "maxChannelDelta": 4,
+                    "confidence": 0.89,
+                }
+            )
+        else:
+            decision.background.update(
+                {
+                    "color": "#F7F8FA",
+                    "meanRgb": [247, 248, 250],
+                    "maxChannelDelta": 5,
+                    "confidence": 0.88,
+                }
+            )
+    annotation = build_component_annotation_document(
+        task_id="task_home",
+        image=image,
+        ocr_document=ocr,
+        replacement_document=replacement,
+        binding_document=binding,
+        structure_document=structure,
+        dsl=dsl,
+        settings=make_layer_settings(),
+    )
+
+    document = build_layer_separation_document(
+        task_id="task_home",
+        image=image,
+        png_data=png_for_ocr(image, ocr),
+        replacement_document=replacement,
+        binding_document=binding,
+        structure_document=structure,
+        annotation_document=annotation,
+        dsl=dsl,
+        settings=make_layer_settings(),
+    )
+
+    preview = next(candidate for candidate in document.candidates if candidate.componentId == "component_preview_card_001")
+    assert preview.strategy == "image_slice_with_repair_required"
+    assert preview.fillCandidate["enabled"] is False
+    assert preview.fillCandidate["targetBBoxes"] == []
+    assert "simple_fill_candidate" not in preview.reasons
+
+
 def test_component_without_text_becomes_image_slice_without_text() -> None:
     image, ocr, replacement, binding, structure, dsl = home_like_annotation_inputs()
     structure.components.append(
