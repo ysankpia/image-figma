@@ -1,6 +1,6 @@
 # M4 FastAPI 后端假任务流计划
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-16
 - 负责人：Codex
 

@@ -8,6 +8,7 @@
 | --- | --- | --- | --- |
 | `API_BASE_URL` | 插件调用后端 API | `http://localhost:8000/api` | 当前插件硬编码同值，后续设置页再读取 |
 | `PUBLIC_BASE_URL` | 后端生成 `/files/...` URL | `http://localhost:8000` | 否 |
+| `CORS_ALLOW_ORIGINS` | 允许浏览器/Figma 插件调用后端的 Origin，逗号分隔 | `*` | 否 |
 | `OPENAI_API_KEY` | AI 视觉模型调用 | 无 | 接入 AI 后是 |
 | `STORAGE_ROOT` | 本地文件存储根目录 | `backend/storage` | 否 |
 | `DATABASE_PATH` | SQLite 数据库路径 | `backend/storage/app.db` | 否 |

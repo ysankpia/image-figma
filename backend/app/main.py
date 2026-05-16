@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .errors import ApiError, error_response
@@ -10,6 +11,12 @@ from .state import state
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Image-to-Figma Backend", version=state.settings.version)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=state.settings.cors_allow_origins,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+    )
     app.add_exception_handler(ApiError, lambda _request, error: error_response(error))
     app.include_router(health.router)
     app.include_router(upload.router)

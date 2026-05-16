@@ -12,6 +12,7 @@ class Settings:
     database_path: Path
     public_base_url: str
     max_upload_bytes: int
+    cors_allow_origins: list[str]
 
 
 def get_settings() -> Settings:
@@ -24,4 +25,10 @@ def get_settings() -> Settings:
         database_path=database_path,
         public_base_url=os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
         max_upload_bytes=int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
+        cors_allow_origins=parse_csv(os.getenv("CORS_ALLOW_ORIGINS", "*")),
     )
+
+
+def parse_csv(value: str) -> list[str]:
+    items = [item.strip() for item in value.split(",")]
+    return [item for item in items if item]

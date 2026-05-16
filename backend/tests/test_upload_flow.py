@@ -70,3 +70,44 @@ def test_missing_task_returns_task_not_found(client: TestClient) -> None:
     assert body["success"] is False
     assert body["error"]["code"] == "TASK_NOT_FOUND"
     assert body["error"]["taskId"] == "task_missing"
+
+
+def test_figma_origin_cors_preflight_is_allowed(client: TestClient) -> None:
+    response = client.options(
+        "/api/upload",
+        headers={
+            "Origin": "https://www.figma.com",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_cors_allow_origins_can_be_restricted(tmp_path, monkeypatch) -> None:
+    import importlib
+    import sys
+
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "https://www.figma.com,http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as restricted_client:
+        response = restricted_client.options(
+            "/api/upload",
+            headers={
+                "Origin": "https://www.figma.com",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://www.figma.com"
