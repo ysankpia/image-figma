@@ -169,6 +169,22 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS layer_separation_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  separation_path TEXT,
+                  candidate_count INTEGER NOT NULL,
+                  fill_candidate_count INTEGER NOT NULL,
+                  repair_required_count INTEGER NOT NULL,
+                  embedded_text_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -372,6 +388,28 @@ class Database:
     def get_component_annotation_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM component_annotation_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_layer_separation_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO layer_separation_results (
+                  task_id, status, separation_path, candidate_count, fill_candidate_count,
+                  repair_required_count, embedded_text_count, blocked_count, warning_count,
+                  error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :separation_path, :candidate_count, :fill_candidate_count,
+                  :repair_required_count, :embedded_text_count, :blocked_count, :warning_count,
+                  :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_layer_separation_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM layer_separation_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

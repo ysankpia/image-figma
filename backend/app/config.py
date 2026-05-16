@@ -46,6 +46,10 @@ class Settings:
     component_annotation_enabled: bool = True
     component_annotation_layer_naming: bool = True
     component_annotation_min_confidence: float = 0.70
+    layer_separation_enabled: bool = True
+    layer_separation_min_confidence: float = 0.70
+    layer_separation_simple_fill_tolerance: int = 24
+    layer_separation_max_component_area_ratio: float = 0.35
 
 
 def get_settings() -> Settings:
@@ -92,6 +96,10 @@ def get_settings() -> Settings:
         component_annotation_enabled=parse_bool(os.getenv("COMPONENT_ANNOTATION_ENABLED", "true")),
         component_annotation_layer_naming=parse_bool(os.getenv("COMPONENT_ANNOTATION_LAYER_NAMING", "true")),
         component_annotation_min_confidence=float(os.getenv("COMPONENT_ANNOTATION_MIN_CONFIDENCE", "0.70")),
+        layer_separation_enabled=parse_bool(os.getenv("LAYER_SEPARATION_ENABLED", "true")),
+        layer_separation_min_confidence=float(os.getenv("LAYER_SEPARATION_MIN_CONFIDENCE", "0.70")),
+        layer_separation_simple_fill_tolerance=int(os.getenv("LAYER_SEPARATION_SIMPLE_FILL_TOLERANCE", "24")),
+        layer_separation_max_component_area_ratio=float(os.getenv("LAYER_SEPARATION_MAX_COMPONENT_AREA_RATIO", "0.35")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

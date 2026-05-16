@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, and serves local asset URLs.
 
 ## Run
 
@@ -55,6 +55,7 @@ curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 curl http://localhost:8000/api/tasks/{taskId}/component-structures
 curl http://localhost:8000/api/tasks/{taskId}/component-annotations
+curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 ```
 
 Visible text replacement is debug-only by default:
@@ -92,3 +93,14 @@ COMPONENT_ANNOTATION_MIN_CONFIDENCE=0.70
 ```
 
 It writes `backend/storage/component_annotations/{taskId}.json` and exposes `GET /api/tasks/{taskId}/component-annotations`. Annotation reports connect M16 components/groups back to existing DSL elements and update DSL `name`/`meta` only. They do not slice images, create Figma groups/components, delete fallback regions, change visible layout/style/content, or reconstruct icons, circles, triangles, stars, or complex shapes.
+
+M18 layer separation candidates are enabled by default:
+
+```bash
+LAYER_SEPARATION_ENABLED=true
+LAYER_SEPARATION_MIN_CONFIDENCE=0.70
+LAYER_SEPARATION_SIMPLE_FILL_TOLERANCE=24
+LAYER_SEPARATION_MAX_COMPONENT_AREA_RATIO=0.35
+```
+
+It writes `backend/storage/layer_separation_candidates/{taskId}.json` and exposes `GET /api/tasks/{taskId}/layer-separation-candidates`. M18 consumes M14 replacement evidence plus M15/M16/M17 structure facts to decide whether each component should later use shape + editable text, image slice with simple fill candidate, future repair, embedded text, or no text. M18 only updates top-level DSL meta. It does not slice images, generate filled PNGs, delete fallback regions, change existing DSL elements, create Figma groups/components, do AI inpainting, introduce Pillow/OpenCV, or reconstruct icons and complex shapes.

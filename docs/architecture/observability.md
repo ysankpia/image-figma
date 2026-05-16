@@ -106,6 +106,22 @@ M17 component annotation result 至少包含：
 - `errorCode`
 - `annotationPath`
 
+M18 layer separation result 至少包含：
+
+- `taskId`
+- `status`
+- `candidateCount`
+- `fillCandidateCount`
+- `repairRequiredCount`
+- `embeddedTextCount`
+- `blockedCount`
+- strategy summary
+- risk summary
+- fallback context count
+- `warningCount`
+- `errorCode`
+- `separationPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -123,6 +139,8 @@ M17 component annotation result 至少包含：
 - component structure role/group/layout 分布。
 - component annotation annotated/unannotated/group hint 数量。
 - component annotation role 分布和 unresolved component 数量。
+- layer separation candidate/fill/repair/embedded/blocked 数量。
+- layer separation strategy/risk 分布。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -137,7 +155,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -157,6 +175,7 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - text binding JSON。
 - component structure JSON。
 - component annotation JSON。
+- layer separation candidate JSON。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

@@ -52,6 +52,7 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         "m15_text_primitive_binding",
         "m16_component_structure_harness",
         "m17_component_annotation",
+        "m18_layer_separation_candidates",
     ]
     assert dsl["meta"]["textPrimitiveBindingCount"] == 0
     assert dsl["meta"]["textPrimitiveContainerCount"] == 3
@@ -63,6 +64,11 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     assert dsl["meta"]["componentAnnotatedElementCount"] == 0
     assert dsl["meta"]["componentUnannotatedElementCount"] == 2
     assert dsl["meta"]["componentGroupHintCount"] == 0
+    assert dsl["meta"]["layerSeparationCandidateCount"] == 0
+    assert dsl["meta"]["layerSeparationFillCandidateCount"] == 0
+    assert dsl["meta"]["layerSeparationRepairRequiredCount"] == 0
+    assert dsl["meta"]["layerSeparationEmbeddedTextCount"] == 0
+    assert dsl["meta"]["layerSeparationBlockedCount"] == 0
 
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert set(assets) == {

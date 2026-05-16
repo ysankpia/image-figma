@@ -25,6 +25,7 @@
 - 接入 text-primitive binding harness。
 - 接入 component structure harness。
 - 接入 DSL component annotation/layer naming harness。
+- 接入 component-aware layer separation candidate harness。
 - 做样例验收。
 
 不包含：
@@ -56,8 +57,9 @@
 15. 接入 text-primitive binding harness，为组件化前的归属关系打基础。状态：完成第一版。
 16. 接入 component structure harness，把 M15 bindings 聚合为 component candidates 和 layout groups。状态：完成第一版。
 17. 接入 DSL component annotation/layer naming harness，把 M16 结构安全挂回已有 DSL element 的 `name/meta`。状态：完成第一版。
-18. 加入更细资产裁切、original reference 和 fallback。
-19. 用固定样例做 MVP 收敛。
+18. 接入 component-aware layer separation candidate harness，先生成分层策略报告和 simple fill candidate，不改变画布。状态：完成第一版。
+19. 加入更细资产裁切、original reference 和 fallback。
+20. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -138,6 +140,11 @@
 - `GET /api/tasks/{taskId}/component-annotations`。
 - component annotation 报告，包含 annotations、groupHints、unannotatedElementIds 和 unresolvedComponentIds。
 - DSL element `name/meta` annotation，且只改已有 element 的 `name` 和 `meta`。
+- LayerSeparationDocument v0.1 合同。
+- SQLite `layer_separation_results`。
+- `GET /api/tasks/{taskId}/layer-separation-candidates`。
+- layer separation candidate 报告，包含 candidates、fallbackContexts、blockedComponentIds 和 simple fill candidate 统计。
+- DSL 顶层 M18 meta，且不改任何已有 element。
 - 单元测试。
 
 验证命令：

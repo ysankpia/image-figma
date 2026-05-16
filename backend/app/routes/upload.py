@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, status
 
 from ..component_annotation import (
+    ComponentAnnotationDocument,
     apply_component_annotations,
     build_component_annotation_document,
     build_failed_component_annotation_document,
@@ -28,6 +29,12 @@ from ..dsl_patch import (
 )
 from ..dsl_factory import DslRegionAsset, build_deterministic_dsl
 from ..errors import ApiError, success_response
+from ..layer_separation import (
+    apply_layer_separation_metadata,
+    build_failed_layer_separation_document,
+    build_layer_separation_document,
+    build_skipped_layer_separation_document,
+)
 from ..ocr import OCRDocument, build_failed_ocr_document, extract_ocr
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
@@ -180,7 +187,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             bound_dsl,
             now,
         )
-        final_dsl = save_component_annotation_result(
+        annotation_document, annotated_dsl = save_component_annotation_result(
             task_id,
             image,
             ocr_document,
@@ -188,6 +195,17 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             binding_document,
             structure_document,
             structured_dsl,
+            now,
+        )
+        final_dsl = save_layer_separation_result(
+            task_id,
+            image,
+            data,
+            replacement_document,
+            binding_document,
+            structure_document,
+            annotation_document,
+            annotated_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -777,9 +795,9 @@ def save_component_annotation_result(
     structure_document: ComponentStructureDocument,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[ComponentAnnotationDocument | None, dict[str, object]]:
     if not state.settings.component_annotation_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -850,6 +868,106 @@ def save_component_annotation_result(
             "annotation_count": len(document.annotations),
             "group_hint_count": len(document.groupHints),
             "unannotated_count": len(document.unannotatedElementIds),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_layer_separation_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    replacement_document: TextReplacementDocument,
+    binding_document: TextPrimitiveBindingDocument,
+    structure_document: ComponentStructureDocument,
+    annotation_document: ComponentAnnotationDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.layer_separation_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if annotation_document is None:
+            document = build_skipped_layer_separation_document(
+                task_id=task_id,
+                image=image,
+                code="component_annotation_not_completed",
+                message="Layer separation skipped because component annotation did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_layer_separation_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                replacement_document=replacement_document,
+                binding_document=binding_document,
+                structure_document=structure_document,
+                annotation_document=annotation_document,
+                dsl=input_dsl,
+                settings=state.settings,
+            )
+            final_dsl = apply_layer_separation_metadata(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="layer_separation",
+                    error_code="LAYER_SEPARATION_VALIDATION_FAILED",
+                    message="Layer separation validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_layer_separation_document(
+                    task_id=task_id,
+                    image=image,
+                    code="LAYER_SEPARATION_VALIDATION_FAILED",
+                    message="Layer separation validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="layer_separation",
+            error_code="LAYER_SEPARATION_FAILED",
+            message="Layer separation failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_layer_separation_document(
+            task_id=task_id,
+            image=image,
+            code="LAYER_SEPARATION_FAILED",
+            message="Layer separation failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="layer_separation",
+            error_code=document.error["code"] if document.error else "LAYER_SEPARATION_FAILED",
+            message=document.error["message"] if document.error else "Layer separation failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    separation_path = state.storage.save_layer_separation(task_id, json_dumps(document.to_dict()))
+    state.database.insert_layer_separation_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "separation_path": str(separation_path),
+            "candidate_count": len(document.candidates),
+            "fill_candidate_count": int(document.meta.get("fillCandidateCount", 0)),
+            "repair_required_count": int(document.meta.get("repairRequiredCount", 0)),
+            "embedded_text_count": int(document.meta.get("embeddedTextCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

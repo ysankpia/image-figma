@@ -18,6 +18,7 @@ class Storage:
         self.text_bindings_dir = root / "text_bindings"
         self.component_structures_dir = root / "component_structures"
         self.component_annotations_dir = root / "component_annotations"
+        self.layer_separation_candidates_dir = root / "layer_separation_candidates"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -33,6 +34,7 @@ class Storage:
             self.text_bindings_dir,
             self.component_structures_dir,
             self.component_annotations_dir,
+            self.layer_separation_candidates_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -72,6 +74,9 @@ class Storage:
 
     def component_annotation_path(self, task_id: str) -> Path:
         return self.component_annotations_dir / f"{task_id}.json"
+
+    def layer_separation_path(self, task_id: str) -> Path:
+        return self.layer_separation_candidates_dir / f"{task_id}.json"
 
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
@@ -138,6 +143,12 @@ class Storage:
 
     def save_component_annotation(self, task_id: str, data: str) -> Path:
         path = self.component_annotation_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_layer_separation(self, task_id: str, data: str) -> Path:
+        path = self.layer_separation_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

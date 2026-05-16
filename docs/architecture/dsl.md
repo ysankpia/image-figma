@@ -196,6 +196,25 @@ fallback region 只作为上下文 annotation，不绑定业务 component：
 
 DSL meta 可记录 `m17_component_annotation`、`componentAnnotationCount`、`componentAnnotatedElementCount`、`componentUnannotatedElementCount` 和 `componentGroupHintCount`。M17 不切图，不做图标、圆形、三角形、五角星或复杂图形识别，不删除 fallback region，不创建真实 Figma group、Component/Instance 或 Auto Layout。
 
+M18 新增 layer separation candidate harness。它生成独立 `/layer-separation-candidates` 报告，基于 M14 replacement、M15 binding、M16 component structure 和 M17 annotation 判断每个 component 后续是否适合 shape + editable text、image slice with simple fill candidate、future repair、embedded text 或 no text。M18 第一版只输出 `solid_color_fill` simple fill candidate，不生成实际 PNG。
+
+M18 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m18_layer_separation_candidates"],
+    "layerSeparationCandidateCount": 12,
+    "layerSeparationFillCandidateCount": 7,
+    "layerSeparationRepairRequiredCount": 2,
+    "layerSeparationEmbeddedTextCount": 1,
+    "layerSeparationBlockedCount": 3
+  }
+}
+```
+
+M18 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`。M18 不切图、不删除 fallback、不做 AI inpainting、不引入 Pillow/OpenCV、不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做图标、圆形、三角形、五角星或复杂图形重建。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

@@ -401,3 +401,50 @@ def get_task_component_annotations(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/layer-separation-candidates")
+def get_task_layer_separation_candidates(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_layer_separation_result(task_id)
+    if result is None:
+        raise ApiError(
+            "LAYER_SEPARATION_NOT_FOUND",
+            "Layer separation result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="layer_separation_lookup",
+            task_id=task_id,
+        )
+
+    separation_path = Path(result["separation_path"] or "")
+    if not separation_path.exists():
+        raise ApiError(
+            "LAYER_SEPARATION_NOT_FOUND",
+            "Layer separation file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="layer_separation_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(separation_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "candidates": document.get("candidates", []),
+        "fallbackContexts": document.get("fallbackContexts", []),
+        "blockedComponentIds": document.get("blockedComponentIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

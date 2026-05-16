@@ -108,6 +108,8 @@ Backend API：
 - M17 component annotation 必须覆盖默认生成报告、`COMPONENT_ANNOTATION_ENABLED=false` 不生成报告、`/component-annotations` API、DSL meta、只改 `name/meta`、不新增可见节点，以及 visible text、cover、hidden candidate text 通过同一 OCR block 绑定到同一 component。
 - M17 回归必须保护 fallback region 只标 `fallback_context`、不绑定业务 component；group hints 不创建真实 Figma group；layer naming 只来自 role/relationship/element type 和 text preview，不按中文文案特化。
 - Renderer 必须覆盖显式 DSL `element.name` 会成为 Figma node name，M17 不需要改 Renderer 协议。
+- M18 layer separation 必须覆盖默认生成报告、`LAYER_SEPARATION_ENABLED=false` 不生成报告、`/layer-separation-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element。
+- M18 回归必须保护 primary button/badge/status/outline/bottom nav label 的 simple fill candidate、tip/shortcut/preview 的 simple fill 或 repair required、fallback region 只进 fallbackContexts、component bbox 过大或 bottom nav fill target 侵入 icon 区域时 blocked。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

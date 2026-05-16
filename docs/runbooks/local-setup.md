@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure 和 M17 component annotation/layer naming harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming 和 M18 layer separation candidate harness。
 
 ## Prerequisites
 
@@ -148,6 +148,7 @@ curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 curl http://localhost:8000/api/tasks/{taskId}/component-structures
 curl http://localhost:8000/api/tasks/{taskId}/component-annotations
+curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -181,6 +182,17 @@ COMPONENT_ANNOTATION_MIN_CONFIDENCE=0.70
 ```
 
 M17 的 layer naming 使用已有 DSL `name` 字段，Renderer 已按该字段命名 Figma node。M17 不切图、不删除 fallback、不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做图标、圆形、三角形、五角星或复杂图形重建。
+
+M18 layer separation candidate 默认开启，生成 `/layer-separation-candidates` 报告，并只更新 DSL 顶层 meta：
+
+```bash
+LAYER_SEPARATION_ENABLED=true
+LAYER_SEPARATION_MIN_CONFIDENCE=0.70
+LAYER_SEPARATION_SIMPLE_FILL_TOLERANCE=24
+LAYER_SEPARATION_MAX_COMPONENT_AREA_RATIO=0.35
+```
+
+M18 用于判断 component 后续是否适合 shape + editable text、image slice with simple fill candidate、future repair、embedded text 或 no text。它不切图、不生成填充 PNG、不删除 fallback、不修改已有 DSL element、不做 AI inpainting、不引入 Pillow/OpenCV，也不做图标、圆形、三角形、五角星或复杂图形重建。
 
 如果要确认完全回退 M7 base DSL：
 
@@ -242,6 +254,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/text-bindings` 默认返回 `status: "completed"`，包含 containers、bindings 或 unboundTextIds。
 - `/api/tasks/{taskId}/component-structures` 默认返回 `status: "completed"`，包含 components、groups 或 unstructuredContainerIds。
 - `/api/tasks/{taskId}/component-annotations` 默认返回 `status: "completed"`，包含 annotations、groupHints、unannotatedElementIds 或 unresolvedComponentIds。
+- `/api/tasks/{taskId}/layer-separation-candidates` 默认返回 `status: "completed"`，包含 candidates、fallbackContexts、blockedComponentIds 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

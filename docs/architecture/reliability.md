@@ -77,6 +77,16 @@ M17 component annotation 是可观测的非关键路径：
 - group hints 只存在于 annotation report，不创建真实 Figma group。
 - M17 不切图、不删除 fallback region、不创建 Figma Component/Instance 或 Auto Layout。
 
+M18 layer separation candidate 是可观测的非关键路径：
+
+- 默认 `LAYER_SEPARATION_ENABLED=true`，但不改变 Figma 可见输出。
+- separation failed/skipped 写入 `layer_separation_results` 和 `error_logs`。
+- separation validation failed 时 `/dsl` 回退 M17 输出，只是不追加 M18 meta。
+- M18 只修改 DSL 顶层 `meta`；不能修改任何已有 element 的 name、meta、layout、style、content、source、imageFill、visible 或 children。
+- simple fill candidate 只存在于 separation report，不生成实际 PNG，不切图，不删除 fallback。
+- PNG pixel decode unsupported 只记录 warning，不让上传失败。
+- M18 不做 AI inpainting，不引入 Pillow/OpenCV，不重建图标、圆形、三角形、五角星或复杂图形。
+
 整页失败只发生在：
 
 - PNG 无法读取。

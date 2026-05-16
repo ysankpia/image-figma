@@ -17,6 +17,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `text_binding_results`
 - `component_structure_results`
 - `component_annotation_results`
+- `layer_separation_results`
 
 后续建议表：
 
@@ -51,7 +52,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M17 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M18 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -274,6 +275,28 @@ Component structure payload 本体写入 `backend/storage/component_structures/{
 - `created_at`
 
 Component annotation payload 本体写入 `backend/storage/component_annotations/{taskId}.json`。它保存 `annotations`、`groupHints`、`unannotatedElementIds`、`unresolvedComponentIds` 和统计 meta。M17 只消费 M15/M16 的 binding/component facts，通过确定性 ID join 给已有 DSL element 添加 `name` 和 `meta`；不会切图、不会创建 Figma group/component、不会删除 fallback region，也不会把 annotation 写回 visual primitives。
+
+## layer_separation_results
+
+用途：记录 M18 layer separation candidate 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `separation_path`
+- `candidate_count`
+- `fill_candidate_count`
+- `repair_required_count`
+- `embedded_text_count`
+- `blocked_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Layer separation payload 本体写入 `backend/storage/layer_separation_candidates/{taskId}.json`。它保存 `candidates`、`fallbackContexts`、`blockedComponentIds` 和统计 meta。M18 只消费 M14/M15/M16/M17 facts 和已有 PNG 采样能力，输出分层策略候选与 simple fill candidate；不会切图、不会生成填充 PNG、不会删除 fallback、不会修改已有 DSL element，也不会引入 Pillow/OpenCV。
 
 ## model_call_logs
 
