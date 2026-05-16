@@ -56,7 +56,7 @@ export interface FigmaAdapter {
   setCornerRadius(node: FigmaNode, radius: number): void;
   setText(node: FigmaNode, text: string): void;
   setTextStyle(node: FigmaNode, style: DSLStyle): void;
-  loadFont(style: DSLStyle): Promise<void>;
+  loadFont(style: DSLStyle): Promise<FigmaFontName>;
   createImagePaint(source: ResolvedImageSource, mode: "fill" | "fit"): Promise<FigmaPaint>;
   getNodeId(node: FigmaNode): string;
 }
@@ -79,6 +79,11 @@ export interface FigmaPaint {
   opacity?: number | undefined;
   imageHash?: string | undefined;
   scaleMode?: "FILL" | "FIT" | undefined;
+}
+
+export interface FigmaFontName {
+  family: string;
+  style: string;
 }
 
 export interface RGBColor {

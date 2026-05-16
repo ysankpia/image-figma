@@ -1,5 +1,6 @@
 import type {
   FigmaAdapter,
+  FigmaFontName,
   FigmaLayout,
   FigmaNode,
   FigmaPaint,
@@ -18,6 +19,7 @@ export interface FakeNode extends FigmaNode {
   cornerRadius?: number;
   characters?: string;
   textStyle?: DSLStyle;
+  fontName?: FigmaFontName;
   children: FakeNode[];
 }
 
@@ -95,13 +97,16 @@ export class FakeFigmaAdapter implements FigmaAdapter {
   }
 
   setTextStyle(node: FigmaNode, style: DSLStyle): void {
-    this.asFakeNode(node).textStyle = style;
+    const fake = this.asFakeNode(node);
+    fake.textStyle = style;
+    fake.fontName = toFakeFontName(style);
   }
 
-  async loadFont(): Promise<void> {
+  async loadFont(style: DSLStyle = {}): Promise<FigmaFontName> {
     if (this.options.failFontLoad) {
       throw new Error("forced font failure");
     }
+    return toFakeFontName(style);
   }
 
   async createImagePaint(source: ResolvedImageSource, mode: "fill" | "fit"): Promise<FigmaPaint> {
@@ -138,4 +143,11 @@ export class FakeFigmaAdapter implements FigmaAdapter {
   private asFakeNode(node: FigmaNode): FakeNode {
     return node as FakeNode;
   }
+}
+
+function toFakeFontName(style: DSLStyle): FigmaFontName {
+  return {
+    family: style.fontFamily ?? "Inter",
+    style: style.fontWeight !== undefined && style.fontWeight >= 600 ? "Bold" : "Regular"
+  };
 }

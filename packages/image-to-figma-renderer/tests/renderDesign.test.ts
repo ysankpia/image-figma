@@ -18,6 +18,7 @@ describe("renderDesign", () => {
     expect(adapter.findNodeByName("mobile_home")).toBeDefined();
     expect(adapter.findNodeByName("Original PNG Reference")?.visible).toBe(false);
     expect(adapter.findNodeByName("Text / title")?.characters).toBe("首页");
+    expect(adapter.findNodeByName("Text / title")?.fontName).toEqual({ family: "Inter", style: "Bold" });
     expect(adapter.findNodeByName("Shape / search_card")).toBeDefined();
     expect(adapter.findNodeByName("Image / banner")?.fills?.[0]?.type).toBe("IMAGE");
     expect(adapter.findNodeByName("Line / divider")).toBeDefined();

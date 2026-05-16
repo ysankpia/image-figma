@@ -20,8 +20,8 @@ export async function renderText(context: RenderContext, element: DSLElement): P
     });
   }
 
-  context.figma.setText(node, element.content?.text ?? "");
   context.figma.setTextStyle(node, element.style ?? {});
+  context.figma.setText(node, element.content?.text ?? "");
   if (element.style?.color) {
     context.figma.setFills(node, [solidPaint(element.style.color)]);
   }

@@ -1,6 +1,7 @@
 import type { DSLStyle } from "@image-figma/dsl-schema";
 import type {
   FigmaAdapter,
+  FigmaFontName,
   FigmaLayout,
   FigmaNode,
   FigmaPaint,
@@ -49,11 +50,6 @@ export interface FigmaPaintLike {
   opacity?: number | undefined;
   imageHash?: string | undefined;
   scaleMode?: "FILL" | "FIT" | undefined;
-}
-
-export interface FigmaFontName {
-  family: string;
-  style: string;
 }
 
 export interface FigmaLineHeight {
@@ -107,6 +103,7 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
     },
     setTextStyle(node, style) {
       const textNode = toTextNode(node);
+      textNode.fontName = toFontName(style);
       textNode.fontSize = style.fontSize ?? 14;
       textNode.textAlignHorizontal = toTextAlign(style.textAlign);
       if (style.lineHeight !== undefined) {
@@ -114,7 +111,9 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
       }
     },
     async loadFont(style) {
-      await figmaApi.loadFontAsync(toFontName(style));
+      const fontName = toFontName(style);
+      await figmaApi.loadFontAsync(fontName);
+      return fontName;
     },
     async createImagePaint(source, mode) {
       const bytes = await fetchBytes(source);
