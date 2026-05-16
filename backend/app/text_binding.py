@@ -20,6 +20,9 @@ CONTAINER_ROLES = {
     "badge",
     "status_badge",
     "primary_button",
+    "outline_button",
+    "activity_card",
+    "summary_stat_card",
     "shortcut_card",
     "preview_card",
     "legend_group",
@@ -275,8 +278,12 @@ def infer_text_containers(
 ) -> list[TextBindingContainer]:
     containers: list[TextBindingContainer] = []
     containers.extend(visual_primitive_containers(primitive_document))
+    containers.extend(infer_header_hero_containers(candidates, image))
     containers.extend(infer_badge_containers(candidates))
+    containers.extend(infer_activity_card_containers(candidates))
+    containers.extend(infer_summary_stat_containers(candidates))
     containers.extend(infer_primary_button_containers(candidates, image))
+    containers.extend(infer_outline_button_containers(candidates))
     containers.extend(infer_shortcut_card_containers(candidates))
     containers.extend(infer_preview_containers(candidates))
     containers.extend(infer_legend_containers(candidates))
@@ -310,12 +317,62 @@ def visual_primitive_containers(primitive_document: VisualPrimitiveDocument) -> 
     return containers
 
 
+def infer_header_hero_containers(candidates: list[BindingCandidate], image: PngMetadata) -> list[TextBindingContainer]:
+    header_hero = [
+        candidate
+        for candidate in candidates
+        if candidate.region in {"header", "hero"} and not is_badge_like_candidate(candidate)
+    ]
+    if not header_hero:
+        return []
+
+    containers: list[TextBindingContainer] = []
+    top_candidates = sorted(
+        [candidate for candidate in header_hero if center_y(candidate.bbox) / max(1, image.height) <= 0.11],
+        key=lambda item: (item.bbox[1], -item.bbox[3]),
+    )
+    page_header_ids: set[str] = set()
+    if top_candidates:
+        title = top_candidates[0]
+        page_header_ids.add(title.id)
+        containers.append(
+            TextBindingContainer(
+                id=f"container_page_header_{safe_id(title.id)}",
+                role="page_header",
+                source="inferred_from_text_cluster",
+                bbox=expand_bbox(title.bbox, 18, 10),
+                confidence=0.8,
+                reason="top_header_text",
+            )
+        )
+
+    profile_candidates = [candidate for candidate in header_hero if candidate.id not in page_header_ids]
+    if profile_candidates:
+        bbox = union_bboxes([candidate.bbox for candidate in profile_candidates])
+        containers.append(
+            TextBindingContainer(
+                id="container_hero_profile_001",
+                role="hero_profile",
+                source="inferred_from_text_cluster",
+                bbox=expand_bbox(bbox, 28, 20),
+                confidence=0.78,
+                reason="hero_text_cluster",
+            )
+        )
+    return containers
+
+
 def infer_badge_containers(candidates: list[BindingCandidate]) -> list[TextBindingContainer]:
     containers: list[TextBindingContainer] = []
+    stat_ids = summary_stat_candidate_ids(candidates)
     for candidate in candidates:
+        if candidate.region not in {"hero", "summary"}:
+            continue
+        if candidate.id in stat_ids:
+            continue
         if not is_badge_like_candidate(candidate):
             continue
-        role = "status_badge" if candidate.region == "summary" and candidate.bbox[0] > 360 else "badge"
+        role = "status_badge" if candidate.region == "summary" else "badge"
         reason = "pill_strategy_short_text_status" if role == "status_badge" else "pill_strategy_short_text"
         containers.append(
             TextBindingContainer(
@@ -330,12 +387,51 @@ def infer_badge_containers(candidates: list[BindingCandidate]) -> list[TextBindi
     return containers
 
 
+def infer_activity_card_containers(candidates: list[BindingCandidate]) -> list[TextBindingContainer]:
+    stat_ids = summary_stat_candidate_ids(candidates)
+    activity = [
+        candidate
+        for candidate in candidates
+        if candidate.region == "summary"
+        and candidate.id not in stat_ids
+        and not is_badge_like_candidate(candidate)
+    ]
+    if not activity:
+        return []
+    bbox = union_bboxes([candidate.bbox for candidate in activity])
+    return [
+        TextBindingContainer(
+            id="container_activity_card_001",
+            role="activity_card",
+            source="inferred_from_text_cluster",
+            bbox=expand_bbox(bbox, 32, 18),
+            confidence=0.8,
+            reason="summary_text_cluster_above_stats",
+        )
+    ]
+
+
+def infer_summary_stat_containers(candidates: list[BindingCandidate]) -> list[TextBindingContainer]:
+    containers: list[TextBindingContainer] = []
+    for index, (label, value) in enumerate(summary_stat_pairs(candidates), start=1):
+        bbox = union_bboxes([label.bbox, value.bbox])
+        containers.append(
+            TextBindingContainer(
+                id=f"container_summary_stat_card_{index:03d}",
+                role="summary_stat_card",
+                source="inferred_from_text_cluster",
+                bbox=expand_bbox(bbox, 28, 16),
+                confidence=0.83,
+                reason="aligned_summary_label_value_pair",
+            )
+        )
+    return containers
+
+
 def infer_primary_button_containers(candidates: list[BindingCandidate], image: PngMetadata) -> list[TextBindingContainer]:
     containers: list[TextBindingContainer] = []
     for candidate in candidates:
-        if candidate.region not in {"summary", "card_grid"}:
-            continue
-        if candidate.bbox[3] < 32 or len(candidate.text.strip()) > 8:
+        if not is_primary_button_candidate(candidate):
             continue
         center_x = candidate.bbox[0] + candidate.bbox[2] / 2
         if abs(center_x - image.width / 2) > image.width * 0.18:
@@ -353,11 +449,29 @@ def infer_primary_button_containers(candidates: list[BindingCandidate], image: P
     return containers
 
 
+def infer_outline_button_containers(candidates: list[BindingCandidate]) -> list[TextBindingContainer]:
+    containers: list[TextBindingContainer] = []
+    for candidate in candidates:
+        if candidate.strategy_name != "outline_button_text_sample":
+            continue
+        containers.append(
+            TextBindingContainer(
+                id=f"container_outline_button_{safe_id(candidate.id)}",
+                role="outline_button",
+                source="inferred_from_text_cluster",
+                bbox=expand_bbox(candidate.bbox, 12, 8),
+                confidence=0.9,
+                reason="outline_button_sampling_strategy",
+            )
+        )
+    return containers
+
+
 def infer_shortcut_card_containers(candidates: list[BindingCandidate]) -> list[TextBindingContainer]:
     card_candidates = [
         candidate
         for candidate in candidates
-        if candidate.region == "card_grid" and candidate.bbox[3] >= 24 and len(candidate.text.strip()) <= 8
+        if candidate.region == "card_grid" and candidate.bbox[3] >= 20 and len(candidate.text.strip()) <= 18
     ]
     containers: list[TextBindingContainer] = []
     for index, title in enumerate(card_candidates, start=1):
@@ -507,7 +621,7 @@ def bind_candidates_to_containers(
             continue
         scored.sort(key=lambda item: (item[0], -bbox_area(item[1].bbox)), reverse=True)
         score, container = scored[0]
-        relationship = relationship_for(candidate, container)
+        relationship = relationship_for(candidate, container, candidates)
         bindings.append(
             TextPrimitiveBinding(
                 id=f"binding_{len(bindings) + 1:03d}",
@@ -546,12 +660,22 @@ def binding_score(candidate: BindingCandidate, container: TextBindingContainer) 
 
 
 def role_matches_candidate(candidate: BindingCandidate, container: TextBindingContainer) -> bool:
+    if container.role == "page_header":
+        return candidate.region in {"header", "hero"} and not is_badge_like_candidate(candidate)
+    if container.role == "hero_profile":
+        return candidate.region == "hero" and not is_badge_like_candidate(candidate)
     if container.role == "badge":
         return is_badge_like_candidate(candidate) and candidate.region == "hero"
     if container.role == "status_badge":
         return is_badge_like_candidate(candidate) and candidate.region == "summary"
     if container.role == "primary_button":
-        return candidate.region in {"summary", "card_grid"} and candidate.bbox[3] >= 30
+        return is_primary_button_candidate(candidate)
+    if container.role == "outline_button":
+        return candidate.strategy_name == "outline_button_text_sample"
+    if container.role == "activity_card":
+        return candidate.region == "summary" and not is_badge_like_candidate(candidate) and not is_primary_button_candidate(candidate)
+    if container.role == "summary_stat_card":
+        return candidate.region == "summary"
     if container.role == "shortcut_card":
         return candidate.region == "card_grid"
     if container.role == "preview_card":
@@ -574,27 +698,70 @@ def is_badge_like_candidate(candidate: BindingCandidate) -> bool:
     return candidate.region in {"hero", "summary"} and len(text) <= 8 and candidate.bbox[2] <= 160 and candidate.bbox[3] <= 36
 
 
-def relationship_for(candidate: BindingCandidate, container: TextBindingContainer) -> str:
+def is_primary_button_candidate(candidate: BindingCandidate) -> bool:
+    if candidate.region not in {"summary", "card_grid"}:
+        return False
+    if is_badge_like_candidate(candidate):
+        return False
+    if candidate.bbox[2] < 56 or candidate.bbox[3] < 30 or len(candidate.text.strip()) > 12:
+        return False
+    return candidate.decision.reason in {"dark_or_colored_background_light_text", "solid_colored_background"}
+
+
+def relationship_for(
+    candidate: BindingCandidate,
+    container: TextBindingContainer,
+    candidates: list[BindingCandidate],
+) -> str:
+    if container.role == "page_header":
+        return "section_title"
     if container.role == "badge":
         return "badge_label"
     if container.role == "status_badge":
         return "status_label"
-    if container.role == "primary_button":
+    if container.role in {"primary_button", "outline_button"}:
         return "button_label"
     if container.role in {"legend_group", "legend_item"}:
         return "legend_label"
     if container.role == "bottom_nav_item":
         return "nav_label"
-    if container.role in {"shortcut_card", "preview_card", "tip_card"}:
-        return card_relationship(candidate, container)
+    if container.role in {"hero_profile", "activity_card", "summary_stat_card", "shortcut_card", "preview_card", "tip_card"}:
+        return card_relationship(candidate, container, candidates)
     return "inside"
 
 
-def card_relationship(candidate: BindingCandidate, container: TextBindingContainer) -> str:
-    relative_y = center_y(candidate.bbox) - container.bbox[1]
-    if candidate.bbox[3] >= 28 or relative_y < container.bbox[3] * 0.35:
+def card_relationship(
+    candidate: BindingCandidate,
+    container: TextBindingContainer,
+    candidates: list[BindingCandidate],
+) -> str:
+    members = container_member_candidates(candidates, container)
+    if not members:
         return "card_title"
-    if candidate.bbox[3] <= 18:
+    rows = group_candidates_by_row(members)
+    candidate_row_index = row_index_for_candidate(candidate, rows)
+    if candidate_row_index is None:
+        return "card_title"
+
+    row_heights = [max(item.bbox[3] for item in row) for row in rows]
+    first_row_height = max(1, row_heights[0])
+    candidate_height = candidate.bbox[3]
+    tallest_height = max(row_heights)
+
+    if container.role == "summary_stat_card":
+        if candidate_row_index > 0 and candidate_height >= first_row_height * 1.25:
+            return "card_title"
+        return "card_subtitle"
+
+    if candidate_row_index == 0:
+        return "card_title"
+    if (
+        container.role == "activity_card"
+        and candidate_height >= tallest_height * 0.95
+        and candidate_height >= first_row_height * 1.2
+    ):
+        return "card_title"
+    if container.role == "tip_card" and (candidate_row_index > 1 or len(candidate.text.strip()) > 12):
         return "card_body"
     return "card_subtitle"
 
@@ -602,6 +769,8 @@ def card_relationship(candidate: BindingCandidate, container: TextBindingContain
 def reason_for(candidate: BindingCandidate, container: TextBindingContainer, relationship: str) -> str:
     if relationship == "button_label":
         return "text_center_inside_inferred_button"
+    if relationship == "section_title":
+        return "top_text_inside_page_header"
     if relationship == "badge_label":
         return "pill_strategy_inside_badge"
     if relationship == "status_label":
@@ -723,6 +892,114 @@ def bbox_area(bbox: list[int]) -> int:
 def container_too_large(candidate: BindingCandidate, container: TextBindingContainer) -> bool:
     candidate_area = max(1, bbox_area(candidate.bbox))
     return bbox_area(container.bbox) / candidate_area > 80
+
+
+def summary_stat_candidate_ids(candidates: list[BindingCandidate]) -> set[str]:
+    ids: set[str] = set()
+    for label, value in summary_stat_pairs(candidates):
+        ids.add(label.id)
+        ids.add(value.id)
+    return ids
+
+
+def summary_stat_pairs(candidates: list[BindingCandidate]) -> list[tuple[BindingCandidate, BindingCandidate]]:
+    summary = [
+        candidate
+        for candidate in candidates
+        if candidate.region == "summary"
+        and not is_primary_button_candidate(candidate)
+    ]
+    rows = group_candidates_by_row(summary)
+    pairs: list[tuple[BindingCandidate, BindingCandidate]] = []
+    seen_values: set[str] = set()
+    for index in range(len(rows) - 1):
+        label_row = sorted(rows[index], key=lambda item: item.bbox[0])
+        value_row = sorted(rows[index + 1], key=lambda item: item.bbox[0])
+        if len(label_row) < 2 or len(value_row) < 2:
+            continue
+        label_height = average_bbox_height(label_row)
+        value_height = average_bbox_height(value_row)
+        if value_height < label_height * 1.2:
+            continue
+        if not rows_have_similar_column_spread(label_row, value_row):
+            continue
+        for value in value_row:
+            label = nearest_by_x_center(value, label_row)
+            if label is None:
+                continue
+            max_offset = max(label.bbox[2], value.bbox[2], int(value_height * 2.2))
+            if abs(center_x(label.bbox) - center_x(value.bbox)) <= max_offset and value.id not in seen_values:
+                pairs.append((label, value))
+                seen_values.add(value.id)
+    return pairs
+
+
+def container_member_candidates(
+    candidates: list[BindingCandidate],
+    container: TextBindingContainer,
+) -> list[BindingCandidate]:
+    members = [
+        candidate
+        for candidate in candidates
+        if point_inside(center_x(candidate.bbox), center_y(candidate.bbox), container.bbox)
+        or overlap_ratio(candidate.bbox, container.bbox) >= 0.55
+    ]
+    return sorted(members, key=lambda item: (center_y(item.bbox), item.bbox[0]))
+
+
+def group_candidates_by_row(candidates: list[BindingCandidate]) -> list[list[BindingCandidate]]:
+    rows: list[list[BindingCandidate]] = []
+    for candidate in sorted(candidates, key=lambda item: (center_y(item.bbox), item.bbox[0])):
+        placed = False
+        for row in rows:
+            row_center = sum(center_y(item.bbox) for item in row) / len(row)
+            tolerance = max(8.0, average_bbox_height(row) * 0.45, candidate.bbox[3] * 0.45)
+            if abs(center_y(candidate.bbox) - row_center) <= tolerance:
+                row.append(candidate)
+                placed = True
+                break
+        if not placed:
+            rows.append([candidate])
+    return [sorted(row, key=lambda item: item.bbox[0]) for row in rows]
+
+
+def row_index_for_candidate(candidate: BindingCandidate, rows: list[list[BindingCandidate]]) -> int | None:
+    for index, row in enumerate(rows):
+        if any(item.id == candidate.id for item in row):
+            return index
+    return None
+
+
+def average_bbox_height(candidates: list[BindingCandidate]) -> float:
+    if not candidates:
+        return 0
+    return sum(candidate.bbox[3] for candidate in candidates) / len(candidates)
+
+
+def rows_have_similar_column_spread(
+    label_row: list[BindingCandidate],
+    value_row: list[BindingCandidate],
+) -> bool:
+    label_span = horizontal_span(label_row)
+    value_span = horizontal_span(value_row)
+    if min(label_span, value_span) <= 0:
+        return False
+    return abs(label_span - value_span) / max(label_span, value_span) <= 0.35
+
+
+def horizontal_span(candidates: list[BindingCandidate]) -> int:
+    left = min(candidate.bbox[0] for candidate in candidates)
+    right = max(candidate.bbox[0] + candidate.bbox[2] for candidate in candidates)
+    return right - left
+
+
+def nearest_by_x_center(
+    candidate: BindingCandidate,
+    candidates: list[BindingCandidate],
+) -> BindingCandidate | None:
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: abs(center_x(item.bbox) - center_x(candidate.bbox)))
 
 
 def union_bboxes(bboxes: list[list[int]]) -> list[int]:
