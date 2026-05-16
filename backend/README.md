@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR and DSL patch candidates, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, and serves local asset URLs.
 
 ## Run
 
@@ -51,4 +51,13 @@ Debug endpoints:
 ```bash
 curl http://localhost:8000/api/tasks/{taskId}/ocr
 curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
+curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 ```
+
+Visible text replacement is debug-only by default:
+
+```bash
+TEXT_REPLACEMENT_MODE=debug
+```
+
+Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and applies only accepted low-risk text replacements.

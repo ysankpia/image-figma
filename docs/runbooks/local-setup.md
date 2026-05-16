@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness 和 M10 百度 PP-OCRv5 异步 OCR provider。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness 、M10 百度 PP-OCRv5 异步 OCR provider 和 M11 低风险可见文字替换 harness。
 
 ## Prerequisites
 
@@ -144,6 +144,21 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```bash
 curl http://localhost:8000/api/tasks/{taskId}/ocr
 curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
+curl http://localhost:8000/api/tasks/{taskId}/text-replacements
+```
+
+M11 text replacement 默认只记录 decisions，不改变可见 DSL：
+
+```bash
+cd backend
+TEXT_REPLACEMENT_MODE=debug uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+本地 smoke 可显式启用 apply：
+
+```bash
+cd backend
+TEXT_REPLACEMENT_MODE=apply uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 如果要确认完全回退 M7 base DSL：
@@ -202,6 +217,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/primitives` 返回 `provider: "fake"` 和 `vp_region_header/content/bottom`。
 - 默认 `/api/tasks/{taskId}/ocr` 返回 `provider: "fake"`；启用百度后返回 `provider: "baidu_ppocrv5"` 和 `model: "PP-OCRv5"`。
 - `/api/tasks/{taskId}/dsl-patch` 返回 `mode: "debug"`。
+- `/api/tasks/{taskId}/text-replacements` 默认返回 `mode: "debug"`，包含 accepted/rejected decisions。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

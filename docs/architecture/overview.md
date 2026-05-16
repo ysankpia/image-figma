@@ -46,7 +46,7 @@ docs/
 - 存储：本地文件存储。
 - PNG region slicer：Python 标准库。
 - Visual primitives：M8 已建立合同和 fake/OpenAI provider 边界，结果不进入 DSL。
-- OCR/DSL patch：M9 已建立 OCR 和 hidden candidate patch harness，M10 可选接入百度 PP-OCRv5 异步 OCR，不做可见替换。
+- OCR/DSL patch/text replacement：M9 已建立 OCR 和 hidden candidate patch harness，M10 可选接入百度 PP-OCRv5 异步 OCR，M11 默认 debug 记录低风险文字替换决策，apply 时只替换浅色纯色背景文字。
 
 ## Major Modules
 
@@ -56,7 +56,7 @@ docs/
 - Renderer：把 DSL 转成 Figma 节点。
 - Backend API：上传、任务状态、DSL、资产、健康检查。
 - Processing Pipeline：预处理、裁切、visual primitive candidates、OCR candidates、DSL patch、DSL Builder、校验和基础修复。
-- Storage：原图、资产、DSL 结果、primitive 结果、OCR 结果、patch 结果、日志。
+- Storage：原图、资产、DSL 结果、primitive 结果、OCR 结果、patch 结果、text replacement 结果、日志。
 
 ## Module Boundaries
 

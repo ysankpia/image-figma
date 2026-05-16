@@ -51,13 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M10 成功后立即返回 completed deterministic region + hidden OCR candidate 任务。
+- M11 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR 和 DSL patch 调试结果。默认 `debug` 模式会在 DSL 中加入 hidden text candidates，但不改变 Figma 可见输出。默认 OCR provider 是 `fake`，显式设置 `OCR_PROVIDER=baidu_ppocrv5` 后调用百度 PP-OCRv5 异步 OCR。
+- 上传链路会生成 visual primitives、OCR、DSL patch 和 text replacement 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后只应用 accepted 的低风险浅底文字替换。
 
 `GET /api/tasks/{taskId}`
 
@@ -72,6 +72,7 @@ http://localhost:8000/api
 - 默认 `DSL_PATCH_MODE=debug` 时返回 enhanced DSL，包含 hidden `candidate_text`。
 - `DSL_PATCH_MODE=off` 时返回 M7 base DSL。
 - patch build 或 validation 失败时返回 base DSL。
+- `TEXT_REPLACEMENT_MODE=apply` 时可额外包含 `text_replacement_cover` 和 `visible_text_replacement`；replacement 失败时回退 M10/M9 输出。
 
 `GET /api/tasks/{taskId}/primitives`
 
@@ -99,6 +100,14 @@ http://localhost:8000/api
 - patch result 不存在返回 `DSL_PATCH_NOT_FOUND`。
 - patch failed 时仍返回 `success: true`，但 `data.status` 为 `failed`，并带 `error`。
 - M9 patch 只允许添加 hidden `candidate_text`。
+
+`GET /api/tasks/{taskId}/text-replacements`
+
+- 用途：获取 M11 low-risk visible text replacement decisions。
+- 只读调试接口，不被插件主流程依赖。
+- task 不存在返回 `TASK_NOT_FOUND`。
+- replacement result 不存在返回 `TEXT_REPLACEMENT_NOT_FOUND`。
+- replacement failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
 
 `GET /api/assets/{assetId}`
 
@@ -135,6 +144,9 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `DSL_PATCH_NOT_FOUND`
 - `DSL_PATCH_BUILD_FAILED`
 - `DSL_PATCH_VALIDATION_FAILED`
+- `TEXT_REPLACEMENT_NOT_FOUND`
+- `TEXT_REPLACEMENT_FAILED`
+- `TEXT_REPLACEMENT_VALIDATION_FAILED`
 - `INTERNAL_ERROR`
 
 ## Plugin M5 Usage
@@ -149,7 +161,7 @@ GET /api/tasks/{taskId}/dsl
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M10 仍不改插件调用路径。插件不调用 OCR、primitives 或 dsl-patch endpoint。
+M11 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch 或 text-replacements endpoint。
 
 ## Optional Endpoints
 

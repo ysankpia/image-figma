@@ -28,6 +28,23 @@ class PngRegion:
     height: int
 
 
+@dataclass(frozen=True)
+class PngPixels:
+    width: int
+    height: int
+    rows: list[bytes]
+
+
+@dataclass(frozen=True)
+class BackgroundSample:
+    bbox: list[int]
+    color: str
+    mean_rgb: list[int]
+    max_channel_delta: int
+    brightness: float
+    confidence: float
+
+
 class UnsupportedPngCropError(ValueError):
     pass
 
@@ -124,6 +141,111 @@ def crop_png(data: bytes, region: PngRegion) -> bytes:
     )
 
 
+def decode_png_pixels(data: bytes) -> PngPixels:
+    metadata = read_png_metadata(data)
+    if metadata is None:
+        raise UnsupportedPngCropError("PNG metadata could not be read.")
+    if metadata.bit_depth != 8 or metadata.color_type not in {2, 6} or metadata.interlace != 0:
+        raise UnsupportedPngCropError("PNG format is not supported by the standard-library pixel decoder.")
+    if metadata.compression != 0 or metadata.filter_method != 0:
+        raise UnsupportedPngCropError("PNG compression or filter method is not supported.")
+
+    chunks = parse_chunks(data)
+    idat_data = b"".join(chunk_data for chunk_type, chunk_data in chunks if chunk_type == b"IDAT")
+    try:
+        raw = zlib.decompress(idat_data)
+    except zlib.error as error:
+        raise UnsupportedPngCropError("PNG IDAT data could not be decompressed.") from error
+
+    bytes_per_pixel = 3 if metadata.color_type == 2 else 4
+    rows = unfilter_rows(raw, metadata.width, metadata.height, bytes_per_pixel)
+    if metadata.color_type == 6:
+        rows = [rgba_row_to_rgb(row) for row in rows]
+    return PngPixels(width=metadata.width, height=metadata.height, rows=rows)
+
+
+def sample_region_background(pixels: PngPixels, bbox: list[int], tolerance: int) -> BackgroundSample:
+    if len(bbox) != 4:
+        raise UnsupportedPngCropError("Background sample bbox must be [x, y, width, height].")
+    x, y, width, height = [round(value) for value in bbox]
+    x1 = clamp_int(x, 0, pixels.width)
+    y1 = clamp_int(y, 0, pixels.height)
+    x2 = clamp_int(x + width, 0, pixels.width)
+    y2 = clamp_int(y + height, 0, pixels.height)
+    if x2 <= x1 or y2 <= y1:
+        raise UnsupportedPngCropError("Background sample bbox does not intersect image bounds.")
+
+    sample_points = perimeter_points(x1, y1, x2, y2)
+    count = len(sample_points)
+    red_sum = 0
+    green_sum = 0
+    blue_sum = 0
+    for row_index, column in sample_points:
+        row = pixels.rows[row_index]
+        offset = column * 3
+        red_sum += row[offset]
+        green_sum += row[offset + 1]
+        blue_sum += row[offset + 2]
+
+    mean_rgb = [
+        round(red_sum / count),
+        round(green_sum / count),
+        round(blue_sum / count),
+    ]
+    max_delta = 0
+    for row_index, column in sample_points:
+        row = pixels.rows[row_index]
+        offset = column * 3
+        max_delta = max(
+            max_delta,
+            abs(row[offset] - mean_rgb[0]),
+            abs(row[offset + 1] - mean_rgb[1]),
+            abs(row[offset + 2] - mean_rgb[2]),
+        )
+
+    brightness = round((mean_rgb[0] * 0.299) + (mean_rgb[1] * 0.587) + (mean_rgb[2] * 0.114), 3)
+    confidence = max(0, min(1, 1 - (max_delta / max(1, tolerance * 2))))
+    return BackgroundSample(
+        bbox=[x1, y1, x2 - x1, y2 - y1],
+        color=rgb_to_hex(mean_rgb),
+        mean_rgb=mean_rgb,
+        max_channel_delta=max_delta,
+        brightness=brightness,
+        confidence=round(confidence, 3),
+    )
+
+
+def rgba_row_to_rgb(row: bytes) -> bytes:
+    rgb = bytearray()
+    for offset in range(0, len(row), 4):
+        red = row[offset]
+        green = row[offset + 1]
+        blue = row[offset + 2]
+        alpha = row[offset + 3] / 255
+        rgb.extend(
+            [
+                round(red * alpha + 255 * (1 - alpha)),
+                round(green * alpha + 255 * (1 - alpha)),
+                round(blue * alpha + 255 * (1 - alpha)),
+            ]
+        )
+    return bytes(rgb)
+
+
+def perimeter_points(x1: int, y1: int, x2: int, y2: int) -> list[tuple[int, int]]:
+    points: list[tuple[int, int]] = []
+    border = min(2, max(1, (x2 - x1) // 2), max(1, (y2 - y1) // 2))
+    for row_index in range(y1, y2):
+        for column in range(x1, x2):
+            if row_index < y1 + border or row_index >= y2 - border or column < x1 + border or column >= x2 - border:
+                points.append((row_index, column))
+    return points
+
+
+def rgb_to_hex(rgb: list[int]) -> str:
+    return "#" + "".join(f"{clamp_int(value, 0, 255):02X}" for value in rgb)
+
+
 def parse_chunks(data: bytes) -> list[tuple[bytes, bytes]]:
     if not is_png(data):
         raise UnsupportedPngCropError("Invalid PNG signature.")
@@ -196,6 +318,10 @@ def paeth(left: int, up: int, upper_left: int) -> int:
     if up_distance <= upper_left_distance:
         return up
     return upper_left
+
+
+def clamp_int(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(maximum, value))
 
 
 def png_chunk(chunk_type: bytes, data: bytes) -> bytes:

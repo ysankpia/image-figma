@@ -13,6 +13,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `primitive_results`
 - `ocr_results`
 - `dsl_patch_results`
+- `text_replacement_results`
 
 后续建议表：
 
@@ -47,7 +48,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M9 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M11 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -190,6 +191,26 @@ OCR payload 本体写入 `backend/storage/ocr/{taskId}.json`。
 - `created_at`
 
 Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
+
+## text_replacement_results
+
+用途：记录 M11 low-risk visible text replacement 文件、模式和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `mode`
+- `status`
+- `replacement_path`
+- `accepted_count`
+- `rejected_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Replacement payload 本体写入 `backend/storage/text_replacements/{taskId}.json`。默认 `debug` 只保存 accepted/rejected decisions；`apply` 才把 accepted replacement 合并进最终 DSL。
 
 ## model_call_logs
 

@@ -1,0 +1,361 @@
+from __future__ import annotations
+
+import importlib
+import struct
+import sys
+import zlib
+from typing import Any
+
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.ocr import OCRBlock, OCRDocument
+from app.png_tools import PngMetadata
+from app.text_replacement import (
+    apply_text_replacements,
+    build_text_replacement_document,
+)
+from conftest import PNG_BYTES, PNG_HEIGHT, PNG_WIDTH, png_chunk
+
+
+def test_text_replacement_debug_creates_document_without_applying_to_dsl(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    client = create_client_with_env(monkeypatch, tmp_path, {"TEXT_REPLACEMENT_MODE": "debug"})
+
+    with client:
+        upload = client.post("/api/upload", files={"file": ("input.png", PNG_BYTES, "image/png")})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        replacement = client.get(f"/api/tasks/{task_id}/text-replacements")
+        assert replacement.status_code == 200
+        data = replacement.json()["data"]
+        assert data["status"] == "completed"
+        assert data["mode"] == "debug"
+        assert len(data["decisions"]) == 2
+
+        dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
+        roles = {child.get("role") for child in dsl["root"]["children"]}
+        assert "visible_text_replacement" not in roles
+        assert "text_replacement_cover" not in roles
+
+
+def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_path) -> None:
+    client = create_client_with_env(
+        monkeypatch,
+        tmp_path,
+        {
+            "TEXT_REPLACEMENT_MODE": "apply",
+            "TEXT_REPLACEMENT_MIN_CONFIDENCE": "0.90",
+        },
+    )
+
+    with client:
+        png = make_rgb_png(PNG_WIDTH, PNG_HEIGHT, (247, 248, 250))
+        upload = client.post("/api/upload", files={"file": ("input.png", png, "image/png")})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        replacement = client.get(f"/api/tasks/{task_id}/text-replacements").json()["data"]
+        assert replacement["status"] == "completed"
+        assert replacement["mode"] == "apply"
+        assert replacement["meta"]["acceptedCount"] == 2
+
+        dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
+        children = {child["id"]: child for child in dsl["root"]["children"]}
+        assert "original_ref" in children
+        assert "fallback_region_header" in children
+        assert "fallback_region_content" in children
+        assert "fallback_region_bottom" in children
+        assert "text_ocr_text_001" in children
+        assert "cover_ocr_text_001" in children
+        assert "visible_text_ocr_text_001" in children
+        assert children["cover_ocr_text_001"]["type"] == "shape"
+        assert children["cover_ocr_text_001"]["role"] == "text_replacement_cover"
+        assert children["visible_text_ocr_text_001"]["type"] == "text"
+        assert children["visible_text_ocr_text_001"]["role"] == "visible_text_replacement"
+        assert children["visible_text_ocr_text_001"]["style"]["visible"] is True
+        assert children["text_ocr_text_001"]["style"]["visible"] is False
+        assert dsl["meta"]["textReplacementCount"] == 2
+        assert "m11_visible_text_replacements" in dsl["meta"]["qualityFlags"]
+
+
+def test_text_replacement_mode_off_has_no_result(monkeypatch, tmp_path) -> None:
+    client = create_client_with_env(monkeypatch, tmp_path, {"TEXT_REPLACEMENT_MODE": "off"})
+
+    with client:
+        upload = client.post("/api/upload", files={"file": ("input.png", PNG_BYTES, "image/png")})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        replacement = client.get(f"/api/tasks/{task_id}/text-replacements")
+        assert replacement.status_code == 404
+        assert replacement.json()["error"]["code"] == "TEXT_REPLACEMENT_NOT_FOUND"
+
+        dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
+        roles = {child.get("role") for child in dsl["root"]["children"]}
+        assert "visible_text_replacement" not in roles
+
+
+def test_missing_task_text_replacements_returns_task_not_found(client: TestClient) -> None:
+    response = client.get("/api/tasks/task_missing/text-replacements")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "TASK_NOT_FOUND"
+
+
+def test_existing_task_without_text_replacements_returns_not_found(client: TestClient) -> None:
+    from app.state import state
+
+    state.database.insert_task(
+        {
+            "id": "task_without_replacements",
+            "status": "completed",
+            "stage": "completed",
+            "progress": 100,
+            "message": "No text replacements.",
+            "original_filename": "input.png",
+            "mime_type": "image/png",
+            "file_size": 1,
+            "upload_path": "/tmp/input.png",
+            "created_at": "2026-05-16T00:00:00+00:00",
+            "updated_at": "2026-05-16T00:00:00+00:00",
+            "completed_at": "2026-05-16T00:00:00+00:00",
+            "failed_at": None,
+        }
+    )
+
+    response = client.get("/api/tasks/task_without_replacements/text-replacements")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "TEXT_REPLACEMENT_NOT_FOUND"
+
+
+def test_replacement_decisions_cover_rejection_reasons() -> None:
+    settings = make_settings(
+        text_replacement_mode="debug",
+        text_replacement_max_blocks=1,
+        text_replacement_min_confidence=0.95,
+    )
+    image = PngMetadata(100, 100, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 100, "height": 100},
+        coordinateSpace="pixel",
+        blocks=[
+            OCRBlock("low_conf", "Low", [10, 50, 30, 20], 0.5, "line_1", "block_1"),
+            OCRBlock("status", "9:41", [10, 10, 30, 20], 0.99, "line_2", "block_2"),
+            OCRBlock("small", "A", [10, 50, 4, 20], 0.99, "line_3", "block_3"),
+            OCRBlock("tall", "Tall", [10, 50, 40, 80], 0.99, "line_4", "block_4"),
+            OCRBlock("accepted", "Good", [10, 50, 40, 20], 0.99, "line_5", "block_5"),
+            OCRBlock("maxed", "Later", [10, 50, 40, 20], 0.99, "line_6", "block_6"),
+        ],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_rgb_png(100, 100, (247, 248, 250)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    reasons = {decision.ocrBlockId: decision.reason for decision in document.decisions}
+    assert reasons == {
+        "low_conf": "confidence_too_low",
+        "status": "status_bar_or_too_small",
+        "small": "bbox_too_small",
+        "tall": "bbox_too_tall",
+        "accepted": "solid_light_background",
+        "maxed": "max_blocks_reached",
+    }
+
+
+def test_complex_and_dark_background_are_rejected() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(100, 100, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 100, "height": 100},
+        coordinateSpace="pixel",
+        blocks=[
+            OCRBlock("complex", "Complex", [10, 50, 40, 20], 0.99, "line_1", "block_1"),
+            OCRBlock("dark", "Dark", [10, 50, 40, 20], 0.99, "line_2", "block_2"),
+        ],
+        warnings=[],
+    )
+
+    complex_document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_checker_png(100, 100),
+        ocr_document=ocr,
+        settings=settings,
+    )
+    dark_document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_rgb_png(100, 100, (20, 20, 20)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert complex_document.decisions[0].reason == "complex_background"
+    assert dark_document.decisions[0].reason == "dark_background"
+
+
+def test_unsupported_png_sampling_skips_replacement() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(20, 20, 8, 3, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 20, "height": 20},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("ocr_1", "Hello", [2, 10, 12, 8], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+    unsupported = bytearray(make_rgb_png(20, 20, (255, 255, 255)))
+    unsupported[25] = 3
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=bytes(unsupported),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert document.status == "skipped"
+    assert document.error is not None
+    assert document.error["code"] == "png_sampling_unsupported"
+
+
+def test_apply_text_replacements_keeps_existing_children() -> None:
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(100, 100, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 100, "height": 100},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("ocr_1", "Hello", [10, 50, 40, 20], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_rgb_png(100, 100, (247, 248, 250)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+    base_dsl = {
+        "version": "0.1",
+        "taskId": "task_1",
+        "assets": [],
+        "root": {
+            "id": "root",
+            "type": "frame",
+            "layout": {"x": 0, "y": 0, "width": 100, "height": 100},
+            "children": [
+                {"id": "original_ref", "type": "image", "layout": {"x": 0, "y": 0, "width": 100, "height": 100}},
+                {"id": "fallback_region_header", "type": "image", "layout": {"x": 0, "y": 0, "width": 100, "height": 40}},
+                {"id": "text_ocr_1", "type": "text", "role": "candidate_text", "layout": {"x": 10, "y": 50, "width": 40, "height": 20}, "content": {"text": "Hello"}},
+            ],
+        },
+        "meta": {"notes": "deterministic_region_dsl", "qualityFlags": ["m9_hidden_text_candidates"]},
+    }
+
+    enhanced = apply_text_replacements(base_dsl, document, ocr)
+    children = {child["id"]: child for child in enhanced["root"]["children"]}
+
+    assert {"original_ref", "fallback_region_header", "text_ocr_1"}.issubset(children)
+    assert "cover_ocr_1" in children
+    assert "visible_text_ocr_1" in children
+    assert enhanced["meta"]["textReplacementCount"] == 1
+
+
+def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestClient:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    for key, value in env.items():
+        if value:
+            monkeypatch.setenv(key, value)
+        else:
+            monkeypatch.delenv(key, raising=False)
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    return TestClient(main.create_app())
+
+
+def make_settings(**overrides: Any) -> Settings:
+    values: dict[str, Any] = {
+        "version": "0.1.0",
+        "storage_root": None,
+        "database_path": None,
+        "public_base_url": "http://localhost:8000",
+        "max_upload_bytes": 10 * 1024 * 1024,
+        "cors_allow_origins": ["*"],
+        "visual_primitive_provider": "fake",
+        "ocr_provider": "fake",
+        "dsl_patch_mode": "debug",
+        "openai_api_key": None,
+        "openai_vision_model": "gpt-5.5",
+        "openai_timeout_seconds": 30,
+        "ocr_min_confidence": 0.70,
+        "text_replacement_mode": "debug",
+        "text_replacement_max_blocks": 20,
+        "text_replacement_min_confidence": 0.95,
+        "text_replacement_solid_bg_tolerance": 18,
+        "text_replacement_max_height": 64,
+        "text_replacement_min_width": 12,
+        "text_replacement_min_height": 10,
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def make_rgb_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
+    rows = [bytes(rgb) * width for _ in range(height)]
+    return make_png_from_rows(width, height, 2, rows)
+
+
+def make_checker_png(width: int, height: int) -> bytes:
+    rows = []
+    for row_index in range(height):
+        row = bytearray()
+        for column in range(width):
+            value = 255 if (row_index + column) % 2 == 0 else 0
+            row.extend([value, value, value])
+        rows.append(bytes(row))
+    return make_png_from_rows(width, height, 2, rows)
+
+
+def make_png_from_rows(width: int, height: int, color_type: int, rows: list[bytes]) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    idat_data = zlib.compress(b"".join(b"\x00" + row for row in rows))
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            png_chunk(b"IHDR", ihdr_data),
+            png_chunk(b"IDAT", idat_data),
+            png_chunk(b"IEND", b""),
+        ]
+    )

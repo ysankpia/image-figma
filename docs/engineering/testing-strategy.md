@@ -92,6 +92,10 @@ Backend API：
 - M10 `OCR_PROVIDER=baidu_ppocrv5` 使用 fake HTTP client 测试，不打真实百度网络。
 - 百度 PP-OCRv5 `rec_boxes` 必须从 `[x1, y1, x2, y2]` 转成 `[x, y, width, height]`。
 - 百度 OCR 失败、超时、缺 token 或 JSONL 异常时，上传仍 completed，DSL 回退 fallback。
+- M11 `TEXT_REPLACEMENT_MODE=debug` 生成 replacement document，但不把 visible text 合并进 `/dsl`。
+- M11 `TEXT_REPLACEMENT_MODE=apply` 只对 accepted 低风险文字添加 cover shape 和 visible text。
+- M11 apply 必须保留 fallback region、original_ref 和 hidden candidate_text。
+- unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
 
@@ -100,12 +104,13 @@ cd backend
 uv run pytest
 ```
 
-PNG cropper：
+PNG cropper / sampler：
 
 - 标准库读取 PNG metadata，包括 width、height、bit depth、color type、interlace。
 - 标准库 cropper 覆盖 bit depth `8`、color type `2`/`6`、non-interlaced PNG。
 - scanline filter `0..4` 必须可还原。
-- 不支持格式抛出明确异常，由上传链路降级为整图 fallback。
+- 不支持格式抛出明确异常，由上传链路降级为整图 fallback 或跳过 text replacement。
+- RGB/RGBA PNG pixel decode 和背景采样必须覆盖。
 
 Visual Primitives：
 

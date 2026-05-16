@@ -20,6 +20,12 @@ from ..errors import ApiError, success_response
 from ..ocr import OCRDocument, build_failed_ocr_document, extract_ocr
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
+from ..text_replacement import (
+    apply_text_replacements,
+    build_failed_text_replacement_document,
+    build_text_replacement_document,
+    normalize_replacement_mode,
+)
 from ..visual_primitives import (
     PrimitiveRegionInput,
     VisualPrimitiveDocument,
@@ -135,7 +141,8 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             )
         primitive_document = save_primitive_result(task_id, image, region_assets, region_inputs, now)
         ocr_document = save_ocr_result(task_id, image, upload_path, now)
-        final_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
+        patched_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
+        final_dsl = save_text_replacement_result(task_id, image, data, ocr_document, patched_dsl, now)
         dsl_path = state.storage.dsl_path(task_id)
         dsl_path.write_text(json.dumps(final_dsl, ensure_ascii=False, indent=2), encoding="utf-8")
         state.database.insert_dsl_result(
@@ -427,6 +434,93 @@ def save_dsl_patch_result(
             "status": document.status,
             "patch_path": str(patch_path),
             "patch_count": len(document.patches),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return final_dsl
+
+
+def save_text_replacement_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    ocr_document: OCRDocument,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    mode = normalize_replacement_mode(state.settings.text_replacement_mode)
+    if mode == "off":
+        return input_dsl
+
+    failed_logged = False
+    try:
+        document = build_text_replacement_document(
+            task_id=task_id,
+            image=image,
+            png_data=png_data,
+            ocr_document=ocr_document,
+            settings=state.settings,
+        )
+        final_dsl = apply_text_replacements(input_dsl, document, ocr_document)
+        validation_errors = validate_enhanced_dsl(final_dsl)
+        if validation_errors:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="text_replacement_validate",
+                error_code="TEXT_REPLACEMENT_VALIDATION_FAILED",
+                message="Text replacement validation failed.",
+                detail=json_dumps(validation_errors),
+            )
+            failed_logged = True
+            document = build_failed_text_replacement_document(
+                task_id=task_id,
+                image=image,
+                mode=mode,
+                code="TEXT_REPLACEMENT_VALIDATION_FAILED",
+                message="Text replacement validation failed.",
+            )
+            final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="text_replacement",
+            error_code="TEXT_REPLACEMENT_FAILED",
+            message="Text replacement failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_text_replacement_document(
+            task_id=task_id,
+            image=image,
+            mode=mode,
+            code="TEXT_REPLACEMENT_FAILED",
+            message="Text replacement failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="text_replacement",
+            error_code=document.error["code"] if document.error else "TEXT_REPLACEMENT_FAILED",
+            message=document.error["message"] if document.error else "Text replacement failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    replacement_path = state.storage.save_text_replacement(task_id, json_dumps(document.to_dict()))
+    accepted_count = sum(1 for decision in document.decisions if decision.decision == "accepted")
+    rejected_count = sum(1 for decision in document.decisions if decision.decision == "rejected")
+    state.database.insert_text_replacement_result(
+        {
+            "task_id": task_id,
+            "mode": document.mode,
+            "status": document.status,
+            "replacement_path": str(replacement_path),
+            "accepted_count": accepted_count,
+            "rejected_count": rejected_count,
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

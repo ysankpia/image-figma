@@ -25,6 +25,13 @@ class Settings:
     baidu_paddle_ocr_model: str = "PP-OCRv5"
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
+    text_replacement_mode: str = "debug"
+    text_replacement_max_blocks: int = 20
+    text_replacement_min_confidence: float = 0.95
+    text_replacement_solid_bg_tolerance: int = 18
+    text_replacement_max_height: int = 64
+    text_replacement_min_width: int = 12
+    text_replacement_min_height: int = 10
 
 
 def get_settings() -> Settings:
@@ -50,6 +57,13 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_model=os.getenv("BAIDU_PADDLE_OCR_MODEL", "PP-OCRv5").strip() or "PP-OCRv5",
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
+        text_replacement_mode=os.getenv("TEXT_REPLACEMENT_MODE", "debug").strip().lower() or "debug",
+        text_replacement_max_blocks=int(os.getenv("TEXT_REPLACEMENT_MAX_BLOCKS", "20")),
+        text_replacement_min_confidence=float(os.getenv("TEXT_REPLACEMENT_MIN_CONFIDENCE", "0.95")),
+        text_replacement_solid_bg_tolerance=int(os.getenv("TEXT_REPLACEMENT_SOLID_BG_TOLERANCE", "18")),
+        text_replacement_max_height=int(os.getenv("TEXT_REPLACEMENT_MAX_HEIGHT", "64")),
+        text_replacement_min_width=int(os.getenv("TEXT_REPLACEMENT_MIN_WIDTH", "12")),
+        text_replacement_min_height=int(os.getenv("TEXT_REPLACEMENT_MIN_HEIGHT", "10")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

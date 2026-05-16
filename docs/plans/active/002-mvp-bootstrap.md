@@ -20,6 +20,7 @@
 - 建立 visual primitive contract harness。
 - 接入 OCR boxes + visual primitives -> DSL patch builder。
 - 接入百度 PP-OCRv5 异步 OCR provider。
+- 接入低风险可见文字替换 harness。
 - 做样例验收。
 
 不包含：
@@ -45,8 +46,9 @@
 9. 建立 visual primitive contract harness，AI/OCR/CV 只产生可验证候选，不直接生成 DSL。状态：完成第一版。
 10. 接入 OCR boxes + visual primitives -> DSL patch builder。状态：完成第一版。
 11. 接入百度 PP-OCRv5 异步 OCR provider。状态：完成第一版。
-12. 加入更细资产裁切、original reference 和 fallback。
-13. 用固定样例做 MVP 收敛。
+12. 接入低风险可见文字替换 harness。状态：完成第一版。
+13. 加入更细资产裁切、original reference 和 fallback。
+14. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -107,6 +109,11 @@
 - `OCR_PROVIDER=baidu_ppocrv5`。
 - OCR 低置信度过滤。
 - 百度失败回退 fallback DSL。
+- TextReplacementDocument v0.1 合同。
+- SQLite `text_replacement_results`。
+- `GET /api/tasks/{taskId}/text-replacements`。
+- `TEXT_REPLACEMENT_MODE=debug/apply`。
+- 低风险浅色背景文字 cover/text replacement。
 - 单元测试。
 
 验证命令：

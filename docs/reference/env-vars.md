@@ -13,6 +13,13 @@
 | `OCR_PROVIDER` | OCR provider，支持 `fake`、`baidu_ppocrv5` | `fake` | 否 |
 | `OCR_MIN_CONFIDENCE` | OCR block 最低置信度，低于该值丢弃 | `0.70` | 否 |
 | `DSL_PATCH_MODE` | M9 DSL patch 模式，支持 `off`、`debug`、`apply` | `debug` | 否 |
+| `TEXT_REPLACEMENT_MODE` | M11 text replacement 模式，支持 `off`、`debug`、`apply` | `debug` | 否 |
+| `TEXT_REPLACEMENT_MAX_BLOCKS` | M11 apply 最多接受的 OCR block 数 | `20` | 否 |
+| `TEXT_REPLACEMENT_MIN_CONFIDENCE` | M11 replacement 最低 OCR 置信度 | `0.95` | 否 |
+| `TEXT_REPLACEMENT_SOLID_BG_TOLERANCE` | M11 浅色纯色背景容差 | `18` | 否 |
+| `TEXT_REPLACEMENT_MAX_HEIGHT` | M11 可替换 OCR bbox 最大高度 | `64` | 否 |
+| `TEXT_REPLACEMENT_MIN_WIDTH` | M11 可替换 OCR bbox 最小宽度 | `12` | 否 |
+| `TEXT_REPLACEMENT_MIN_HEIGHT` | M11 可替换 OCR bbox 最小高度 | `10` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -31,4 +38,4 @@
 
 `BAIDU_PADDLE_OCR_TOKEN` 是 bearer token，必须只通过本地环境变量或未提交的 `.env` 提供，不能写入仓库。
 
-M10 中 `DSL_PATCH_MODE=apply` 只保留配置入口，行为仍不做可见文字替换；真正可见替换放到 M11。
+`DSL_PATCH_MODE=apply` 仍不做可见文字替换。M11 可见替换由 `TEXT_REPLACEMENT_MODE=apply` 单独控制，默认 `debug` 只记录 decisions。

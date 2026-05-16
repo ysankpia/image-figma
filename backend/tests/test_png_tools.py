@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+import struct
+import zlib
+
 import pytest
 
-from app.png_tools import PngMetadata, PngRegion, UnsupportedPngCropError, crop_png, plan_regions, read_png_metadata
-from conftest import make_png
+from app.png_tools import (
+    PngMetadata,
+    PngRegion,
+    UnsupportedPngCropError,
+    crop_png,
+    decode_png_pixels,
+    plan_regions,
+    read_png_metadata,
+    sample_region_background,
+)
+from conftest import make_png, png_chunk
 
 
 def test_read_png_metadata_includes_crop_relevant_fields() -> None:
@@ -66,3 +78,61 @@ def test_crop_png_rejects_unsupported_color_type_after_metadata_is_readable() ->
 
     with pytest.raises(UnsupportedPngCropError):
         crop_png(bytes(png), PngRegion("header", 0, 0, 20, 7))
+
+
+def test_decode_png_pixels_and_sample_rgb_background() -> None:
+    png = make_rgb_png(12, 8, (247, 248, 250))
+
+    pixels = decode_png_pixels(png)
+    sample = sample_region_background(pixels, [0, 0, 12, 8], tolerance=18)
+
+    assert sample.color == "#F7F8FA"
+    assert sample.mean_rgb == [247, 248, 250]
+    assert sample.max_channel_delta == 0
+    assert sample.brightness > 180
+
+
+def test_decode_png_pixels_composites_rgba_on_white() -> None:
+    png = make_rgba_png(2, 1, (0, 0, 0, 128))
+
+    pixels = decode_png_pixels(png)
+    sample = sample_region_background(pixels, [0, 0, 2, 1], tolerance=18)
+
+    assert sample.mean_rgb == [127, 127, 127]
+
+
+def test_sample_region_background_clamps_bbox_to_bounds() -> None:
+    png = make_rgb_png(12, 8, (255, 255, 255))
+    pixels = decode_png_pixels(png)
+
+    sample = sample_region_background(pixels, [-4, -4, 8, 8], tolerance=18)
+
+    assert sample.bbox == [0, 0, 4, 4]
+
+
+def make_rgb_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    row = b"\x00" + bytes(rgb) * width
+    idat_data = zlib.compress(row * height)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            png_chunk(b"IHDR", ihdr_data),
+            png_chunk(b"IDAT", idat_data),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def make_rgba_png(width: int, height: int, rgba: tuple[int, int, int, int]) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    row = b"\x00" + bytes(rgba) * width
+    idat_data = zlib.compress(row * height)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            png_chunk(b"IHDR", ihdr_data),
+            png_chunk(b"IDAT", idat_data),
+            png_chunk(b"IEND", b""),
+        ]
+    )

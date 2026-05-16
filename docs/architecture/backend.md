@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M10 当前管线：
+M11 当前管线：
 
 ```text
 receive multipart PNG
@@ -30,11 +30,14 @@ receive multipart PNG
 -> build deterministic region DSL
 -> extract visual primitive candidates
 -> extract OCR candidates
--> build DSL patch
+-> build hidden candidate DSL patch
+-> evaluate low-risk text replacements
+-> optionally merge visible text replacements when TEXT_REPLACEMENT_MODE=apply
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
 -> save patch JSON
+-> save text replacement JSON
 -> mark task completed
 ```
 
@@ -66,6 +69,7 @@ backend/storage/
   primitives/
   ocr/
   patches/
+  text_replacements/
   logs/
 ```
 
@@ -73,12 +77,12 @@ backend/storage/
 
 ## Task State
 
-M10 当前只实际写入：
+M11 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M10 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M11 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -153,7 +157,7 @@ OpenAI provider 规则：
 
 ## AI Strategy
 
-M10 之后的普通页面目标管线：
+M11 之后的普通页面目标管线：
 
 ```text
 OCR boxes
@@ -187,11 +191,11 @@ M9 引入 OCR 合同和 DSL patch；M10 新增可选百度 PP-OCRv5 异步 OCR p
 - candidate text `style.visible` 固定为 `false`，避免双层文字。
 - patch validation 失败时 `/dsl` 回退 deterministic base DSL。
 
-M10 不用 OCR 文字猜字体、颜色、层级或背景。可见文字替换留到 M11。
+M11 新增低风险可见文字替换 harness：默认 `TEXT_REPLACEMENT_MODE=debug` 只记录 accepted/rejected 决策；`apply` 只给浅色纯色背景上的高置信 OCR block 添加 cover shape 和 visible text。fallback region、original reference 和 hidden candidate text 都保留。M11 不猜字体、颜色、层级，不处理复杂背景或深色按钮。
 
 ## Backend Non-Goals
 
-M10 不做：
+M11 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -206,5 +210,7 @@ M10 不做：
 - AI 直接生成 DSL。
 - AI 直接生成 patch。
 - OCR/AI 语义裁切。
-- 可编辑文字生成。
-- 可见文字替换。
+- 全量可编辑文字生成。
+- 完整可编辑还原。
+- 删除 fallback region。
+- 深色按钮文字和复杂背景文字替换。

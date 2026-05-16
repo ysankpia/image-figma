@@ -16,6 +16,7 @@
 - 当前 visual primitive contract 计划：[plans/active/008-visual-primitive-contract-harness.md](plans/active/008-visual-primitive-contract-harness.md)
 - 当前 OCR/DSL patch 计划：[plans/active/009-ocr-primitive-dsl-patch-harness.md](plans/active/009-ocr-primitive-dsl-patch-harness.md)
 - 当前百度 PP-OCRv5 异步 OCR 计划：[plans/active/010-baidu-ppocrv5-async-ocr-provider.md](plans/active/010-baidu-ppocrv5-async-ocr-provider.md)
+- 当前低风险可见文字替换计划：[plans/active/011-low-risk-visible-text-replacement.md](plans/active/011-low-risk-visible-text-replacement.md)
 
 ## By Task Type
 
@@ -75,6 +76,7 @@
 - M8 visual primitives 决策：[decisions/0010-ai-proposes-visual-primitives-not-dsl.md](decisions/0010-ai-proposes-visual-primitives-not-dsl.md)
 - M9 DSL patch 决策：[decisions/0011-use-dsl-patch-builder-before-editable-reconstruction.md](decisions/0011-use-dsl-patch-builder-before-editable-reconstruction.md)
 - M10 百度 PP-OCRv5 决策：[decisions/0012-use-baidu-ppocrv5-async-for-real-ocr.md](decisions/0012-use-baidu-ppocrv5-async-for-real-ocr.md)
+- M11 低风险文字替换决策：[decisions/0013-use-low-risk-text-replacement-before-full-editable-reconstruction.md](decisions/0013-use-low-risk-text-replacement-before-full-editable-reconstruction.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 
