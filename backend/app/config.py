@@ -13,6 +13,10 @@ class Settings:
     public_base_url: str
     max_upload_bytes: int
     cors_allow_origins: list[str]
+    visual_primitive_provider: str
+    openai_api_key: str | None
+    openai_vision_model: str
+    openai_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -26,6 +30,10 @@ def get_settings() -> Settings:
         public_base_url=os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
         max_upload_bytes=int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
         cors_allow_origins=parse_csv(os.getenv("CORS_ALLOW_ORIGINS", "*")),
+        visual_primitive_provider=os.getenv("VISUAL_PRIMITIVE_PROVIDER", "fake").strip().lower() or "fake",
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
+        openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
     )
 
 

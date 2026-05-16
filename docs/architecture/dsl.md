@@ -140,7 +140,9 @@ M7 deterministic region DSL 默认使用三段 region fallback：
 - `meta.notes`：`deterministic_fallback_dsl`。
 - `meta.qualityFlags`：包含 `region_crop_unsupported`。
 
-M7 不识别文字、图标或真实布局。后续 OCR/AI 管线必须在不破坏该 fallback 保障的前提下逐步增加可编辑元素。
+M8 仍不识别文字、图标或真实布局。M8 新增的是独立 visual primitive candidate 结果，不会合并进 DSL，不改变 Renderer 输入。
+
+后续 M9 才允许把 OCR boxes 和 visual primitives 转成 DSL patch。这个 patch 必须经过 DSL validator，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair
 

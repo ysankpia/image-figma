@@ -42,3 +42,4 @@ logs/
 # Figma plugin build artifacts
 figma-plugin/dist/
 figma-plugin/build/
+repomix-output.xml

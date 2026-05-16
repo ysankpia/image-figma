@@ -11,6 +11,11 @@ from ..dsl_factory import DslRegionAsset, build_deterministic_dsl
 from ..errors import ApiError, success_response
 from ..png_tools import PngMetadata, UnsupportedPngCropError, crop_png, is_png, plan_regions, read_png_metadata
 from ..state import state
+from ..visual_primitives import (
+    PrimitiveRegionInput,
+    build_failed_primitive_document,
+    extract_visual_primitives,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -50,6 +55,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
         upload_path = state.storage.save_upload(task_id, data)
         banner_path = state.storage.create_banner_asset(task_id, upload_path)
         region_assets, quality_flags = create_region_assets(task_id, data, image)
+        region_inputs = create_region_inputs(task_id, image, region_assets, str(banner_path))
         dsl = build_deterministic_dsl(
             task_id=task_id,
             original_url=state.storage.original_url(task_id),
@@ -118,6 +124,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                     "created_at": now,
                 }
             )
+        save_primitive_result(task_id, image, region_assets, region_inputs, now)
         state.database.insert_dsl_result(
             {
                 "task_id": task_id,
@@ -188,3 +195,95 @@ def create_region_assets(task_id: str, data: bytes, image: PngMetadata) -> tuple
         )
 
     return assets, []
+
+
+def create_region_inputs(
+    task_id: str,
+    image: PngMetadata,
+    region_assets: list[DslRegionAsset],
+    fallback_path: str,
+) -> list[PrimitiveRegionInput]:
+    if not region_assets:
+        return [
+            PrimitiveRegionInput(
+                id="full_image",
+                path=fallback_path,
+                x=0,
+                y=0,
+                width=image.width,
+                height=image.height,
+            )
+        ]
+    return [
+        PrimitiveRegionInput(
+            id=region.name,
+            path=str(state.storage.region_path(task_id, region.name)),
+            x=region.x,
+            y=region.y,
+            width=region.width,
+            height=region.height,
+        )
+        for region in region_assets
+    ]
+
+
+def save_primitive_result(
+    task_id: str,
+    image: PngMetadata,
+    region_assets: list[DslRegionAsset],
+    region_inputs: list[PrimitiveRegionInput],
+    created_at: str,
+) -> None:
+    failed_logged = False
+    try:
+        document = extract_visual_primitives(
+            task_id=task_id,
+            image=image,
+            regions=region_assets,
+            region_inputs=region_inputs,
+            settings=state.settings,
+        )
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="primitive_extract",
+            error_code="PRIMITIVE_EXTRACTION_FAILED",
+            message="Visual primitive extraction failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_primitive_document(
+            task_id=task_id,
+            image=image,
+            provider=state.settings.visual_primitive_provider,
+            model=state.settings.openai_vision_model if state.settings.visual_primitive_provider == "openai" else None,
+            code="PRIMITIVE_EXTRACTION_FAILED",
+            message="Visual primitive extraction failed.",
+        )
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="primitive_extract",
+            error_code=document.error["code"] if document.error else "PRIMITIVE_EXTRACTION_FAILED",
+            message=document.error["message"] if document.error else "Visual primitive extraction failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    primitive_path = state.storage.save_primitives(
+        task_id,
+        json_dumps(document.to_dict()),
+    )
+    state.database.insert_primitive_result(
+        {
+            "task_id": task_id,
+            "provider": document.provider,
+            "model": document.model,
+            "status": document.status,
+            "primitive_path": str(primitive_path),
+            "primitive_count": len(document.primitives),
+            "relation_count": len(document.relations),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )

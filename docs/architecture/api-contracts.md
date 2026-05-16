@@ -51,12 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M7 成功后立即返回 completed deterministic region 任务。
+- M8 成功后立即返回 completed deterministic region 任务。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
+- 上传链路会生成 visual primitives 调试结果，但不会改变 DSL 或插件输出。
 
 `GET /api/tasks/{taskId}`
 
@@ -68,6 +69,15 @@ http://localhost:8000/api
 - 用途：获取任务 DSL。
 - 仅在任务 completed 后成功。
 - 未完成时返回明确错误。
+
+`GET /api/tasks/{taskId}/primitives`
+
+- 用途：获取 M8 visual primitive candidate 结果。
+- 只读调试接口，不被插件主流程依赖。
+- task 不存在返回 `TASK_NOT_FOUND`。
+- primitive result 不存在返回 `PRIMITIVE_NOT_FOUND`。
+- extraction 失败时仍返回 `success: true`，但 `data.status` 为 `failed`，并带 `error` 摘要。
+- 返回的 `bbox` 使用整图像素坐标 `[x, y, width, height]`。
 
 `GET /api/assets/{assetId}`
 
@@ -97,6 +107,8 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `DSL_NOT_READY`
 - `DSL_NOT_FOUND`
 - `ASSET_NOT_FOUND`
+- `PRIMITIVE_NOT_FOUND`
+- `PRIMITIVE_EXTRACTION_FAILED`
 - `INTERNAL_ERROR`
 
 ## Plugin M5 Usage
@@ -109,7 +121,7 @@ GET /api/tasks/{taskId}
 GET /api/tasks/{taskId}/dsl
 ```
 
-即使 M7 后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
+即使 M8 后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。插件当前不调用 primitives endpoint。
 
 ## Optional Endpoints
 

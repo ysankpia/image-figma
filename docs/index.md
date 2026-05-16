@@ -13,6 +13,7 @@
 - 当前插件后端上传计划：[plans/active/005-plugin-backend-upload-flow.md](plans/active/005-plugin-backend-upload-flow.md)
 - 当前 deterministic PNG -> DSL 计划：[plans/active/006-deterministic-png-to-dsl.md](plans/active/006-deterministic-png-to-dsl.md)
 - 当前 deterministic region slicer 计划：[plans/active/007-deterministic-region-slicer.md](plans/active/007-deterministic-region-slicer.md)
+- 当前 visual primitive contract 计划：[plans/active/008-visual-primitive-contract-harness.md](plans/active/008-visual-primitive-contract-harness.md)
 
 ## By Task Type
 
@@ -69,6 +70,7 @@
 - M5 插件后端接入决策：[decisions/0007-plugin-uses-backend-api-after-m4.md](decisions/0007-plugin-uses-backend-api-after-m4.md)
 - M6 deterministic DSL 决策：[decisions/0008-use-deterministic-png-dsl-builder-before-ai.md](decisions/0008-use-deterministic-png-dsl-builder-before-ai.md)
 - M7 PNG region slicer 决策：[decisions/0009-use-standard-library-png-region-slicer.md](decisions/0009-use-standard-library-png-region-slicer.md)
+- M8 visual primitives 决策：[decisions/0010-ai-proposes-visual-primitives-not-dsl.md](decisions/0010-ai-proposes-visual-primitives-not-dsl.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

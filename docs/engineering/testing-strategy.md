@@ -81,6 +81,9 @@ Backend API：
 - 未完成任务获取 DSL 返回明确错误。
 - asset 元信息可查询。
 - `/files/uploads/...` 和 `/files/assets/...` 可返回 PNG。
+- M8 上传后生成 primitive JSON 文件。
+- `GET /api/tasks/{taskId}/primitives` 可返回 fake primitives。
+- primitive extraction 失败不影响 DSL 查询。
 
 当前命令：
 
@@ -95,6 +98,19 @@ PNG cropper：
 - 标准库 cropper 覆盖 bit depth `8`、color type `2`/`6`、non-interlaced PNG。
 - scanline filter `0..4` 必须可还原。
 - 不支持格式抛出明确异常，由上传链路降级为整图 fallback。
+
+Visual Primitives：
+
+- 默认 fake provider 不需要 `OPENAI_API_KEY`。
+- fake provider 根据 M7 region 输出 `vp_region_header`、`vp_region_content`、`vp_region_bottom`。
+- M7 DSL 不应包含 `vp_*` 节点。
+- normalized `0..999` bbox 必须转换为整图像素 bbox。
+- primitive bbox 轻微越界必须 clamp 并记录 warning。
+- 严重非法 bbox 必须丢弃。
+- duplicate primitive id 必须丢弃。
+- invalid relation 引用必须丢弃。
+- OpenAI provider 缺 key、异常、空结果时，上传仍 completed，primitive result 为 `failed` 或 `partial`。
+- OpenAI provider 测试使用 monkeypatch fake client，不打真实网络。
 
 Plugin UI：
 
@@ -116,7 +132,7 @@ Plugin UI：
 End-to-End：
 
 - 单张 PNG -> taskId -> DSL -> Renderer -> Figma root Frame。
-- 主要文字可编辑。
+- M8 当前不要求主要文字可编辑。
 - 图片资产显示。
 - 复杂区域 fallback。
 

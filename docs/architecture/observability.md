@@ -22,6 +22,17 @@ Renderer warning 至少包含：
 - `code`
 - `message`
 
+M8 primitive result 至少包含：
+
+- `taskId`
+- `provider`
+- `model`
+- `status`
+- `primitiveCount`
+- `relationCount`
+- `errorCode`
+- `primitivePath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -29,6 +40,7 @@ Renderer warning 至少包含：
 - 上传耗时。
 - OCR 耗时。
 - AI 调用耗时。
+- primitive extraction 成功/失败数量。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -43,7 +55,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> ocr -> ai_analyze -> asset_crop -> dsl_build -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> dsl_build -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -56,6 +68,7 @@ upload -> preprocess -> ocr -> ai_analyze -> asset_crop -> dsl_build -> dsl_vali
 - 预处理结果。
 - OCR 摘要。
 - AI 输出摘要。
+- visual primitive JSON。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

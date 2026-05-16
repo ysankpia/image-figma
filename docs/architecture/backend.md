@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M7 当前管线：
+M8 当前管线：
 
 ```text
 receive multipart PNG
@@ -28,7 +28,9 @@ receive multipart PNG
 -> plan deterministic regions
 -> crop header/content/bottom region assets when supported
 -> build deterministic region DSL
+-> extract visual primitive candidates
 -> save DSL JSON
+-> save primitive JSON
 -> mark task completed
 ```
 
@@ -57,6 +59,7 @@ backend/storage/
   uploads/
   assets/
   dsl/
+  primitives/
   logs/
 ```
 
@@ -64,12 +67,12 @@ backend/storage/
 
 ## Task State
 
-M7 当前只实际写入：
+M8 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M7 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M8 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -124,14 +127,34 @@ content = height - header - bottom
 - `completed`
 - `failed`
 
+## Visual Primitive Contract Harness
+
+M8 引入 visual primitives，但不让 AI 直接生成 DSL。后端会保存一份 candidate primitive JSON：
+
+- 默认 provider 是 `fake`，不需要 `OPENAI_API_KEY`。
+- `fake` provider 根据 M7 region 生成 `vp_region_header`、`vp_region_content`、`vp_region_bottom`。
+- 可选 `openai` provider 使用视觉模型提取非文字 UI candidate primitives。
+- primitive bbox 使用整图像素坐标 `[x, y, width, height]`。
+- primitives 不进入 DSL，不改变 Figma 插件输出。
+- extraction 失败只影响 primitives 查询结果，不影响 M7 deterministic DSL。
+
+OpenAI provider 规则：
+
+- 只有 `VISUAL_PRIMITIVE_PROVIDER=openai` 时启用。
+- 输入为 region PNG，不直接分析整张长图。
+- 模型输出 normalized region-local box 后，由后端换算成整图像素 bbox。
+- 模型输出必须经过 validator，非法 bbox、重复 id、无效 relation 不进入结果。
+
 ## AI Strategy
 
-普通页面：
+M8 之后的普通页面目标管线：
 
 ```text
-OCR / CV 预处理
--> 1 次主 AI 结构分析
--> DSL Builder
+OCR boxes
+-> visual primitives
+-> primitive merger
+-> DSL patch builder
+-> DSL validator
 ```
 
 异常 JSON：
@@ -144,7 +167,7 @@ OCR / CV 预处理
 
 ## Backend Non-Goals
 
-M7 不做：
+M8 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -155,6 +178,6 @@ M7 不做：
 - 微服务拆分。
 - 正式对象存储策略。
 - OCR。
-- AI。
+- AI 直接生成 DSL。
 - OCR/AI 语义裁切。
 - 可编辑文字生成。

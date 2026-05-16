@@ -1,6 +1,6 @@
 # 外部 API
 
-当前仓库没有代码调用外部 API。本文件记录后续集成边界。
+当前仓库默认不调用外部 API。M8 增加了可选 OpenAI provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。
 
 ## Figma Plugin API
 
@@ -27,17 +27,32 @@
 
 ## AI Provider
 
-候选：
+当前可选：
 
-- OpenAI 视觉模型。
-- 等价结构化视觉模型。
+- OpenAI Responses API。
+
+默认关闭：
+
+```text
+VISUAL_PRIMITIVE_PROVIDER=fake
+```
+
+启用 OpenAI smoke：
+
+```text
+VISUAL_PRIMITIVE_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_VISION_MODEL=gpt-5.5
+```
 
 要求：
 
 - 支持结构化输出。
 - 有超时。
 - 有错误码。
-- 有调用摘要日志。
+- 输出不能直接作为 DSL。
+- 输出 bbox 必须经过统一 validator。
+- 失败不得影响 deterministic DSL 主链路。
 
 ## Storage Provider
 

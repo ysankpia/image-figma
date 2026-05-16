@@ -91,6 +91,8 @@ UI clicks Sample
 -> Main calls Renderer
 ```
 
+M8 没有改插件协议。插件不调用 `/api/tasks/{taskId}/primitives`，也不展示 AI/OCR/primitive 内部结果。primitives 只服务后端调试和后续 M9 合并逻辑。
+
 ## User Language
 
 插件 UI 不暴露内部术语：

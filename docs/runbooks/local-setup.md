@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端和 deterministic region fallback 上传链路。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路和 M8 visual primitive contract harness。
 
 ## Prerequisites
 
@@ -96,6 +96,30 @@ pnpm --filter @image-figma/figma-plugin run build:dev
 
 当前 M5 插件主链路会调用 `http://localhost:8000/api`。`Sample` 按钮保留为开发备用入口，不调用后端。
 
+M8 primitive extraction 默认使用 fake provider，不需要 OpenAI key：
+
+```bash
+VISUAL_PRIMITIVE_PROVIDER=fake
+```
+
+上传后可以查询 primitive candidates：
+
+```bash
+curl http://localhost:8000/api/tasks/{taskId}/primitives
+```
+
+OpenAI provider 只用于可选 smoke，必须显式启用：
+
+```bash
+cd backend
+VISUAL_PRIMITIVE_PROVIDER=openai \
+OPENAI_API_KEY=... \
+OPENAI_VISION_MODEL=gpt-5.5 \
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+即使 OpenAI provider 失败，上传任务和 `/api/tasks/{taskId}/dsl` 也应继续使用 M7 deterministic DSL 成功返回。
+
 `localhost` 只配置在 `manifest.json` 的 `networkAccess.devAllowedDomains`。Figma 不允许把 localhost 放进正式 `allowedDomains`，除非同时提供审核用 `reasoning` 字段。开发期如果要阻断正式网络域名，`allowedDomains` 必须写成 `["none"]`，不能写空数组。
 
 Figma 插件主线程的 JavaScript 解析器比现代浏览器页面更保守。插件 bundle 目标使用 `es2017`，并在构建后扫描 `??`、`?.`、ESM import/export、`structuredClone`、`Object.hasOwn` 和 `for await` 残留。
@@ -142,6 +166,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `meta.notes` 为 `deterministic_region_dsl`。
 - `meta.platformHint` 为 `mobile`。
 - root children 包含 `original_ref`、`fallback_region_header`、`fallback_region_content`、`fallback_region_bottom`。
+- `/api/tasks/{taskId}/primitives` 返回 `provider: "fake"` 和 `vp_region_header/content/bottom`。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

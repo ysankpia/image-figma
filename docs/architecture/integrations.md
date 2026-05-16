@@ -16,6 +16,12 @@ Renderer 只通过 Figma Plugin API 写图层，不调用后端。
 
 ## OCR
 
+M8 尚未接 OCR。OCR 后续用于：
+
+```text
+PNG -> text boxes
+```
+
 OCR 用于：
 
 - 识别文字。
@@ -35,19 +41,28 @@ OCR 输出至少包含：
 
 ## AI / CV
 
+M8 已接入的是 visual primitive contract harness，不是完整 AI 还原。
+
 AI / CV 用于：
 
-- 结构理解。
-- 元素归属判断。
-- role 判断。
-- fallback 判断。
-- 辅助生成 DSL。
+- 提出非文字 UI visual primitive candidates。
+- 提供 card、button background、icon、image、shape、divider 等候选 bbox。
+- 后续辅助元素归属判断和 role 判断。
 
 调用策略：
 
-- 普通页面最多 1 次主 AI 调用。
-- JSON 异常最多 1 次 repair。
-- 不做多轮模型流水线。
+- 默认 `VISUAL_PRIMITIVE_PROVIDER=fake`，不调用外部模型。
+- 只有 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才调用 OpenAI。
+- OpenAI provider 分 region 调用，最多 3 个 region。
+- OpenAI 输出 structured JSON，不输出 DesignDSL。
+- 模型输出必须经过 primitive validator。
+- JSON 异常和模型失败只影响 primitives 查询结果，不影响 M7 DSL。
+
+不允许：
+
+- AI 直接生成 DSL 并交给 Renderer。
+- AI 抄写完整文字内容。
+- AI 失败导致上传主链路失败。
 
 ## Storage
 

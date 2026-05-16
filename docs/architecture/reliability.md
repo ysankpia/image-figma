@@ -29,6 +29,13 @@ v0.1 的可靠性目标是稳定跑通主链路，而不是建设复杂平台。
 
 局部失败优先 fallback，不让整页失败。
 
+M8 primitive extraction 是可观测的非关键路径：
+
+- `fake` provider 正常情况下应 completed。
+- `openai` provider 缺 key、超时、坏 JSON、空结果时，primitive result 可为 `failed` 或 `partial`。
+- primitive failure 写入 `error_logs` 和 `primitive_results`。
+- primitive failure 不影响 `/api/tasks/{taskId}/dsl`。
+
 整页失败只发生在：
 
 - PNG 无法读取。

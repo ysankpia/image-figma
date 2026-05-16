@@ -10,6 +10,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `assets`
 - `dsl_results`
 - `error_logs`
+- `primitive_results`
 
 后续建议表：
 
@@ -44,7 +45,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M7 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M8 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -74,12 +75,12 @@ M7 只写入 `completed`。后续接真实处理管线再补 `pending`、`upload
 - `fallback`
 - `icon`
 
-M7 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
+M8 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
 当前上传成功路径会写入：
 
 - `asset_original`：原始上传 PNG。
-- `asset_banner`：兼容旧查询的 full-image fallback 资产，M7 成功切分时不进入 DSL。
+- `asset_banner`：兼容旧查询的 full-image fallback 资产，M8 成功切分时不进入 DSL。
 - `asset_region_header`：顶部 region crop。
 - `asset_region_content`：中部 region crop。
 - `asset_region_bottom`：底部 region crop。
@@ -121,9 +122,38 @@ M7 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `severity`
 - `created_at`
 
+## primitive_results
+
+用途：记录 M8 visual primitive candidate 文件和 provider 状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `provider`
+- `model`
+- `status`
+- `primitive_path`
+- `primitive_count`
+- `relation_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+`status`：
+
+- `completed`
+- `partial`
+- `failed`
+- `skipped`
+
+primitive payload 本体写入 `backend/storage/primitives/{taskId}.json`，SQLite 只保存索引和摘要，避免大 JSON 塞进数据库。
+
+primitive extraction 失败时仍写入一条 `primitive_results`，`status` 为 `failed`，并在 `error_logs` 记录 `primitive_extract` 阶段错误。这样上传主链路能继续返回 DSL，同时调试端能看到失败原因。
+
 ## model_call_logs
 
-用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M7 不创建该表，因为没有模型调用。
+用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M8 不创建该表；OpenAI provider 当前只把 primitive extraction 的结果摘要写入 `primitive_results`，失败细节写入 `error_logs`。
 
 核心字段：
 

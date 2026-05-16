@@ -73,6 +73,20 @@ class Database:
                   severity TEXT NOT NULL,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS primitive_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  provider TEXT NOT NULL,
+                  model TEXT,
+                  status TEXT NOT NULL,
+                  primitive_path TEXT,
+                  primitive_count INTEGER NOT NULL,
+                  relation_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -136,6 +150,26 @@ class Database:
     def get_dsl_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM dsl_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_primitive_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO primitive_results (
+                  task_id, provider, model, status, primitive_path, primitive_count,
+                  relation_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :provider, :model, :status, :primitive_path, :primitive_count,
+                  :relation_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_primitive_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM primitive_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

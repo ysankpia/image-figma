@@ -75,3 +75,50 @@ def get_task_dsl(task_id: str) -> dict[str, object]:
         )
 
     return success_response({"dsl": json.loads(dsl_path.read_text(encoding="utf-8"))})
+
+
+@router.get("/tasks/{task_id}/primitives")
+def get_task_primitives(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_primitive_result(task_id)
+    if result is None:
+        raise ApiError(
+            "PRIMITIVE_NOT_FOUND",
+            "Primitive result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="primitive_lookup",
+            task_id=task_id,
+        )
+
+    primitive_path = Path(result["primitive_path"] or "")
+    if not primitive_path.exists():
+        raise ApiError(
+            "PRIMITIVE_NOT_FOUND",
+            "Primitive file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="primitive_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(primitive_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "provider": result["provider"],
+        "model": result["model"],
+        "primitives": document.get("primitives", []),
+        "relations": document.get("relations", []),
+        "warnings": document.get("warnings", []),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

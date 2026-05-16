@@ -17,7 +17,8 @@
 - 实现 Renderer 假 DSL 渲染。
 - 实现 Figma 插件最小 UI。
 - 实现后端上传、任务、假 DSL。
-- 接入真实 OCR/AI/裁切。
+- 建立 visual primitive contract harness。
+- 后续接入 OCR boxes + visual primitives -> DSL patch builder。
 - 做样例验收。
 
 不包含：
@@ -40,16 +41,18 @@
 6. 插件接入后端上传、任务查询和 DSL 获取。状态：完成第一版。
 7. 接入真实 PNG -> deterministic DSL Builder。状态：完成第一版。
 8. 接入 deterministic region slicer，把整图 fallback 拆成稳定区域。状态：完成第一版。
-9. 接入 OCR/AI -> DSL Builder。
-10. 加入更细资产裁切、original reference 和 fallback。
-11. 用固定样例做 MVP 收敛。
+9. 建立 visual primitive contract harness，AI/OCR/CV 只产生可验证候选，不直接生成 DSL。状态：完成第一版。
+10. 接入 OCR boxes + visual primitives -> DSL patch builder。
+11. 加入更细资产裁切、original reference 和 fallback。
+12. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
 - 假 DSL 能渲染到 Figma。
 - 插件能通过后端拿到 DSL。
 - 真实 PNG 能生成可校验 DSL。
-- 主要文字可编辑。
+- visual primitive candidates 可查询且不污染 DSL。
+- 后续主要文字可编辑。
 - 图片资产能显示。
 - 复杂区域能 fallback。
 - 失败能定位阶段和错误码。
@@ -86,6 +89,11 @@
 - 后端 deterministic DSL 使用真实 PNG 宽高、原图隐藏层和三段 region fallback。
 - 标准库 PNG cropper。
 - `header`、`content`、`bottom` region asset。
+- VisualPrimitiveDocument v0.1 合同。
+- 默认 fake primitive provider。
+- 可选 OpenAI primitive provider。
+- SQLite `primitive_results`。
+- `GET /api/tasks/{taskId}/primitives`。
 - 单元测试。
 
 验证命令：
