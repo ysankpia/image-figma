@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-M4 backend for the fake task flow. It accepts one PNG, stores local files, creates a completed fake task, returns DSL, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic fallback DSL from real PNG dimensions, and serves local asset URLs.
 
 ## Run
 

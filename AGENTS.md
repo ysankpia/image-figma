@@ -13,7 +13,7 @@
 ## 项目边界
 
 - 项目名：Image-to-Figma Design。
-- 当前状态：M5 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 假任务流和插件上传链路第一版。
+- 当前状态：M6 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 后端、插件上传链路和 deterministic PNG -> DSL fallback 第一版。
 - 项目类型：`multi-end-frontend`。
 - 一期目标：单张 PNG 上传后生成 DSL v0.1，并由 Figma Renderer 写入可编辑 Figma 设计稿。
 - 一期硬边界：不做代码生成、Figma Component/Instance、Auto Layout、批量上传、账号、支付、额度、质量看板、多模型平台。

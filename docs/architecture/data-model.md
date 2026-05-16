@@ -4,7 +4,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 
 ## Tables
 
-M4 已实现表：
+当前已实现表：
 
 - `tasks`
 - `assets`
@@ -44,7 +44,7 @@ M4 已实现表：
 - `completed`
 - `failed`
 
-M4 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M6 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -73,6 +73,8 @@ M4 只写入 `completed`。后续接真实处理管线再补 `pending`、`upload
 - `banner`
 - `fallback`
 - `icon`
+
+M6 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。`asset_banner` 暂时保留旧 asset id，但语义是 full-image fallback。
 
 ## dsl_results
 
@@ -111,7 +113,7 @@ M4 只写入 `completed`。后续接真实处理管线再补 `pending`、`upload
 
 ## model_call_logs
 
-用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M4 不创建该表，因为没有模型调用。
+用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M6 不创建该表，因为没有模型调用。
 
 核心字段：
 

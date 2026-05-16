@@ -17,14 +17,15 @@
 
 ## Processing Pipeline
 
-M4 当前管线：
+M6 当前管线：
 
 ```text
 receive multipart PNG
 -> validate MIME and PNG signature
+-> read PNG IHDR width/height
 -> save original image
--> create development banner asset
--> build fake DSL from mobile-home example
+-> create full-image fallback asset
+-> build deterministic DSL from real PNG dimensions
 -> save DSL JSON
 -> mark task completed
 ```
@@ -57,14 +58,16 @@ backend/storage/
   logs/
 ```
 
-M4 服务启动或测试运行时会创建这些目录。`backend/storage/` 不进入 git。
+后端服务启动或测试运行时会创建这些目录。`backend/storage/` 不进入 git。
 
 ## Task State
 
-M4 当前只实际写入：
+M6 当前只实际写入：
 
 - `completed`
 - `failed`
+
+M6 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -73,6 +76,17 @@ M4 当前只实际写入：
 - `processing`
 - `completed`
 - `failed`
+
+## Deterministic DSL Builder
+
+M6 不接 OCR/AI。上传成功后，后端根据真实 PNG 尺寸生成 deterministic fallback DSL：
+
+- root frame 尺寸等于 PNG 宽高。
+- 隐藏 `original_reference` 图层覆盖整图。
+- 可见 `fallback_region` 图层覆盖整图。
+- `meta.notes` 写为 `deterministic_fallback_dsl`。
+
+这不是最终识别能力，只是把 M4 的固定 sample DSL 替换成真实输入驱动的 DSL。
 
 任务阶段：
 
@@ -109,7 +123,7 @@ OCR / CV 预处理
 
 ## Backend Non-Goals
 
-M4 不做：
+M6 不做：
 
 - 用户系统。
 - 支付和额度。

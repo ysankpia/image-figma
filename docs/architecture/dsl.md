@@ -113,6 +113,14 @@ Fallback 元素必须记录原因：
 }
 ```
 
+M6 deterministic fallback DSL 固定使用整图 fallback：
+
+- `original_ref`：隐藏原图参考层。
+- `fallback_full_image`：可见整图 fallback。
+- `meta.notes`：`deterministic_fallback_dsl`。
+
+M6 不识别文字、图标或真实布局。后续 OCR/AI 管线必须在不破坏该 fallback 保障的前提下逐步增加可编辑元素。
+
 ## Validation And Repair
 
 最小校验：

@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, File, UploadFile, status
 
 from ..database import json_dumps
-from ..dsl_factory import build_fake_dsl
+from ..dsl_factory import build_deterministic_dsl
 from ..errors import ApiError, success_response
 from ..state import state
-from ..storage import is_png
+from ..storage import is_png, read_png_metadata
 
 router = APIRouter(prefix="/api")
 
@@ -36,14 +36,24 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                 stage="upload",
             )
 
+        image = read_png_metadata(data)
+        if image is None:
+            raise ApiError(
+                "INVALID_IMAGE_DIMENSIONS",
+                "PNG image dimensions could not be read.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                stage="upload",
+            )
+
         task_id = f"task_{secrets.token_hex(6)}"
         now = datetime.now(UTC).isoformat()
         upload_path = state.storage.save_upload(task_id, data)
         banner_path = state.storage.create_banner_asset(task_id, upload_path)
-        dsl = build_fake_dsl(
+        dsl = build_deterministic_dsl(
             task_id=task_id,
             original_url=state.storage.original_url(task_id),
-            banner_url=state.storage.banner_url(task_id),
+            fallback_url=state.storage.banner_url(task_id),
+            image=image,
         )
         dsl_path = state.storage.dsl_path(task_id)
         dsl_path.write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -54,7 +64,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                 "status": "completed",
                 "stage": "completed",
                 "progress": 100,
-                "message": "Fake DSL is ready.",
+                "message": "Deterministic DSL is ready.",
                 "original_filename": file.filename or "upload.png",
                 "mime_type": file.content_type or "image/png",
                 "file_size": len(data),
@@ -73,8 +83,8 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                 "path": str(upload_path),
                 "url": state.storage.original_url(task_id),
                 "mime_type": "image/png",
-                "width": None,
-                "height": None,
+                "width": image.width,
+                "height": image.height,
                 "created_at": now,
             }
         )
@@ -86,8 +96,8 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                 "path": str(banner_path),
                 "url": state.storage.banner_url(task_id),
                 "mime_type": "image/png",
-                "width": None,
-                "height": None,
+                "width": image.width,
+                "height": image.height,
                 "created_at": now,
             }
         )

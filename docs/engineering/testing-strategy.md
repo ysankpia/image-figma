@@ -68,9 +68,12 @@ Backend API：
 - `GET /api/health` 成功。
 - `POST /api/upload` 接受 PNG。
 - 非 PNG 拒绝。
+- PNG 尺寸不可读时拒绝。
 - 过大图片拒绝。
 - task 状态可查询。
 - completed 后 DSL 可获取。
+- M6 deterministic DSL 尺寸必须等于真实 PNG 尺寸。
+- M6 upload DSL 不应包含 sample-only 元素如 `search_icon`。
 - 未完成任务获取 DSL 返回明确错误。
 - asset 元信息可查询。
 - `/files/uploads/...` 和 `/files/assets/...` 可返回 PNG。

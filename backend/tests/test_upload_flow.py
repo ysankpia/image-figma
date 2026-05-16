@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from conftest import PNG_HEIGHT, PNG_WIDTH
+
 
 def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
     upload = client.post("/api/upload", files={"file": png_file})
@@ -22,7 +24,7 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         "status": "completed",
         "stage": "completed",
         "progress": 100,
-        "message": "Fake DSL is ready.",
+        "message": "Deterministic DSL is ready.",
     }
 
     dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
@@ -30,14 +32,48 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     dsl = dsl_response.json()["data"]["dsl"]
     assert dsl["version"] == "0.1"
     assert dsl["taskId"] == task_id
+    assert dsl["page"]["name"] == "uploaded_png"
+    assert dsl["page"]["width"] == PNG_WIDTH
+    assert dsl["page"]["height"] == PNG_HEIGHT
+    assert dsl["page"]["originalWidth"] == PNG_WIDTH
+    assert dsl["page"]["originalHeight"] == PNG_HEIGHT
+    assert dsl["page"]["scaleFactor"] == 1
+    assert dsl["meta"]["source"] == "png"
+    assert dsl["meta"]["platformHint"] == "mobile"
+    assert dsl["meta"]["fallbackCount"] == 1
+    assert dsl["meta"]["elementCount"] == 2
+    assert dsl["meta"]["notes"] == "deterministic_fallback_dsl"
+
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert assets["asset_original"]["url"] == f"http://localhost:8000/files/uploads/{task_id}/original.png"
     assert assets["asset_banner"]["url"] == f"http://localhost:8000/files/assets/{task_id}/banner.png"
-    assert dsl["root"]["children"][0]["source"]["assetId"] == "asset_original"
+    assert assets["asset_original"]["width"] == PNG_WIDTH
+    assert assets["asset_original"]["height"] == PNG_HEIGHT
+    assert assets["asset_banner"]["width"] == PNG_WIDTH
+    assert assets["asset_banner"]["height"] == PNG_HEIGHT
+
+    assert dsl["root"]["type"] == "frame"
+    assert dsl["root"]["name"] == "uploaded_png"
+    assert dsl["root"]["layout"]["width"] == PNG_WIDTH
+    assert dsl["root"]["layout"]["height"] == PNG_HEIGHT
+    children = {child["id"]: child for child in dsl["root"]["children"]}
+    assert set(children) == {"original_ref", "fallback_full_image"}
+    assert children["original_ref"]["source"]["assetId"] == "asset_original"
+    assert children["original_ref"]["style"]["visible"] is False
+    assert children["fallback_full_image"]["source"]["assetId"] == "asset_banner"
+    assert children["fallback_full_image"]["meta"] == {
+        "fallback": True,
+        "reason": "m6_deterministic_full_image",
+        "confidence": 1,
+    }
 
     original_file = client.get(f"/files/uploads/{task_id}/original.png")
     assert original_file.status_code == 200
     assert original_file.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    fallback_file = client.get(f"/files/assets/{task_id}/banner.png")
+    assert fallback_file.status_code == 200
+    assert fallback_file.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_upload_rejects_non_png(client: TestClient) -> None:
@@ -47,6 +83,16 @@ def test_upload_rejects_non_png(client: TestClient) -> None:
     body = response.json()
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_FILE_TYPE"
+    assert body["error"]["stage"] == "upload"
+
+
+def test_upload_rejects_png_without_dimensions(client: TestClient) -> None:
+    response = client.post("/api/upload", files={"file": ("broken.png", b"\x89PNG\r\n\x1a\n", "image/png")})
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_IMAGE_DIMENSIONS"
     assert body["error"]["stage"] == "upload"
 
 

@@ -18,7 +18,7 @@
 - 插件：TypeScript + 静态 `ui.html`；React/Vite 只在后续 UI 复杂度真实需要时再评估。
 - 共享包：TypeScript，当前已实现 `@image-figma/dsl-schema` 和 `@image-figma/image-to-figma-renderer`。
 - 后端：Python、FastAPI、Pydantic。
-- 数据库：SQLite，M4 使用 Python 标准库 `sqlite3`，暂不引入 ORM。
+- 数据库：SQLite，后端使用 Python 标准库 `sqlite3`，暂不引入 ORM。
 - 测试：按实际代码栈选择 Vitest、pytest、Playwright。
 
 ## Current Dependencies
@@ -31,13 +31,13 @@
 - `ajv`：测试 JSON Schema 与示例 DSL 的兼容性。
 - `@figma/plugin-typings`：Figma 插件 Main 类型。
 - `tsup`：构建 Figma 插件 Main 和 dev harness，当前 Figma bundle target 固定为 `es2017`。
-- `fastapi`：M4 后端 API。
+- `fastapi`：后端 API。
 - `uvicorn`：本地运行 FastAPI。
 - `pydantic`：后端数据结构和 FastAPI 依赖。
 - `python-multipart`：处理 PNG multipart 上传。
 - `pytest`、`httpx`：后端 API 测试。
 
-这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环和 M4 后端假任务流，没有引入 React/Vite、ORM、队列或 CI。
+这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环和后端 deterministic fallback 链路，没有引入 React/Vite、ORM、队列或 CI。
 
 ## AI/OCR Dependencies
 

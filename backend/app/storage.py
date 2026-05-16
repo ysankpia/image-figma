@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import shutil
+import struct
+from dataclasses import dataclass
 from pathlib import Path
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+@dataclass(frozen=True)
+class PngMetadata:
+    width: int
+    height: int
 
 
 class Storage:
@@ -51,3 +59,19 @@ class Storage:
 
 def is_png(data: bytes) -> bool:
     return data.startswith(PNG_SIGNATURE)
+
+
+def read_png_metadata(data: bytes) -> PngMetadata | None:
+    if not is_png(data) or len(data) < 33:
+        return None
+
+    ihdr_length = struct.unpack(">I", data[8:12])[0]
+    chunk_type = data[12:16]
+    if ihdr_length != 13 or chunk_type != b"IHDR":
+        return None
+
+    width, height = struct.unpack(">II", data[16:24])
+    if width <= 0 or height <= 0:
+        return None
+
+    return PngMetadata(width=width, height=height)

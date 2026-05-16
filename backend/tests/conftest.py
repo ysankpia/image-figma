@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import struct
 import sys
+import zlib
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-
-
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 
 @pytest.fixture()
@@ -30,3 +29,28 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
 @pytest.fixture()
 def png_file() -> tuple[str, bytes, str]:
     return ("input.png", PNG_BYTES, "image/png")
+
+
+def make_png(width: int, height: int) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    row = b"\x00" + b"\x00" * (width * 3)
+    idat_data = zlib.compress(row * height)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            png_chunk(b"IHDR", ihdr_data),
+            png_chunk(b"IDAT", idat_data),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    checksum = zlib.crc32(chunk_type)
+    checksum = zlib.crc32(data, checksum)
+    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", checksum & 0xFFFFFFFF)
+
+
+PNG_WIDTH = 317
+PNG_HEIGHT = 2729
+PNG_BYTES = make_png(PNG_WIDTH, PNG_HEIGHT)
