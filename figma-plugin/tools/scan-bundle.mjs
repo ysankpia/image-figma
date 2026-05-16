@@ -10,6 +10,8 @@ if (!filePath) {
 const source = fs.readFileSync(filePath, "utf8");
 const checks = [
   { name: "top-level import/export", pattern: /^\s*(import|export)\s/m },
+  { name: "optional chaining", pattern: /\?\./ },
+  { name: "nullish coalescing", pattern: /\?\?/ },
   { name: "structuredClone", pattern: /\bstructuredClone\s*\(/ },
   { name: "Object.hasOwn", pattern: /\bObject\.hasOwn\s*\(/ },
   { name: "for await", pattern: /\bfor\s+await\b/ }

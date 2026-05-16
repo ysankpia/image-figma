@@ -30,7 +30,7 @@
 - `@types/node`：测试和 Node 工具类型。
 - `ajv`：测试 JSON Schema 与示例 DSL 的兼容性。
 - `@figma/plugin-typings`：Figma 插件 Main 类型。
-- `tsup`：构建 Figma 插件 Main 和 dev harness。
+- `tsup`：构建 Figma 插件 Main 和 dev harness，当前 Figma bundle target 固定为 `es2017`。
 
 这些依赖只服务 DSL 合同、Renderer 和 Figma 插件最小闭环，没有引入 React/Vite、后端框架或 CI。
 

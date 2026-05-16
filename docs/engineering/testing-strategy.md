@@ -52,7 +52,8 @@ Figma Plugin：
 
 - 构建命令：`pnpm --filter @image-figma/figma-plugin run build`
 - 类型检查：`pnpm --filter @image-figma/figma-plugin run typecheck`
-- 构建时扫描 `dist/main.global.js`，避免残留 Figma sandbox 风险语法。
+- 构建 target 使用 `es2017`。
+- 构建时扫描 `dist/main.global.js`，避免残留 `??`、`?.`、ESM 和其他 Figma sandbox 风险语法。
 - 在 Figma 开发模式加载 `figma-plugin/manifest.json`
 - manifest 中 `localhost` 只能出现在 `networkAccess.devAllowedDomains`
 - manifest 中阻断正式网络访问时使用 `networkAccess.allowedDomains: ["none"]`

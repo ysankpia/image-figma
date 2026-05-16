@@ -16,7 +16,7 @@
 - `main.ts` 和 UI/Main 消息协议。
 - sample DSL 渲染入口。
 - warning 和 error 展示。
-- Figma bundle 兼容性扫描。
+- Figma `es2017` bundle 和兼容性扫描。
 - 本地构建和 Figma 手动烟测说明。
 
 不包含：
@@ -43,6 +43,7 @@
 - `figma-plugin/manifest.json` 指向正式 UI。
 - `localhost` 只出现在 `networkAccess.devAllowedDomains`。
 - 正式 `networkAccess.allowedDomains` 使用 `["none"]`。
+- 插件 bundle 不保留 `??`、`?.` 或 ESM import/export。
 - UI 可以发送 `render-sample`。
 - Main 可以调用 Renderer 渲染 sample DSL。
 - 渲染成功时 UI 显示节点数和 warning 数。
