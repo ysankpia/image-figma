@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, and serves local asset URLs.
 
 ## Run
 
@@ -54,6 +54,7 @@ curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 curl http://localhost:8000/api/tasks/{taskId}/component-structures
+curl http://localhost:8000/api/tasks/{taskId}/component-annotations
 ```
 
 Visible text replacement is debug-only by default:
@@ -81,3 +82,13 @@ COMPONENT_STRUCTURE_MIN_CONFIDENCE=0.70
 ```
 
 It writes `backend/storage/component_structures/{taskId}.json` and exposes `GET /api/tasks/{taskId}/component-structures`. Structure reports aggregate M15 containers and bindings into component candidates and layout groups for M17+. They do not change Figma-visible output, do not create Figma Component/Instance nodes, do not delete fallback regions, and do not write inferred components back into visual primitives.
+
+M17 component annotation is enabled by default:
+
+```bash
+COMPONENT_ANNOTATION_ENABLED=true
+COMPONENT_ANNOTATION_LAYER_NAMING=true
+COMPONENT_ANNOTATION_MIN_CONFIDENCE=0.70
+```
+
+It writes `backend/storage/component_annotations/{taskId}.json` and exposes `GET /api/tasks/{taskId}/component-annotations`. Annotation reports connect M16 components/groups back to existing DSL elements and update DSL `name`/`meta` only. They do not slice images, create Figma groups/components, delete fallback regions, change visible layout/style/content, or reconstruct icons, circles, triangles, stars, or complex shapes.

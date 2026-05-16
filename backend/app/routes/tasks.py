@@ -353,3 +353,51 @@ def get_task_component_structures(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/component-annotations")
+def get_task_component_annotations(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_component_annotation_result(task_id)
+    if result is None:
+        raise ApiError(
+            "COMPONENT_ANNOTATION_NOT_FOUND",
+            "Component annotation result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="component_annotation_lookup",
+            task_id=task_id,
+        )
+
+    annotation_path = Path(result["annotation_path"] or "")
+    if not annotation_path.exists():
+        raise ApiError(
+            "COMPONENT_ANNOTATION_NOT_FOUND",
+            "Component annotation file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="component_annotation_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(annotation_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "annotations": document.get("annotations", []),
+        "groupHints": document.get("groupHints", []),
+        "unannotatedElementIds": document.get("unannotatedElementIds", []),
+        "unresolvedComponentIds": document.get("unresolvedComponentIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

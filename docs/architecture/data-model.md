@@ -16,6 +16,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `text_replacement_results`
 - `text_binding_results`
 - `component_structure_results`
+- `component_annotation_results`
 
 后续建议表：
 
@@ -50,7 +51,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M16 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M17 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -253,6 +254,26 @@ Binding payload 本体写入 `backend/storage/text_bindings/{taskId}.json`。它
 - `created_at`
 
 Component structure payload 本体写入 `backend/storage/component_structures/{taskId}.json`。它保存 `components`、`groups`、`unstructuredContainerIds` 和统计 meta。M16 只消费 M15 binding facts，输出 component candidates 和 layout groups；不会把 inferred components 写回 M8 visual primitives，也不会创建 Figma Component/Instance。
+
+## component_annotation_results
+
+用途：记录 M17 component annotation 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `annotation_path`
+- `annotation_count`
+- `group_hint_count`
+- `unannotated_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Component annotation payload 本体写入 `backend/storage/component_annotations/{taskId}.json`。它保存 `annotations`、`groupHints`、`unannotatedElementIds`、`unresolvedComponentIds` 和统计 meta。M17 只消费 M15/M16 的 binding/component facts，通过确定性 ID join 给已有 DSL element 添加 `name` 和 `meta`；不会切图、不会创建 Figma group/component、不会删除 fallback region，也不会把 annotation 写回 visual primitives。
 
 ## model_call_logs
 

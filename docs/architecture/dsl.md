@@ -163,6 +163,39 @@ M15 新增 text-primitive binding harness。它生成独立 `/text-bindings` 报
 
 M16 新增 component structure harness。它生成独立 `/component-structures` 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups。component role 可覆盖 page header、hero profile、badge/status badge、activity card、summary stat card、primary/outline button、shortcut/preview/tip card、legend group、bottom nav 和 bottom nav item；group role 可覆盖 summary stat group、shortcut grid、preview section、bottom nav group 和 page structure。M16 不新增可见 DSL 节点，不创建 Figma Component/Instance，不删除 fallback region；DSL meta 只记录 `m16_component_structure_harness`、`componentStructureCount`、`componentStructureGroupCount` 和 `componentStructureUnstructuredCount`。
 
+M17 新增 component annotation harness。它生成独立 `/component-annotations` 报告，把 M16 component/group 结构通过确定性 ID join 挂回已有 DSL element。M17 只允许修改已有 element 的 `name` 和 `meta`，不新增可见节点，不改 `layout`、`style`、`content`、`source`、`imageFill` 或 `visible`。Renderer 已使用 `element.name` 给 Figma node 命名，所以 M17 layer naming 不需要改 Renderer 协议。
+
+M17 element meta 只追加 annotation 字段，不覆盖旧 `meta.source`、`meta.reason`、`meta.candidate` 或 `meta.fallback`：
+
+```json
+{
+  "meta": {
+    "componentId": "component_primary_button_001",
+    "componentRole": "primary_button",
+    "groupIds": ["group_page_structure_001"],
+    "bindingId": "binding_016",
+    "ocrBlockId": "ocr_text_016",
+    "relationship": "button_label",
+    "annotationSource": "m17_component_annotation"
+  }
+}
+```
+
+fallback region 只作为上下文 annotation，不绑定业务 component：
+
+```json
+{
+  "meta": {
+    "fallback": true,
+    "annotationRole": "fallback_context",
+    "groupIds": ["group_page_structure_001"],
+    "annotationSource": "m17_component_annotation"
+  }
+}
+```
+
+DSL meta 可记录 `m17_component_annotation`、`componentAnnotationCount`、`componentAnnotatedElementCount`、`componentUnannotatedElementCount` 和 `componentGroupHintCount`。M17 不切图，不做图标、圆形、三角形、五角星或复杂图形识别，不删除 fallback region，不创建真实 Figma group、Component/Instance 或 Auto Layout。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

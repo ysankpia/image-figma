@@ -57,4 +57,16 @@ describe("renderDesign", () => {
     expect(result.warnings.some((warning) => warning.code === "FONT_LOAD_FAILED")).toBe(true);
     expect(adapter.findNodeByName("Text / title")?.characters).toBe("首页");
   });
+
+  it("uses explicit DSL element names for Figma layer names", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = structuredClone(mobileHome as DesignDSL);
+    const title = dsl.root.children!.find((child) => child.id === "title")!;
+    title.name = "Page Header / Text / 首页";
+
+    const result = await renderDesign(dsl, { figma: adapter });
+
+    expect(result.success).toBe(true);
+    expect(adapter.findNodeByName("Page Header / Text / 首页")?.characters).toBe("首页");
+  });
 });

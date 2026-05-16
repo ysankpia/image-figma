@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding 和 M16 component structure harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure 和 M17 component annotation/layer naming harness。
 
 ## Prerequisites
 
@@ -147,6 +147,7 @@ curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 curl http://localhost:8000/api/tasks/{taskId}/component-structures
+curl http://localhost:8000/api/tasks/{taskId}/component-annotations
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -170,6 +171,16 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 M15 text binding 默认开启，只生成 `/text-bindings` 报告和 DSL meta，不改变 Figma 可见输出。它的 inferred containers 是 M16 输入，不会写回 `/primitives`。
 
 M16 component structure 默认开启，只生成 `/component-structures` 报告和 DSL meta，不改变 Figma 可见输出。它消费 M15 binding report，输出 component candidates 和 layout groups，供 M17+ 图层命名、分组实验和局部结构化替换使用；不会创建 Figma Component/Instance，也不会删除 fallback region。
+
+M17 component annotation 默认开启，生成 `/component-annotations` 报告，并只更新已有 DSL element 的 `name` 和 `meta`：
+
+```bash
+COMPONENT_ANNOTATION_ENABLED=true
+COMPONENT_ANNOTATION_LAYER_NAMING=true
+COMPONENT_ANNOTATION_MIN_CONFIDENCE=0.70
+```
+
+M17 的 layer naming 使用已有 DSL `name` 字段，Renderer 已按该字段命名 Figma node。M17 不切图、不删除 fallback、不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做图标、圆形、三角形、五角星或复杂图形重建。
 
 如果要确认完全回退 M7 base DSL：
 
@@ -230,6 +241,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/text-replacements` 默认返回 `mode: "debug"`，包含 accepted/rejected decisions。
 - `/api/tasks/{taskId}/text-bindings` 默认返回 `status: "completed"`，包含 containers、bindings 或 unboundTextIds。
 - `/api/tasks/{taskId}/component-structures` 默认返回 `status: "completed"`，包含 components、groups 或 unstructuredContainerIds。
+- `/api/tasks/{taskId}/component-annotations` 默认返回 `status: "completed"`，包含 annotations、groupHints、unannotatedElementIds 或 unresolvedComponentIds。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

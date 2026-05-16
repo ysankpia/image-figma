@@ -105,6 +105,9 @@ Backend API：
 - M15 回归必须保护 primary button 不吞 summary/stat 文本、outline button 优先于 preview card、card title/subtitle/body 按同容器内 row 顺序和相对字号判定。
 - M16 component structure 必须覆盖默认生成报告、`COMPONENT_STRUCTURE_ENABLED=false` 不生成报告、`/component-structures` API、DSL meta、不新增可见节点，以及 page header、hero profile、activity card、summary stat group、primary/outline button、shortcut grid、preview section、tip card、bottom nav group、page structure 聚合规则。
 - M16 回归必须保护 fallback region 不生成高置信业务 component，低于 `COMPONENT_STRUCTURE_MIN_CONFIDENCE` 的 container 进入 `unstructuredContainerIds`，component/group 引用的 M15 binding/container id 必须可校验。
+- M17 component annotation 必须覆盖默认生成报告、`COMPONENT_ANNOTATION_ENABLED=false` 不生成报告、`/component-annotations` API、DSL meta、只改 `name/meta`、不新增可见节点，以及 visible text、cover、hidden candidate text 通过同一 OCR block 绑定到同一 component。
+- M17 回归必须保护 fallback region 只标 `fallback_context`、不绑定业务 component；group hints 不创建真实 Figma group；layer naming 只来自 role/relationship/element type 和 text preview，不按中文文案特化。
+- Renderer 必须覆盖显式 DSL `element.name` 会成为 Figma node name，M17 不需要改 Renderer 协议。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

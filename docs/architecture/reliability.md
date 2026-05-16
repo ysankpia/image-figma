@@ -68,6 +68,15 @@ M16 component structure 是可观测的非关键路径：
 - structure validation failed 时 `/dsl` 回退 M15 输出，只是不追加 M16 meta。
 - component candidates 和 layout groups 只存在于 structure report，不创建 Figma Component/Instance，不删除 fallback region。
 
+M17 component annotation 是可观测的非关键路径：
+
+- 默认 `COMPONENT_ANNOTATION_ENABLED=true`，但不改变 Figma 可见输出。
+- annotation failed/skipped 写入 `component_annotation_results` 和 `error_logs`。
+- annotation validation failed 时 `/dsl` 回退 M16 输出，只是不追加 M17 meta/name。
+- M17 只修改已有 DSL element 的 `name` 和 `meta`；不能修改 layout、style、content、source、imageFill 或 visible。
+- group hints 只存在于 annotation report，不创建真实 Figma group。
+- M17 不切图、不删除 fallback region、不创建 Figma Component/Instance 或 Auto Layout。
+
 整页失败只发生在：
 
 - PNG 无法读取。

@@ -92,6 +92,20 @@ M16 component structure result 至少包含：
 - `errorCode`
 - `structurePath`
 
+M17 component annotation result 至少包含：
+
+- `taskId`
+- `status`
+- `annotationCount`
+- `annotatedElementCount`
+- `unannotatedElementCount`
+- `groupHintCount`
+- component role summary
+- unresolved component count
+- `warningCount`
+- `errorCode`
+- `annotationPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -107,6 +121,8 @@ M16 component structure result 至少包含：
 - text binding role/relationship 分布。
 - component structure component/group/unstructured 数量。
 - component structure role/group/layout 分布。
+- component annotation annotated/unannotated/group hint 数量。
+- component annotation role 分布和 unresolved component 数量。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -121,7 +137,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -140,6 +156,7 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - text replacement JSON。
 - text binding JSON。
 - component structure JSON。
+- component annotation JSON。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

@@ -24,6 +24,7 @@
 - 接入 UI-aware text replacement sampling。
 - 接入 text-primitive binding harness。
 - 接入 component structure harness。
+- 接入 DSL component annotation/layer naming harness。
 - 做样例验收。
 
 不包含：
@@ -54,8 +55,9 @@
 14. 接入 UI-aware text replacement sampling，减少 `complex_background` 误杀。状态：完成第一版。
 15. 接入 text-primitive binding harness，为组件化前的归属关系打基础。状态：完成第一版。
 16. 接入 component structure harness，把 M15 bindings 聚合为 component candidates 和 layout groups。状态：完成第一版。
-17. 加入更细资产裁切、original reference 和 fallback。
-18. 用固定样例做 MVP 收敛。
+17. 接入 DSL component annotation/layer naming harness，把 M16 结构安全挂回已有 DSL element 的 `name/meta`。状态：完成第一版。
+18. 加入更细资产裁切、original reference 和 fallback。
+19. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -131,6 +133,11 @@
 - SQLite `component_structure_results`。
 - `GET /api/tasks/{taskId}/component-structures`。
 - component structure 报告，包含 component candidates、layout groups 和 unstructuredContainerIds。
+- ComponentAnnotationDocument v0.1 合同。
+- SQLite `component_annotation_results`。
+- `GET /api/tasks/{taskId}/component-annotations`。
+- component annotation 报告，包含 annotations、groupHints、unannotatedElementIds 和 unresolvedComponentIds。
+- DSL element `name/meta` annotation，且只改已有 element 的 `name` 和 `meta`。
 - 单元测试。
 
 验证命令：

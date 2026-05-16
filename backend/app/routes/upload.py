@@ -7,7 +7,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, status
 
+from ..component_annotation import (
+    apply_component_annotations,
+    build_component_annotation_document,
+    build_failed_component_annotation_document,
+)
 from ..component_structure import (
+    ComponentStructureDocument,
     apply_component_structure_metadata,
     build_component_structure_document,
     build_failed_component_structure_document,
@@ -164,7 +170,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             replaced_dsl,
             now,
         )
-        final_dsl = save_component_structure_result(
+        structure_document, structured_dsl = save_component_structure_result(
             task_id,
             image,
             ocr_document,
@@ -172,6 +178,16 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             replacement_document,
             binding_document,
             bound_dsl,
+            now,
+        )
+        final_dsl = save_component_annotation_result(
+            task_id,
+            image,
+            ocr_document,
+            replacement_document,
+            binding_document,
+            structure_document,
+            structured_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -668,9 +684,15 @@ def save_component_structure_result(
     binding_document: TextPrimitiveBindingDocument,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[ComponentStructureDocument, dict[str, object]]:
     if not state.settings.component_structure_enabled:
-        return input_dsl
+        document = build_failed_component_structure_document(
+            task_id=task_id,
+            image=image,
+            code="COMPONENT_STRUCTURE_NOT_ENABLED",
+            message="Component structure is disabled.",
+        )
+        return document, input_dsl
 
     failed_logged = False
     try:
@@ -737,6 +759,97 @@ def save_component_structure_result(
             "component_count": len(document.components),
             "group_count": len(document.groups),
             "unstructured_count": len(document.unstructuredContainerIds),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_component_annotation_result(
+    task_id: str,
+    image: PngMetadata,
+    ocr_document: OCRDocument,
+    replacement_document: TextReplacementDocument,
+    binding_document: TextPrimitiveBindingDocument,
+    structure_document: ComponentStructureDocument,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.component_annotation_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        document = build_component_annotation_document(
+            task_id=task_id,
+            image=image,
+            ocr_document=ocr_document,
+            replacement_document=replacement_document,
+            binding_document=binding_document,
+            structure_document=structure_document,
+            dsl=input_dsl,
+            settings=state.settings,
+        )
+        final_dsl = apply_component_annotations(
+            input_dsl,
+            document,
+            layer_naming=state.settings.component_annotation_layer_naming,
+        )
+        validation_errors = validate_enhanced_dsl(final_dsl)
+        if validation_errors:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="component_annotation",
+                error_code="COMPONENT_ANNOTATION_VALIDATION_FAILED",
+                message="Component annotation validation failed.",
+                detail=json_dumps(validation_errors),
+            )
+            failed_logged = True
+            document = build_failed_component_annotation_document(
+                task_id=task_id,
+                image=image,
+                code="COMPONENT_ANNOTATION_VALIDATION_FAILED",
+                message="Component annotation validation failed.",
+            )
+            final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="component_annotation",
+            error_code="COMPONENT_ANNOTATION_FAILED",
+            message="Component annotation failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_component_annotation_document(
+            task_id=task_id,
+            image=image,
+            code="COMPONENT_ANNOTATION_FAILED",
+            message="Component annotation failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="component_annotation",
+            error_code=document.error["code"] if document.error else "COMPONENT_ANNOTATION_FAILED",
+            message=document.error["message"] if document.error else "Component annotation failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    annotation_path = state.storage.save_component_annotation(task_id, json_dumps(document.to_dict()))
+    state.database.insert_component_annotation_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "annotation_path": str(annotation_path),
+            "annotation_count": len(document.annotations),
+            "group_hint_count": len(document.groupHints),
+            "unannotated_count": len(document.unannotatedElementIds),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

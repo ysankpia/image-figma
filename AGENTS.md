@@ -13,7 +13,7 @@
 ## 项目边界
 
 - 项目名：Image-to-Figma Design。
-- 当前状态：M16 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 后端、插件上传链路、真实 PNG deterministic region fallback DSL、visual primitive contract harness、OCR/DSL patch harness、百度 PP-OCRv5 异步 OCR provider、文字替换覆盖率扩展 harness、text replacement 质量控制、UI-aware text replacement sampling、text-primitive binding harness，以及 component structure harness。
+- 当前状态：M17 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 后端、插件上传链路、真实 PNG deterministic region fallback DSL、visual primitive contract harness、OCR/DSL patch harness、百度 PP-OCRv5 异步 OCR provider、文字替换覆盖率扩展 harness、text replacement 质量控制、UI-aware text replacement sampling、text-primitive binding harness、component structure harness，以及 DSL component annotation/layer naming harness。
 - 项目类型：`multi-end-frontend`。
 - 一期目标：单张 PNG 上传后生成 DSL v0.1，并由 Figma Renderer 写入可编辑 Figma 设计稿。
 - 一期硬边界：不做代码生成、Figma Component/Instance、Auto Layout、批量上传、账号、支付、额度、质量看板、多模型平台。
@@ -45,7 +45,7 @@
 - 保持模块边界清楚，不把后端识别、Renderer 和插件 UI 混在一起。
 - 优先小而稳定的实现，不为未来功能提前加抽象。
 - 复杂区域优先 fallback，不能让局部失败拖垮整页生成。
-- M16 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时对 quality gate 通过的 accepted 文字做可见替换；high-risk replacement 阻断，medium-risk replacement 记录风险但仍可应用。M14 通过 UI-aware sampling 减少 `complex_background` 误杀。M15 生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups。M15/M16 都不改变 Figma 可见输出、不重组图层、不删除 fallback、不创建 Figma Component/Instance、不把 inferred containers/components 写回 primitives。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策、采样策略、质量门禁、绑定、结构聚合和校验。
+- M17 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时对 quality gate 通过的 accepted 文字做可见替换；high-risk replacement 阻断，medium-risk replacement 记录风险但仍可应用。M14 通过 UI-aware sampling 减少 `complex_background` 误杀。M15 生成 text binding 报告，M16 生成 component structure 报告，M17 只把 M16 结构以 DSL element `meta/name` annotation 形式挂回 DSL。M15-M17 都不改变 Figma 可见输出、不切图、不重组图层、不删除 fallback、不创建 Figma Component/Instance、不把 inferred containers/components 写回 primitives。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策、采样策略、质量门禁、绑定、结构聚合、annotation 和校验。
 - 上传主链路默认返回带 hidden `candidate_text` 的 enhanced DSL，但 fallback 视觉输出必须保持稳定。
 - 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。
 

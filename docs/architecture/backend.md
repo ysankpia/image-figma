@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M16 当前管线：
+M17 当前管线：
 
 ```text
 receive multipart PNG
@@ -37,6 +37,7 @@ receive multipart PNG
 -> optionally merge non-high-risk visible text replacements when TEXT_REPLACEMENT_MODE=apply
 -> bind OCR/replacement text to visual primitives or inferred UI containers
 -> aggregate bindings into component candidates and layout groups
+-> annotate existing DSL elements with component/group metadata and layer names
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -44,6 +45,7 @@ receive multipart PNG
 -> save text replacement JSON
 -> save text binding JSON
 -> save component structure JSON
+-> save component annotation JSON
 -> mark task completed
 ```
 
@@ -78,6 +80,7 @@ backend/storage/
   text_replacements/
   text_bindings/
   component_structures/
+  component_annotations/
   logs/
 ```
 
@@ -85,12 +88,12 @@ backend/storage/
 
 ## Task State
 
-M16 当前只实际写入：
+M17 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M16 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M17 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -165,7 +168,7 @@ OpenAI provider 规则：
 
 ## AI Strategy
 
-M16 之后的普通页面目标管线：
+M17 之后的普通页面目标管线：
 
 ```text
 OCR boxes
@@ -209,9 +212,11 @@ M15 增加 text-primitive binding harness：后端把 M14 可用 text candidate 
 
 M16 增加 component structure harness：后端把 M15 containers/bindings 聚合为 component candidates 和 layout groups，写入 `backend/storage/component_structures/{taskId}.json` 并通过 `/api/tasks/{taskId}/component-structures` 暴露。第一版 component role 覆盖 page header、hero profile、badge/status badge、activity card、summary stat card、primary/outline button、shortcut card、preview card、legend group、tip card、bottom nav 和 bottom nav item；group role 覆盖 summary stat group、shortcut grid、preview section、bottom nav group 和 page structure。M16 不按中文文案或单张图绝对坐标推断，只消费 M15 的 role、relationship、bbox、confidence 和 source。M16 只追加 DSL meta，不新增可见节点，不创建 Figma Component/Instance，不删除 fallback region。
 
+M17 增加 component annotation harness：后端把 M16 component/group 结构通过确定性 ID 链路挂回已有 DSL element，写入 `backend/storage/component_annotations/{taskId}.json` 并通过 `/api/tasks/{taskId}/component-annotations` 暴露。M17 join 链路固定为 `component.bindingIds -> binding.id -> binding.ocrBlockId -> visible_text_{ocrBlockId} / cover_{ocrBlockId} / text_{safe_id(ocrBlockId)}`。M17 只允许修改已有 DSL element 的 `name` 和 `meta`，用于 Figma layer naming 和后续结构索引；不重新识图、不按中文文案特化、不切图、不删除 fallback region、不创建真实 Figma group、Component/Instance 或 Auto Layout。fallback region 只标记为 `fallback_context`，不绑定业务 component。
+
 ## Backend Non-Goals
 
-M16 不做：
+M17 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -235,3 +240,6 @@ M16 不做：
 - 把 inferred containers 写回 visual primitives。
 - 通过 binding 结果重组 Figma 图层。
 - 通过 component structure 结果创建 Figma group、component 或 Auto Layout。
+- 切图、局部 asset slicing 或 partial fallback replacement。
+- 图标、头像、圆形、三角形、五角星、复杂图形或组件视觉重建。
+- 通过 component annotation 结果创建真实 Figma group、component 或 Auto Layout。

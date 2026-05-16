@@ -31,6 +31,9 @@
 | `TEXT_BINDING_MIN_CONFIDENCE` | M15 text-to-container binding 最低置信度，低于该值进入 `unboundTextIds` | `0.70` | 否 |
 | `COMPONENT_STRUCTURE_ENABLED` | 是否生成 M16 component structure 报告；不改变 Figma 可见输出 | `true` | 否 |
 | `COMPONENT_STRUCTURE_MIN_CONFIDENCE` | M16 container-to-component 聚合最低置信度，低于该值进入 `unstructuredContainerIds` | `0.70` | 否 |
+| `COMPONENT_ANNOTATION_ENABLED` | 是否生成 M17 component annotation 报告并把结构写入已有 DSL element `name/meta`；不改变 Figma 可见输出 | `true` | 否 |
+| `COMPONENT_ANNOTATION_LAYER_NAMING` | 是否用 M17 annotation 更新已有 DSL element `name`，供 Renderer 命名 Figma layer | `true` | 否 |
+| `COMPONENT_ANNOTATION_MIN_CONFIDENCE` | M17 component annotation 最低 component 置信度，低于该值进入 `unresolvedComponentIds` | `0.70` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -54,3 +57,5 @@
 M15 binding 由 `TEXT_BINDING_ENABLED` 控制，默认开启并只生成 `/text-bindings` 报告和 DSL meta。它不会重组图层、删除 fallback 或把 inferred containers 写回 visual primitives。
 
 M16 component structure 由 `COMPONENT_STRUCTURE_ENABLED` 控制，默认开启并只生成 `/component-structures` 报告和 DSL meta。它消费 M15 bindings，聚合 component candidates 和 layout groups；不会创建 Figma Component/Instance、不会删除 fallback、不会新增可见 DSL 节点，也不会把 inferred components 写回 visual primitives。
+
+M17 component annotation 由 `COMPONENT_ANNOTATION_ENABLED` 控制，默认开启并生成 `/component-annotations` 报告。它消费 M16 structures，通过确定性 ID join 只修改已有 DSL element 的 `name` 和 `meta`，并追加 DSL meta。`COMPONENT_ANNOTATION_LAYER_NAMING=false` 时仍生成 annotation 报告和 element meta，但不改 element name。M17 不切图、不删除 fallback、不创建真实 Figma group、Component/Instance 或 Auto Layout。
