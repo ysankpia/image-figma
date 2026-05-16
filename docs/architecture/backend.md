@@ -17,15 +17,17 @@
 
 ## Processing Pipeline
 
-M6 当前管线：
+M7 当前管线：
 
 ```text
 receive multipart PNG
 -> validate MIME and PNG signature
--> read PNG IHDR width/height
+-> read PNG IHDR metadata
 -> save original image
--> create full-image fallback asset
--> build deterministic DSL from real PNG dimensions
+-> create compatibility full-image asset
+-> plan deterministic regions
+-> crop header/content/bottom region assets when supported
+-> build deterministic region DSL
 -> save DSL JSON
 -> mark task completed
 ```
@@ -62,12 +64,12 @@ backend/storage/
 
 ## Task State
 
-M6 当前只实际写入：
+M7 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M6 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M7 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -79,14 +81,33 @@ M6 仍同步完成任务。后续接真实处理管线再补 `pending`、`upload
 
 ## Deterministic DSL Builder
 
-M6 不接 OCR/AI。上传成功后，后端根据真实 PNG 尺寸生成 deterministic fallback DSL：
+M7 不接 OCR/AI。上传成功后，后端根据真实 PNG 尺寸生成 deterministic region fallback DSL：
 
 - root frame 尺寸等于 PNG 宽高。
 - 隐藏 `original_reference` 图层覆盖整图。
-- 可见 `fallback_region` 图层覆盖整图。
-- `meta.notes` 写为 `deterministic_fallback_dsl`。
+- 对 portrait/mobile-like PNG，生成可见 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom`。
+- 每个 region 生成独立 PNG crop asset。
+- `meta.notes` 写为 `deterministic_region_dsl`。
+- 如果 PNG 可读尺寸但 cropper 不支持该 PNG 格式，退回整图 `fallback_full_image`，并写入 `meta.qualityFlags: ["region_crop_unsupported"]`。
 
-这不是最终识别能力，只是把 M4 的固定 sample DSL 替换成真实输入驱动的 DSL。
+这不是最终识别能力，只是把 M6 的整图 fallback 基线推进到可单独替换的区域层。
+
+region 规则：
+
+```text
+header = min(max(round(height * 0.14), 120), 260)
+bottom = min(max(round(height * 0.12), 100), 220)
+content = height - header - bottom
+```
+
+图片过矮、非 portrait/mobile-like 或切分不安全时，使用整图 fallback。
+
+当前标准库 PNG cropper 只支持：
+
+- bit depth `8`
+- color type `2` RGB 或 `6` RGBA
+- non-interlaced PNG
+- filter type `0..4`
 
 任务阶段：
 
@@ -123,7 +144,7 @@ OCR / CV 预处理
 
 ## Backend Non-Goals
 
-M6 不做：
+M7 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -135,4 +156,5 @@ M6 不做：
 - 正式对象存储策略。
 - OCR。
 - AI。
-- 真实裁切。
+- OCR/AI 语义裁切。
+- 可编辑文字生成。

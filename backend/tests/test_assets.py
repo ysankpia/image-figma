@@ -24,6 +24,20 @@ def test_asset_metadata_and_file_url(client: TestClient, png_file: tuple[str, by
     assert asset_file.status_code == 200
     assert asset_file.content.startswith(b"\x89PNG\r\n\x1a\n")
 
+    region_asset = client.get("/api/assets/asset_region_header")
+    assert region_asset.status_code == 200
+    assert region_asset.json()["data"] == {
+        "assetId": "asset_region_header",
+        "taskId": task_id,
+        "role": "fallback_region",
+        "url": f"http://localhost:8000/files/assets/{task_id}/header.png",
+        "mimeType": "image/png",
+    }
+
+    region_file = client.get(f"/files/assets/{task_id}/header.png")
+    assert region_file.status_code == 200
+    assert region_file.content.startswith(b"\x89PNG\r\n\x1a\n")
+
 
 def test_missing_asset_returns_asset_not_found(client: TestClient) -> None:
     response = client.get("/api/assets/asset_missing")

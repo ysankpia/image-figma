@@ -39,9 +39,10 @@
 5. 做后端 `health`、`upload`、`task`、`dsl`、`asset` API，先返回假 DSL。状态：完成第一版。
 6. 插件接入后端上传、任务查询和 DSL 获取。状态：完成第一版。
 7. 接入真实 PNG -> deterministic DSL Builder。状态：完成第一版。
-8. 接入 OCR/AI -> DSL Builder。
-9. 加入资产裁切、original reference 和 fallback。
-10. 用固定样例做 MVP 收敛。
+8. 接入 deterministic region slicer，把整图 fallback 拆成稳定区域。状态：完成第一版。
+9. 接入 OCR/AI -> DSL Builder。
+10. 加入更细资产裁切、original reference 和 fallback。
+11. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -82,7 +83,9 @@
 - SQLite `tasks`、`assets`、`dsl_results`、`error_logs`。
 - 本地 `/files/uploads` 和 `/files/assets` 静态文件服务。
 - 插件 PNG 上传 -> 后端 deterministic DSL -> Renderer 主链路。
-- 后端 deterministic DSL 使用真实 PNG 宽高、原图隐藏层和整图 fallback。
+- 后端 deterministic DSL 使用真实 PNG 宽高、原图隐藏层和三段 region fallback。
+- 标准库 PNG cropper。
+- `header`、`content`、`bottom` region asset。
 - 单元测试。
 
 验证命令：

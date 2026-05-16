@@ -12,6 +12,7 @@
 - 当前后端假任务流计划：[plans/active/004-backend-fake-task-flow.md](plans/active/004-backend-fake-task-flow.md)
 - 当前插件后端上传计划：[plans/active/005-plugin-backend-upload-flow.md](plans/active/005-plugin-backend-upload-flow.md)
 - 当前 deterministic PNG -> DSL 计划：[plans/active/006-deterministic-png-to-dsl.md](plans/active/006-deterministic-png-to-dsl.md)
+- 当前 deterministic region slicer 计划：[plans/active/007-deterministic-region-slicer.md](plans/active/007-deterministic-region-slicer.md)
 
 ## By Task Type
 
@@ -67,6 +68,7 @@
 - M4 后端决策：[decisions/0006-use-fastapi-sqlite-for-m4-backend.md](decisions/0006-use-fastapi-sqlite-for-m4-backend.md)
 - M5 插件后端接入决策：[decisions/0007-plugin-uses-backend-api-after-m4.md](decisions/0007-plugin-uses-backend-api-after-m4.md)
 - M6 deterministic DSL 决策：[decisions/0008-use-deterministic-png-dsl-builder-before-ai.md](decisions/0008-use-deterministic-png-dsl-builder-before-ai.md)
+- M7 PNG region slicer 决策：[decisions/0009-use-standard-library-png-region-slicer.md](decisions/0009-use-standard-library-png-region-slicer.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

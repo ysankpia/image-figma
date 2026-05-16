@@ -39,6 +39,14 @@
 
 这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环和后端 deterministic fallback 链路，没有引入 React/Vite、ORM、队列或 CI。
 
+M7 PNG region slicer 使用 Python 标准库完成 PNG metadata 解析和 crop：
+
+- `struct`：解析 PNG chunk 和 IHDR。
+- `zlib`：解压和重新压缩 IDAT。
+- 标准库实现 scanline filter 还原。
+
+当前不引入 Pillow。原因是 M7 只需要覆盖常见导出 PNG 的 deterministic crop，不需要完整图像处理能力。遇到不支持格式时退回整图 fallback。
+
 ## AI/OCR Dependencies
 
 OCR 和 AI 依赖应包装在清晰 client 层。业务代码不直接散落调用外部 SDK。

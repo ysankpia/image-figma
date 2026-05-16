@@ -113,13 +113,34 @@ Fallback 元素必须记录原因：
 }
 ```
 
-M6 deterministic fallback DSL 固定使用整图 fallback：
+M7 deterministic region DSL 默认使用三段 region fallback：
 
 - `original_ref`：隐藏原图参考层。
+- `fallback_region_header`：顶部可见 fallback。
+- `fallback_region_content`：中部可见 fallback。
+- `fallback_region_bottom`：底部可见 fallback。
+- `meta.notes`：`deterministic_region_dsl`。
+
+每个 region fallback 必须记录来源区域：
+
+```json
+{
+  "meta": {
+    "fallback": true,
+    "reason": "m7_deterministic_region",
+    "confidence": 1,
+    "sourceBBox": [0, 234, 941, 1237]
+  }
+}
+```
+
+如果 PNG 可读尺寸但 cropper 不支持该格式，DSL 退回 M6 整图 fallback：
+
 - `fallback_full_image`：可见整图 fallback。
 - `meta.notes`：`deterministic_fallback_dsl`。
+- `meta.qualityFlags`：包含 `region_crop_unsupported`。
 
-M6 不识别文字、图标或真实布局。后续 OCR/AI 管线必须在不破坏该 fallback 保障的前提下逐步增加可编辑元素。
+M7 不识别文字、图标或真实布局。后续 OCR/AI 管线必须在不破坏该 fallback 保障的前提下逐步增加可编辑元素。
 
 ## Validation And Repair
 

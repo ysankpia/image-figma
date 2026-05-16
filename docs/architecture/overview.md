@@ -25,9 +25,9 @@ Figma Plugin UI
 - 后端 API。
 - 图片识别和资产裁切管线。
 
-## Recommended Future Shape
+## Current Shape
 
-本轮不创建代码目录。后续实现建议结构：
+当前仓库已经进入 MVP 工程阶段，核心结构：
 
 ```text
 figma-plugin/
@@ -37,14 +37,15 @@ packages/image-to-figma-renderer/
 docs/
 ```
 
-推荐技术栈：
+当前技术栈：
 
-- Figma 插件：TypeScript、React、Vite、Figma Plugin API。
+- Figma 插件：TypeScript、静态 `ui.html`、Figma Plugin API、`tsup`。
 - 共享包：TypeScript。
 - 后端：Python、FastAPI、Pydantic。
 - 数据：SQLite。
 - 存储：本地文件存储。
-- OCR/AI：PaddleOCR 或等价 OCR，OpenAI 视觉模型或等价结构分析模型。
+- PNG region slicer：Python 标准库。
+- OCR/AI：后续再接入，不属于 M7。
 
 ## Major Modules
 

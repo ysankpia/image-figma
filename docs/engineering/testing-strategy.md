@@ -72,8 +72,12 @@ Backend API：
 - 过大图片拒绝。
 - task 状态可查询。
 - completed 后 DSL 可获取。
-- M6 deterministic DSL 尺寸必须等于真实 PNG 尺寸。
-- M6 upload DSL 不应包含 sample-only 元素如 `search_icon`。
+- M7 deterministic DSL 尺寸必须等于真实 PNG 尺寸。
+- M7 upload DSL 不应包含 sample-only 元素如 `search_icon`。
+- portrait/mobile-like PNG 应生成 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom`。
+- region layout 必须连续覆盖整图，不能有空洞或重叠。
+- region asset 文件必须存在，且宽高等于对应 layout。
+- cropper 不支持的 PNG 格式必须退回整图 fallback，并写入 `qualityFlags`。
 - 未完成任务获取 DSL 返回明确错误。
 - asset 元信息可查询。
 - `/files/uploads/...` 和 `/files/assets/...` 可返回 PNG。
@@ -84,6 +88,13 @@ Backend API：
 cd backend
 uv run pytest
 ```
+
+PNG cropper：
+
+- 标准库读取 PNG metadata，包括 width、height、bit depth、color type、interlace。
+- 标准库 cropper 覆盖 bit depth `8`、color type `2`/`6`、non-interlaced PNG。
+- scanline filter `0..4` 必须可还原。
+- 不支持格式抛出明确异常，由上传链路降级为整图 fallback。
 
 Plugin UI：
 

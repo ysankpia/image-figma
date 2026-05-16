@@ -1,18 +1,7 @@
 from __future__ import annotations
 
 import shutil
-import struct
-from dataclasses import dataclass
 from pathlib import Path
-
-
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-
-
-@dataclass(frozen=True)
-class PngMetadata:
-    width: int
-    height: int
 
 
 class Storage:
@@ -35,6 +24,9 @@ class Storage:
     def banner_path(self, task_id: str) -> Path:
         return self.assets_dir / task_id / "banner.png"
 
+    def region_path(self, task_id: str, region_name: str) -> Path:
+        return self.assets_dir / task_id / f"{region_name}.png"
+
     def dsl_path(self, task_id: str) -> Path:
         return self.dsl_dir / f"{task_id}.json"
 
@@ -43,6 +35,9 @@ class Storage:
 
     def banner_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/assets/{task_id}/banner.png"
+
+    def region_url(self, task_id: str, region_name: str) -> str:
+        return f"{self.public_base_url}/files/assets/{task_id}/{region_name}.png"
 
     def save_upload(self, task_id: str, data: bytes) -> Path:
         path = self.upload_path(task_id)
@@ -56,22 +51,8 @@ class Storage:
         shutil.copyfile(upload_path, path)
         return path
 
-
-def is_png(data: bytes) -> bool:
-    return data.startswith(PNG_SIGNATURE)
-
-
-def read_png_metadata(data: bytes) -> PngMetadata | None:
-    if not is_png(data) or len(data) < 33:
-        return None
-
-    ihdr_length = struct.unpack(">I", data[8:12])[0]
-    chunk_type = data[12:16]
-    if ihdr_length != 13 or chunk_type != b"IHDR":
-        return None
-
-    width, height = struct.unpack(">II", data[16:24])
-    if width <= 0 or height <= 0:
-        return None
-
-    return PngMetadata(width=width, height=height)
+    def save_region_asset(self, task_id: str, region_name: str, data: bytes) -> Path:
+        path = self.region_path(task_id, region_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path

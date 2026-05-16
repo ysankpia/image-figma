@@ -51,10 +51,12 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M6 成功后立即返回 completed deterministic 任务。
+- M7 成功后立即返回 completed deterministic region 任务。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
+- 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
+- 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
 
 `GET /api/tasks/{taskId}`
 
@@ -107,7 +109,7 @@ GET /api/tasks/{taskId}
 GET /api/tasks/{taskId}/dsl
 ```
 
-即使 M6 后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
+即使 M7 后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
 ## Optional Endpoints
 
