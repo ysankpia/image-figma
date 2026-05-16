@@ -39,14 +39,14 @@ OCR 输出至少包含：
 
 价格、手机号、订单号、日期、金额、库存等敏感文本以 OCR 为准，AI 不应自由改写。
 
-当前 M10 规则：
+当前 M12 规则：
 
 - 默认 `OCR_PROVIDER=fake`。
 - 可选 `OCR_PROVIDER=baidu_ppocrv5`，调用百度 AI Studio `PP-OCRv5` 异步 OCR API。
 - 不调用同步 OCR API。
 - 不引入本地 PaddleOCR、RapidOCR 或 Apple Vision provider。
 - OCR 输出只进入 DSL patch builder。
-- patch 默认生成 hidden `candidate_text`。M11 可选 text replacement 只处理浅色纯色背景的低风险 OCR block。
+- patch 默认生成 hidden `candidate_text`。M12 可选 text replacement 只处理低复杂度背景上的 accepted OCR block。
 - 百度 token 只通过环境变量提供，不写入仓库。
 - 百度失败只影响 OCR/patch 调试结果，不影响 fallback DSL。
 
@@ -82,16 +82,18 @@ M9 DSL patch builder 用于把 OCR boxes 和 visual primitives 转为可验证 p
 - 默认 `DSL_PATCH_MODE=debug`。
 - `off` 返回 M7 base DSL。
 - `debug` 返回带 hidden text candidates 的 enhanced DSL。
-- `apply` 在 M9 保留但不做可见替换；M11 可见替换由 `TEXT_REPLACEMENT_MODE=apply` 控制。
+- `apply` 在 M9 保留但不做可见替换；M12 可见替换由 `TEXT_REPLACEMENT_MODE=apply` 控制。
 - patch 失败回退 base DSL。
 
 ## Text Replacement
 
-M11 text replacement harness 用于把一小部分低风险 OCR block 转成可见 DSL 元素：
+M12 text replacement harness 用于把一部分低复杂度背景 OCR block 转成可见 DSL 元素：
 
 - 默认 `TEXT_REPLACEMENT_MODE=debug`，只保存 accepted/rejected decisions。
 - `apply` 时追加 cover shape 和 visible text。
-- 只接受浅色纯色背景、高置信 OCR block。
+- 接受浅底深字和部分彩色/深色底浅字。
+- 只接受高置信 OCR block 和低复杂度背景。
+- 可保守合并明显同一行的拆分 OCR block。
 - fallback region、original reference 和 hidden candidate text 不删除。
 - replacement 失败回退 M10/M9 输出。
 

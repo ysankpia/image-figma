@@ -44,7 +44,7 @@ M10 OCR 和 DSL patch 也是可观测的非关键路径：
 - Patch validation failed 时 `/dsl` 回退 base DSL。
 - Hidden text candidates 不允许破坏 fallback 视觉输出。
 
-M11 text replacement 是可观测的非关键路径：
+M12 text replacement 是可观测的非关键路径：
 
 - 默认 `TEXT_REPLACEMENT_MODE=debug` 不改变可见 DSL。
 - replacement failed/skipped 写入 `text_replacement_results` 和 `error_logs`。

@@ -14,6 +14,8 @@ from app.png_tools import PngMetadata
 from app.text_replacement import (
     apply_text_replacements,
     build_text_replacement_document,
+    build_visible_text_element,
+    visible_text_font_size,
 )
 from conftest import PNG_BYTES, PNG_HEIGHT, PNG_WIDTH, png_chunk
 
@@ -53,7 +55,15 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
     )
 
     with client:
-        png = make_rgb_png(PNG_WIDTH, PNG_HEIGHT, (247, 248, 250))
+        png = make_text_fixture_png(
+            PNG_WIDTH,
+            PNG_HEIGHT,
+            (247, 248, 250),
+            [
+                ([25, 109, 143, 36], (20, 20, 20)),
+                ([25, 157, 190, 32], (20, 20, 20)),
+            ],
+        )
         upload = client.post("/api/upload", files={"file": ("input.png", png, "image/png")})
         assert upload.status_code == 200
         task_id = upload.json()["data"]["taskId"]
@@ -77,9 +87,11 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert children["visible_text_ocr_text_001"]["type"] == "text"
         assert children["visible_text_ocr_text_001"]["role"] == "visible_text_replacement"
         assert children["visible_text_ocr_text_001"]["style"]["visible"] is True
+        assert children["visible_text_ocr_text_001"]["style"]["lineHeight"] >= children["visible_text_ocr_text_001"]["style"]["fontSize"]
         assert children["text_ocr_text_001"]["style"]["visible"] is False
         assert dsl["meta"]["textReplacementCount"] == 2
         assert "m11_visible_text_replacements" in dsl["meta"]["qualityFlags"]
+        assert "m12_text_replacement_coverage_expansion" in dsl["meta"]["qualityFlags"]
 
 
 def test_text_replacement_mode_off_has_no_result(monkeypatch, tmp_path) -> None:
@@ -159,7 +171,7 @@ def test_replacement_decisions_cover_rejection_reasons() -> None:
     document = build_text_replacement_document(
         task_id="task_1",
         image=image,
-        png_data=make_rgb_png(100, 100, (247, 248, 250)),
+        png_data=make_text_fixture_png(100, 100, (247, 248, 250), [([10, 50, 40, 20], (20, 20, 20))]),
         ocr_document=ocr,
         settings=settings,
     )
@@ -256,7 +268,7 @@ def test_apply_text_replacements_keeps_existing_children() -> None:
     document = build_text_replacement_document(
         task_id="task_1",
         image=image,
-        png_data=make_rgb_png(100, 100, (247, 248, 250)),
+        png_data=make_text_fixture_png(100, 100, (247, 248, 250), [([10, 50, 40, 20], (20, 20, 20))]),
         ocr_document=ocr,
         settings=settings,
     )
@@ -284,6 +296,184 @@ def test_apply_text_replacements_keeps_existing_children() -> None:
     assert "cover_ocr_1" in children
     assert "visible_text_ocr_1" in children
     assert enhanced["meta"]["textReplacementCount"] == 1
+
+
+def test_colored_background_with_light_text_is_accepted() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(120, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 120, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("button", "确认选床", [24, 48, 72, 22], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(120, 90, (38, 132, 255), [([24, 48, 72, 22], (255, 255, 255))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.reason == "dark_or_colored_background_light_text"
+    assert decision.background is not None
+    assert decision.foreground is not None
+    assert decision.background["color"] == "#2684FF"
+    assert decision.foreground["color"] == "#FFFFFF"
+    assert document.meta["coloredBackgroundAcceptedCount"] == 1
+
+
+def test_colored_background_can_be_disabled() -> None:
+    settings = make_settings(text_replacement_mode="debug", text_replacement_enable_colored_bg=False)
+    image = PngMetadata(120, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 120, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("button", "确认选床", [24, 48, 72, 22], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(120, 90, (38, 132, 255), [([24, 48, 72, 22], (255, 255, 255))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert document.decisions[0].decision == "rejected"
+    assert document.decisions[0].reason == "dark_background"
+
+
+def test_low_contrast_text_is_rejected() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(100, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 100, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("low", "Low", [20, 48, 40, 20], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(100, 90, (247, 248, 250), [([20, 48, 40, 20], (210, 211, 212))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert document.decisions[0].reason == "foreground_background_low_contrast"
+
+
+def test_text_color_uncertain_when_no_foreground_pixels() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(100, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 100, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("empty", "Empty", [20, 48, 40, 20], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_rgb_png(100, 90, (247, 248, 250)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert document.decisions[0].reason == "text_color_uncertain"
+
+
+def test_split_ocr_blocks_on_same_line_are_merged() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(180, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 180, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[
+            OCRBlock("left", "下一步：", [30, 48, 58, 22], 0.99, "line_1", "block_1"),
+            OCRBlock("right", "确认选床", [94, 48, 64, 22], 0.98, "line_1", "block_2"),
+        ],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(180, 90, (38, 132, 255), [([30, 48, 128, 22], (255, 255, 255))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert len(document.decisions) == 1
+    decision = document.decisions[0]
+    assert decision.ocrBlockId == "merged_left_right"
+    assert decision.sourceOcrBlockIds == ["left", "right"]
+    assert decision.bbox == [30, 48, 128, 22]
+    assert document.meta["mergedBlockCount"] == 1
+    assert any(warning.code == "OCR_BLOCKS_MERGED" for warning in document.warnings)
+
+
+def test_unrelated_short_labels_are_not_merged() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(180, 90, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 180, "height": 90},
+        coordinateSpace="pixel",
+        blocks=[
+            OCRBlock("a", "可选", [30, 48, 34, 22], 0.99, "line_1", "block_1"),
+            OCRBlock("b", "已住", [70, 48, 34, 22], 0.98, "line_1", "block_2"),
+        ],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(180, 90, (247, 248, 250), [([30, 48, 34, 22], (20, 20, 20)), ([70, 48, 34, 22], (20, 20, 20))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert [decision.ocrBlockId for decision in document.decisions] == ["a", "b"]
+
+
+def test_visible_text_font_size_respects_bbox_width_for_chinese_labels() -> None:
+    block = OCRBlock("ocr_text_021", "5号上铺", [183, 877, 98, 38], 0.99, "line_1", "block_1")
+
+    assert visible_text_font_size(block.text, block.bbox) < round(block.bbox[3] * 0.75)
+    assert build_visible_text_element(block)["style"]["fontSize"] == 25
+    assert build_visible_text_element(block)["style"]["lineHeight"] >= 25
 
 
 def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestClient:
@@ -321,12 +511,16 @@ def make_settings(**overrides: Any) -> Settings:
         "openai_timeout_seconds": 30,
         "ocr_min_confidence": 0.70,
         "text_replacement_mode": "debug",
-        "text_replacement_max_blocks": 20,
+        "text_replacement_max_blocks": 100,
         "text_replacement_min_confidence": 0.95,
         "text_replacement_solid_bg_tolerance": 18,
         "text_replacement_max_height": 64,
         "text_replacement_min_width": 12,
         "text_replacement_min_height": 10,
+        "text_replacement_enable_colored_bg": True,
+        "text_replacement_min_contrast": 90,
+        "text_replacement_edge_sample_padding": 4,
+        "text_replacement_text_sample_inset": 1,
     }
     values.update(overrides)
     return Settings(**values)
@@ -335,6 +529,27 @@ def make_settings(**overrides: Any) -> Settings:
 def make_rgb_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
     rows = [bytes(rgb) * width for _ in range(height)]
     return make_png_from_rows(width, height, 2, rows)
+
+
+def make_text_fixture_png(
+    width: int,
+    height: int,
+    background_rgb: tuple[int, int, int],
+    text_regions: list[tuple[list[int], tuple[int, int, int]]],
+) -> bytes:
+    rows = [bytearray(bytes(background_rgb) * width) for _ in range(height)]
+    for bbox, text_rgb in text_regions:
+        x, y, region_width, region_height = bbox
+        x1 = max(0, x + 2)
+        y1 = max(0, y + 2)
+        x2 = min(width, x + region_width - 2)
+        y2 = min(height, y + region_height - 2)
+        for row_index in range(y1, y2):
+            row = rows[row_index]
+            for column in range(x1, x2, 3):
+                offset = column * 3
+                row[offset : offset + 3] = bytes(text_rgb)
+    return make_png_from_rows(width, height, 2, [bytes(row) for row in rows])
 
 
 def make_checker_png(width: int, height: int) -> bytes:

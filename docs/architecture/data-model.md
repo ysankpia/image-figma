@@ -48,7 +48,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M11 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M12 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -194,7 +194,7 @@ Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
 
 ## text_replacement_results
 
-用途：记录 M11 low-risk visible text replacement 文件、模式和状态。
+用途：记录 M12 visible text replacement 文件、模式和状态。
 
 核心字段：
 

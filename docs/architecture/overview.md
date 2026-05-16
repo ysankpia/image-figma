@@ -46,7 +46,7 @@ docs/
 - 存储：本地文件存储。
 - PNG region slicer：Python 标准库。
 - Visual primitives：M8 已建立合同和 fake/OpenAI provider 边界，结果不进入 DSL。
-- OCR/DSL patch/text replacement：M9 已建立 OCR 和 hidden candidate patch harness，M10 可选接入百度 PP-OCRv5 异步 OCR，M11 默认 debug 记录低风险文字替换决策，apply 时只替换浅色纯色背景文字。
+- OCR/DSL patch/text replacement：M9 已建立 OCR 和 hidden candidate patch harness，M10 可选接入百度 PP-OCRv5 异步 OCR，M11 建立低风险文字替换基座，M12 默认 debug 记录覆盖率扩展决策，apply 时替换低复杂度背景文字。
 
 ## Major Modules
 

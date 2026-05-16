@@ -92,9 +92,10 @@ Backend API：
 - M10 `OCR_PROVIDER=baidu_ppocrv5` 使用 fake HTTP client 测试，不打真实百度网络。
 - 百度 PP-OCRv5 `rec_boxes` 必须从 `[x1, y1, x2, y2]` 转成 `[x, y, width, height]`。
 - 百度 OCR 失败、超时、缺 token 或 JSONL 异常时，上传仍 completed，DSL 回退 fallback。
-- M11 `TEXT_REPLACEMENT_MODE=debug` 生成 replacement document，但不把 visible text 合并进 `/dsl`。
-- M11 `TEXT_REPLACEMENT_MODE=apply` 只对 accepted 低风险文字添加 cover shape 和 visible text。
-- M11 apply 必须保留 fallback region、original_ref 和 hidden candidate_text。
+- M12 `TEXT_REPLACEMENT_MODE=debug` 生成 replacement document，但不把 visible text 合并进 `/dsl`。
+- M12 `TEXT_REPLACEMENT_MODE=apply` 只对 accepted 低复杂度背景文字添加 cover shape 和 visible text。
+- M12 apply 必须保留 fallback region、original_ref 和 hidden candidate_text。
+- M12 必须覆盖浅底深字、彩色/深色底浅字、低对比拒绝、无稳定前景色拒绝、短中文 bbox 字号约束和保守 OCR block 合并。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：

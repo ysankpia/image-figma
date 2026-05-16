@@ -60,4 +60,4 @@ Visible text replacement is debug-only by default:
 TEXT_REPLACEMENT_MODE=debug
 ```
 
-Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and applies only accepted low-risk text replacements.
+Use `TEXT_REPLACEMENT_MODE=apply` only for local smoke. It keeps fallback regions and applies only accepted low-complexity text replacements, including light text on simple colored backgrounds when `TEXT_REPLACEMENT_ENABLE_COLORED_BG=true`.

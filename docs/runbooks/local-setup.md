@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness 、M10 百度 PP-OCRv5 异步 OCR provider 和 M11 低风险可见文字替换 harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness 和 M12 文字替换覆盖率扩展。
 
 ## Prerequisites
 
@@ -147,7 +147,7 @@ curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 ```
 
-M11 text replacement 默认只记录 decisions，不改变可见 DSL：
+M12 text replacement 默认只记录 decisions，不改变可见 DSL：
 
 ```bash
 cd backend
@@ -158,7 +158,9 @@ TEXT_REPLACEMENT_MODE=debug uv run uvicorn app.main:app --reload --host 127.0.0.
 
 ```bash
 cd backend
-TEXT_REPLACEMENT_MODE=apply uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+TEXT_REPLACEMENT_MODE=apply \
+TEXT_REPLACEMENT_ENABLE_COLORED_BG=true \
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 如果要确认完全回退 M7 base DSL：
