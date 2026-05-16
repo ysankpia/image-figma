@@ -1,0 +1,44 @@
+# macOS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+dist/
+build/
+coverage/
+.vitest/
+.turbo/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# local app storage
+backend/storage/
+*.sqlite
+*.sqlite3
+*.db
+
+# logs
+logs/
+*.log
+
+# Figma plugin build artifacts
+figma-plugin/dist/
+figma-plugin/build/
