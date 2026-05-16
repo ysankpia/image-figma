@@ -1,6 +1,6 @@
 # 外部 API
 
-当前仓库默认不调用外部 API。M8 增加了可选 OpenAI primitive provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。M9 OCR provider 仍是本地 fake，不调用外部 OCR。
+当前仓库默认不调用外部 API。M8 增加了可选 OpenAI primitive provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。M10 增加了可选百度 PP-OCRv5 异步 OCR provider，只有显式设置 `OCR_PROVIDER=baidu_ppocrv5` 且提供 token 时才会调用。
 
 ## Figma Plugin API
 
@@ -21,14 +21,23 @@
 当前：
 
 - `OCR_PROVIDER=fake`。
+- `OCR_PROVIDER=baidu_ppocrv5`。
+
+百度 PP-OCRv5：
+
+- Endpoint 默认：`https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`。
+- Model 默认：`PP-OCRv5`。
+- 鉴权：`Authorization: bearer <BAIDU_PADDLE_OCR_TOKEN>`。
+- 只使用异步 jobs API，不接同步接口。
+- 返回的 `rec_texts`、`rec_scores`、`rec_boxes`、`rec_polys` 会被标准化为 `OCRDocument v0.1`。
+
+输出必须标准化为 text、bbox、confidence、lineId、blockId。
 
 后续候选：
 
-- PaddleOCR。
-- Apple Vision。
-- 等价 OCR 服务。
-
-输出必须标准化为 text、bbox、confidence、lineId、blockId。
+- PaddleOCR-VL-1.5 作为结构解析 provider。
+- PP-StructureV3 作为文档结构 provider。
+- 等价商业 OCR 服务。
 
 ## AI Provider
 

@@ -19,6 +19,12 @@ class Settings:
     openai_api_key: str | None
     openai_vision_model: str
     openai_timeout_seconds: float
+    ocr_min_confidence: float = 0.70
+    baidu_paddle_ocr_token: str | None = None
+    baidu_paddle_ocr_job_url: str = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
+    baidu_paddle_ocr_model: str = "PP-OCRv5"
+    baidu_paddle_ocr_poll_interval_seconds: float = 5
+    baidu_paddle_ocr_timeout_seconds: float = 120
 
 
 def get_settings() -> Settings:
@@ -34,7 +40,16 @@ def get_settings() -> Settings:
         cors_allow_origins=parse_csv(os.getenv("CORS_ALLOW_ORIGINS", "*")),
         visual_primitive_provider=os.getenv("VISUAL_PRIMITIVE_PROVIDER", "fake").strip().lower() or "fake",
         ocr_provider=os.getenv("OCR_PROVIDER", "fake").strip().lower() or "fake",
+        ocr_min_confidence=float(os.getenv("OCR_MIN_CONFIDENCE", "0.70")),
         dsl_patch_mode=os.getenv("DSL_PATCH_MODE", "debug").strip().lower() or "debug",
+        baidu_paddle_ocr_token=os.getenv("BAIDU_PADDLE_OCR_TOKEN"),
+        baidu_paddle_ocr_job_url=os.getenv(
+            "BAIDU_PADDLE_OCR_JOB_URL",
+            "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs",
+        ).rstrip("/"),
+        baidu_paddle_ocr_model=os.getenv("BAIDU_PADDLE_OCR_MODEL", "PP-OCRv5").strip() or "PP-OCRv5",
+        baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
+        baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

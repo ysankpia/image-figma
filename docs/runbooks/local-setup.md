@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness 和 M9 OCR/DSL patch harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness 和 M10 百度 PP-OCRv5 异步 OCR provider。
 
 ## Prerequisites
 
@@ -120,12 +120,24 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 即使 OpenAI provider 失败，上传任务和 `/api/tasks/{taskId}/dsl` 也应继续成功；M9 patch 失败时会回退 base DSL。
 
-M9 OCR 和 patch 默认配置：
+OCR 和 patch 默认配置：
 
 ```bash
 OCR_PROVIDER=fake
 DSL_PATCH_MODE=debug
 ```
+
+百度 PP-OCRv5 异步 OCR smoke：
+
+```bash
+cd backend
+OCR_PROVIDER=baidu_ppocrv5 \
+BAIDU_PADDLE_OCR_TOKEN=... \
+BAIDU_PADDLE_OCR_MODEL=PP-OCRv5 \
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+百度 token 是 bearer token，只能放在本地环境变量或未提交的 `.env` 中，不能写入仓库。百度 OCR 失败时上传任务仍应 completed，`/dsl` 回退 fallback DSL。
 
 上传后可以查询：
 
@@ -188,7 +200,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `meta.platformHint` 为 `mobile`。
 - root children 包含 `original_ref`、`fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 和 hidden `candidate_text`。
 - `/api/tasks/{taskId}/primitives` 返回 `provider: "fake"` 和 `vp_region_header/content/bottom`。
-- `/api/tasks/{taskId}/ocr` 返回 `provider: "fake"`。
+- 默认 `/api/tasks/{taskId}/ocr` 返回 `provider: "fake"`；启用百度后返回 `provider: "baidu_ppocrv5"` 和 `model: "PP-OCRv5"`。
 - `/api/tasks/{taskId}/dsl-patch` 返回 `mode: "debug"`。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 

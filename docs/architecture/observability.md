@@ -33,7 +33,7 @@ M8 primitive result 至少包含：
 - `errorCode`
 - `primitivePath`
 
-M9 OCR/patch result 至少包含：
+M10 OCR/patch result 至少包含：
 
 - `taskId`
 - `provider` 或 `mode`
@@ -44,6 +44,8 @@ M9 OCR/patch result 至少包含：
 - `errorCode`
 - `ocrPath`
 - `patchPath`
+
+百度 PP-OCRv5 provider 的 OCR JSON `meta` 还应包含远端 `jobId`、提交耗时、轮询耗时、轮询次数和低置信度过滤数量，方便定位远端耗时和质量问题。
 
 ## Metrics
 

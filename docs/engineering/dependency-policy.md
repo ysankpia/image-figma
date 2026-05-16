@@ -36,6 +36,7 @@
 - `pydantic`：后端数据结构和 FastAPI 依赖。
 - `python-multipart`：处理 PNG multipart 上传。
 - `openai`：可选 M8 visual primitive provider；默认 fake provider 不调用外部模型。
+- `requests`：M10 百度 PP-OCRv5 异步 OCR provider 的 HTTP client。
 - `pytest`、`httpx`：后端 API 测试。
 
 这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环、后端 deterministic fallback 链路、OCR/DSL patch harness 和可选 visual primitive smoke，没有引入 React/Vite、ORM、队列或 CI。
@@ -59,7 +60,14 @@ M8 当前只有可选 OpenAI provider：
 - 模型输出只写入 visual primitive candidate document，不直接生成 DSL。
 - provider 失败必须降级为 primitive result `failed` 或 `partial`，不能让上传任务失败。
 
-M9 OCR provider 当前只有 `fake`，不新增 OCR SDK。真实 OCR 依赖必须等 provider 方案明确后再引入。
+M10 OCR provider 默认仍是 `fake`，可选 `baidu_ppocrv5` 通过 HTTP 调用百度 AI Studio PP-OCRv5 异步 API。
+
+当前不引入本地 OCR 重依赖：
+
+- 不引入 `paddleocr`。
+- 不引入 `paddlepaddle`。
+- 不引入 `rapidocr`。
+- 不引入 `onnxruntime`。
 
 模型调用必须有：
 

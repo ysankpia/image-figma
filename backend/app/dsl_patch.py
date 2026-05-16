@@ -71,7 +71,7 @@ def build_dsl_patch(
         warnings.append(
             DSLPatchWarning(
                 code="DSL_PATCH_APPLY_NOT_IMPLEMENTED",
-                message="DSL_PATCH_MODE=apply is reserved for M10; M9 keeps OCR text candidates hidden.",
+                message="DSL_PATCH_MODE=apply is reserved for M11; OCR text candidates stay hidden.",
             )
         )
 

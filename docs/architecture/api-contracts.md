@@ -51,13 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M9 成功后立即返回 completed deterministic region + hidden OCR candidate 任务。
+- M10 成功后立即返回 completed deterministic region + hidden OCR candidate 任务。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR 和 DSL patch 调试结果。默认 `debug` 模式会在 DSL 中加入 hidden text candidates，但不改变 Figma 可见输出。
+- 上传链路会生成 visual primitives、OCR 和 DSL patch 调试结果。默认 `debug` 模式会在 DSL 中加入 hidden text candidates，但不改变 Figma 可见输出。默认 OCR provider 是 `fake`，显式设置 `OCR_PROVIDER=baidu_ppocrv5` 后调用百度 PP-OCRv5 异步 OCR。
 
 `GET /api/tasks/{taskId}`
 
@@ -84,7 +84,7 @@ http://localhost:8000/api
 
 `GET /api/tasks/{taskId}/ocr`
 
-- 用途：获取 M9 OCR candidate 结果。
+- 用途：获取 OCR candidate 结果。
 - 只读调试接口，不被插件主流程依赖。
 - task 不存在返回 `TASK_NOT_FOUND`。
 - OCR result 不存在返回 `OCR_NOT_FOUND`。
@@ -93,7 +93,7 @@ http://localhost:8000/api
 
 `GET /api/tasks/{taskId}/dsl-patch`
 
-- 用途：获取 M9 DSL patch 结果。
+- 用途：获取 DSL patch 结果。
 - 只读调试接口，不被插件主流程依赖。
 - task 不存在返回 `TASK_NOT_FOUND`。
 - patch result 不存在返回 `DSL_PATCH_NOT_FOUND`。
@@ -149,7 +149,7 @@ GET /api/tasks/{taskId}/dsl
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M9 仍不改插件调用路径。插件不调用 OCR、primitives 或 dsl-patch endpoint。
+M10 仍不改插件调用路径。插件不调用 OCR、primitives 或 dsl-patch endpoint。
 
 ## Optional Endpoints
 

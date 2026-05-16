@@ -151,7 +151,7 @@ M9 新增 OCR/DSL patch harness。默认 `/api/tasks/{taskId}/dsl` 会包含 hid
 - `meta.candidate: true`。
 - `meta.reason: "m9_ocr_candidate_hidden_by_default"`。
 
-这些 text candidates 是调试和后续 M10 可见替换的输入，不代表已经完成可编辑还原。fallback region 不删除、不移动。
+这些 text candidates 是调试和后续 M11 可见替换的输入，不代表已经完成可编辑还原。fallback region 不删除、不移动。
 
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 

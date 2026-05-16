@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M9 当前管线：
+M10 当前管线：
 
 ```text
 receive multipart PNG
@@ -29,7 +29,7 @@ receive multipart PNG
 -> crop header/content/bottom region assets when supported
 -> build deterministic region DSL
 -> extract visual primitive candidates
--> extract fake OCR candidates
+-> extract OCR candidates
 -> build DSL patch
 -> save DSL JSON
 -> save primitive JSON
@@ -73,12 +73,12 @@ backend/storage/
 
 ## Task State
 
-M9 当前只实际写入：
+M10 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M9 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M10 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -153,7 +153,7 @@ OpenAI provider 规则：
 
 ## AI Strategy
 
-M9 之后的普通页面目标管线：
+M10 之后的普通页面目标管线：
 
 ```text
 OCR boxes
@@ -173,10 +173,13 @@ OCR boxes
 
 ## OCR And DSL Patch Harness
 
-M9 引入 fake OCR 和 DSL patch，但仍不做完整识别还原：
+M9 引入 OCR 合同和 DSL patch；M10 新增可选百度 PP-OCRv5 异步 OCR provider，但仍不做完整识别还原：
 
-- `OCR_PROVIDER=fake`。
+- 默认 `OCR_PROVIDER=fake`。
+- 可选 `OCR_PROVIDER=baidu_ppocrv5`，使用百度 AI Studio `PP-OCRv5` 异步 OCR API。
 - OCR bbox 使用整图像素坐标 `[x, y, width, height]`。
+- 百度返回的 `rec_boxes` 从 `[x1, y1, x2, y2]` 转为 `[x, y, width, height]`。
+- 百度 OCR 失败、超时、429 或 JSONL 异常只会让 OCR result failed，不能拖垮上传和 fallback DSL。
 - OCR 结果写入 `backend/storage/ocr/{taskId}.json`。
 - DSL patch 写入 `backend/storage/patches/{taskId}.json`。
 - 默认 `DSL_PATCH_MODE=debug`。
@@ -184,11 +187,11 @@ M9 引入 fake OCR 和 DSL patch，但仍不做完整识别还原：
 - candidate text `style.visible` 固定为 `false`，避免双层文字。
 - patch validation 失败时 `/dsl` 回退 deterministic base DSL。
 
-M9 不用 OCR 文字猜字体、颜色、层级或背景。可见文字替换留到 M10。
+M10 不用 OCR 文字猜字体、颜色、层级或背景。可见文字替换留到 M11。
 
 ## Backend Non-Goals
 
-M9 不做：
+M10 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -198,7 +201,8 @@ M9 不做：
 - Redis 缓存。
 - 微服务拆分。
 - 正式对象存储策略。
-- 真实 OCR provider。
+- 同步 OCR API。
+- PaddleOCR/RapidOCR 本地 provider。
 - AI 直接生成 DSL。
 - AI 直接生成 patch。
 - OCR/AI 语义裁切。

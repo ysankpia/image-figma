@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from .config import Settings
@@ -46,10 +47,25 @@ class OCRDocument:
         return asdict(self)
 
 
-def extract_ocr(*, task_id: str, image: PngMetadata, settings: Settings) -> OCRDocument:
+def extract_ocr(
+    *,
+    task_id: str,
+    image: PngMetadata,
+    settings: Settings,
+    source_path: Path | None = None,
+) -> OCRDocument:
     provider = settings.ocr_provider
     if provider == "fake":
         return build_fake_ocr_document(task_id=task_id, image=image)
+    if provider == "baidu_ppocrv5":
+        from .ocr_baidu import extract_baidu_ppocrv5
+
+        return extract_baidu_ppocrv5(
+            task_id=task_id,
+            image=image,
+            source_path=source_path,
+            settings=settings,
+        )
     return build_failed_ocr_document(
         task_id=task_id,
         image=image,

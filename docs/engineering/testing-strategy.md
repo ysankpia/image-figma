@@ -89,6 +89,9 @@ Backend API：
 - `GET /api/tasks/{taskId}/dsl-patch` 可返回 patch document。
 - `DSL_PATCH_MODE=debug` 时 `/dsl` 返回 hidden text candidates。
 - `DSL_PATCH_MODE=off` 时 `/dsl` 返回 M7 base DSL。
+- M10 `OCR_PROVIDER=baidu_ppocrv5` 使用 fake HTTP client 测试，不打真实百度网络。
+- 百度 PP-OCRv5 `rec_boxes` 必须从 `[x1, y1, x2, y2]` 转成 `[x, y, width, height]`。
+- 百度 OCR 失败、超时、缺 token 或 JSONL 异常时，上传仍 completed，DSL 回退 fallback。
 
 当前命令：
 
@@ -120,8 +123,10 @@ Visual Primitives：
 OCR And DSL Patch:
 
 - 默认 fake OCR provider 不需要外部依赖。
+- 可选百度 PP-OCRv5 provider 不引入本地 PaddleOCR/RapidOCR 依赖。
 - OCR bbox 使用整图像素坐标。
 - OCR 空文本必须丢弃。
+- OCR 置信度低于 `OCR_MIN_CONFIDENCE` 必须丢弃并记录 warning。
 - OCR bbox 轻微越界必须 clamp 并记录 warning。
 - 严重非法 OCR bbox 必须丢弃。
 - duplicate OCR id 必须丢弃。

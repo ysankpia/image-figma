@@ -16,7 +16,7 @@ Renderer 只通过 Figma Plugin API 写图层，不调用后端。
 
 ## OCR
 
-M9 已建立 fake OCR contract harness。当前不是完整 OCR 产品化。
+M9 已建立 OCR contract harness。M10 新增可选百度 PP-OCRv5 异步 OCR provider。当前仍不是完整 OCR 产品化。
 
 ```text
 PNG -> text boxes
@@ -39,12 +39,16 @@ OCR 输出至少包含：
 
 价格、手机号、订单号、日期、金额、库存等敏感文本以 OCR 为准，AI 不应自由改写。
 
-当前 M9 规则：
+当前 M10 规则：
 
 - 默认 `OCR_PROVIDER=fake`。
-- 不调用 PaddleOCR、Apple Vision 或 OpenAI OCR。
+- 可选 `OCR_PROVIDER=baidu_ppocrv5`，调用百度 AI Studio `PP-OCRv5` 异步 OCR API。
+- 不调用同步 OCR API。
+- 不引入本地 PaddleOCR、RapidOCR 或 Apple Vision provider。
 - OCR 输出只进入 DSL patch builder。
 - patch 默认生成 hidden `candidate_text`，不做可见文字替换。
+- 百度 token 只通过环境变量提供，不写入仓库。
+- 百度失败只影响 OCR/patch 调试结果，不影响 fallback DSL。
 
 ## AI / CV
 

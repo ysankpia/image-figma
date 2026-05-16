@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import secrets
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, status
 
@@ -133,7 +134,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
                 }
             )
         primitive_document = save_primitive_result(task_id, image, region_assets, region_inputs, now)
-        ocr_document = save_ocr_result(task_id, image, now)
+        ocr_document = save_ocr_result(task_id, image, upload_path, now)
         final_dsl = save_dsl_patch_result(task_id, base_dsl, ocr_document, primitive_document, now)
         dsl_path = state.storage.dsl_path(task_id)
         dsl_path.write_text(json.dumps(final_dsl, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -302,10 +303,10 @@ def save_primitive_result(
     return document
 
 
-def save_ocr_result(task_id: str, image: PngMetadata, created_at: str) -> OCRDocument:
+def save_ocr_result(task_id: str, image: PngMetadata, source_path: Path, created_at: str) -> OCRDocument:
     failed_logged = False
     try:
-        document = extract_ocr(task_id=task_id, image=image, settings=state.settings)
+        document = extract_ocr(task_id=task_id, image=image, settings=state.settings, source_path=source_path)
     except Exception as error:
         state.database.insert_error(
             task_id=task_id,
