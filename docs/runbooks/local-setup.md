@@ -1,27 +1,46 @@
 # 本地设置
 
-当前仓库只有文档 harness，没有代码、依赖、脚本或服务。
+当前仓库已经初始化最小 monorepo，并实现了第一批 `@image-figma/dsl-schema` 合同包。
 
 ## Prerequisites
 
-阅读文档只需要：
+需要：
 
-- 一个 Markdown 编辑器。
-- 能查看相对链接的 IDE。
+- Node.js 24.x。当前开发机使用 Homebrew `node@24`。
+- pnpm 10.33.2。
+- Python 3.12.7，由 asdf 管理。
+- Git。
 
-后续工程骨架建立后，本文件必须补充：
+`.tool-versions` 当前只固定：
 
-- Node.js 版本。
-- pnpm 版本。
-- Python 版本。
-- 后端虚拟环境。
-- Figma 插件构建方式。
-- 本地 API 启动命令。
-- 测试命令。
+```text
+python 3.12.7
+```
+
+本机 asdf 当前没有 nodejs 插件，所以本轮不把 Node 写入 `.tool-versions`。
 
 ## Run Locally
 
-当前阶段无需启动服务。
+安装依赖：
+
+```bash
+pnpm install
+```
+
+运行全部当前检查：
+
+```bash
+pnpm run check
+```
+
+只检查 DSL Schema 包：
+
+```bash
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+```
+
+当前还没有后端服务、Figma 插件 UI 或 Renderer 可启动。
 
 后续目标命令应覆盖：
 

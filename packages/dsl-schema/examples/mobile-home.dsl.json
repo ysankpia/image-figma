@@ -1,0 +1,176 @@
+{
+  "version": "0.1",
+  "taskId": "task_mobile_home",
+  "page": {
+    "name": "mobile_home",
+    "width": 390,
+    "height": 844,
+    "originalWidth": 780,
+    "originalHeight": 1688,
+    "scaleFactor": 2,
+    "viewportHeight": 844,
+    "isScrollable": false,
+    "background": {
+      "type": "color",
+      "value": "#F7F8FA"
+    },
+    "safeArea": {
+      "top": 44,
+      "bottom": 34
+    }
+  },
+  "assets": [
+    {
+      "assetId": "asset_original",
+      "type": "image",
+      "role": "original",
+      "url": "http://localhost:8000/files/uploads/task_mobile_home/original.png",
+      "format": "png",
+      "width": 390,
+      "height": 844,
+      "storage": "local"
+    },
+    {
+      "assetId": "asset_banner",
+      "type": "image",
+      "role": "fallback_region",
+      "url": "http://localhost:8000/files/assets/task_mobile_home/banner.png",
+      "format": "png",
+      "width": 358,
+      "height": 140,
+      "storage": "local"
+    }
+  ],
+  "root": {
+    "id": "root",
+    "type": "frame",
+    "role": "screen",
+    "name": "mobile_home",
+    "layout": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 844
+    },
+    "style": {
+      "fill": "#F7F8FA"
+    },
+    "children": [
+      {
+        "id": "original_ref",
+        "type": "image",
+        "role": "original_reference",
+        "name": "Original PNG Reference",
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 844
+        },
+        "source": {
+          "assetId": "asset_original"
+        },
+        "style": {
+          "visible": false,
+          "opacity": 0.5
+        },
+        "imageFill": {
+          "mode": "fill"
+        }
+      },
+      {
+        "id": "title",
+        "type": "text",
+        "role": "title",
+        "layout": {
+          "x": 16,
+          "y": 56,
+          "width": 120,
+          "height": 28
+        },
+        "style": {
+          "fontSize": 22,
+          "fontWeight": 600,
+          "color": "#111111"
+        },
+        "content": {
+          "text": "首页"
+        }
+      },
+      {
+        "id": "search_card",
+        "type": "shape",
+        "role": "search_box",
+        "layout": {
+          "x": 16,
+          "y": 96,
+          "width": 358,
+          "height": 44
+        },
+        "style": {
+          "fill": "#FFFFFF",
+          "radius": 12
+        }
+      },
+      {
+        "id": "search_icon",
+        "type": "icon",
+        "role": "search_icon",
+        "layout": {
+          "x": 28,
+          "y": 108,
+          "width": 20,
+          "height": 20
+        },
+        "source": {
+          "kind": "builtin_svg",
+          "iconName": "search"
+        },
+        "style": {
+          "color": "#999999"
+        }
+      },
+      {
+        "id": "banner",
+        "type": "image",
+        "role": "fallback_region",
+        "layout": {
+          "x": 16,
+          "y": 156,
+          "width": 358,
+          "height": 140
+        },
+        "source": {
+          "assetId": "asset_banner"
+        },
+        "imageFill": {
+          "mode": "fill"
+        },
+        "meta": {
+          "fallback": true,
+          "reason": "complex_banner"
+        }
+      },
+      {
+        "id": "divider",
+        "type": "line",
+        "role": "divider",
+        "layout": {
+          "x": 16,
+          "y": 320,
+          "width": 358,
+          "height": 1
+        },
+        "style": {
+          "fill": "#E5E7EB"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "source": "png",
+    "platformHint": "mobile",
+    "fallbackCount": 1,
+    "elementCount": 6
+  }
+}

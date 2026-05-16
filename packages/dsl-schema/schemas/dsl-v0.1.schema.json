@@ -1,0 +1,269 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://image-figma.local/schemas/dsl-v0.1.schema.json",
+  "title": "Image-to-Figma DSL v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "taskId", "page", "assets", "root"],
+  "properties": {
+    "version": {
+      "const": "0.1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "page": {
+      "$ref": "#/definitions/page"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/asset"
+      }
+    },
+    "root": {
+      "$ref": "#/definitions/element"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "definitions": {
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "name": { "type": "string" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "originalWidth": { "type": "number", "exclusiveMinimum": 0 },
+        "originalHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "scaleFactor": { "type": "number", "exclusiveMinimum": 0 },
+        "viewportHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "isScrollable": { "type": "boolean" },
+        "background": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "value"],
+              "properties": {
+                "type": { "const": "color" },
+                "value": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "gradient"],
+              "properties": {
+                "type": { "const": "gradient" },
+                "gradient": { "$ref": "#/definitions/gradientFill" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "assetId"],
+              "properties": {
+                "type": { "const": "image" },
+                "assetId": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        },
+        "safeArea": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top": { "type": "number" },
+            "bottom": { "type": "number" }
+          }
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "type", "url", "format"],
+      "properties": {
+        "assetId": { "type": "string", "minLength": 1 },
+        "type": { "const": "image" },
+        "role": { "type": "string" },
+        "url": { "type": "string", "minLength": 1 },
+        "format": { "enum": ["png", "jpeg", "jpg", "webp"] },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "storage": { "enum": ["local", "oss"] },
+        "objectKey": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "layout"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["frame", "group", "text", "shape", "image", "icon", "line"] },
+        "role": { "type": "string" },
+        "name": { "type": "string" },
+        "layout": { "$ref": "#/definitions/layout" },
+        "rawLayout": { "$ref": "#/definitions/layout" },
+        "style": { "$ref": "#/definitions/style" },
+        "content": { "$ref": "#/definitions/content" },
+        "source": { "$ref": "#/definitions/source" },
+        "imageFill": { "$ref": "#/definitions/imageFill" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/element" }
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/definitions/gradientFill" }
+          ]
+        },
+        "color": { "type": "string" },
+        "opacity": { "type": "number" },
+        "visible": { "type": "boolean" },
+        "radius": {
+          "oneOf": [
+            { "type": "number" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "topLeft": { "type": "number" },
+                "topRight": { "type": "number" },
+                "bottomRight": { "type": "number" },
+                "bottomLeft": { "type": "number" }
+              }
+            }
+          ]
+        },
+        "stroke": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["color", "width"],
+          "properties": {
+            "color": { "type": "string" },
+            "width": { "type": "number" }
+          }
+        },
+        "shadow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "x", "y", "blur", "color"],
+            "properties": {
+              "type": { "const": "drop_shadow" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "blur": { "type": "number" },
+              "spread": { "type": "number" },
+              "color": { "type": "string" }
+            }
+          }
+        },
+        "clipContent": { "type": "boolean" },
+        "fontFamily": { "type": "string" },
+        "fontSize": { "type": "number" },
+        "fontWeight": { "type": "number" },
+        "lineHeight": { "type": "number" },
+        "textAlign": { "enum": ["left", "center", "right"] }
+      }
+    },
+    "gradientFill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "angle", "stops"],
+      "properties": {
+        "type": { "const": "linear_gradient" },
+        "angle": { "type": "number" },
+        "stops": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["color", "position"],
+            "properties": {
+              "color": { "type": "string" },
+              "position": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" }
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "assetId": { "type": "string", "minLength": 1 },
+            "url": { "type": "string" }
+          },
+          "anyOf": [
+            { "required": ["assetId"] },
+            { "required": ["url"] }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "iconName"],
+          "properties": {
+            "kind": { "const": "builtin_svg" },
+            "iconName": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "imageFill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["fill", "fit"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "version": "0.1",
+  "taskId": "task_mobile_detail",
+  "page": {
+    "name": "mobile_detail",
+    "width": 390,
+    "height": 844,
+    "background": {
+      "type": "color",
+      "value": "#FAFAFA"
+    }
+  },
+  "assets": [
+    {
+      "assetId": "asset_hero",
+      "type": "image",
+      "role": "product_image",
+      "url": "http://localhost:8000/files/assets/task_mobile_detail/hero.jpg",
+      "format": "jpeg",
+      "width": 390,
+      "height": 300,
+      "storage": "local"
+    }
+  ],
+  "root": {
+    "id": "root",
+    "type": "frame",
+    "role": "screen",
+    "layout": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 844
+    },
+    "children": [
+      {
+        "id": "hero",
+        "type": "image",
+        "role": "product_image",
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 300
+        },
+        "source": {
+          "assetId": "asset_hero"
+        },
+        "imageFill": {
+          "mode": "fill"
+        }
+      },
+      {
+        "id": "price",
+        "type": "text",
+        "role": "price",
+        "layout": {
+          "x": 16,
+          "y": 324,
+          "width": 140,
+          "height": 32
+        },
+        "style": {
+          "fontSize": 26,
+          "fontWeight": 700,
+          "color": "#E11D48"
+        },
+        "content": {
+          "text": "¥199"
+        },
+        "meta": {
+          "correctionPolicy": "no_free_rewrite"
+        }
+      },
+      {
+        "id": "buy_button",
+        "type": "shape",
+        "role": "primary_button",
+        "layout": {
+          "x": 16,
+          "y": 760,
+          "width": 358,
+          "height": 52
+        },
+        "style": {
+          "fill": "#111111",
+          "radius": 10
+        }
+      },
+      {
+        "id": "buy_text",
+        "type": "text",
+        "role": "button_text",
+        "layout": {
+          "x": 154,
+          "y": 776,
+          "width": 82,
+          "height": 20
+        },
+        "style": {
+          "color": "#FFFFFF",
+          "textAlign": "center"
+        },
+        "content": {
+          "text": "立即购买"
+        }
+      }
+    ]
+  }
+}

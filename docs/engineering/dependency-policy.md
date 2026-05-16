@@ -14,12 +14,23 @@
 
 后续实现的默认技术选择：
 
-- Monorepo：pnpm workspace。
+- Monorepo：pnpm workspace，当前已初始化。
 - 插件：TypeScript、React、Vite。
-- 共享包：TypeScript。
+- 共享包：TypeScript，当前已实现 `@image-figma/dsl-schema`。
 - 后端：Python、FastAPI、Pydantic。
 - 数据库：SQLite。
 - 测试：按实际代码栈选择 Vitest、pytest、Playwright。
+
+## Current Dependencies
+
+当前引入：
+
+- `typescript`：共享包类型检查。
+- `vitest`：`dsl-schema` 单元测试。
+- `@types/node`：测试和 Node 工具类型。
+- `ajv`：测试 JSON Schema 与示例 DSL 的兼容性。
+
+这些依赖只服务 DSL 合同包，没有引入 UI 框架、后端框架或 CI。
 
 ## AI/OCR Dependencies
 

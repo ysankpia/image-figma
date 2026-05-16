@@ -1,6 +1,6 @@
 # 测试策略
 
-当前仓库还没有代码。本文件定义后续实现必须补的验证层。
+当前仓库已有最小 `@image-figma/dsl-schema` 包。本文件定义当前验证层和后续必须补的验证层。
 
 ## Validation Focus
 
@@ -22,6 +22,13 @@ DSL Schema：
 - image assetId 不存在失败。
 - normalize 能补默认值。
 - repair 只做安全修复。
+
+当前命令：
+
+```bash
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+```
 
 Renderer：
 
@@ -83,13 +90,17 @@ Bug 修复必须增加回归保护。优先级：
 
 ## Repository Checks
 
-后续工程骨架建立后，应提供统一检查入口：
+当前统一检查入口：
+
+```bash
+pnpm run check
+```
+
+后续应继续扩展到：
 
 - lint。
-- typecheck。
-- unit tests。
+- 更完整 typecheck。
+- 更完整 unit tests。
 - integration tests。
 - e2e tests。
 - doc link checks。
-
-本轮不创建脚本。

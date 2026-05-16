@@ -2,7 +2,7 @@
 
 - 状态：active
 - 创建日期：2026-05-16
-- 负责人：未指定
+- 负责人：Codex
 
 ## Goal
 
@@ -32,8 +32,8 @@
 
 ## Steps
 
-1. 初始化 repo 工程骨架，建立 `figma-plugin/`、`backend/`、`packages/dsl-schema/`、`packages/image-to-figma-renderer/`。
-2. 做 DSL Schema、类型、示例 DSL 和校验。
+1. 初始化 repo 工程骨架，建立 `figma-plugin/`、`backend/`、`packages/dsl-schema/`、`packages/image-to-figma-renderer/`。状态：完成。
+2. 做 DSL Schema、类型、示例 DSL 和校验。状态：完成第一版。
 3. 做 Renderer，用假 DSL 在 Figma 生成 root、text、shape、image。
 4. 做插件最小 UI 和 UI/Main 消息流。
 5. 做后端 `health`、`upload`、`task`、`dsl`、`asset` API，先返回假 DSL。
@@ -58,3 +58,24 @@
 - 后端 API 集成测试。
 - 插件 UI 状态测试。
 - 样例端到端验收。
+
+## Current Evidence
+
+当前已完成：
+
+- Git 仓库初始化。
+- pnpm workspace 初始化。
+- `@image-figma/dsl-schema` 最小包。
+- DSL TypeScript 类型。
+- JSON Schema。
+- 四份示例 DSL。
+- normalize、validator、repair。
+- 单元测试。
+
+验证命令：
+
+```bash
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+pnpm run check
+```

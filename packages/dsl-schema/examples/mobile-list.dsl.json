@@ -1,0 +1,111 @@
+{
+  "version": "0.1",
+  "taskId": "task_mobile_list",
+  "page": {
+    "name": "mobile_list",
+    "width": 390,
+    "height": 844,
+    "background": {
+      "type": "color",
+      "value": "#FFFFFF"
+    }
+  },
+  "assets": [
+    {
+      "assetId": "asset_item_1",
+      "type": "image",
+      "role": "product_image",
+      "url": "http://localhost:8000/files/assets/task_mobile_list/item_1.jpg",
+      "format": "jpeg",
+      "width": 72,
+      "height": 72,
+      "storage": "local"
+    }
+  ],
+  "root": {
+    "id": "root",
+    "type": "frame",
+    "role": "screen",
+    "layout": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 844
+    },
+    "children": [
+      {
+        "id": "list_header",
+        "type": "text",
+        "role": "title",
+        "layout": {
+          "x": 16,
+          "y": 52,
+          "width": 180,
+          "height": 28
+        },
+        "content": {
+          "text": "商品列表"
+        }
+      },
+      {
+        "id": "item_card_1",
+        "type": "group",
+        "role": "list_item",
+        "layout": {
+          "x": 16,
+          "y": 104,
+          "width": 358,
+          "height": 96
+        },
+        "children": [
+          {
+            "id": "item_bg_1",
+            "type": "shape",
+            "role": "card_background",
+            "layout": {
+              "x": 0,
+              "y": 0,
+              "width": 358,
+              "height": 96
+            },
+            "style": {
+              "fill": "#FFFFFF",
+              "radius": 8
+            }
+          },
+          {
+            "id": "item_image_1",
+            "type": "image",
+            "role": "product_image",
+            "layout": {
+              "x": 12,
+              "y": 12,
+              "width": 72,
+              "height": 72
+            },
+            "source": {
+              "assetId": "asset_item_1"
+            },
+            "imageFill": {
+              "mode": "fill"
+            }
+          },
+          {
+            "id": "item_title_1",
+            "type": "text",
+            "role": "item_title",
+            "layout": {
+              "x": 96,
+              "y": 16,
+              "width": 220,
+              "height": 24
+            },
+            "content": {
+              "text": "高保真商品卡片"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
