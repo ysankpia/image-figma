@@ -72,7 +72,7 @@ pnpm --filter @image-figma/figma-plugin run build:dev
 
 当前还没有后端服务。示例 DSL 的图片 URL 指向 `http://localhost:8000`，如果本地没有文件服务，图片加载失败应显示为 warning，不应阻断文字、shape 和 line 渲染。
 
-`localhost` 只配置在 `manifest.json` 的 `networkAccess.devAllowedDomains`。Figma 不允许把 localhost 放进正式 `allowedDomains`，除非同时提供审核用 `reasoning` 字段。
+`localhost` 只配置在 `manifest.json` 的 `networkAccess.devAllowedDomains`。Figma 不允许把 localhost 放进正式 `allowedDomains`，除非同时提供审核用 `reasoning` 字段。开发期如果要阻断正式网络域名，`allowedDomains` 必须写成 `["none"]`，不能写空数组。
 
 后续目标命令应覆盖：
 

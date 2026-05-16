@@ -55,6 +55,7 @@ Figma Plugin：
 - 构建时扫描 `dist/main.global.js`，避免残留 Figma sandbox 风险语法。
 - 在 Figma 开发模式加载 `figma-plugin/manifest.json`
 - manifest 中 `localhost` 只能出现在 `networkAccess.devAllowedDomains`
+- manifest 中阻断正式网络访问时使用 `networkAccess.allowedDomains: ["none"]`
 - 运行后点击 `Generate sample design`
 - 当前页面应生成示例 root Frame
 - UI 应显示成功、失败或 warning 列表

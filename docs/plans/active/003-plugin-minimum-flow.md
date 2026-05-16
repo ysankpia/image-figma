@@ -42,6 +42,7 @@
 - 插件构建生成 `dist/main.global.js` 和 `dist/ui.html`。
 - `figma-plugin/manifest.json` 指向正式 UI。
 - `localhost` 只出现在 `networkAccess.devAllowedDomains`。
+- 正式 `networkAccess.allowedDomains` 使用 `["none"]`。
 - UI 可以发送 `render-sample`。
 - Main 可以调用 Renderer 渲染 sample DSL。
 - 渲染成功时 UI 显示节点数和 warning 数。
