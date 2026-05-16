@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展和 M13 text replacement 质量控制。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制和 M14 UI-aware sampling。
 
 ## Prerequisites
 
@@ -147,19 +147,20 @@ curl http://localhost:8000/api/tasks/{taskId}/dsl-patch
 curl http://localhost:8000/api/tasks/{taskId}/text-replacements
 ```
 
-M13 text replacement 默认只记录 decisions 和 quality/application 报告，不改变可见 DSL：
+M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
 
 ```bash
 cd backend
 TEXT_REPLACEMENT_MODE=debug uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-本地 smoke 可显式启用 apply。M13 只会写入通过 quality gate 的 replacement：
+本地 smoke 可显式启用 apply。M14 只会写入通过 UI-aware sampling decision 和 quality gate 的 replacement：
 
 ```bash
 cd backend
 TEXT_REPLACEMENT_MODE=apply \
 TEXT_REPLACEMENT_ENABLE_COLORED_BG=true \
+TEXT_REPLACEMENT_UI_AWARE_SAMPLING=true \
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 

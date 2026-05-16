@@ -99,6 +99,8 @@ Backend API：
 - M13 text replacement 必须给每个 decision 输出 quality/application 字段。
 - M13 apply 只能阻断 high-risk accepted replacement，medium-risk replacement 应记录 caution 但仍可应用。
 - M13 必须覆盖 accepted high-risk 被 quality gate blocked、accepted medium-risk 仍 applied、rejected high risk、region/reason summary，以及首页样例 OCR 已识别但 replacement 拒绝的回归。
+- M14 UI-aware sampling 必须覆盖标准采样仍可用、复杂纹理仍拒绝、badge/status badge rescue、legend 三标签一致 rescue、outline button rescue、card/tip rescue、bottom nav label rescue、关闭 `TEXT_REPLACEMENT_UI_AWARE_SAMPLING` 后回退 M13 行为。
+- M14 decision 必须输出 `strategy.attempts`，`meta.strategySummary` 和 `rescuedFromComplexBackgroundCount` 必须可用于解释 `complex_background` 误杀是否被恢复。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
@@ -115,6 +117,7 @@ PNG cropper / sampler：
 - scanline filter `0..4` 必须可还原。
 - 不支持格式抛出明确异常，由上传链路降级为整图 fallback 或跳过 text replacement。
 - RGB/RGBA PNG pixel decode 和背景采样必须覆盖。
+- M14 局部 edge/dominant background sampling 必须能跳过图例色块、按钮边框和少量文字前景像素。
 
 Visual Primitives：
 

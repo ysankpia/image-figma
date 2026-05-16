@@ -194,7 +194,7 @@ Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
 
 ## text_replacement_results
 
-用途：记录 M13 visible text replacement 文件、模式和状态。
+用途：记录 M14 visible text replacement 文件、模式和状态。
 
 核心字段：
 
@@ -210,7 +210,7 @@ Patch payload 本体写入 `backend/storage/patches/{taskId}.json`。
 - `error_message`
 - `created_at`
 
-Replacement payload 本体写入 `backend/storage/text_replacements/{taskId}.json`。默认 `debug` 只保存 accepted/rejected decisions 和 quality/application 报告；`apply` 把非 high-risk 的 accepted replacement 合并进最终 DSL。SQLite 不单独保存 applied/blocked 计数，这些统计写在 JSON `meta` 中。
+Replacement payload 本体写入 `backend/storage/text_replacements/{taskId}.json`。默认 `debug` 只保存 accepted/rejected decisions、sampling strategy 和 quality/application 报告；`apply` 把非 high-risk 的 accepted replacement 合并进最终 DSL。SQLite 不单独保存 applied/blocked/rescued/strategy 计数，这些统计写在 JSON `meta` 中。
 
 ## model_call_logs
 

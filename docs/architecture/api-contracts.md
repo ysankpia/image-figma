@@ -51,13 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M13 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
+- M14 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR、DSL patch 和 text replacement 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M13 只阻断 high-risk replacement。
+- 上传链路会生成 visual primitives、OCR、DSL patch 和 text replacement 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy，用于解释 badge、legend、button、card/tip 和 bottom nav 文本是否从 `complex_background` 误杀中恢复。
 
 `GET /api/tasks/{taskId}`
 
@@ -72,7 +72,7 @@ http://localhost:8000/api
 - 默认 `DSL_PATCH_MODE=debug` 时返回 enhanced DSL，包含 hidden `candidate_text`。
 - `DSL_PATCH_MODE=off` 时返回 M7 base DSL。
 - patch build 或 validation 失败时返回 base DSL。
-- `TEXT_REPLACEMENT_MODE=apply` 时可额外包含 `text_replacement_cover` 和 `visible_text_replacement`；只有通过 M13 quality gate 的 replacement 会进入 DSL，replacement 失败时回退 M10/M9 输出。
+- `TEXT_REPLACEMENT_MODE=apply` 时可额外包含 `text_replacement_cover` 和 `visible_text_replacement`；只有通过 M13/M14 decision 和 quality gate 的 replacement 会进入 DSL，replacement 失败时回退 M10/M9 输出。
 
 `GET /api/tasks/{taskId}/primitives`
 
@@ -103,12 +103,12 @@ http://localhost:8000/api
 
 `GET /api/tasks/{taskId}/text-replacements`
 
-- 用途：获取 M13 visible text replacement decisions 和质量门禁结果。
+- 用途：获取 M14 visible text replacement decisions、sampling strategy 和质量门禁结果。
 - 只读调试接口，不被插件主流程依赖。
 - task 不存在返回 `TASK_NOT_FOUND`。
 - replacement result 不存在返回 `TEXT_REPLACEMENT_NOT_FOUND`。
 - replacement failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- decisions 可包含 `background`、`foreground`、`sourceOcrBlockIds`、`quality` 和 `application` 调试字段，用于解释彩色背景替换、OCR block 合并、风险等级和 apply 阻断原因。
+- decisions 可包含 `background`、`foreground`、`sourceOcrBlockIds`、`strategy`、`quality` 和 `application` 调试字段，用于解释彩色背景替换、OCR block 合并、UI-aware sampling、风险等级和 apply 阻断原因。
 
 `GET /api/assets/{assetId}`
 
@@ -162,7 +162,7 @@ GET /api/tasks/{taskId}/dsl
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M13 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch 或 text-replacements endpoint。
+M14 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch 或 text-replacements endpoint。
 
 ## Optional Endpoints
 

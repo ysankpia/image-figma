@@ -175,12 +175,117 @@ def sample_region_background(pixels: PngPixels, bbox: list[int], tolerance: int)
     if x2 <= x1 or y2 <= y1:
         raise UnsupportedPngCropError("Background sample bbox does not intersect image bounds.")
 
-    sample_points = perimeter_points(x1, y1, x2, y2)
-    count = len(sample_points)
+    return sample_points_background(pixels, perimeter_points(x1, y1, x2, y2), tolerance, [x1, y1, x2 - x1, y2 - y1])
+
+
+def sample_rect_edges(
+    pixels: PngPixels,
+    bbox: list[int],
+    *,
+    sides: set[str],
+    inset: int,
+    thickness: int,
+    tolerance: int,
+) -> BackgroundSample:
+    if len(bbox) != 4:
+        raise UnsupportedPngCropError("Edge sample bbox must be [x, y, width, height].")
+    x, y, width, height = [round(value) for value in bbox]
+    x1 = clamp_int(x + inset, 0, pixels.width)
+    y1 = clamp_int(y + inset, 0, pixels.height)
+    x2 = clamp_int(x + width - inset, 0, pixels.width)
+    y2 = clamp_int(y + height - inset, 0, pixels.height)
+    if x2 <= x1 or y2 <= y1:
+        raise UnsupportedPngCropError("Edge sample bbox does not intersect image bounds.")
+
+    points = rect_edge_points(x1, y1, x2, y2, sides=sides, thickness=thickness)
+    return sample_points_background(pixels, points, tolerance, [x1, y1, x2 - x1, y2 - y1])
+
+
+def sample_rect_edges_dominant_background(
+    pixels: PngPixels,
+    bbox: list[int],
+    *,
+    sides: set[str],
+    inset: int,
+    thickness: int,
+    tolerance: int,
+    min_fraction: float = 0.58,
+) -> BackgroundSample:
+    if len(bbox) != 4:
+        raise UnsupportedPngCropError("Dominant edge sample bbox must be [x, y, width, height].")
+    x, y, width, height = [round(value) for value in bbox]
+    x1 = clamp_int(x + inset, 0, pixels.width)
+    y1 = clamp_int(y + inset, 0, pixels.height)
+    x2 = clamp_int(x + width - inset, 0, pixels.width)
+    y2 = clamp_int(y + height - inset, 0, pixels.height)
+    if x2 <= x1 or y2 <= y1:
+        raise UnsupportedPngCropError("Dominant edge sample bbox does not intersect image bounds.")
+    points = rect_edge_points(x1, y1, x2, y2, sides=sides, thickness=thickness)
+    return sample_points_dominant_background(
+        pixels,
+        points,
+        tolerance,
+        [x1, y1, x2 - x1, y2 - y1],
+        min_fraction=min_fraction,
+    )
+
+
+def sample_points_dominant_background(
+    pixels: PngPixels,
+    sample_points: list[tuple[int, int]],
+    tolerance: int,
+    bbox: list[int] | None = None,
+    *,
+    min_fraction: float = 0.58,
+) -> BackgroundSample:
+    valid_points = [
+        (row_index, column)
+        for row_index, column in sample_points
+        if 0 <= row_index < pixels.height and 0 <= column < pixels.width
+    ]
+    if not valid_points:
+        raise UnsupportedPngCropError("Dominant background sample has no valid points.")
+
+    buckets: dict[tuple[int, int, int], list[tuple[int, int]]] = {}
+    for row_index, column in valid_points:
+        row = pixels.rows[row_index]
+        offset = column * 3
+        bucket = (row[offset] // 16, row[offset + 1] // 16, row[offset + 2] // 16)
+        buckets.setdefault(bucket, []).append((row_index, column))
+    dominant_points = max(buckets.values(), key=len)
+    if len(dominant_points) / len(valid_points) < min_fraction:
+        return sample_points_background(pixels, valid_points, tolerance, bbox)
+
+    sample = sample_points_background(pixels, dominant_points, tolerance, bbox)
+    return BackgroundSample(
+        bbox=sample.bbox,
+        color=sample.color,
+        mean_rgb=sample.mean_rgb,
+        max_channel_delta=sample.max_channel_delta,
+        brightness=sample.brightness,
+        confidence=round(min(1, sample.confidence * (len(dominant_points) / len(valid_points))), 3),
+    )
+
+
+def sample_points_background(
+    pixels: PngPixels,
+    sample_points: list[tuple[int, int]],
+    tolerance: int,
+    bbox: list[int] | None = None,
+) -> BackgroundSample:
+    valid_points = [
+        (row_index, column)
+        for row_index, column in sample_points
+        if 0 <= row_index < pixels.height and 0 <= column < pixels.width
+    ]
+    if not valid_points:
+        raise UnsupportedPngCropError("Background sample has no valid points.")
+
+    count = len(valid_points)
     red_sum = 0
     green_sum = 0
     blue_sum = 0
-    for row_index, column in sample_points:
+    for row_index, column in valid_points:
         row = pixels.rows[row_index]
         offset = column * 3
         red_sum += row[offset]
@@ -193,7 +298,7 @@ def sample_region_background(pixels: PngPixels, bbox: list[int], tolerance: int)
         round(blue_sum / count),
     ]
     max_delta = 0
-    for row_index, column in sample_points:
+    for row_index, column in valid_points:
         row = pixels.rows[row_index]
         offset = column * 3
         max_delta = max(
@@ -206,13 +311,45 @@ def sample_region_background(pixels: PngPixels, bbox: list[int], tolerance: int)
     brightness = round((mean_rgb[0] * 0.299) + (mean_rgb[1] * 0.587) + (mean_rgb[2] * 0.114), 3)
     confidence = max(0, min(1, 1 - (max_delta / max(1, tolerance * 2))))
     return BackgroundSample(
-        bbox=[x1, y1, x2 - x1, y2 - y1],
+        bbox=bbox or points_bbox(valid_points),
         color=rgb_to_hex(mean_rgb),
         mean_rgb=mean_rgb,
         max_channel_delta=max_delta,
         brightness=brightness,
         confidence=round(confidence, 3),
     )
+
+
+def rect_edge_points(
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    *,
+    sides: set[str],
+    thickness: int,
+) -> list[tuple[int, int]]:
+    edge_thickness = max(1, min(thickness, max(1, (x2 - x1) // 2), max(1, (y2 - y1) // 2)))
+    points: list[tuple[int, int]] = []
+    normalized_sides = {side.lower() for side in sides}
+    for row_index in range(y1, y2):
+        for column in range(x1, x2):
+            near_top = row_index < y1 + edge_thickness
+            near_bottom = row_index >= y2 - edge_thickness
+            near_left = column < x1 + edge_thickness
+            near_right = column >= x2 - edge_thickness
+            on_top = near_top and ("left" in normalized_sides or not near_left) and ("right" in normalized_sides or not near_right)
+            on_bottom = near_bottom and ("left" in normalized_sides or not near_left) and ("right" in normalized_sides or not near_right)
+            on_left = near_left and ("top" in normalized_sides or not near_top) and ("bottom" in normalized_sides or not near_bottom)
+            on_right = near_right and ("top" in normalized_sides or not near_top) and ("bottom" in normalized_sides or not near_bottom)
+            if (
+                ("top" in normalized_sides and on_top)
+                or ("bottom" in normalized_sides and on_bottom)
+                or ("left" in normalized_sides and on_left)
+                or ("right" in normalized_sides and on_right)
+            ):
+                points.append((row_index, column))
+    return points
 
 
 def rgba_row_to_rgb(row: bytes) -> bytes:
@@ -240,6 +377,14 @@ def perimeter_points(x1: int, y1: int, x2: int, y2: int) -> list[tuple[int, int]
             if row_index < y1 + border or row_index >= y2 - border or column < x1 + border or column >= x2 - border:
                 points.append((row_index, column))
     return points
+
+
+def points_bbox(points: list[tuple[int, int]]) -> list[int]:
+    min_y = min(row_index for row_index, _column in points)
+    max_y = max(row_index for row_index, _column in points)
+    min_x = min(column for _row_index, column in points)
+    max_x = max(column for _row_index, column in points)
+    return [min_x, min_y, max_x - min_x + 1, max_y - min_y + 1]
 
 
 def rgb_to_hex(rgb: list[int]) -> str:

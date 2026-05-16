@@ -157,6 +157,8 @@ M12 在 `TEXT_REPLACEMENT_MODE=apply` 时可追加 `text_replacement_cover` shap
 
 M13 在 M12 decision 后增加 quality gate。`decision=accepted` 且非 high-risk 的 replacement 会进入 DSL；high-risk accepted decision 只保留在 `/text-replacements` 报告里。DSL meta 可包含 `m13_text_replacement_quality_control`、`textReplacementAppliedCount` 和 `textReplacementBlockedCount`。
 
+M14 在 M13 quality gate 前增加 UI-aware sampling。它不改变 DSL 节点形状，只让更多安全的 OCR text candidate 从 `complex_background` 误杀中进入 accepted replacement。`TEXT_REPLACEMENT_MODE=apply` 时仍追加同样的 `text_replacement_cover` shape 和 `visible_text_replacement` text，并在 DSL meta 中可记录 `m14_ui_aware_text_sampling` 和 `textReplacementRescuedCount`。fallback region、hidden candidate text 和 original reference 仍保留。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

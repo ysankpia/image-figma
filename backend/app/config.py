@@ -36,6 +36,9 @@ class Settings:
     text_replacement_min_contrast: int = 90
     text_replacement_edge_sample_padding: int = 4
     text_replacement_text_sample_inset: int = 1
+    text_replacement_ui_aware_sampling: bool = True
+    text_replacement_local_bg_tolerance: int = 24
+    text_replacement_max_rescue_strategies: int = 4
 
 
 def get_settings() -> Settings:
@@ -72,6 +75,9 @@ def get_settings() -> Settings:
         text_replacement_min_contrast=int(os.getenv("TEXT_REPLACEMENT_MIN_CONTRAST", "90")),
         text_replacement_edge_sample_padding=int(os.getenv("TEXT_REPLACEMENT_EDGE_SAMPLE_PADDING", "4")),
         text_replacement_text_sample_inset=int(os.getenv("TEXT_REPLACEMENT_TEXT_SAMPLE_INSET", "1")),
+        text_replacement_ui_aware_sampling=parse_bool(os.getenv("TEXT_REPLACEMENT_UI_AWARE_SAMPLING", "true")),
+        text_replacement_local_bg_tolerance=int(os.getenv("TEXT_REPLACEMENT_LOCAL_BG_TOLERANCE", "24")),
+        text_replacement_max_rescue_strategies=int(os.getenv("TEXT_REPLACEMENT_MAX_RESCUE_STRATEGIES", "4")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

@@ -13,6 +13,7 @@ from app.png_tools import (
     decode_png_pixels,
     plan_regions,
     read_png_metadata,
+    sample_rect_edges,
     sample_region_background,
 )
 from conftest import make_png, png_chunk
@@ -110,6 +111,25 @@ def test_sample_region_background_clamps_bbox_to_bounds() -> None:
     assert sample.bbox == [0, 0, 4, 4]
 
 
+def test_sample_rect_edges_can_ignore_one_side() -> None:
+    rows = []
+    for _row_index in range(8):
+        row = bytearray(bytes((247, 248, 250)) * 12)
+        for column in range(0, 2):
+            offset = column * 3
+            row[offset : offset + 3] = bytes((38, 132, 255))
+        rows.append(bytes(row))
+    png = make_png_from_rows(12, 8, rows)
+    pixels = decode_png_pixels(png)
+
+    all_edges = sample_region_background(pixels, [0, 0, 12, 8], tolerance=18)
+    side_edges = sample_rect_edges(pixels, [0, 0, 12, 8], sides={"top", "bottom", "right"}, inset=2, thickness=1, tolerance=18)
+
+    assert all_edges.max_channel_delta > 18
+    assert side_edges.max_channel_delta == 0
+    assert side_edges.color == "#F7F8FA"
+
+
 def make_rgb_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
     ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     row = b"\x00" + bytes(rgb) * width
@@ -128,6 +148,19 @@ def make_rgba_png(width: int, height: int, rgba: tuple[int, int, int, int]) -> b
     ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     row = b"\x00" + bytes(rgba) * width
     idat_data = zlib.compress(row * height)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            png_chunk(b"IHDR", ihdr_data),
+            png_chunk(b"IDAT", idat_data),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def make_png_from_rows(width: int, height: int, rows: list[bytes]) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    idat_data = zlib.compress(b"".join(b"\x00" + row for row in rows))
     return b"".join(
         [
             b"\x89PNG\r\n\x1a\n",

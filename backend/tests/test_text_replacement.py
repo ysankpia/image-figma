@@ -399,6 +399,227 @@ def test_home_sample_rejected_labels_are_reported_as_ocr_seen_but_not_replaced()
     assert document.meta["reasonSummary"]["complex_background_rejected"] == 8
     assert document.meta["regionSummary"]["preview_card"]["rejected"] == 4
     assert document.meta["regionSummary"]["tip_card"]["rejected"] == 2
+    assert document.meta["strategySummary"]["standard_perimeter_sample"]["rejected"] == 8
+
+
+def test_ui_aware_sampling_rescues_badge_from_complex_standard_sample() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(180, 120, 8, 2, 0, 0, 0)
+    bbox = [52, 58, 76, 24]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_badge",
+        provider="fake",
+        model=None,
+        imageSize={"width": 180, "height": 120},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("badge", "2026级新生", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_badge",
+        image=image,
+        png_data=make_noisy_expanded_text_png(180, 120, bbox, (232, 242, 255), (28, 56, 92)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.strategy is not None
+    assert decision.strategy["name"] == "pill_inner_background_sample"
+    assert decision.strategy["fallbackFrom"] == "standard_perimeter_sample"
+    assert decision.strategy["attempts"][0]["reason"] == "complex_background"
+    assert decision.reason == "solid_light_background"
+    assert document.meta["rescuedFromComplexBackgroundCount"] == 1
+
+
+def test_ui_aware_sampling_rescues_colored_status_badge_with_light_text() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(160, 120, 8, 2, 0, 0, 0)
+    bbox = [52, 58, 56, 24]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_status",
+        provider="fake",
+        model=None,
+        imageSize={"width": 160, "height": 120},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("status", "进行中", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_status",
+        image=image,
+        png_data=make_noisy_expanded_text_png(160, 120, bbox, (28, 132, 88), (255, 255, 255)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.reason == "dark_or_colored_background_light_text"
+    assert decision.strategy is not None
+    assert decision.strategy["name"] == "pill_inner_background_sample"
+    assert decision.foreground is not None
+    assert decision.foreground["color"] == "#FFFFFF"
+
+
+def test_ui_aware_sampling_rescues_legend_labels_consistently_without_covering_swatch() -> None:
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(260, 120, 8, 2, 0, 0, 0)
+    blocks = [
+        OCRBlock("available", "可选", [48, 58, 38, 22], 0.99, "line_1", "block_1"),
+        OCRBlock("selected", "已选", [118, 58, 38, 22], 0.99, "line_1", "block_2"),
+        OCRBlock("disabled", "不可选", [188, 58, 54, 22], 0.99, "line_1", "block_3"),
+    ]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_legend",
+        provider="fake",
+        model=None,
+        imageSize={"width": 260, "height": 120},
+        coordinateSpace="pixel",
+        blocks=blocks,
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_legend",
+        image=image,
+        png_data=make_legend_fixture_png(260, 120, [block.bbox for block in blocks]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    assert [decision.decision for decision in document.decisions] == ["accepted", "accepted", "accepted"]
+    assert {decision.strategy["name"] for decision in document.decisions if decision.strategy is not None} == {
+        "legend_text_side_sample"
+    }
+    assert document.meta["rescuedFromComplexBackgroundCount"] == 3
+    assert document.decisions[0].expandedBBox is not None
+    assert document.decisions[0].expandedBBox[0] == 47
+
+
+def test_ui_aware_sampling_rescues_outline_button_text() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(240, 140, 8, 2, 0, 0, 0)
+    bbox = [66, 70, 110, 24]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_button",
+        provider="fake",
+        model=None,
+        imageSize={"width": 240, "height": 140},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("preview", "预览选床界面", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_button",
+        image=image,
+        png_data=make_noisy_expanded_text_png(240, 140, bbox, (247, 248, 250), (20, 20, 20)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.strategy is not None
+    assert decision.strategy["name"] == "outline_button_text_sample"
+    assert decision.expandedBBox == [64, 68, 114, 28]
+
+
+def test_ui_aware_sampling_rescues_card_tip_text() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(360, 180, 8, 2, 0, 0, 0)
+    bbox = [78, 92, 128, 28]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_tip",
+        provider="fake",
+        model=None,
+        imageSize={"width": 360, "height": 180},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("tip", "温馨提示", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_tip",
+        image=image,
+        png_data=make_noisy_expanded_text_png(360, 180, bbox, (255, 250, 230), (40, 40, 40)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.strategy is not None
+    assert decision.strategy["name"] == "card_local_background_sample"
+
+
+def test_ui_aware_sampling_rescues_bottom_nav_label_without_covering_icon() -> None:
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(180, 1000, 8, 2, 0, 0, 0)
+    bbox = [72, 914, 36, 22]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_nav",
+        provider="fake",
+        model=None,
+        imageSize={"width": 180, "height": 1000},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("mine", "我的", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_nav",
+        image=image,
+        png_data=make_noisy_expanded_text_png(180, 1000, bbox, (247, 248, 250), (80, 80, 80)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.strategy is not None
+    assert decision.strategy["name"] == "bottom_nav_label_sample"
+    assert decision.expandedBBox == [70, 913, 40, 25]
+
+
+def test_ui_aware_sampling_can_be_disabled() -> None:
+    settings = make_settings(text_replacement_mode="debug", text_replacement_ui_aware_sampling=False)
+    image = PngMetadata(180, 120, 8, 2, 0, 0, 0)
+    bbox = [52, 58, 76, 24]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_badge",
+        provider="fake",
+        model=None,
+        imageSize={"width": 180, "height": 120},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("badge", "2026级新生", bbox, 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_badge",
+        image=image,
+        png_data=make_noisy_expanded_text_png(180, 120, bbox, (232, 242, 255), (28, 56, 92)),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "rejected"
+    assert decision.reason == "complex_background"
+    assert decision.strategy is not None
+    assert [attempt["name"] for attempt in decision.strategy["attempts"]] == ["standard_perimeter_sample"]
 
 
 def test_unsupported_png_sampling_skips_replacement() -> None:
@@ -731,6 +952,66 @@ def make_text_fixture_png(
                 offset = column * 3
                 row[offset : offset + 3] = bytes(text_rgb)
     return make_png_from_rows(width, height, 2, [bytes(row) for row in rows])
+
+
+def make_noisy_expanded_text_png(
+    width: int,
+    height: int,
+    bbox: list[int],
+    background_rgb: tuple[int, int, int],
+    text_rgb: tuple[int, int, int],
+) -> bytes:
+    rows = [bytearray(bytes(background_rgb) * width) for _ in range(height)]
+    x, y, region_width, region_height = bbox
+    expanded = [max(0, x - 4), max(0, y - 4), min(width, x + region_width + 4), min(height, y + region_height + 4)]
+    for row_index in range(expanded[1], expanded[3]):
+        row = rows[row_index]
+        for column in range(expanded[0], expanded[2]):
+            if x <= column < x + region_width and y <= row_index < y + region_height:
+                continue
+            value = 255 if (row_index + column) % 2 == 0 else 0
+            offset = column * 3
+            row[offset : offset + 3] = bytes((value, value, value))
+    draw_text_pixels(rows, width, height, bbox, text_rgb)
+    return make_png_from_rows(width, height, 2, [bytes(row) for row in rows])
+
+
+def make_legend_fixture_png(width: int, height: int, bboxes: list[list[int]]) -> bytes:
+    rows = [bytearray(bytes((247, 248, 250)) * width) for _ in range(height)]
+    for bbox in bboxes:
+        x, y, region_width, region_height = bbox
+        for row_index in range(max(0, y - 4), min(height, y + region_height + 4)):
+            row = rows[row_index]
+            for column in range(max(0, x - 4), min(width, x + region_width + 4)):
+                if x <= column < x + region_width and y <= row_index < y + region_height:
+                    continue
+                offset = column * 3
+                if column < x:
+                    row[offset : offset + 3] = bytes((38, 132, 255))
+                else:
+                    value = 255 if (row_index + column) % 2 == 0 else 0
+                    row[offset : offset + 3] = bytes((value, value, value))
+        draw_text_pixels(rows, width, height, bbox, (20, 20, 20))
+    return make_png_from_rows(width, height, 2, [bytes(row) for row in rows])
+
+
+def draw_text_pixels(
+    rows: list[bytearray],
+    width: int,
+    height: int,
+    bbox: list[int],
+    text_rgb: tuple[int, int, int],
+) -> None:
+    x, y, region_width, region_height = bbox
+    x1 = max(0, x + 2)
+    y1 = max(0, y + 2)
+    x2 = min(width, x + region_width - 2)
+    y2 = min(height, y + region_height - 2)
+    for row_index in range(y1, y2):
+        row = rows[row_index]
+        for column in range(x1, x2, 3):
+            offset = column * 3
+            row[offset : offset + 3] = bytes(text_rgb)
 
 
 def make_checker_png(width: int, height: int) -> bytes:

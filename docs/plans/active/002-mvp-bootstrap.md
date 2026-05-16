@@ -21,6 +21,7 @@
 - 接入 OCR boxes + visual primitives -> DSL patch builder。
 - 接入百度 PP-OCRv5 异步 OCR provider。
 - 接入文字替换覆盖率扩展 harness。
+- 接入 UI-aware text replacement sampling。
 - 做样例验收。
 
 不包含：
@@ -47,8 +48,10 @@
 10. 接入 OCR boxes + visual primitives -> DSL patch builder。状态：完成第一版。
 11. 接入百度 PP-OCRv5 异步 OCR provider。状态：完成第一版。
 12. 接入文字替换覆盖率扩展 harness。状态：完成第一版。
-13. 加入更细资产裁切、original reference 和 fallback。
-14. 用固定样例做 MVP 收敛。
+13. 接入 text replacement quality gate。状态：完成第一版。
+14. 接入 UI-aware text replacement sampling，减少 `complex_background` 误杀。状态：完成第一版。
+15. 加入更细资产裁切、original reference 和 fallback。
+16. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -115,6 +118,7 @@
 - `TEXT_REPLACEMENT_MODE=debug/apply`。
 - 低复杂度背景文字 cover/text replacement，包含浅底深字和部分彩色/深色底浅字。
 - text replacement quality gate，包含 applied/blocked/risk/region/reason 报告。
+- UI-aware text replacement sampling，包含 strategy attempts、strategy summary 和 rescued count。
 - 单元测试。
 
 验证命令：

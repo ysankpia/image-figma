@@ -19,6 +19,7 @@
 - 当前低风险可见文字替换计划：[plans/active/011-low-risk-visible-text-replacement.md](plans/active/011-low-risk-visible-text-replacement.md)
 - 当前文字替换覆盖率扩展计划：[plans/active/012-text-replacement-coverage-expansion.md](plans/active/012-text-replacement-coverage-expansion.md)
 - 当前文字替换质量控制计划：[plans/active/013-text-replacement-quality-control.md](plans/active/013-text-replacement-quality-control.md)
+- 当前 UI-aware 文字采样计划：[plans/active/014-ui-aware-text-replacement-sampling.md](plans/active/014-ui-aware-text-replacement-sampling.md)
 
 ## By Task Type
 
@@ -82,6 +83,7 @@
 - M12 文字替换覆盖率扩展决策：[decisions/0014-expand-text-replacement-with-color-sampling-before-components.md](decisions/0014-expand-text-replacement-with-color-sampling-before-components.md)
 - M12 replacement 上限决策：[decisions/0015-raise-text-replacement-max-blocks-default.md](decisions/0015-raise-text-replacement-max-blocks-default.md)
 - M13 文字替换质量门禁决策：[decisions/0016-use-quality-gate-before-formal-text-replacement.md](decisions/0016-use-quality-gate-before-formal-text-replacement.md)
+- M14 UI-aware 文字采样决策：[decisions/0017-use-ui-aware-sampling-before-formal-text-reconstruction.md](decisions/0017-use-ui-aware-sampling-before-formal-text-reconstruction.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

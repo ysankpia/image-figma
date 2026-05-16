@@ -14,6 +14,8 @@ from .png_tools import (
     clamp_int,
     decode_png_pixels,
     rgb_to_hex,
+    sample_rect_edges,
+    sample_rect_edges_dominant_background,
     sample_region_background,
 )
 
@@ -42,6 +44,7 @@ class TextReplacementDecision:
     patches: list[str] = field(default_factory=list)
     quality: dict[str, Any] = field(default_factory=dict)
     application: dict[str, str] = field(default_factory=dict)
+    strategy: dict[str, Any] | None = None
 
 
 @dataclass
@@ -81,6 +84,30 @@ class ReplacementCandidate:
     blockId: str
     source: str
     source_ids: list[str]
+
+
+@dataclass
+class SamplingOutcome:
+    name: str
+    status: Literal["accepted", "rejected"]
+    reason: str
+    expanded_bbox: list[int] | None = None
+    background: BackgroundSample | None = None
+    foreground: ForegroundSample | None = None
+
+    def to_attempt(self) -> dict[str, Any]:
+        attempt: dict[str, Any] = {
+            "name": self.name,
+            "status": self.status,
+            "reason": self.reason,
+        }
+        if self.background is not None:
+            attempt["backgroundMaxChannelDelta"] = self.background.max_channel_delta
+            attempt["backgroundColor"] = self.background.color
+        if self.foreground is not None:
+            attempt["foregroundColor"] = self.foreground.color
+            attempt["foregroundContrast"] = self.foreground.contrast
+        return attempt
 
 
 def normalize_replacement_mode(mode: str) -> str:
@@ -144,6 +171,8 @@ def build_text_replacement_document(
     )
     text_color_estimated = sum(1 for decision in decisions if decision.foreground is not None)
     merged = sum(1 for decision in decisions if len(decision.sourceOcrBlockIds) > 1)
+    strategy_summary = summarize_sampling_strategies(decisions)
+    rescued = count_rescued_from_complex_background(decisions)
     return TextReplacementDocument(
         version="0.1",
         taskId=task_id,
@@ -167,6 +196,9 @@ def build_text_replacement_document(
             "coloredBackgroundAcceptedCount": colored,
             "mergedBlockCount": merged,
             "textColorEstimatedCount": text_color_estimated,
+            "samplingNotes": "ui_aware_text_replacement_sampling",
+            "strategySummary": strategy_summary,
+            "rescuedFromComplexBackgroundCount": rescued,
         },
     )
 
@@ -202,6 +234,9 @@ def build_skipped_document(
             "coloredBackgroundAcceptedCount": 0,
             "mergedBlockCount": 0,
             "textColorEstimatedCount": 0,
+            "samplingNotes": "ui_aware_text_replacement_sampling",
+            "strategySummary": {},
+            "rescuedFromComplexBackgroundCount": 0,
         },
         error={"code": code, "message": message},
     )
@@ -238,6 +273,9 @@ def build_failed_text_replacement_document(
             "coloredBackgroundAcceptedCount": 0,
             "mergedBlockCount": 0,
             "textColorEstimatedCount": 0,
+            "samplingNotes": "ui_aware_text_replacement_sampling",
+            "strategySummary": {},
+            "rescuedFromComplexBackgroundCount": 0,
         },
         error={"code": code, "message": message},
     )
@@ -365,12 +403,217 @@ def evaluate_candidate(
     if not replacement_box_is_safe(candidate.bbox, expanded_bbox):
         return reject(candidate, "replacement_box_unsafe", expanded_bbox)
 
-    try:
-        background = sample_region_background(
+    outcomes = [run_standard_sampling(candidate, pixels, expanded_bbox, settings)]
+    if outcomes[0].status == "accepted":
+        return accept_from_outcome(candidate, outcomes[0], outcomes)
+
+    if settings.text_replacement_ui_aware_sampling and should_try_rescue(outcomes[0]):
+        for sampler in rescue_samplers(candidate, pixels, settings):
+            if len(outcomes) - 1 >= max(0, settings.text_replacement_max_rescue_strategies):
+                break
+            outcome = sampler()
+            if outcome is None:
+                continue
+            outcomes.append(outcome)
+            if outcome.status == "accepted":
+                return accept_from_outcome(candidate, outcome, outcomes)
+
+    return reject_from_outcome(candidate, choose_rejection_outcome(outcomes), outcomes)
+
+
+def run_standard_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    expanded_bbox: list[int],
+    settings: Settings,
+) -> SamplingOutcome:
+    return sample_with_background(
+        name="standard_perimeter_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=expanded_bbox,
+        sample_background=lambda: sample_region_background(
             pixels,
             expanded_bbox,
             settings.text_replacement_solid_bg_tolerance,
-        )
+        ),
+        tolerance=settings.text_replacement_solid_bg_tolerance,
+        settings=settings,
+    )
+
+
+def rescue_samplers(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> list[Any]:
+    return [
+        lambda: run_pill_inner_background_sampling(candidate, pixels, settings),
+        lambda: run_legend_text_side_sampling(candidate, pixels, settings),
+        lambda: run_outline_button_text_sampling(candidate, pixels, settings),
+        lambda: run_card_local_background_sampling(candidate, pixels, settings),
+        lambda: run_bottom_nav_label_sampling(candidate, pixels, settings),
+    ]
+
+
+def run_pill_inner_background_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> SamplingOutcome | None:
+    text = candidate.text.strip()
+    aspect_ratio = candidate.bbox[2] / max(1, candidate.bbox[3])
+    center_y_ratio = (candidate.bbox[1] + (candidate.bbox[3] / 2)) / max(1, pixels.height)
+    if text in {"可选", "已选", "不可选"}:
+        return None
+    if center_y_ratio >= 0.88 and len(text) <= 6:
+        return None
+    if candidate.bbox[2] >= 96 and len(text) >= 4:
+        return None
+    if (len(text) > 8 and candidate.bbox[3] > 36) or aspect_ratio > 4.5:
+        return None
+    cover_bbox = expand_bbox(candidate.bbox, pixels.width, pixels.height, 2)
+    return sample_with_background(
+        name="pill_inner_background_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=cover_bbox,
+        sample_background=lambda: sample_rect_edges(
+            pixels,
+            candidate.bbox,
+            sides={"top", "bottom", "left", "right"},
+            inset=0,
+            thickness=1,
+            tolerance=settings.text_replacement_local_bg_tolerance,
+        ),
+        tolerance=settings.text_replacement_local_bg_tolerance,
+        settings=settings,
+    )
+
+
+def run_legend_text_side_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> SamplingOutcome | None:
+    center_y_ratio = (candidate.bbox[1] + (candidate.bbox[3] / 2)) / max(1, pixels.height)
+    text = candidate.text.strip()
+    if center_y_ratio >= 0.88 or len(text) > 4 or candidate.bbox[3] > 36:
+        return None
+    if text not in {"可选", "已选", "不可选"}:
+        return None
+    cover_bbox = expand_bbox_sides(candidate.bbox, pixels.width, pixels.height, left=1, top=2, right=2, bottom=2)
+    return sample_with_background(
+        name="legend_text_side_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=cover_bbox,
+        sample_background=lambda: sample_rect_edges(
+            pixels,
+            candidate.bbox,
+            sides={"top", "bottom", "right"},
+            inset=0,
+            thickness=2,
+            tolerance=settings.text_replacement_local_bg_tolerance,
+        ),
+        tolerance=settings.text_replacement_local_bg_tolerance,
+        settings=settings,
+    )
+
+
+def run_outline_button_text_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> SamplingOutcome | None:
+    text_length = len(candidate.text.strip())
+    if candidate.bbox[2] < 48 or candidate.bbox[3] < 16 or candidate.bbox[3] > 44 or text_length < 5 or text_length > 12:
+        return None
+    cover_bbox = expand_bbox(candidate.bbox, pixels.width, pixels.height, 2)
+    return sample_with_background(
+        name="outline_button_text_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=cover_bbox,
+        sample_background=lambda: sample_rect_edges_dominant_background(
+            pixels,
+            candidate.bbox,
+            sides={"top", "bottom"},
+            inset=2,
+            thickness=2,
+            tolerance=settings.text_replacement_local_bg_tolerance,
+        ),
+        tolerance=settings.text_replacement_local_bg_tolerance,
+        settings=settings,
+    )
+
+
+def run_card_local_background_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> SamplingOutcome | None:
+    center_y_ratio = (candidate.bbox[1] + (candidate.bbox[3] / 2)) / max(1, pixels.height)
+    if center_y_ratio >= 0.88 or candidate.bbox[3] > 44:
+        return None
+    cover_bbox = expand_bbox_sides(candidate.bbox, pixels.width, pixels.height, left=2, top=2, right=3, bottom=2)
+    return sample_with_background(
+        name="card_local_background_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=cover_bbox,
+        sample_background=lambda: sample_rect_edges_dominant_background(
+            pixels,
+            candidate.bbox,
+            sides={"top", "bottom", "right"},
+            inset=1,
+            thickness=2,
+            tolerance=settings.text_replacement_local_bg_tolerance,
+        ),
+        tolerance=settings.text_replacement_local_bg_tolerance,
+        settings=settings,
+    )
+
+
+def run_bottom_nav_label_sampling(
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    settings: Settings,
+) -> SamplingOutcome | None:
+    center_y = candidate.bbox[1] + (candidate.bbox[3] / 2)
+    if center_y / max(1, pixels.height) < 0.88 or candidate.bbox[3] > 32 or len(candidate.text.strip()) > 6:
+        return None
+    cover_bbox = expand_bbox_sides(candidate.bbox, pixels.width, pixels.height, left=2, top=1, right=2, bottom=2)
+    return sample_with_background(
+        name="bottom_nav_label_sample",
+        candidate=candidate,
+        pixels=pixels,
+        expanded_bbox=cover_bbox,
+        sample_background=lambda: sample_rect_edges_dominant_background(
+            pixels,
+            candidate.bbox,
+            sides={"left", "right"},
+            inset=1,
+            thickness=2,
+            tolerance=settings.text_replacement_local_bg_tolerance,
+        ),
+        tolerance=settings.text_replacement_local_bg_tolerance,
+        settings=settings,
+    )
+
+
+def sample_with_background(
+    *,
+    name: str,
+    candidate: ReplacementCandidate,
+    pixels: PngPixels,
+    expanded_bbox: list[int],
+    sample_background: Any,
+    tolerance: int,
+    settings: Settings,
+) -> SamplingOutcome:
+    try:
+        background = sample_background()
         foreground = sample_text_foreground(
             pixels,
             candidate.bbox,
@@ -378,27 +621,101 @@ def evaluate_candidate(
             max(0, settings.text_replacement_text_sample_inset),
         )
     except UnsupportedPngCropError:
-        return reject(candidate, "png_sampling_unsupported", expanded_bbox)
+        return SamplingOutcome(name=name, status="rejected", reason="png_sampling_unsupported", expanded_bbox=expanded_bbox)
+    return classify_sampling_outcome(name, expanded_bbox, background, foreground, tolerance, settings)
 
-    if background.max_channel_delta > settings.text_replacement_solid_bg_tolerance:
-        return reject(candidate, "complex_background", expanded_bbox, background, foreground)
+
+def classify_sampling_outcome(
+    name: str,
+    expanded_bbox: list[int],
+    background: BackgroundSample,
+    foreground: ForegroundSample | None,
+    tolerance: int,
+    settings: Settings,
+) -> SamplingOutcome:
+    if background.max_channel_delta > tolerance:
+        return SamplingOutcome(name, "rejected", "complex_background", expanded_bbox, background, foreground)
     if foreground is None:
         if background.brightness < 180:
-            return reject(candidate, "dark_background", expanded_bbox, background)
-        return reject(candidate, "text_color_uncertain", expanded_bbox, background)
+            return SamplingOutcome(name, "rejected", "dark_background", expanded_bbox, background)
+        return SamplingOutcome(name, "rejected", "text_color_uncertain", expanded_bbox, background)
     if foreground.contrast < settings.text_replacement_min_contrast:
-        return reject(candidate, "foreground_background_low_contrast", expanded_bbox, background, foreground)
+        return SamplingOutcome(name, "rejected", "foreground_background_low_contrast", expanded_bbox, background, foreground)
 
     if background.brightness >= 180 and foreground.brightness <= 140:
-        return accept(candidate, "solid_light_background", expanded_bbox, background, foreground)
+        return SamplingOutcome(name, "accepted", "solid_light_background", expanded_bbox, background, foreground)
     if settings.text_replacement_enable_colored_bg and foreground.brightness >= 170:
         if background.brightness < 180:
-            return accept(candidate, "dark_or_colored_background_light_text", expanded_bbox, background, foreground)
+            return SamplingOutcome(name, "accepted", "dark_or_colored_background_light_text", expanded_bbox, background, foreground)
         if saturation(background.mean_rgb) >= 35:
-            return accept(candidate, "solid_colored_background", expanded_bbox, background, foreground)
+            return SamplingOutcome(name, "accepted", "solid_colored_background", expanded_bbox, background, foreground)
     if background.brightness < 180:
-        return reject(candidate, "dark_background", expanded_bbox, background, foreground)
-    return reject(candidate, "text_color_uncertain", expanded_bbox, background, foreground)
+        return SamplingOutcome(name, "rejected", "dark_background", expanded_bbox, background, foreground)
+    return SamplingOutcome(name, "rejected", "text_color_uncertain", expanded_bbox, background, foreground)
+
+
+def should_try_rescue(outcome: SamplingOutcome) -> bool:
+    return outcome.reason in {
+        "complex_background",
+        "text_color_uncertain",
+        "foreground_background_low_contrast",
+        "dark_background",
+    }
+
+
+def choose_rejection_outcome(outcomes: list[SamplingOutcome]) -> SamplingOutcome:
+    for reason in ("foreground_background_low_contrast", "text_color_uncertain", "dark_background", "complex_background"):
+        for outcome in reversed(outcomes):
+            if outcome.reason == reason:
+                return outcome
+    return outcomes[-1]
+
+
+def accept_from_outcome(
+    candidate: ReplacementCandidate,
+    outcome: SamplingOutcome,
+    outcomes: list[SamplingOutcome],
+) -> TextReplacementDecision:
+    assert outcome.expanded_bbox is not None
+    assert outcome.background is not None
+    assert outcome.foreground is not None
+    return accept(
+        candidate,
+        outcome.reason,
+        outcome.expanded_bbox,
+        outcome.background,
+        outcome.foreground,
+        build_strategy(outcome, outcomes),
+    )
+
+
+def reject_from_outcome(
+    candidate: ReplacementCandidate,
+    outcome: SamplingOutcome,
+    outcomes: list[SamplingOutcome],
+) -> TextReplacementDecision:
+    return reject(
+        candidate,
+        outcome.reason,
+        outcome.expanded_bbox,
+        outcome.background,
+        outcome.foreground,
+        build_strategy(outcome, outcomes),
+    )
+
+
+def build_strategy(outcome: SamplingOutcome, outcomes: list[SamplingOutcome]) -> dict[str, Any]:
+    strategy: dict[str, Any] = {
+        "name": outcome.name,
+        "fallbackFrom": None,
+        "acceptedBy": "m14_ui_aware_sampling" if outcome.status == "accepted" else None,
+        "attempts": [item.to_attempt() for item in outcomes],
+    }
+    if outcome.name != outcomes[0].name:
+        strategy["fallbackFrom"] = outcomes[0].name
+    if outcome.status == "accepted" and outcome.name == "standard_perimeter_sample":
+        strategy["acceptedBy"] = "standard_perimeter_sample"
+    return strategy
 
 
 def replacement_box_is_safe(bbox: list[int], expanded_bbox: list[int]) -> bool:
@@ -411,6 +728,7 @@ def accept(
     expanded_bbox: list[int],
     background: BackgroundSample,
     foreground: ForegroundSample,
+    strategy: dict[str, Any] | None = None,
 ) -> TextReplacementDecision:
     return TextReplacementDecision(
         ocrBlockId=candidate.id,
@@ -422,6 +740,7 @@ def accept(
         foreground=foreground_to_dict(foreground),
         sourceOcrBlockIds=list(candidate.source_ids),
         patches=[f"cover_{candidate.id}", f"visible_text_{candidate.id}"],
+        strategy=strategy,
     )
 
 
@@ -431,6 +750,7 @@ def reject(
     expanded_bbox: list[int] | None = None,
     background: BackgroundSample | None = None,
     foreground: ForegroundSample | None = None,
+    strategy: dict[str, Any] | None = None,
 ) -> TextReplacementDecision:
     source_ids = list(candidate.source_ids) if isinstance(candidate, ReplacementCandidate) else [candidate.id]
     return TextReplacementDecision(
@@ -443,6 +763,7 @@ def reject(
         foreground=foreground_to_dict(foreground) if foreground else None,
         sourceOcrBlockIds=source_ids,
         patches=[],
+        strategy=strategy,
     )
 
 
@@ -628,12 +949,61 @@ def summarize_quality_reasons(decisions: list[TextReplacementDecision]) -> dict[
     return summary
 
 
+def summarize_sampling_strategies(decisions: list[TextReplacementDecision]) -> dict[str, dict[str, int]]:
+    summary: dict[str, dict[str, int]] = {}
+    for decision in decisions:
+        strategy = decision.strategy or {}
+        for attempt in strategy.get("attempts", []):
+            name = str(attempt.get("name") or "unknown")
+            status = str(attempt.get("status") or "rejected")
+            item = summary.setdefault(name, {"accepted": 0, "rejected": 0})
+            if status == "accepted":
+                item["accepted"] += 1
+            else:
+                item["rejected"] += 1
+    return summary
+
+
+def count_rescued_from_complex_background(decisions: list[TextReplacementDecision]) -> int:
+    rescued = 0
+    for decision in decisions:
+        if decision.decision != "accepted" or decision.strategy is None:
+            continue
+        if decision.strategy.get("name") == "standard_perimeter_sample":
+            continue
+        attempts = decision.strategy.get("attempts", [])
+        if any(
+            attempt.get("name") == "standard_perimeter_sample" and attempt.get("reason") == "complex_background"
+            for attempt in attempts
+        ):
+            rescued += 1
+    return rescued
+
+
 def expand_bbox(bbox: list[int], image_width: int, image_height: int, padding: int) -> list[int]:
     x, y, width, height = bbox
     x1 = max(0, x - padding)
     y1 = max(0, y - padding)
     x2 = min(image_width, x + width + padding)
     y2 = min(image_height, y + height + padding)
+    return [x1, y1, max(1, x2 - x1), max(1, y2 - y1)]
+
+
+def expand_bbox_sides(
+    bbox: list[int],
+    image_width: int,
+    image_height: int,
+    *,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+) -> list[int]:
+    x, y, width, height = bbox
+    x1 = max(0, x - max(0, left))
+    y1 = max(0, y - max(0, top))
+    x2 = min(image_width, x + width + max(0, right))
+    y2 = min(image_height, y + height + max(0, bottom))
     return [x1, y1, max(1, x2 - x1), max(1, y2 - y1)]
 
 
@@ -739,10 +1109,15 @@ def apply_text_replacements(
             quality_flags.append("m12_text_replacement_coverage_expansion")
         if "m13_text_replacement_quality_control" not in quality_flags:
             quality_flags.append("m13_text_replacement_quality_control")
+        if "m14_ui_aware_text_sampling" not in quality_flags:
+            quality_flags.append("m14_ui_aware_text_sampling")
         meta["qualityFlags"] = quality_flags
         meta["textReplacementCount"] = added_count
         meta["textReplacementAppliedCount"] = added_count
         meta["textReplacementBlockedCount"] = blocked_count
+        rescued_count = count_rescued_from_complex_background(document.decisions)
+        if rescued_count:
+            meta["textReplacementRescuedCount"] = rescued_count
         meta["elementCount"] = len(children)
     elif blocked_count:
         meta = next_dsl.setdefault("meta", {})

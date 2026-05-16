@@ -1,6 +1,6 @@
 # Bug: Text replacement rejects OCR labels on low-complexity UI cards
 
-- 状态：open
+- 状态：open，M14 已加入自动化回归保护，仍需真实首页 smoke 后决定是否关闭
 - 创建日期：2026-05-17
 - 影响范围：M12 text replacement coverage
 
@@ -67,16 +67,25 @@ M12 的背景/前景采样仍偏保守。它只接受浅色纯背景或低复杂
 
 ## Fix
 
-未修复。建议放入后续阶段处理：
+M14 已实现第一版修复：
 
-- M13：增加 text replacement 质量控制和区域级回退/开关，先让这类 rejected case 可观测、可批量比较。
-- M14+：改进 text replacement 采样策略，例如基于 OCR bbox 周边局部边缘采样、pill/badge 背景估计、图例文本与色块分离、提示卡片内文字的局部背景估计。
+- 标准 `standard_perimeter_sample` 仍先运行。
+- 当标准采样因 `complex_background` 等可救原因失败时，M14 尝试局部 UI-aware sampling。
+- 新增 `pill_inner_background_sample`、`legend_text_side_sample`、`outline_button_text_sample`、`card_local_background_sample` 和 `bottom_nav_label_sample`。
+- replacement document 增加 `strategy.attempts` 和 `meta.strategySummary`，能解释某个 OCR block 是被 rescue 还是继续 rejected。
 
-不要在 M12 直接放宽 `complex_background`，否则会增加双层文字、遮盖图标和误盖插画的风险。
+M14 没有全局放宽 `TEXT_REPLACEMENT_SOLID_BG_TOLERANCE`，避免把真正复杂背景也放进可见替换。
 
 ## Regression Guard
 
-后续修复时必须用该首页样例回归，至少检查：
+M14 已增加合成 PNG 自动回归，覆盖：
+
+- badge/status badge 从标准 `complex_background` 中被 rescue。
+- `可选`、`已选`、`不可选` 三个图例文字一致处理。
+- outline button、tip/card、bottom nav label 的局部采样。
+- `TEXT_REPLACEMENT_UI_AWARE_SAMPLING=false` 时保持 M13 行为。
+
+真实首页样例仍需手动 smoke，至少检查：
 
 - 上述 OCR block 仍能被 PP-OCRv5 识别。
 - `男生`、`2026级新生`、`可视化选床，像高铁选座一样直观`、`温馨提示` 和提示正文至少部分进入 accepted replacement。
@@ -85,7 +94,7 @@ M12 的背景/前景采样仍偏保守。它只接受浅色纯背景或低复杂
 
 ## Validation Evidence
 
-2026-05-17 本地检查：
+2026-05-17 M12/M13 本地检查：
 
 ```bash
 jq -r '.blocks[] | [.id,.text, (.bbox|join(",")), (.confidence|tostring)] | @tsv' \
@@ -96,6 +105,14 @@ jq -r '.decisions[] | [.ocrBlockId,.decision,.reason, (.bbox|join(","))] | @tsv'
 ```
 
 结果显示 OCR completed，`block_count=38`；text replacement completed，`accepted_count=26`，`rejected_count=12`，其中 `complex_background=10`。
+
+2026-05-17 M14 自动化回归：
+
+```bash
+cd backend && uv run pytest tests/test_png_tools.py tests/test_text_replacement.py -q
+```
+
+结果：34 passed。真实百度首页 smoke 待运行后补充 taskId 和决策统计。
 
 ## Prevention Notes
 
