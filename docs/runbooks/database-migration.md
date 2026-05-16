@@ -1,14 +1,17 @@
 # 数据库迁移
 
-v0.1 默认 SQLite。当前仓库尚未实现数据库。
+v0.1 默认 SQLite。M4 后端已实现本地 SQLite 初始化。
 
 ## Current State
 
-无数据库文件、无迁移脚本、无 ORM。
+- 数据库路径默认：`backend/storage/app.db`。
+- schema 在 `backend/app/database.py` 中通过 `CREATE TABLE IF NOT EXISTS` 初始化。
+- 当前没有 ORM。
+- 当前没有独立迁移脚本。
 
 ## Future Rules
 
-后续引入数据库后：
+后续 schema 变化：
 
 - schema 变化必须更新 [../architecture/data-model.md](../architecture/data-model.md)。
 - 迁移必须可重复执行。

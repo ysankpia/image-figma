@@ -4,12 +4,15 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 
 ## Tables
 
-建议表：
+M4 已实现表：
 
 - `tasks`
 - `assets`
 - `dsl_results`
 - `error_logs`
+
+后续建议表：
+
 - `model_call_logs`
 
 可选表：
@@ -25,13 +28,12 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `id`
 - `status`
 - `stage`
+- `progress`
+- `message`
 - `original_filename`
 - `mime_type`
 - `file_size`
-- `width`
-- `height`
 - `upload_path`
-- `quality_flags`
 - `created_at`
 - `updated_at`
 - `completed_at`
@@ -39,11 +41,10 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 
 `status` 枚举：
 
-- `pending`
-- `uploaded`
-- `processing`
 - `completed`
 - `failed`
+
+M4 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -52,6 +53,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 核心字段：
 
 - `id`
+- `asset_id`
 - `task_id`
 - `role`
 - `path`
@@ -59,7 +61,6 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `mime_type`
 - `width`
 - `height`
-- `source_bbox`
 - `created_at`
 
 常见 `role`：
@@ -110,7 +111,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 
 ## model_call_logs
 
-用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。
+用途：记录 OCR/AI 调用摘要，不默认保存完整模型输入输出。M4 不创建该表，因为没有模型调用。
 
 核心字段：
 

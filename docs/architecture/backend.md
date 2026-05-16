@@ -17,7 +17,19 @@
 
 ## Processing Pipeline
 
-v0.1 管线：
+M4 当前管线：
+
+```text
+receive multipart PNG
+-> validate MIME and PNG signature
+-> save original image
+-> create development banner asset
+-> build fake DSL from mobile-home example
+-> save DSL JSON
+-> mark task completed
+```
+
+后续真实 v0.1 管线：
 
 ```text
 load original image
@@ -38,18 +50,23 @@ load original image
 开发阶段使用本地文件存储：
 
 ```text
-storage/
+backend/storage/
   uploads/
   assets/
   dsl/
   logs/
 ```
 
-本轮不创建该目录；这是后续实现目标。
+M4 服务启动或测试运行时会创建这些目录。`backend/storage/` 不进入 git。
 
 ## Task State
 
-任务状态：
+M4 当前只实际写入：
+
+- `completed`
+- `failed`
+
+后续完整任务状态：
 
 - `pending`
 - `uploaded`
@@ -60,6 +77,9 @@ storage/
 任务阶段：
 
 - `upload`
+- `task_lookup`
+- `dsl_lookup`
+- `asset_lookup`
 - `preprocess`
 - `ocr`
 - `ai_analyze`
@@ -89,7 +109,7 @@ OCR / CV 预处理
 
 ## Backend Non-Goals
 
-后端 v0.1 不做：
+M4 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -99,3 +119,6 @@ OCR / CV 预处理
 - Redis 缓存。
 - 微服务拆分。
 - 正式对象存储策略。
+- OCR。
+- AI。
+- 真实裁切。

@@ -36,7 +36,7 @@
 2. 做 DSL Schema、类型、示例 DSL 和校验。状态：完成第一版。
 3. 做 Renderer，用假 DSL 在 Figma 生成 root、text、shape、image。状态：完成第一版。
 4. 做插件最小 UI 和 UI/Main 消息流。状态：完成第一版。
-5. 做后端 `health`、`upload`、`task`、`dsl`、`asset` API，先返回假 DSL。
+5. 做后端 `health`、`upload`、`task`、`dsl`、`asset` API，先返回假 DSL。状态：完成第一版。
 6. 接入真实 PNG -> OCR/AI -> DSL Builder。
 7. 加入资产裁切、original reference 和 fallback。
 8. 用固定样例做 MVP 收敛。
@@ -76,6 +76,9 @@
 - Renderer adapter、P0 元素渲染、warning/error 收集。
 - UI/Main `render-sample` 消息流。
 - Figma 插件 bundle 兼容性扫描。
+- FastAPI 后端假任务流。
+- SQLite `tasks`、`assets`、`dsl_results`、`error_logs`。
+- 本地 `/files/uploads` 和 `/files/assets` 静态文件服务。
 - 单元测试。
 
 验证命令：
@@ -88,4 +91,5 @@ pnpm --filter @image-figma/image-to-figma-renderer run test
 pnpm --filter @image-figma/figma-plugin run build
 pnpm --filter @image-figma/figma-plugin run typecheck
 pnpm run check
+cd backend && uv run pytest
 ```

@@ -71,6 +71,15 @@ Backend API：
 - task 状态可查询。
 - completed 后 DSL 可获取。
 - 未完成任务获取 DSL 返回明确错误。
+- asset 元信息可查询。
+- `/files/uploads/...` 和 `/files/assets/...` 可返回 PNG。
+
+当前命令：
+
+```bash
+cd backend
+uv run pytest
+```
 
 Plugin UI：
 
@@ -127,6 +136,13 @@ Bug 修复必须增加回归保护。优先级：
 
 ```bash
 pnpm run check
+```
+
+后端当前独立验证入口：
+
+```bash
+cd backend
+uv run pytest
 ```
 
 后续应继续扩展到：

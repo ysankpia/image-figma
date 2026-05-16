@@ -51,8 +51,10 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- 成功返回：`taskId`、文件信息、初始状态。
+- M4 成功后立即返回 completed 假任务。
+- 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG 和过大图片。
+- 默认大小上限：10MB。
 
 `GET /api/tasks/{taskId}`
 
@@ -68,7 +70,31 @@ http://localhost:8000/api
 `GET /api/assets/{assetId}`
 
 - 用途：获取资产信息或文件访问。
-- 开发阶段可以返回本地可访问 URL。
+- M4 返回资产元信息，不直接返回文件 bytes。
+- 开发阶段 URL 指向 `/files/uploads/...` 或 `/files/assets/...`。
+- 如果多个任务有同名 `assetId`，M4 返回最新匹配资产。M5 前再决定是否引入 task-scoped asset API。
+
+## Static Files
+
+M4 后端挂载：
+
+```text
+/files/uploads
+/files/assets
+```
+
+DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图片。
+
+## M4 Error Codes
+
+- `INVALID_FILE_TYPE`
+- `FILE_TOO_LARGE`
+- `UPLOAD_FAILED`
+- `TASK_NOT_FOUND`
+- `DSL_NOT_READY`
+- `DSL_NOT_FOUND`
+- `ASSET_NOT_FOUND`
+- `INTERNAL_ERROR`
 
 ## Optional Endpoints
 
