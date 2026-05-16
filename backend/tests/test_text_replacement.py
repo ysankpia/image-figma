@@ -72,6 +72,17 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert replacement["status"] == "completed"
         assert replacement["mode"] == "apply"
         assert replacement["meta"]["acceptedCount"] == 2
+        assert replacement["meta"]["appliedCount"] == 1
+        assert replacement["meta"]["blockedAcceptedCount"] == 1
+        assert replacement["meta"]["qualityNotes"] == "text_replacement_quality_control"
+        first_decision = replacement["decisions"][0]
+        assert first_decision["quality"]["risk"] == "low"
+        assert first_decision["quality"]["applyEligible"] is True
+        assert first_decision["application"] == {"status": "applied", "reason": "quality_gate_passed"}
+        second_decision = replacement["decisions"][1]
+        assert second_decision["quality"]["risk"] == "medium"
+        assert second_decision["quality"]["applyEligible"] is False
+        assert second_decision["application"] == {"status": "blocked", "reason": "quality_gate_blocked"}
 
         dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
         children = {child["id"]: child for child in dsl["root"]["children"]}
@@ -82,6 +93,8 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert "text_ocr_text_001" in children
         assert "cover_ocr_text_001" in children
         assert "visible_text_ocr_text_001" in children
+        assert "cover_ocr_text_002" not in children
+        assert "visible_text_ocr_text_002" not in children
         assert children["cover_ocr_text_001"]["type"] == "shape"
         assert children["cover_ocr_text_001"]["role"] == "text_replacement_cover"
         assert children["visible_text_ocr_text_001"]["type"] == "text"
@@ -89,9 +102,12 @@ def test_text_replacement_apply_adds_cover_and_visible_text(monkeypatch, tmp_pat
         assert children["visible_text_ocr_text_001"]["style"]["visible"] is True
         assert children["visible_text_ocr_text_001"]["style"]["lineHeight"] >= children["visible_text_ocr_text_001"]["style"]["fontSize"]
         assert children["text_ocr_text_001"]["style"]["visible"] is False
-        assert dsl["meta"]["textReplacementCount"] == 2
+        assert dsl["meta"]["textReplacementCount"] == 1
+        assert dsl["meta"]["textReplacementAppliedCount"] == 1
+        assert dsl["meta"]["textReplacementBlockedCount"] == 1
         assert "m11_visible_text_replacements" in dsl["meta"]["qualityFlags"]
         assert "m12_text_replacement_coverage_expansion" in dsl["meta"]["qualityFlags"]
+        assert "m13_text_replacement_quality_control" in dsl["meta"]["qualityFlags"]
 
 
 def test_text_replacement_mode_off_has_no_result(monkeypatch, tmp_path) -> None:
@@ -220,7 +236,119 @@ def test_complex_and_dark_background_are_rejected() -> None:
     )
 
     assert complex_document.decisions[0].reason == "complex_background"
+    assert complex_document.decisions[0].quality["risk"] == "high"
+    assert complex_document.decisions[0].quality["applyEligible"] is False
+    assert complex_document.decisions[0].quality["reasons"] == [
+        "complex_background_rejected",
+        "background_sample_available",
+        "foreground_sample_available",
+    ]
+    assert complex_document.decisions[0].application == {
+        "status": "not_applicable",
+        "reason": "decision_not_accepted",
+    }
     assert dark_document.decisions[0].reason == "dark_background"
+
+
+def test_accepted_hero_region_is_reported_but_blocked_by_quality_gate() -> None:
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(320, 1000, 8, 2, 0, 0, 0)
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_1",
+        provider="fake",
+        model=None,
+        imageSize={"width": 320, "height": 1000},
+        coordinateSpace="pixel",
+        blocks=[OCRBlock("hero_text", "2026级新生", [80, 120, 120, 30], 0.99, "line_1", "block_1")],
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_1",
+        image=image,
+        png_data=make_text_fixture_png(320, 1000, (247, 248, 250), [([80, 120, 120, 30], (20, 20, 20))]),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decision = document.decisions[0]
+    assert decision.decision == "accepted"
+    assert decision.quality["region"] == "hero"
+    assert decision.quality["risk"] == "medium"
+    assert decision.quality["applyEligible"] is False
+    assert "hero_region_caution" in decision.quality["reasons"]
+    assert decision.application == {"status": "blocked", "reason": "quality_gate_blocked"}
+    assert document.meta["acceptedCount"] == 1
+    assert document.meta["appliedCount"] == 0
+    assert document.meta["blockedAcceptedCount"] == 1
+
+    enhanced = apply_text_replacements(
+        {
+            "version": "0.1",
+            "taskId": "task_1",
+            "assets": [],
+            "root": {"id": "root", "type": "frame", "layout": {"x": 0, "y": 0, "width": 320, "height": 1000}, "children": []},
+            "meta": {"qualityFlags": []},
+        },
+        document,
+        ocr,
+    )
+    children = {child["id"]: child for child in enhanced["root"]["children"]}
+    assert "cover_hero_text" not in children
+    assert "visible_text_hero_text" not in children
+    assert enhanced["meta"]["textReplacementAppliedCount"] == 0
+    assert enhanced["meta"]["textReplacementBlockedCount"] == 1
+
+
+def test_home_sample_rejected_labels_are_reported_as_ocr_seen_but_not_replaced() -> None:
+    settings = make_settings(text_replacement_mode="debug")
+    image = PngMetadata(941, 1672, 8, 2, 0, 0, 0)
+    blocks = [
+        OCRBlock("ocr_text_004", "男生", [213, 261, 55, 33], 0.999, "line_1", "block_1"),
+        OCRBlock("ocr_text_005", "2026级新生", [310, 263, 128, 30], 0.998, "line_1", "block_2"),
+        OCRBlock("ocr_text_026", "可视化选床，像高铁选座一样直观", [78, 1094, 377, 29], 0.994, "line_2", "block_3"),
+        OCRBlock("ocr_text_029", "可选", [519, 1221, 48, 26], 0.999, "line_3", "block_4"),
+        OCRBlock("ocr_text_030", "已选", [630, 1221, 46, 26], 0.999, "line_3", "block_5"),
+        OCRBlock("ocr_text_031", "不可选", [739, 1221, 65, 26], 0.999, "line_3", "block_6"),
+        OCRBlock("ocr_text_032", "温馨提示", [92, 1320, 129, 30], 0.996, "line_4", "block_7"),
+        OCRBlock("ocr_text_034", "选床确认后将无法自行修改，如需调整请联系辅导员。", [104, 1409, 467, 17], 0.997, "line_5", "block_8"),
+    ]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_home",
+        provider="fake",
+        model=None,
+        imageSize={"width": 941, "height": 1672},
+        coordinateSpace="pixel",
+        blocks=blocks,
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_home",
+        image=image,
+        png_data=make_checker_png(941, 1672),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decisions = {decision.ocrBlockId: decision for decision in document.decisions}
+    assert set(decisions) == {block.id for block in blocks}
+    for block_id in {"ocr_text_004", "ocr_text_005", "ocr_text_026", "ocr_text_029", "ocr_text_031", "ocr_text_032", "ocr_text_034"}:
+        decision = decisions[block_id]
+        assert decision.decision == "rejected"
+        assert decision.reason == "complex_background"
+        assert decision.quality["risk"] == "high"
+        assert decision.quality["applyEligible"] is False
+        assert "complex_background_rejected" in decision.quality["reasons"]
+        assert decision.application == {"status": "not_applicable", "reason": "decision_not_accepted"}
+    assert decisions["ocr_text_026"].quality["region"] == "preview_card"
+    assert decisions["ocr_text_032"].quality["region"] == "tip_card"
+    assert decisions["ocr_text_030"].quality["region"] == "preview_card"
+    assert document.meta["reasonSummary"]["complex_background_rejected"] == 8
+    assert document.meta["regionSummary"]["preview_card"]["rejected"] == 4
+    assert document.meta["regionSummary"]["tip_card"]["rejected"] == 2
 
 
 def test_unsupported_png_sampling_skips_replacement() -> None:
@@ -296,6 +424,9 @@ def test_apply_text_replacements_keeps_existing_children() -> None:
     assert "cover_ocr_1" in children
     assert "visible_text_ocr_1" in children
     assert enhanced["meta"]["textReplacementCount"] == 1
+    assert enhanced["meta"]["textReplacementAppliedCount"] == 1
+    assert enhanced["meta"]["textReplacementBlockedCount"] == 0
+    assert "m13_text_replacement_quality_control" in enhanced["meta"]["qualityFlags"]
 
 
 def test_colored_background_with_light_text_is_accepted() -> None:

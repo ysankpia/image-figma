@@ -114,6 +114,7 @@
 - `GET /api/tasks/{taskId}/text-replacements`。
 - `TEXT_REPLACEMENT_MODE=debug/apply`。
 - 低复杂度背景文字 cover/text replacement，包含浅底深字和部分彩色/深色底浅字。
+- text replacement quality gate，包含 applied/blocked/risk/region/reason 报告。
 - 单元测试。
 
 验证命令：

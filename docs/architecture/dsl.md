@@ -155,6 +155,8 @@ M9 新增 OCR/DSL patch harness。默认 `/api/tasks/{taskId}/dsl` 会包含 hid
 
 M12 在 `TEXT_REPLACEMENT_MODE=apply` 时可追加 `text_replacement_cover` shape 和 `visible_text_replacement` text。它处理低复杂度背景上的 accepted OCR block，支持浅底深字、部分彩色/深色底浅字和保守 block 合并，仍保留 hidden candidate text 和 fallback region。
 
+M13 在 M12 decision 后增加 quality gate。只有 `decision=accepted` 且 `quality.applyEligible=true` 的 replacement 会进入 DSL；被阻断的 accepted decision 只保留在 `/text-replacements` 报告里。DSL meta 可包含 `m13_text_replacement_quality_control`、`textReplacementAppliedCount` 和 `textReplacementBlockedCount`。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

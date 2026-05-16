@@ -17,6 +17,8 @@
 - 当前 OCR/DSL patch 计划：[plans/active/009-ocr-primitive-dsl-patch-harness.md](plans/active/009-ocr-primitive-dsl-patch-harness.md)
 - 当前百度 PP-OCRv5 异步 OCR 计划：[plans/active/010-baidu-ppocrv5-async-ocr-provider.md](plans/active/010-baidu-ppocrv5-async-ocr-provider.md)
 - 当前低风险可见文字替换计划：[plans/active/011-low-risk-visible-text-replacement.md](plans/active/011-low-risk-visible-text-replacement.md)
+- 当前文字替换覆盖率扩展计划：[plans/active/012-text-replacement-coverage-expansion.md](plans/active/012-text-replacement-coverage-expansion.md)
+- 当前文字替换质量控制计划：[plans/active/013-text-replacement-quality-control.md](plans/active/013-text-replacement-quality-control.md)
 
 ## By Task Type
 
@@ -77,6 +79,9 @@
 - M9 DSL patch 决策：[decisions/0011-use-dsl-patch-builder-before-editable-reconstruction.md](decisions/0011-use-dsl-patch-builder-before-editable-reconstruction.md)
 - M10 百度 PP-OCRv5 决策：[decisions/0012-use-baidu-ppocrv5-async-for-real-ocr.md](decisions/0012-use-baidu-ppocrv5-async-for-real-ocr.md)
 - M11 低风险文字替换决策：[decisions/0013-use-low-risk-text-replacement-before-full-editable-reconstruction.md](decisions/0013-use-low-risk-text-replacement-before-full-editable-reconstruction.md)
+- M12 文字替换覆盖率扩展决策：[decisions/0014-expand-text-replacement-with-color-sampling-before-components.md](decisions/0014-expand-text-replacement-with-color-sampling-before-components.md)
+- M12 replacement 上限决策：[decisions/0015-raise-text-replacement-max-blocks-default.md](decisions/0015-raise-text-replacement-max-blocks-default.md)
+- M13 文字替换质量门禁决策：[decisions/0016-use-quality-gate-before-formal-text-replacement.md](decisions/0016-use-quality-gate-before-formal-text-replacement.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

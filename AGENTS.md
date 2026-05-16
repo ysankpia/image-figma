@@ -13,7 +13,7 @@
 ## 项目边界
 
 - 项目名：Image-to-Figma Design。
-- 当前状态：M12 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 后端、插件上传链路、真实 PNG deterministic region fallback DSL、visual primitive contract harness、OCR/DSL patch harness、百度 PP-OCRv5 异步 OCR provider，以及文字替换覆盖率扩展 harness。
+- 当前状态：M13 工程阶段，已完成 DSL Schema、Renderer、Figma 插件静态 UI、FastAPI 后端、插件上传链路、真实 PNG deterministic region fallback DSL、visual primitive contract harness、OCR/DSL patch harness、百度 PP-OCRv5 异步 OCR provider、文字替换覆盖率扩展 harness，以及 text replacement 质量控制。
 - 项目类型：`multi-end-frontend`。
 - 一期目标：单张 PNG 上传后生成 DSL v0.1，并由 Figma Renderer 写入可编辑 Figma 设计稿。
 - 一期硬边界：不做代码生成、Figma Component/Instance、Auto Layout、批量上传、账号、支付、额度、质量看板、多模型平台。
@@ -45,7 +45,7 @@
 - 保持模块边界清楚，不把后端识别、Renderer 和插件 UI 混在一起。
 - 优先小而稳定的实现，不为未来功能提前加抽象。
 - 复杂区域优先 fallback，不能让局部失败拖垮整页生成。
-- M12 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时只对低复杂度背景上的 accepted 文字做可见替换。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策和校验。
+- M13 当前可选接入百度 PP-OCRv5 异步 OCR，并在 `TEXT_REPLACEMENT_MODE=apply` 时只对 quality gate 通过的低风险 accepted 文字做可见替换。AI/OCR 输出不能直接成为 DSL 权威，必须经过合同、决策、质量门禁和校验。
 - 上传主链路默认返回带 hidden `candidate_text` 的 enhanced DSL，但 fallback 视觉输出必须保持稳定。
 - 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。
 

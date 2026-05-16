@@ -47,13 +47,18 @@ M10 OCR/patch result 至少包含：
 
 百度 PP-OCRv5 provider 的 OCR JSON `meta` 还应包含远端 `jobId`、提交耗时、轮询耗时、轮询次数和低置信度过滤数量，方便定位远端耗时和质量问题。
 
-M12 text replacement result 至少包含：
+M13 text replacement result 至少包含：
 
 - `taskId`
 - `mode`
 - `status`
 - `acceptedCount`
 - `rejectedCount`
+- `appliedCount`
+- `blockedAcceptedCount`
+- risk summary
+- region summary
+- reason summary
 - `warningCount`
 - `errorCode`
 - `replacementPath`
@@ -67,7 +72,7 @@ M12 text replacement result 至少包含：
 - AI 调用耗时。
 - primitive extraction 成功/失败数量。
 - DSL patch build 成功/失败数量。
-- text replacement accepted/rejected 数量。
+- text replacement accepted/rejected/applied/blocked 数量。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。

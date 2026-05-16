@@ -40,6 +40,8 @@ class TextReplacementDecision:
     foreground: dict[str, Any] | None = None
     sourceOcrBlockIds: list[str] = field(default_factory=list)
     patches: list[str] = field(default_factory=list)
+    quality: dict[str, Any] = field(default_factory=dict)
+    application: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -126,8 +128,14 @@ def build_text_replacement_document(
             accepted_count += 1
         decisions.append(decision)
 
+    decisions = add_quality_control(decisions, image)
     accepted = sum(1 for decision in decisions if decision.decision == "accepted")
     rejected = sum(1 for decision in decisions if decision.decision == "rejected")
+    applied = sum(1 for decision in decisions if decision.application.get("status") == "applied")
+    blocked = sum(1 for decision in decisions if decision.application.get("status") == "blocked")
+    low_risk = sum(1 for decision in decisions if decision.quality.get("risk") == "low")
+    medium_risk = sum(1 for decision in decisions if decision.quality.get("risk") == "medium")
+    high_risk = sum(1 for decision in decisions if decision.quality.get("risk") == "high")
     colored = sum(
         1
         for decision in decisions
@@ -146,8 +154,16 @@ def build_text_replacement_document(
         warnings=merge_warnings,
         meta={
             "notes": "text_replacement_coverage_expansion",
+            "qualityNotes": "text_replacement_quality_control",
             "acceptedCount": accepted,
             "rejectedCount": rejected,
+            "appliedCount": applied,
+            "blockedAcceptedCount": blocked,
+            "lowRiskCount": low_risk,
+            "mediumRiskCount": medium_risk,
+            "highRiskCount": high_risk,
+            "regionSummary": summarize_quality_regions(decisions),
+            "reasonSummary": summarize_quality_reasons(decisions),
             "coloredBackgroundAcceptedCount": colored,
             "mergedBlockCount": merged,
             "textColorEstimatedCount": text_color_estimated,
@@ -173,8 +189,16 @@ def build_skipped_document(
         warnings=[TextReplacementWarning(code=code, message=message)],
         meta={
             "notes": "text_replacement_coverage_expansion",
+            "qualityNotes": "text_replacement_quality_control",
             "acceptedCount": 0,
             "rejectedCount": 0,
+            "appliedCount": 0,
+            "blockedAcceptedCount": 0,
+            "lowRiskCount": 0,
+            "mediumRiskCount": 0,
+            "highRiskCount": 0,
+            "regionSummary": {},
+            "reasonSummary": {},
             "coloredBackgroundAcceptedCount": 0,
             "mergedBlockCount": 0,
             "textColorEstimatedCount": 0,
@@ -201,8 +225,16 @@ def build_failed_text_replacement_document(
         warnings=[TextReplacementWarning(code=code, message=message)],
         meta={
             "notes": "text_replacement_coverage_expansion",
+            "qualityNotes": "text_replacement_quality_control",
             "acceptedCount": 0,
             "rejectedCount": 0,
+            "appliedCount": 0,
+            "blockedAcceptedCount": 0,
+            "lowRiskCount": 0,
+            "mediumRiskCount": 0,
+            "highRiskCount": 0,
+            "regionSummary": {},
+            "reasonSummary": {},
             "coloredBackgroundAcceptedCount": 0,
             "mergedBlockCount": 0,
             "textColorEstimatedCount": 0,
@@ -414,6 +446,188 @@ def reject(
     )
 
 
+def add_quality_control(decisions: list[TextReplacementDecision], image: PngMetadata) -> list[TextReplacementDecision]:
+    return [with_quality_control(decision, image) for decision in decisions]
+
+
+def with_quality_control(decision: TextReplacementDecision, image: PngMetadata) -> TextReplacementDecision:
+    quality = evaluate_replacement_quality(decision, image)
+    decision.quality = quality
+    if decision.decision != "accepted":
+        decision.application = {"status": "not_applicable", "reason": "decision_not_accepted"}
+    elif quality["applyEligible"]:
+        decision.application = {"status": "applied", "reason": "quality_gate_passed"}
+    else:
+        decision.application = {"status": "blocked", "reason": "quality_gate_blocked"}
+    return decision
+
+
+def evaluate_replacement_quality(decision: TextReplacementDecision, image: PngMetadata) -> dict[str, Any]:
+    region = classify_replacement_region(decision.bbox, image)
+    reasons = quality_reason_codes(decision, region)
+    score = quality_score(decision, reasons)
+    risk = quality_risk(decision, score, reasons)
+    return {
+        "score": score,
+        "risk": risk,
+        "applyEligible": decision.decision == "accepted" and risk == "low",
+        "reasons": reasons,
+        "region": region,
+    }
+
+
+def quality_reason_codes(decision: TextReplacementDecision, region: str) -> list[str]:
+    reasons: list[str] = []
+    if decision.decision != "accepted":
+        reasons.append(f"{decision.reason}_rejected")
+        if decision.background is not None:
+            reasons.append("background_sample_available")
+        if decision.foreground is not None:
+            reasons.append("foreground_sample_available")
+        return reasons
+
+    if decision.background is None or decision.foreground is None:
+        return ["missing_quality_samples"]
+
+    background_confidence = float(decision.background.get("confidence", 0))
+    foreground_contrast = float(decision.foreground.get("contrast", 0))
+    foreground_sample_count = int(decision.foreground.get("sampleCount", 0))
+    contrast_margin = foreground_contrast - 90
+    cover_ratio = replacement_cover_area_ratio(decision)
+
+    if background_confidence >= 0.72:
+        reasons.append("stable_background")
+    else:
+        reasons.append("borderline_background_confidence")
+    if contrast_margin >= 45:
+        reasons.append("strong_contrast_margin")
+    elif contrast_margin >= 20:
+        reasons.append("moderate_contrast_margin")
+    else:
+        reasons.append("low_contrast_margin")
+    if foreground_sample_count >= 12:
+        reasons.append("foreground_sample_sufficient")
+    else:
+        reasons.append("foreground_sample_sparse")
+    if cover_ratio <= 1.9:
+        reasons.append("cover_area_safe")
+    else:
+        reasons.append("large_cover_area")
+    if region in {"hero", "preview_card", "tip_card"}:
+        reasons.append(f"{region}_region_caution")
+    if decision.bbox[1] < 44:
+        reasons.append("near_status_bar")
+
+    if all(
+        reason not in reasons
+        for reason in {
+            "borderline_background_confidence",
+            "low_contrast_margin",
+            "foreground_sample_sparse",
+            "large_cover_area",
+            "hero_region_caution",
+            "preview_card_region_caution",
+            "tip_card_region_caution",
+            "near_status_bar",
+        }
+    ):
+        reasons.append("accepted_low_risk")
+    return reasons
+
+
+def quality_score(decision: TextReplacementDecision, reasons: list[str]) -> int:
+    if decision.decision != "accepted":
+        return 0
+    score = 100
+    penalties = {
+        "missing_quality_samples": 100,
+        "borderline_background_confidence": 30,
+        "low_contrast_margin": 30,
+        "moderate_contrast_margin": 10,
+        "foreground_sample_sparse": 20,
+        "large_cover_area": 25,
+        "hero_region_caution": 20,
+        "preview_card_region_caution": 20,
+        "tip_card_region_caution": 20,
+        "near_status_bar": 30,
+    }
+    for reason in reasons:
+        score -= penalties.get(reason, 0)
+    return max(0, min(100, score))
+
+
+def quality_risk(decision: TextReplacementDecision, score: int, reasons: list[str]) -> str:
+    if decision.decision != "accepted":
+        return "high"
+    high_risk_reasons = {"missing_quality_samples", "low_contrast_margin", "large_cover_area", "near_status_bar"}
+    if any(reason in high_risk_reasons for reason in reasons) or score < 55:
+        return "high"
+    medium_risk_reasons = {
+        "borderline_background_confidence",
+        "foreground_sample_sparse",
+        "hero_region_caution",
+        "preview_card_region_caution",
+        "tip_card_region_caution",
+    }
+    if any(reason in medium_risk_reasons for reason in reasons) or score < 80:
+        return "medium"
+    return "low"
+
+
+def replacement_cover_area_ratio(decision: TextReplacementDecision) -> float:
+    if decision.expandedBBox is None or decision.bbox[2] <= 0 or decision.bbox[3] <= 0:
+        return 999
+    bbox_area = decision.bbox[2] * decision.bbox[3]
+    cover_area = decision.expandedBBox[2] * decision.expandedBBox[3]
+    return cover_area / max(1, bbox_area)
+
+
+def classify_replacement_region(bbox: list[int], image: PngMetadata) -> str:
+    center_y = bbox[1] + (bbox[3] / 2)
+    ratio = center_y / max(1, image.height)
+    if ratio < 0.06:
+        return "header"
+    if ratio < 0.18:
+        return "hero"
+    if ratio < 0.42:
+        return "summary"
+    if ratio < 0.62:
+        return "card_grid"
+    if ratio < 0.78:
+        return "preview_card"
+    if ratio < 0.88:
+        return "tip_card"
+    if ratio >= 0.88:
+        return "bottom_nav"
+    return "unknown"
+
+
+def summarize_quality_regions(decisions: list[TextReplacementDecision]) -> dict[str, dict[str, int]]:
+    summary: dict[str, dict[str, int]] = {}
+    for decision in decisions:
+        region = str(decision.quality.get("region", "unknown"))
+        item = summary.setdefault(region, {"total": 0, "accepted": 0, "applied": 0, "blocked": 0, "rejected": 0})
+        item["total"] += 1
+        if decision.decision == "accepted":
+            item["accepted"] += 1
+        if decision.decision == "rejected":
+            item["rejected"] += 1
+        status = decision.application.get("status")
+        if status == "applied":
+            item["applied"] += 1
+        elif status == "blocked":
+            item["blocked"] += 1
+    return summary
+
+
+def summarize_quality_reasons(decisions: list[TextReplacementDecision]) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for decision in decisions:
+        for reason in decision.quality.get("reasons", []):
+            summary[str(reason)] = summary.get(str(reason), 0) + 1
+    return summary
+
+
 def expand_bbox(bbox: list[int], image_width: int, image_height: int, padding: int) -> list[int]:
     x, y, width, height = bbox
     x1 = max(0, x - padding)
@@ -499,8 +713,12 @@ def apply_text_replacements(
     root = next_dsl.setdefault("root", {})
     children = root.setdefault("children", [])
     added_count = 0
+    blocked_count = 0
     for decision in document.decisions:
         if decision.decision != "accepted":
+            continue
+        if not decision.quality.get("applyEligible", True):
+            blocked_count += 1
             continue
         candidate = candidates.get(decision.ocrBlockId)
         if candidate is None or decision.expandedBBox is None or decision.background is None or decision.foreground is None:
@@ -519,9 +737,21 @@ def apply_text_replacements(
             quality_flags.append("m11_visible_text_replacements")
         if "m12_text_replacement_coverage_expansion" not in quality_flags:
             quality_flags.append("m12_text_replacement_coverage_expansion")
+        if "m13_text_replacement_quality_control" not in quality_flags:
+            quality_flags.append("m13_text_replacement_quality_control")
         meta["qualityFlags"] = quality_flags
         meta["textReplacementCount"] = added_count
+        meta["textReplacementAppliedCount"] = added_count
+        meta["textReplacementBlockedCount"] = blocked_count
         meta["elementCount"] = len(children)
+    elif blocked_count:
+        meta = next_dsl.setdefault("meta", {})
+        quality_flags = list(meta.get("qualityFlags") or [])
+        if "m13_text_replacement_quality_control" not in quality_flags:
+            quality_flags.append("m13_text_replacement_quality_control")
+        meta["qualityFlags"] = quality_flags
+        meta["textReplacementAppliedCount"] = 0
+        meta["textReplacementBlockedCount"] = blocked_count
     return next_dsl
 
 
