@@ -2,7 +2,9 @@
 
 本目录记录 shipped bug、根因、修复和回归保护。
 
-当前项目还没有代码实现，因此没有 bug 记录。
+当前 open bug：
+
+- [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别的 UI 文本仍判为 `complex_background`。
 
 ## Structure
 
