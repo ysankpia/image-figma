@@ -72,6 +72,8 @@ M14 已实现第一版修复：
 - 标准 `standard_perimeter_sample` 仍先运行。
 - 当标准采样因 `complex_background` 等可救原因失败时，M14 尝试局部 UI-aware sampling。
 - 新增 `pill_inner_background_sample`、`legend_text_side_sample`、`outline_button_text_sample`、`card_local_background_sample` 和 `bottom_nav_label_sample`。
+- M14 fix 补充了浅色背景彩色文字接受路径，解决 `温馨提示` 这类橙色标题被判 `text_color_uncertain`。
+- M14 fix 让 quality gate 读取局部 strategy evidence，稳定的 M14 rescue 不会仅因 `hero/preview/tip` 区域 caution 被阻断。
 - replacement document 增加 `strategy.attempts` 和 `meta.strategySummary`，能解释某个 OCR block 是被 rescue 还是继续 rejected。
 
 M14 没有全局放宽 `TEXT_REPLACEMENT_SOLID_BG_TOLERANCE`，避免把真正复杂背景也放进可见替换。
@@ -113,6 +115,14 @@ cd backend && uv run pytest tests/test_png_tools.py tests/test_text_replacement.
 ```
 
 结果：34 passed。真实百度首页 smoke 待运行后补充 taskId 和决策统计。
+
+2026-05-17 M14 fix 本机首页回归：
+
+```bash
+cd backend && uv run pytest tests/test_text_replacement.py::test_home_screenshot_m14_sampling_regression_when_sample_exists -q
+```
+
+结果：1 passed。该回归使用首页 PNG 和百度 OCR 38-block 基准中的关键 bbox，验证 `男生`、`2026级新生`、`可视化选床，像高铁选座一样直观`、`预览选床界面`、`温馨提示`、提示正文和底部 `我的` 均进入 applied。
 
 ## Prevention Notes
 

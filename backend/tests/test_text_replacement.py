@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import struct
 import sys
 import zlib
@@ -351,7 +352,7 @@ def test_accepted_high_risk_replacement_is_reported_but_blocked_by_quality_gate(
     assert enhanced["meta"]["textReplacementBlockedCount"] == 1
 
 
-def test_home_sample_rejected_labels_are_reported_as_ocr_seen_but_not_replaced() -> None:
+def test_home_like_complex_fixture_keeps_strategy_evidence_for_rejections() -> None:
     settings = make_settings(text_replacement_mode="debug")
     image = PngMetadata(941, 1672, 8, 2, 0, 0, 0)
     blocks = [
@@ -392,6 +393,8 @@ def test_home_sample_rejected_labels_are_reported_as_ocr_seen_but_not_replaced()
         assert decision.quality["risk"] == "high"
         assert decision.quality["applyEligible"] is False
         assert "complex_background_rejected" in decision.quality["reasons"]
+        assert decision.strategy is not None
+        assert decision.strategy["attempts"][0]["name"] == "standard_perimeter_sample"
         assert decision.application == {"status": "not_applicable", "reason": "decision_not_accepted"}
     assert decisions["ocr_text_026"].quality["region"] == "preview_card"
     assert decisions["ocr_text_032"].quality["region"] == "tip_card"
@@ -620,6 +623,58 @@ def test_ui_aware_sampling_can_be_disabled() -> None:
     assert decision.reason == "complex_background"
     assert decision.strategy is not None
     assert [attempt["name"] for attempt in decision.strategy["attempts"]] == ["standard_perimeter_sample"]
+
+
+def test_home_screenshot_m14_sampling_regression_when_sample_exists() -> None:
+    sample_path = Path("/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计图/学生端/01_学生端-首页选床活动.png")
+    if not sample_path.exists():
+        return
+    settings = make_settings(text_replacement_mode="apply")
+    image = PngMetadata(941, 1672, 8, 2, 0, 0, 0)
+    blocks = [
+        OCRBlock("ocr_text_004", "男生", [213, 261, 55, 33], 0.9999145269393921, "line_1", "block_1"),
+        OCRBlock("ocr_text_005", "2026级新生", [310, 263, 128, 30], 0.9987850189208984, "line_1", "block_2"),
+        OCRBlock("ocr_text_026", "可视化选床，像高铁选座一样直观", [78, 1094, 377, 29], 0.9940683841705322, "line_2", "block_3"),
+        OCRBlock("ocr_text_028", "预览选床界面", [95, 1205, 139, 30], 0.9985814094543457, "line_3", "block_4"),
+        OCRBlock("ocr_text_032", "温馨提示", [92, 1320, 129, 30], 0.995962381362915, "line_4", "block_5"),
+        OCRBlock("ocr_text_034", "选床确认后将无法自行修改，如需调整请联系辅导员。", [104, 1409, 467, 17], 0.9966685771942139, "line_5", "block_6"),
+        OCRBlock("ocr_text_038", "我的", [743, 1574, 62, 39], 0.9999213218688965, "line_6", "block_7"),
+    ]
+    ocr = OCRDocument(
+        version="0.1",
+        taskId="task_home_real",
+        provider="fake",
+        model=None,
+        imageSize={"width": 941, "height": 1672},
+        coordinateSpace="pixel",
+        blocks=blocks,
+        warnings=[],
+    )
+
+    document = build_text_replacement_document(
+        task_id="task_home_real",
+        image=image,
+        png_data=sample_path.read_bytes(),
+        ocr_document=ocr,
+        settings=settings,
+    )
+
+    decisions = {decision.ocrBlockId: decision for decision in document.decisions}
+    assert decisions["ocr_text_004"].decision == "accepted"
+    assert decisions["ocr_text_004"].application["status"] == "applied"
+    assert decisions["ocr_text_004"].strategy["name"] == "pill_inner_background_sample"
+    assert decisions["ocr_text_005"].decision == "accepted"
+    assert decisions["ocr_text_005"].application["status"] == "applied"
+    assert decisions["ocr_text_005"].strategy["name"] == "pill_inner_background_sample"
+    assert decisions["ocr_text_026"].application["status"] == "applied"
+    assert decisions["ocr_text_028"].application["status"] == "applied"
+    assert decisions["ocr_text_032"].decision == "accepted"
+    assert decisions["ocr_text_032"].reason == "solid_light_background_colored_text"
+    assert decisions["ocr_text_032"].application["status"] == "applied"
+    assert decisions["ocr_text_034"].application["status"] == "applied"
+    assert decisions["ocr_text_038"].decision == "accepted"
+    assert decisions["ocr_text_038"].application["status"] == "applied"
+    assert decisions["ocr_text_038"].strategy["name"] == "bottom_nav_label_sample"
 
 
 def test_unsupported_png_sampling_skips_replacement() -> None:

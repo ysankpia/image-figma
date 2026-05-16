@@ -167,7 +167,8 @@ def build_text_replacement_document(
         1
         for decision in decisions
         if decision.decision == "accepted"
-        and decision.reason in {"solid_colored_background", "dark_or_colored_background_light_text"}
+        and decision.reason
+        in {"solid_colored_background", "dark_or_colored_background_light_text", "solid_light_background_colored_text"}
     )
     text_color_estimated = sum(1 for decision in decisions if decision.foreground is not None)
     merged = sum(1 for decision in decisions if len(decision.sourceOcrBlockIds) > 1)
@@ -468,7 +469,7 @@ def run_pill_inner_background_sampling(
         return None
     if center_y_ratio >= 0.88 and len(text) <= 6:
         return None
-    if candidate.bbox[2] >= 96 and len(text) >= 4:
+    if candidate.bbox[2] >= 160 and len(text) >= 4:
         return None
     if (len(text) > 8 and candidate.bbox[3] > 36) or aspect_ratio > 4.5:
         return None
@@ -478,11 +479,11 @@ def run_pill_inner_background_sampling(
         candidate=candidate,
         pixels=pixels,
         expanded_bbox=cover_bbox,
-        sample_background=lambda: sample_rect_edges(
+        sample_background=lambda: sample_rect_edges_dominant_background(
             pixels,
             candidate.bbox,
             sides={"top", "bottom", "left", "right"},
-            inset=0,
+            inset=1,
             thickness=1,
             tolerance=settings.text_replacement_local_bg_tolerance,
         ),
@@ -581,7 +582,7 @@ def run_bottom_nav_label_sampling(
     settings: Settings,
 ) -> SamplingOutcome | None:
     center_y = candidate.bbox[1] + (candidate.bbox[3] / 2)
-    if center_y / max(1, pixels.height) < 0.88 or candidate.bbox[3] > 32 or len(candidate.text.strip()) > 6:
+    if center_y / max(1, pixels.height) < 0.88 or candidate.bbox[3] > 48 or len(candidate.text.strip()) > 6:
         return None
     cover_bbox = expand_bbox_sides(candidate.bbox, pixels.width, pixels.height, left=2, top=1, right=2, bottom=2)
     return sample_with_background(
@@ -644,6 +645,8 @@ def classify_sampling_outcome(
 
     if background.brightness >= 180 and foreground.brightness <= 140:
         return SamplingOutcome(name, "accepted", "solid_light_background", expanded_bbox, background, foreground)
+    if background.brightness >= 180 and foreground.brightness <= 170 and saturation(foreground.mean_rgb) >= 80:
+        return SamplingOutcome(name, "accepted", "solid_light_background_colored_text", expanded_bbox, background, foreground)
     if settings.text_replacement_enable_colored_bg and foreground.brightness >= 170:
         if background.brightness < 180:
             return SamplingOutcome(name, "accepted", "dark_or_colored_background_light_text", expanded_bbox, background, foreground)
@@ -788,6 +791,11 @@ def evaluate_replacement_quality(decision: TextReplacementDecision, image: PngMe
     reasons = quality_reason_codes(decision, region)
     score = quality_score(decision, reasons)
     risk = quality_risk(decision, score, reasons)
+    if m14_strategy_evidence_is_safe(decision, reasons):
+        if risk == "high":
+            risk = "medium"
+        if "m14_strategy_evidence_safe" not in reasons:
+            reasons.append("m14_strategy_evidence_safe")
     return {
         "score": score,
         "risk": risk,
@@ -838,6 +846,8 @@ def quality_reason_codes(decision: TextReplacementDecision, region: str) -> list
         reasons.append(f"{region}_region_caution")
     if decision.bbox[1] < 44:
         reasons.append("near_status_bar")
+    if m14_strategy_evidence_is_safe(decision, reasons):
+        reasons.append("m14_strategy_evidence_safe")
 
     if all(
         reason not in reasons
@@ -854,6 +864,34 @@ def quality_reason_codes(decision: TextReplacementDecision, region: str) -> list
     ):
         reasons.append("accepted_low_risk")
     return reasons
+
+
+def m14_strategy_evidence_is_safe(decision: TextReplacementDecision, reasons: list[str]) -> bool:
+    if decision.decision != "accepted" or decision.strategy is None:
+        return False
+    if decision.strategy.get("acceptedBy") != "m14_ui_aware_sampling":
+        return False
+    if decision.background is None or decision.foreground is None:
+        return False
+    if (
+        "low_contrast_margin" in reasons
+        and decision.reason != "solid_light_background_colored_text"
+    ) or "large_cover_area" in reasons or "foreground_sample_sparse" in reasons:
+        return False
+    min_contrast = 90 if decision.reason == "solid_light_background_colored_text" else 110
+    if float(decision.foreground.get("contrast", 0)) < min_contrast:
+        return False
+    if int(decision.background.get("maxChannelDelta", 999)) > 24:
+        return False
+    if replacement_cover_area_ratio(decision) > 1.9:
+        return False
+    return decision.strategy.get("name") in {
+        "pill_inner_background_sample",
+        "outline_button_text_sample",
+        "card_local_background_sample",
+        "bottom_nav_label_sample",
+        "legend_text_side_sample",
+    }
 
 
 def quality_score(decision: TextReplacementDecision, reasons: list[str]) -> int:

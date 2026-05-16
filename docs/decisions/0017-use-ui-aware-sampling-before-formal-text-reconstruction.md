@@ -16,6 +16,8 @@ M14 在正式文本重建前增加 UI-aware sampling：
 - 保留标准 perimeter sampling 作为第一策略。
 - 仅在标准策略出现可救失败时尝试局部 rescue。
 - 为 badge、legend、outline button、card/tip 和 bottom nav 文本使用更窄的局部背景采样。
+- 对浅色背景上的彩色文字使用独立接受路径，避免把 `温馨提示` 这类橙色标题误判成 `text_color_uncertain`。
+- quality gate 读取 M14 局部采样证据；当背景稳定、对比足够、cover 安全时，不因粗略 `hero/preview/tip` 区域 caution 单独阻断。
 - 每个 decision 记录 `strategy.attempts`，让 `/text-replacements` 能解释为什么被救回或继续拒绝。
 - 不改 OCR provider、插件协议、Renderer、DSL 节点结构或 SQLite 表。
 
