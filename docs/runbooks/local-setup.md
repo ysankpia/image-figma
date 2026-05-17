@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate 和 M19 local asset slice/simple fill experiment harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness 和 M20 icon candidate extraction/crop harness。
 
 ## Prerequisites
 
@@ -149,6 +149,8 @@ curl http://localhost:8000/api/tasks/{taskId}/text-bindings
 curl http://localhost:8000/api/tasks/{taskId}/component-structures
 curl http://localhost:8000/api/tasks/{taskId}/component-annotations
 curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
+curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
+curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -205,6 +207,20 @@ ASSET_SLICE_GENERATE_FILLED=true
 ```
 
 M19 基于 M18 低风险候选生成 original slice 和可选 filled slice，写入 `backend/storage/assets/{taskId}/slices/`。这些 slice 不进入 DSL `assets`，不会改变 Figma 可见输出。M19 不删除 fallback、不做正式局部替换、不做 AI inpainting、不引入 Pillow/OpenCV，也不做图标、圆形、三角形、五角星或复杂图形重建。
+
+M20 icon candidate extraction 默认开启，生成 `/icon-candidates` 报告和本地 icon PNG，并只更新 DSL 顶层 meta：
+
+```bash
+ICON_CANDIDATE_ENABLED=true
+ICON_CANDIDATE_MIN_CONFIDENCE=0.70
+ICON_CANDIDATE_MAX_CANDIDATES=64
+ICON_CANDIDATE_MIN_SIZE=8
+ICON_CANDIDATE_MAX_SIZE=96
+ICON_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_CANDIDATE_MAX_COMPONENT_AREA_RATIO=0.20
+```
+
+M20 基于 M15-M17 结构索引，在 component 内部找高置信小图标 bbox，并用标准库 PNG 工具裁剪到 `backend/storage/assets/{taskId}/icons/`。这些 icon 不进入 DSL `assets`，不会改变 Figma 可见输出。M20 不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不做可见 icon replacement、不做 AI inpainting、不引入 Pillow/OpenCV，也不做圆形、三角形、五角星或复杂图形重建。
 
 如果要确认完全回退 M7 base DSL：
 
@@ -268,6 +284,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/component-annotations` 默认返回 `status: "completed"`，包含 annotations、groupHints、unannotatedElementIds 或 unresolvedComponentIds。
 - `/api/tasks/{taskId}/layer-separation-candidates` 默认返回 `status: "completed"`，包含 candidates、fallbackContexts、blockedComponentIds 和 meta。
 - `/api/tasks/{taskId}/asset-slice-candidates` 默认返回 `status: "completed"`，包含 slices、blockedComponentIds 和 meta。
+- `/api/tasks/{taskId}/icon-candidates` 默认返回 `status: "completed"`，包含 icons、blockedComponentIds 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

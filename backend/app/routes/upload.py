@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, status
 
 from ..asset_slice import (
+    AssetSliceCandidateDocument,
     AssetSliceStorageAdapter,
     apply_asset_slice_metadata,
     build_asset_slice_document,
@@ -26,6 +27,15 @@ from ..component_structure import (
     apply_component_structure_metadata,
     build_component_structure_document,
     build_failed_component_structure_document,
+)
+from ..icon_candidate import (
+    IconCandidateDocument,
+    IconCandidateStorageAdapter,
+    apply_icon_candidate_metadata,
+    build_failed_icon_candidate_document,
+    build_icon_candidate_document,
+    build_skipped_icon_candidate_document,
+    icon_asset_records,
 )
 from ..database import json_dumps
 from ..dsl_patch import (
@@ -217,13 +227,25 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             annotated_dsl,
             now,
         )
-        final_dsl = save_asset_slice_result(
+        asset_slice_document, sliced_dsl = save_asset_slice_result(
             task_id,
             image,
             data,
             structure_document,
             separation_document,
             separated_dsl,
+            now,
+        )
+        final_dsl = save_icon_candidate_result(
+            task_id,
+            image,
+            data,
+            binding_document,
+            structure_document,
+            annotation_document,
+            separation_document,
+            asset_slice_document,
+            sliced_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -1003,9 +1025,9 @@ def save_asset_slice_result(
     layer_separation_document: LayerSeparationDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[AssetSliceCandidateDocument | None, dict[str, object]]:
     if not state.settings.asset_slice_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -1097,6 +1119,123 @@ def save_asset_slice_result(
             "filled_slice_count": int(document.meta.get("filledSliceCount", 0)),
             "blocked_count": int(document.meta.get("blockedCount", 0)),
             "failed_slice_count": int(document.meta.get("failedSliceCount", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_icon_candidate_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    binding_document: TextPrimitiveBindingDocument,
+    structure_document: ComponentStructureDocument,
+    annotation_document: ComponentAnnotationDocument | None,
+    layer_separation_document: LayerSeparationDocument | None,
+    asset_slice_document: AssetSliceCandidateDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.icon_candidate_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if annotation_document is None:
+            document = build_skipped_icon_candidate_document(
+                task_id=task_id,
+                image=image,
+                code="component_annotation_not_completed",
+                message="Icon candidate extraction skipped because component annotation did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_icon_candidate_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                binding_document=binding_document,
+                structure_document=structure_document,
+                annotation_document=annotation_document,
+                layer_separation_document=layer_separation_document,
+                asset_slice_document=asset_slice_document,
+                dsl=input_dsl,
+                settings=state.settings,
+                storage=IconCandidateStorageAdapter(
+                    assets_root=state.storage.assets_dir,
+                    public_base_url=state.settings.public_base_url,
+                ),
+            )
+            final_dsl = apply_icon_candidate_metadata(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="icon_candidate",
+                    error_code="ICON_CANDIDATE_VALIDATION_FAILED",
+                    message="Icon candidate validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_icon_candidate_document(
+                    task_id=task_id,
+                    image=image,
+                    code="ICON_CANDIDATE_VALIDATION_FAILED",
+                    message="Icon candidate validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_candidate",
+            error_code="ICON_CANDIDATE_FAILED",
+            message="Icon candidate extraction failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_icon_candidate_document(
+            task_id=task_id,
+            image=image,
+            code="ICON_CANDIDATE_FAILED",
+            message="Icon candidate extraction failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_candidate",
+            error_code=document.error["code"] if document.error else "ICON_CANDIDATE_FAILED",
+            message=document.error["message"] if document.error else "Icon candidate extraction failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in icon_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="icon_candidate",
+                error_code="asset_db_insert_failed",
+                message="Icon candidate asset database insert failed.",
+                detail=str(error),
+            )
+
+    icon_path = state.storage.save_icon_candidate(task_id, json_dumps(document.to_dict()))
+    state.database.insert_icon_candidate_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "icon_path": str(icon_path),
+            "icon_count": int(document.meta.get("iconCount", 0)),
+            "cropped_icon_count": int(document.meta.get("croppedIconCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "failed_crop_count": int(document.meta.get("failedCropCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

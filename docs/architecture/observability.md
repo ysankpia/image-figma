@@ -136,6 +136,20 @@ M19 asset slice result 至少包含：
 - `errorCode`
 - `slicePath`
 
+M20 icon candidate result 至少包含：
+
+- `taskId`
+- `status`
+- `iconCount`
+- `croppedIconCount`
+- `blockedCount`
+- `failedCropCount`
+- source summary
+- role summary
+- `warningCount`
+- `errorCode`
+- `iconPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -155,6 +169,9 @@ M19 asset slice result 至少包含：
 - component annotation role 分布和 unresolved component 数量。
 - layer separation candidate/fill/repair/embedded/blocked 数量。
 - layer separation strategy/risk 分布。
+- asset slice original/filled/blocked/failed 数量。
+- icon candidate/cropped/blocked/failed 数量。
+- icon candidate source/role 分布。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -169,7 +186,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。

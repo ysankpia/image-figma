@@ -27,6 +27,7 @@
 - 接入 DSL component annotation/layer naming harness。
 - 接入 component-aware layer separation candidate harness。
 - 接入 local asset slice/simple fill experiment harness。
+- 接入 icon candidate extraction/crop harness。
 - 做样例验收。
 
 不包含：
@@ -60,8 +61,9 @@
 17. 接入 DSL component annotation/layer naming harness，把 M16 结构安全挂回已有 DSL element 的 `name/meta`。状态：完成第一版。
 18. 接入 component-aware layer separation candidate harness，先生成分层策略报告和 simple fill candidate，不改变画布。状态：完成第一版。
 19. 接入 local asset slice/simple fill experiment harness，生成候选 PNG 资产但不改变画布。状态：完成第一版。
-20. 加入 partial fallback replacement 实验，基于 M19 资产做局部替换验证。
-21. 用固定样例做 MVP 收敛。
+20. 接入 icon candidate extraction/crop harness，生成 icon PNG 候选资产但不改变画布。状态：完成第一版。
+21. 加入 visible icon fallback 或 partial fallback replacement 实验，基于 M19/M20 资产做局部替换验证。
+22. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -153,6 +155,12 @@
 - local asset slice candidate 报告，包含 slices、blockedComponentIds 和 original/filled slice 统计。
 - 本地 `assets/{taskId}/slices/*.png` 实验资产。
 - DSL 顶层 M19 meta，且不改任何已有 element 或 DSL assets。
+- IconCandidateDocument v0.1 合同。
+- SQLite `icon_candidate_results`。
+- `GET /api/tasks/{taskId}/icon-candidates`。
+- icon candidate 报告，包含 icons、blockedComponentIds 和 cropped/failed 统计。
+- 本地 `assets/{taskId}/icons/*.png` 候选资产。
+- DSL 顶层 M20 meta，且不改任何已有 element 或 DSL assets。
 - 单元测试。
 
 验证命令：

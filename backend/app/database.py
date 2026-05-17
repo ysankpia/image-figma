@@ -200,6 +200,21 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS icon_candidate_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  icon_path TEXT,
+                  icon_count INTEGER NOT NULL,
+                  cropped_icon_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  failed_crop_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -447,6 +462,28 @@ class Database:
     def get_asset_slice_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM asset_slice_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_icon_candidate_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO icon_candidate_results (
+                  task_id, status, icon_path, icon_count, cropped_icon_count,
+                  blocked_count, failed_crop_count, warning_count, error_code,
+                  error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :icon_path, :icon_count, :cropped_icon_count,
+                  :blocked_count, :failed_crop_count, :warning_count, :error_code,
+                  :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_icon_candidate_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM icon_candidate_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

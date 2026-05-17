@@ -215,7 +215,7 @@ M18 只允许修改 DSL 顶层 `meta`：
 
 M18 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`。M18 不切图、不删除 fallback、不做 AI inpainting、不引入 Pillow/OpenCV、不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做图标、圆形、三角形、五角星或复杂图形重建。
 
-M19 新增 local asset slice candidate harness。它生成独立 `/asset-slice-candidates` 报告，并为 M18 低风险 `image_slice_with_simple_fill_candidate` 生成本地 original slice PNG 和可选 filled slice PNG。M19 只把实验资产写入 storage 和 `assets` 表，供调试和 M20 使用。
+M19 新增 local asset slice candidate harness。它生成独立 `/asset-slice-candidates` 报告，并为 M18 低风险 `image_slice_with_simple_fill_candidate` 生成本地 original slice PNG 和可选 filled slice PNG。M19 只把实验资产写入 storage 和 `assets` 表，供调试和 M20+ 使用。
 
 M19 只允许修改 DSL 顶层 `meta`：
 
@@ -232,6 +232,24 @@ M19 只允许修改 DSL 顶层 `meta`：
 ```
 
 M19 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M19 不做正式局部 fallback 替换，不删除 fallback，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做图标、圆形、三角形、五角星或复杂图形重建。
+
+M20 新增 icon candidate extraction/crop harness。它生成独立 `/icon-candidates` 报告，在 M15-M17 已有结构索引限定的 component 内部寻找高置信小型 icon bbox，并用标准库 PNG 工具生成本地 icon PNG 候选资产。M20 只把 icon PNG 写入 storage 和 `assets` 表，供调试和 M21+ 使用。
+
+M20 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m20_icon_candidate_extraction"],
+    "iconCandidateCount": 12,
+    "iconCroppedAssetCount": 12,
+    "iconBlockedCount": 0,
+    "iconFailedCropCount": 0
+  }
+}
+```
+
+M20 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M20 不做 SVG/icon 语义识别，不做图标库匹配，不做可见 icon replacement，不删除 fallback，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做圆形、三角形、五角星或复杂图形重建。
 
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 

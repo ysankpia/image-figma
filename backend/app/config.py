@@ -55,6 +55,13 @@ class Settings:
     asset_slice_min_confidence: float = 0.70
     asset_slice_max_area_ratio: float = 0.25
     asset_slice_generate_filled: bool = True
+    icon_candidate_enabled: bool = True
+    icon_candidate_min_confidence: float = 0.70
+    icon_candidate_max_candidates: int = 64
+    icon_candidate_min_size: int = 8
+    icon_candidate_max_size: int = 96
+    icon_candidate_foreground_distance: int = 32
+    icon_candidate_max_component_area_ratio: float = 0.20
 
 
 def get_settings() -> Settings:
@@ -110,6 +117,13 @@ def get_settings() -> Settings:
         asset_slice_min_confidence=float(os.getenv("ASSET_SLICE_MIN_CONFIDENCE", "0.70")),
         asset_slice_max_area_ratio=float(os.getenv("ASSET_SLICE_MAX_AREA_RATIO", "0.25")),
         asset_slice_generate_filled=parse_bool(os.getenv("ASSET_SLICE_GENERATE_FILLED", "true")),
+        icon_candidate_enabled=parse_bool(os.getenv("ICON_CANDIDATE_ENABLED", "true")),
+        icon_candidate_min_confidence=float(os.getenv("ICON_CANDIDATE_MIN_CONFIDENCE", "0.70")),
+        icon_candidate_max_candidates=int(os.getenv("ICON_CANDIDATE_MAX_CANDIDATES", "64")),
+        icon_candidate_min_size=int(os.getenv("ICON_CANDIDATE_MIN_SIZE", "8")),
+        icon_candidate_max_size=int(os.getenv("ICON_CANDIDATE_MAX_SIZE", "96")),
+        icon_candidate_foreground_distance=int(os.getenv("ICON_CANDIDATE_FOREGROUND_DISTANCE", "32")),
+        icon_candidate_max_component_area_ratio=float(os.getenv("ICON_CANDIDATE_MAX_COMPONENT_AREA_RATIO", "0.20")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

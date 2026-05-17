@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, and serves local asset URLs.
 
 ## Run
 
@@ -57,6 +57,7 @@ curl http://localhost:8000/api/tasks/{taskId}/component-structures
 curl http://localhost:8000/api/tasks/{taskId}/component-annotations
 curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
+curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 ```
 
 Visible text replacement is debug-only by default:
@@ -117,3 +118,17 @@ ASSET_SLICE_GENERATE_FILLED=true
 ```
 
 It writes `backend/storage/asset_slice_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/slices/`, and exposes `GET /api/tasks/{taskId}/asset-slice-candidates`. M19 consumes M18 layer separation candidates and only slices low-risk component roles that are suitable for future image-slice replacement. It can generate original slice PNGs plus solid-color filled slice PNGs for simple fill candidates. M19 only updates top-level DSL meta and never adds those experimental slices to DSL `assets`, so Figma-visible output stays identical to M18. It does not delete fallback regions, create Figma groups/components, do AI inpainting, introduce Pillow/OpenCV, or reconstruct icons and complex shapes.
+
+M20 icon candidates are enabled by default:
+
+```bash
+ICON_CANDIDATE_ENABLED=true
+ICON_CANDIDATE_MIN_CONFIDENCE=0.70
+ICON_CANDIDATE_MAX_CANDIDATES=64
+ICON_CANDIDATE_MIN_SIZE=8
+ICON_CANDIDATE_MAX_SIZE=96
+ICON_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_CANDIDATE_MAX_COMPONENT_AREA_RATIO=0.20
+```
+
+It writes `backend/storage/icon_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons/`, and exposes `GET /api/tasks/{taskId}/icon-candidates`. M20 consumes M15-M17 structure/index facts plus local PNG pixels to find high-confidence small icon bboxes inside components, then crops icon PNG candidates with the standard-library PNG tools. M20 only updates top-level DSL meta and never adds those icon assets to DSL `assets`, so Figma-visible output stays identical to M19. It does not do SVG/icon semantic recognition, icon library matching, visible icon replacement, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.

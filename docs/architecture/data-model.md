@@ -19,6 +19,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `component_annotation_results`
 - `layer_separation_results`
 - `asset_slice_results`
+- `icon_candidate_results`
 
 后续建议表：
 
@@ -53,7 +54,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M18 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M20 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -84,6 +85,7 @@ M18 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploa
 - `icon`
 - `asset_slice_candidate`
 - `asset_slice_filled_candidate`
+- `asset_icon_candidate`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -95,6 +97,7 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_region_content`：中部 region crop。
 - `asset_region_bottom`：底部 region crop。
 - `asset_slice_*`：M19 生成的实验 slice PNG，只通过 `/asset-slice-candidates` 暴露，不进入 DSL `assets`。
+- `asset_icon_candidate_*`：M20 生成的 icon PNG 候选资产，只通过 `/icon-candidates` 暴露，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -322,6 +325,27 @@ Layer separation payload 本体写入 `backend/storage/layer_separation_candidat
 - `created_at`
 
 Asset slice payload 本体写入 `backend/storage/asset_slice_candidates/{taskId}.json`。它保存 `slices`、`blockedComponentIds` 和统计 meta。生成的 PNG 写入 `backend/storage/assets/{taskId}/slices/`，并以 `asset_slice_candidate` 或 `asset_slice_filled_candidate` role 登记到 `assets` 表。M19 不把这些实验 slice 写入 DSL `assets` 数组，不改变 Figma 可见输出。
+
+## icon_candidate_results
+
+用途：记录 M20 icon candidate extraction 文件和状态。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `icon_path`
+- `icon_count`
+- `cropped_icon_count`
+- `blocked_count`
+- `failed_crop_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Icon candidate payload 本体写入 `backend/storage/icon_candidates/{taskId}.json`。它保存 `icons`、`blockedComponentIds` 和统计 meta。生成的 PNG 写入 `backend/storage/assets/{taskId}/icons/`，并以 `asset_icon_candidate` role 登记到 `assets` 表。M20 不把这些 icon 候选写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
 
 ## model_call_logs
 

@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M19 当前管线：
+M20 当前管线：
 
 ```text
 receive multipart PNG
@@ -40,6 +40,7 @@ receive multipart PNG
 -> annotate existing DSL elements with component/group metadata and layer names
 -> build component-aware layer separation candidates
 -> build local asset slice candidates
+-> build icon candidate crops
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -50,6 +51,7 @@ receive multipart PNG
 -> save component annotation JSON
 -> save layer separation candidate JSON
 -> save asset slice candidate JSON
+-> save icon candidate JSON
 -> mark task completed
 ```
 
@@ -87,7 +89,9 @@ backend/storage/
   component_annotations/
   layer_separation_candidates/
   asset_slice_candidates/
+  icon_candidates/
   assets/{taskId}/slices/
+  assets/{taskId}/icons/
   logs/
 ```
 
@@ -95,12 +99,12 @@ backend/storage/
 
 ## Task State
 
-M19 当前只实际写入：
+M20 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M19 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M20 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -225,9 +229,11 @@ M18 增加 layer separation candidate harness：后端基于 M14 replacement evi
 
 M19 增加 local asset slice candidate harness：后端基于 M18 的低风险 `image_slice_with_simple_fill_candidate` 生成本地 original slice PNG 和可选 filled slice PNG，写入 `backend/storage/assets/{taskId}/slices/` 与 `backend/storage/asset_slice_candidates/{taskId}.json`，并通过 `/api/tasks/{taskId}/asset-slice-candidates` 暴露。M19 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；生成的 PNG 只是实验资产，不进入 Renderer 可见路径。
 
+M20 增加 icon candidate extraction/crop harness：后端基于 M15-M17 的结构索引，在 bottom nav label 上方、shortcut card 文本左侧、tip title 左侧和字段 label 左侧等 component-local search window 中寻找小型前景块，使用 `decode_png_pixels()` 和简单 connected component 找 bbox，再用 `crop_png()` 生成 icon PNG，写入 `backend/storage/assets/{taskId}/icons/` 与 `backend/storage/icon_candidates/{taskId}.json`，并通过 `/api/tasks/{taskId}/icon-candidates` 暴露。M20 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；生成的 PNG 只是候选资产，不进入 Renderer 可见路径。M20 不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不引入 Pillow/OpenCV。
+
 ## Backend Non-Goals
 
-M19 不做：
+M20 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -255,6 +261,9 @@ M19 不做：
 - 图标、头像、圆形、三角形、五角星、复杂图形或组件视觉重建。
 - 通过 component annotation 结果创建真实 Figma group、component 或 Auto Layout。
 - 把 M19 实验 asset slice 写入 DSL `assets`。
+- 把 M20 icon candidate 写入 DSL `assets`。
 - AI inpainting。
 - 引入 Pillow/OpenCV。
-- 图标、圆形、三角形、五角星或复杂图形重建。
+- SVG/icon 语义识别或图标库匹配。
+- 可见 icon replacement。
+- 圆形、三角形、五角星或复杂图形重建。
