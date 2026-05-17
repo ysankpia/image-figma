@@ -57,12 +57,22 @@ from ..icon_gap_candidate import (
     gap_overlay_asset_records,
 )
 from ..icon_placement_plan import (
+    IconPlacementPlanDocument,
     IconPlacementStorageAdapter,
     apply_icon_placement_plan_metadata,
     build_failed_icon_placement_plan_document,
     build_icon_placement_plan_document,
     build_skipped_icon_placement_plan_document,
     placement_overlay_asset_records,
+)
+from ..icon_visible_fallback import (
+    IconVisibleFallbackStorageAdapter,
+    apply_icon_visible_fallback_to_dsl,
+    build_failed_icon_visible_fallback_document,
+    build_icon_visible_fallback_document,
+    build_skipped_icon_visible_fallback_document,
+    validate_icon_visible_fallback_document,
+    visible_fallback_overlay_asset_records,
 )
 from ..database import json_dumps
 from ..dsl_patch import (
@@ -297,7 +307,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             icon_coverage_dsl,
             now,
         )
-        final_dsl = save_icon_placement_plan_result(
+        icon_placement_document, icon_placement_dsl = save_icon_placement_plan_result(
             task_id,
             image,
             data,
@@ -309,6 +319,14 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             icon_coverage_document,
             icon_gap_document,
             icon_gap_dsl,
+            now,
+        )
+        final_dsl = save_icon_visible_fallback_result(
+            task_id,
+            image,
+            data,
+            icon_placement_document,
+            icon_placement_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -1555,9 +1573,9 @@ def save_icon_placement_plan_result(
     icon_gap_document: IconGapCandidateDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[IconPlacementPlanDocument | None, dict[str, object]]:
     if not state.settings.icon_placement_plan_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -1659,6 +1677,124 @@ def save_icon_placement_plan_result(
             "review_required_count": int(document.meta.get("reviewRequiredCount", 0)),
             "blocked_count": int(document.meta.get("blockedCount", 0)),
             "deduped_count": int(document.meta.get("dedupedCount", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_icon_visible_fallback_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    icon_placement_document: IconPlacementPlanDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.icon_visible_fallback_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if icon_placement_document is None or icon_placement_document.status != "completed":
+            document = build_skipped_icon_visible_fallback_document(
+                task_id=task_id,
+                image=image,
+                code="icon_placement_plan_not_completed",
+                message="Icon visible fallback replay skipped because M23 placement plan did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_icon_visible_fallback_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                icon_placement_document=icon_placement_document,
+                dsl=input_dsl,
+                settings=state.settings,
+                storage=IconVisibleFallbackStorageAdapter(
+                    assets_root=state.storage.assets_dir,
+                    public_base_url=state.settings.public_base_url,
+                ),
+            )
+            final_dsl = apply_icon_visible_fallback_to_dsl(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            validation_errors.extend(
+                validate_icon_visible_fallback_document(
+                    document=document,
+                    icon_placement_document=icon_placement_document,
+                    final_dsl=final_dsl,
+                    image=image,
+                )
+            )
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="icon_visible_fallback",
+                    error_code="ICON_VISIBLE_FALLBACK_VALIDATION_FAILED",
+                    message="Icon visible fallback validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_icon_visible_fallback_document(
+                    task_id=task_id,
+                    image=image,
+                    code="ICON_VISIBLE_FALLBACK_VALIDATION_FAILED",
+                    message="Icon visible fallback validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_visible_fallback",
+            error_code="ICON_VISIBLE_FALLBACK_FAILED",
+            message="Icon visible fallback replay failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_icon_visible_fallback_document(
+            task_id=task_id,
+            image=image,
+            code="ICON_VISIBLE_FALLBACK_FAILED",
+            message="Icon visible fallback replay failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_visible_fallback",
+            error_code=document.error["code"] if document.error else "ICON_VISIBLE_FALLBACK_FAILED",
+            message=document.error["message"] if document.error else "Icon visible fallback replay failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in visible_fallback_overlay_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="icon_visible_fallback",
+                error_code="asset_db_insert_failed",
+                message="Icon visible fallback overlay asset database insert failed.",
+                detail=str(error),
+            )
+
+    fallback_path = state.storage.save_icon_visible_fallback(task_id, json_dumps(document.to_dict()))
+    state.database.insert_icon_visible_fallback_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "fallback_path": str(fallback_path),
+            "overlay_asset_id": document.visibleFallbackOverlay.assetId if document.visibleFallbackOverlay else None,
+            "selected_count": int(document.meta.get("selectedCount", 0)),
+            "applied_count": int(document.meta.get("appliedCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "skipped_count": int(document.meta.get("skippedCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

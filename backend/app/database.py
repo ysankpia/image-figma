@@ -269,6 +269,22 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS icon_visible_fallback_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  fallback_path TEXT,
+                  overlay_asset_id TEXT,
+                  selected_count INTEGER NOT NULL,
+                  applied_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  skipped_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -608,6 +624,28 @@ class Database:
     def get_icon_placement_plan_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM icon_placement_plan_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_icon_visible_fallback_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO icon_visible_fallback_results (
+                  task_id, status, fallback_path, overlay_asset_id, selected_count,
+                  applied_count, blocked_count, skipped_count, warning_count,
+                  error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :fallback_path, :overlay_asset_id, :selected_count,
+                  :applied_count, :blocked_count, :skipped_count, :warning_count,
+                  :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_icon_visible_fallback_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM icon_visible_fallback_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

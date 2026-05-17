@@ -683,3 +683,50 @@ def get_task_icon_placement_plan(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/icon-visible-fallback")
+def get_task_icon_visible_fallback(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_icon_visible_fallback_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ICON_VISIBLE_FALLBACK_NOT_FOUND",
+            "Icon visible fallback result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_visible_fallback_lookup",
+            task_id=task_id,
+        )
+
+    fallback_path = Path(result["fallback_path"] or "")
+    if not fallback_path.exists():
+        raise ApiError(
+            "ICON_VISIBLE_FALLBACK_NOT_FOUND",
+            "Icon visible fallback file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_visible_fallback_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(fallback_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "visibleIcons": document.get("visibleIcons", []),
+        "blockedPlacements": document.get("blockedPlacements", []),
+        "visibleFallbackOverlay": document.get("visibleFallbackOverlay"),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

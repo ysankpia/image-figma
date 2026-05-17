@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M23 当前管线：
+M24 当前管线：
 
 ```text
 receive multipart PNG
@@ -44,6 +44,7 @@ receive multipart PNG
 -> build icon coverage audit
 -> build region-guided icon gap candidates
 -> build icon placement plan
+-> optionally replay visible icon fallback
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -58,6 +59,7 @@ receive multipart PNG
 -> save icon coverage audit JSON
 -> save icon gap candidate JSON
 -> save icon placement plan JSON
+-> save icon visible fallback JSON when enabled
 -> mark task completed
 ```
 
@@ -99,6 +101,7 @@ backend/storage/
   icon_coverage_audits/
   icon_gap_candidates/
   icon_placement_plans/
+  icon_visible_fallbacks/
   assets/{taskId}/slices/
   assets/{taskId}/icons/
   assets/{taskId}/icons_gap/
@@ -110,12 +113,12 @@ backend/storage/
 
 ## Task State
 
-M23 当前只实际写入：
+M24 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M23 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M24 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -248,9 +251,11 @@ M22 增加 region-guided icon gap candidate harness：后端基于 M21 missedIco
 
 M23 增加 icon placement plan/layering readiness harness：后端基于 M20 icon candidates、M22 gap icon candidates、M19 slice candidates、M15/M16 引用和当前 DSL collision facts，统一规划 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon，写入 `backend/storage/icon_placement_plans/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`，并通过 `/api/tasks/{taskId}/icon-placement-plan` 暴露。M23 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；futureDslNodeHint 和 overlay 都只是计划/调试信息，不进入 Renderer 可见路径。M23 不裁新 icon，不把 icon 放进画布，不删除 fallback，不做全局 icon detection，不做 Codia 式全量可拖动图层，不做 SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
 
+M24 增加 visible icon fallback replay experiment harness：后端默认不启用 `ICON_VISIBLE_FALLBACK_ENABLED=false`，因为它会改变可见 DSL/Figma 输出。显式开启后，M24 只消费 M23 `needs_fallback_mask` 且低风险的 M20/M22 icon placement，使用 solid background sampling 生成 `icon_fallback_cover` shape，再追加 `visible_icon_fallback` image node，并只把实际使用的 icon asset 追加进 DSL `assets`。M24 写入 `backend/storage/icon_visible_fallbacks/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`，并通过 `/api/tasks/{taskId}/icon-visible-fallback` 暴露。M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不裁新 icon，不做全局 icon detection，不做 Codia 式全量可拖动图层，不做透明 PNG/SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
+
 ## Backend Non-Goals
 
-M23 不做：
+M24 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -282,9 +287,12 @@ M23 不做：
 - 把 M21 overlay 写入 DSL `assets`。
 - 把 M22 gap icon 或 overlay 写入 DSL `assets`。
 - 把 M23 placement plan 或 overlay 写入 DSL `assets`。
-- 把 M20 icon 放进 Figma 可见画布。
-- 把 M22 gap icon 放进 Figma 可见画布。
+- 默认或未经 M24 allowlist/mask 门禁把 M20 icon 放进 Figma 可见画布。
+- 默认或未经 M24 allowlist/mask 门禁把 M22 gap icon 放进 Figma 可见画布。
 - 把 M23 futureDslNodeHint 放进 Figma 可见画布。
+- 默认把 M24 visible icon fallback 打开。
+- 在 M24 处理没拆出来的 icon、M21 missed hints 或 M22 blocked hints。
+- 在 M24 做新的 icon crop。
 - 全局 icon detection。
 - Codia 式全量可拖动图层。
 - SVG/icon semantic recognition 或图标库匹配。
@@ -292,5 +300,5 @@ M23 不做：
 - AI inpainting。
 - 引入 Pillow/OpenCV。
 - SVG/icon 语义识别或图标库匹配。
-- 可见 icon replacement。
+- 全量或默认开启的可见 icon replacement。
 - 圆形、三角形、五角星或复杂图形重建。

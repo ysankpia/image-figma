@@ -51,13 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M23 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
+- M24 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR、DSL patch、text replacement、text binding、component structure、component annotation、layer separation candidate、asset slice candidate、icon candidate、icon coverage audit、icon gap candidate 和 icon placement plan 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy。M15 默认生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 默认生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups；M17 默认生成 component annotation 报告，并只把 M16 结构挂到已有 DSL element 的 `name`/`meta`；M18 默认生成 layer separation candidate 报告，并只追加 DSL 顶层 meta；M19 默认生成本地 asset slice candidate 报告和实验 PNG，并只追加 DSL 顶层 meta；M20 默认生成 icon candidate 报告和 icon PNG，并只追加 DSL 顶层 meta；M21 默认生成 icon coverage audit 报告和 debug overlay，并只追加 DSL 顶层 meta；M22 默认生成 region-guided icon gap candidate 报告、gap icon PNG 和 debug overlay，并只追加 DSL 顶层 meta；M23 默认生成 icon placement plan 报告和 debug overlay，并只追加 DSL 顶层 meta。M15-M23 都不改变 Figma 可见输出。
+- 上传链路会生成 visual primitives、OCR、DSL patch、text replacement、text binding、component structure、component annotation、layer separation candidate、asset slice candidate、icon candidate、icon coverage audit、icon gap candidate 和 icon placement plan 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy。M15 默认生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 默认生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups；M17 默认生成 component annotation 报告，并只把 M16 结构挂到已有 DSL element 的 `name`/`meta`；M18 默认生成 layer separation candidate 报告，并只追加 DSL 顶层 meta；M19 默认生成本地 asset slice candidate 报告和实验 PNG，并只追加 DSL 顶层 meta；M20 默认生成 icon candidate 报告和 icon PNG，并只追加 DSL 顶层 meta；M21 默认生成 icon coverage audit 报告和 debug overlay，并只追加 DSL 顶层 meta；M22 默认生成 region-guided icon gap candidate 报告、gap icon PNG 和 debug overlay，并只追加 DSL 顶层 meta；M23 默认生成 icon placement plan 报告和 debug overlay，并只追加 DSL 顶层 meta。M15-M23 都不改变 Figma 可见输出。M24 默认关闭；显式设置 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后才会追加 `icon_fallback_cover` 和 `visible_icon_fallback` 可见节点，并追加实际使用的 icon asset 到 DSL `assets`。
 
 `GET /api/tasks/{taskId}`
 
@@ -82,6 +82,7 @@ http://localhost:8000/api
 - M21 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m21_icon_coverage_audit`，并写入 `iconCoverageCandidateCount`、`iconCoveragePlacementCount`、`iconCoverageMissedHintCount`、`iconPlacementReadyCount`、`iconPlacementNeedsFallbackCoordinationCount`、`iconPlacementNeedsSliceCoordinationCount`、`iconPlacementBlockedCount`。M21 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
 - M22 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m22_icon_gap_candidates`，并写入 `iconGapCandidateCount`、`iconGapCroppedAssetCount`、`iconGapBlockedCount`、`iconGapFailedCropCount`。M22 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
 - M23 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m23_icon_placement_plan`，并写入 `iconPlacementPlanCount`、`iconPlacementReadyCount`、`iconPlacementNeedsFallbackMaskCount`、`iconPlacementNeedsSliceCoordinationCount`、`iconPlacementNeedsFallbackCoordinationCount`、`iconPlacementReviewRequiredCount`、`iconPlacementBlockedCount`、`iconPlacementDedupedCount`。M23 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
+- M24 默认不生成 result、不修改 DSL。开启 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后，DSL 顶层 `meta` 可追加 `m24_visible_icon_fallback_replay`，并写入 `visibleIconFallbackSelectedCount`、`visibleIconFallbackAppliedCount`、`visibleIconFallbackBlockedCount`、`visibleIconFallbackSkippedCount`。M24 只能 append 实际使用的 icon asset、`icon_fallback_cover` shape 和 `visible_icon_fallback` image node，不能修改任何已有 element 或已有 asset。
 
 `GET /api/tasks/{taskId}/primitives`
 
@@ -200,6 +201,15 @@ http://localhost:8000/api
 - placement plan failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
 - 返回 `placements`、`dedupedIcons`、`blockedIcons`、`placementOverlay`、`warnings` 和 `meta`。`futureDslNodeHint` 只存在于 report，不写入 DSL；`placementOverlay` 不写入 DSL `assets`，不会让 Renderer 创建可见节点。
 
+`GET /api/tasks/{taskId}/icon-visible-fallback`
+
+- 用途：获取 M24 visible icon fallback replay experiment 报告。
+- 只读调试接口，不被插件主流程依赖。
+- task 不存在返回 `TASK_NOT_FOUND`。
+- result 不存在或文件缺失返回 `ICON_VISIBLE_FALLBACK_NOT_FOUND`。
+- visible fallback failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
+- 返回 `visibleIcons`、`blockedPlacements`、`visibleFallbackOverlay`、`warnings` 和 `meta`。默认 `ICON_VISIBLE_FALLBACK_ENABLED=false` 时不生成 result。开启后，`visibleIcons` 对应最终 DSL 中新增的 `icon_fallback_cover` 和 `visible_icon_fallback` 节点。
+
 `GET /api/assets/{assetId}`
 
 - 用途：获取资产信息或文件访问。
@@ -265,6 +275,9 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `ICON_PLACEMENT_PLAN_NOT_FOUND`
 - `ICON_PLACEMENT_PLAN_FAILED`
 - `ICON_PLACEMENT_PLAN_VALIDATION_FAILED`
+- `ICON_VISIBLE_FALLBACK_NOT_FOUND`
+- `ICON_VISIBLE_FALLBACK_FAILED`
+- `ICON_VISIBLE_FALLBACK_VALIDATION_FAILED`
 - `INTERNAL_ERROR`
 
 ## Plugin M5 Usage
@@ -279,7 +292,7 @@ GET /api/tasks/{taskId}/dsl
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M23 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates 或 icon-placement-plan endpoint。
+M24 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan 或 icon-visible-fallback endpoint。
 
 ## Optional Endpoints
 

@@ -120,6 +120,9 @@ Backend API：
 - M22 回归必须保护 M21 missed hint 升级为 header/right/trailing/bottom-nav/shortcut gap icon、M20 icon 不重复裁、visible text/cover/hidden candidate_text 不误裁、状态栏不误裁、field text-stroke blocked、edge-clipped retry/blocked 逻辑和 overlay PNG 可读。
 - M23 icon placement plan 必须覆盖默认生成报告、`ICON_PLACEMENT_PLAN_ENABLED=false` 不生成报告、`/icon-placement-plan` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M23 回归必须保护 M20/M22 icon 去重、fallback 内 icon 标记 `needs_fallback_mask`、M19 slice 内 icon 标记 `needs_slice_coordination`、text/cover/candidate_text 冲突 blocked、ready icon 的 futureDslNodeHint 只存在于 report，以及 overlay PNG 可读。
+- M24 visible icon fallback 必须覆盖 `ICON_VISIBLE_FALLBACK_ENABLED=false` 默认不生成 result 且 DSL 保持 M23 输出、`ICON_VISIBLE_FALLBACK_ENABLED=true` 时生成 `/icon-visible-fallback` 报告并 append DSL nodes/assets、endpoint not found、validation failed 回退 M23 输出。
+- M24 回归必须保护只消费 M23 `needs_fallback_mask` placement、role allowlist、置信度门禁、asset/bbox/text/cover/candidate_text/background blocking、cover node 在 icon node 之前、只追加实际使用的 icon asset、不修改已有 DSL element 或已有 asset。
+- Renderer 必须覆盖 M24 `icon_fallback_cover` shape 和 `visible_icon_fallback` image node，且 imageFill `fit` 能解析。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
@@ -142,6 +145,7 @@ PNG cropper / sampler：
 - M21 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素被染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。
 - M22 gap icon crop 必须覆盖 gap icon PNG 输出，生成资产宽高必须等于 bbox；M22 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素被染色、overlay asset 写入 `assets` 表，PNG decode/crop/overlay 写入失败不能影响 upload completed。
 - M23 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素按 decision 染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。M23 不生成新的 icon PNG。
+- M24 overlay PNG 必须覆盖尺寸等于原图、applied cover/icon 和 blocked bbox 被染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。M24 不生成新的 icon PNG，只复用 M20/M22 asset。
 
 Visual Primitives：
 

@@ -142,6 +142,17 @@ M23 icon placement plan 是可观测的非关键路径：
 - PNG pixel decode unsupported 只记录 warning，不让上传失败。
 - M23 不裁新 icon、不把 icon 放进画布、不删除 fallback、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M24 visible icon fallback replay 是默认关闭的实验路径：
+
+- 默认 `ICON_VISIBLE_FALLBACK_ENABLED=false`，不生成 result，不修改 DSL。
+- 显式开启后，visible fallback failed/skipped 写入 `icon_visible_fallback_results` 和 `error_logs`。
+- visible fallback validation failed 时 `/dsl` 回退 M23 输出，不追加 M24 节点、asset 或 meta。
+- M24 只能 append 新 asset、`icon_fallback_cover` shape 和 `visible_icon_fallback` image node，不能修改任何已有 element 或已有 asset。
+- 单个 placement 不安全时进入 `blockedPlacements`，不影响其他 placement，也不让 upload 失败。
+- overlay 生成或写入失败只记录 warning，不能让 upload 失败。
+- PNG pixel decode unsupported 时保存 skipped document，DSL 保持 M23 输出。
+- M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不裁新 icon、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
+
 整页失败只发生在：
 
 - PNG 无法读取。

@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, optionally runs visible icon fallback replay, and serves local asset URLs.
 
 ## Run
 
@@ -177,3 +177,18 @@ ICON_PLACEMENT_PLAN_MAX_PLACEMENTS=128
 ```
 
 It writes `backend/storage/icon_placement_plans/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-placement-plan`. M23 consumes M20 icon candidates, M22 gap icon candidates, M19 slice candidates and current DSL collision facts to produce a placement plan with dedupe, blocked, fallback-mask, slice-coordination and future DSL node hints. M23 only updates top-level DSL meta and never adds icon nodes or placement overlays to DSL `assets`, so Figma-visible output stays identical to M22. It does not crop new icons, put icons on canvas, remove fallback, do global icon detection, Codia-style all-layer extraction, SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.
+
+M24 visible icon fallback replay is disabled by default because it changes visible DSL/Figma output:
+
+```bash
+ICON_VISIBLE_FALLBACK_ENABLED=false
+ICON_VISIBLE_FALLBACK_MAX_PLACEMENTS=12
+ICON_VISIBLE_FALLBACK_MIN_CONFIDENCE=0.85
+ICON_VISIBLE_FALLBACK_MASK_PADDING=2
+ICON_VISIBLE_FALLBACK_MAX_MASK_SIZE=96
+ICON_VISIBLE_FALLBACK_SOLID_BG_TOLERANCE=28
+ICON_VISIBLE_FALLBACK_ALLOWED_ROLES=nav_icon,header_nav_icon,header_action_icon,leading_icon
+ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED=true
+```
+
+When explicitly enabled, it writes `backend/storage/icon_visible_fallbacks/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-visible-fallback`. M24 consumes only M23 placement plan items that already point to M20/M22 cropped icon assets. It appends `icon_fallback_cover` shape nodes and `visible_icon_fallback` image nodes, and appends only actually used icon assets to DSL `assets`. M24 does not handle missing icons, M21 missed hints, M22 blocked hints, new icon crop, global icon detection, Codia-style all-layer extraction, transparent PNG/SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.

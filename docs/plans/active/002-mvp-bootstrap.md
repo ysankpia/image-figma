@@ -31,6 +31,7 @@
 - 接入 icon coverage audit/placement readiness harness。
 - 接入 region-guided icon gap candidate harness。
 - 接入 icon placement plan/layering readiness harness。
+- 接入 visible icon fallback replay experiment harness。
 - 做样例验收。
 
 不包含：
@@ -68,7 +69,8 @@
 21. 加入 icon coverage audit 和 placement readiness 报告，基于 M20 icon 候选审计覆盖、漏裁和未来放回阻断。状态：完成第一版。
 22. 加入 region-guided icon gap candidate harness，基于 M21 missed hints 和局部 probe 补裁漏裁 icon，但不改变画布。状态：完成第一版。
 23. 加入 icon placement plan/layering readiness harness，基于 M20/M22 资产、M19 slice 和 DSL collision facts 决定后续可见替换边界。状态：完成第一版。
-24. 用固定样例做 MVP 收敛。
+24. 加入 visible icon fallback replay experiment harness，默认关闭；显式开启后只回放 M23 规划的低风险 icon。状态：完成第一版。
+25. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -185,6 +187,12 @@
 - icon placement plan 报告，包含 placements、dedupedIcons、blockedIcons、placementOverlay 和 placement readiness 统计。
 - 本地 `assets/{taskId}/debug/icon_placement_overlay.png` 调试 overlay。
 - DSL 顶层 M23 meta，且不改任何已有 element 或 DSL assets。
+- IconVisibleFallbackDocument v0.1 合同。
+- SQLite `icon_visible_fallback_results`。
+- `GET /api/tasks/{taskId}/icon-visible-fallback`。
+- 默认 `ICON_VISIBLE_FALLBACK_ENABLED=false` 时不生成 M24 result，DSL 保持 M23 输出。
+- 开启 M24 时 append `icon_fallback_cover` shape、`visible_icon_fallback` image node 和实际使用的 icon asset。
+- 本地 `assets/{taskId}/debug/icon_visible_fallback_overlay.png` 调试 overlay。
 - 单元测试。
 
 验证命令：

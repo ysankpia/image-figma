@@ -267,6 +267,21 @@ ICON_PLACEMENT_PLAN_MAX_PLACEMENTS=128
 
 M23 基于 M20/M22 icon assets、M19 slice candidates 和当前 DSL collision facts 规划 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon。overlay 写入 `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`，只画彩色 bbox，不画文字标签。placement plan、futureDslNodeHint 和 overlay 都不进入 DSL `assets`，不会改变 Figma 可见输出。M23 不裁新 icon、不把 icon 放进画布、不删除 fallback、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M24 visible icon fallback replay 默认关闭。它会改变可见 DSL/Figma 输出，只有实验或 smoke 时才显式开启：
+
+```bash
+ICON_VISIBLE_FALLBACK_ENABLED=false
+ICON_VISIBLE_FALLBACK_MAX_PLACEMENTS=12
+ICON_VISIBLE_FALLBACK_MIN_CONFIDENCE=0.85
+ICON_VISIBLE_FALLBACK_MASK_PADDING=2
+ICON_VISIBLE_FALLBACK_MAX_MASK_SIZE=96
+ICON_VISIBLE_FALLBACK_SOLID_BG_TOLERANCE=28
+ICON_VISIBLE_FALLBACK_ALLOWED_ROLES=nav_icon,header_nav_icon,header_action_icon,leading_icon
+ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED=true
+```
+
+开启后，M24 基于 M23 `needs_fallback_mask` placement 小范围回放 M20/M22 已裁出的 nav/header/leading icon。它会 append `icon_fallback_cover` shape、`visible_icon_fallback` image node，并只把实际使用的 icon asset 追加进 DSL `assets`。M24 写入 `backend/storage/icon_visible_fallbacks/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`，通过 `/api/tasks/{taskId}/icon-visible-fallback` 查询。M24 不处理没拆出来的 icon、不补 M21 missed hints、不处理 M22 blocked hints、不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash

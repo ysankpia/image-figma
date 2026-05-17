@@ -182,6 +182,40 @@ M22 icon gap candidate result 至少包含：
 - `errorCode`
 - `gapPath`
 
+M23 icon placement plan result 至少包含：
+
+- `taskId`
+- `status`
+- `placementCount`
+- `readyCount`
+- `needsFallbackMaskCount`
+- `needsSliceCoordinationCount`
+- `needsFallbackCoordinationCount`
+- `reviewRequiredCount`
+- `blockedCount`
+- `dedupedCount`
+- decision summary
+- role summary
+- `overlayAssetId`
+- `warningCount`
+- `errorCode`
+- `planPath`
+
+M24 visible icon fallback result 至少包含：
+
+- `taskId`
+- `status`
+- `selectedCount`
+- `appliedCount`
+- `blockedCount`
+- `skippedCount`
+- role summary
+- blocked reason summary
+- `overlayAssetId`
+- `warningCount`
+- `errorCode`
+- `fallbackPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -208,6 +242,8 @@ M22 icon gap candidate result 至少包含：
 - icon coverage source/hint 分布。
 - icon gap candidate/cropped/blocked/failed 数量。
 - icon gap source/blocked reason 分布。
+- icon placement plan ready/fallback-mask/slice/blocked/deduped 数量。
+- icon visible fallback selected/applied/blocked/skipped 数量。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -222,7 +258,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> icon_visible_fallback -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -251,6 +287,8 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - icon gap overlay PNG。
 - icon placement plan JSON。
 - icon placement overlay PNG。
+- icon visible fallback JSON。
+- icon visible fallback overlay PNG。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

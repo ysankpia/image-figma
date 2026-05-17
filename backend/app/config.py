@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -83,6 +83,16 @@ class Settings:
     icon_placement_plan_text_overlap_iou: float = 0.10
     icon_placement_plan_slice_overlap_iou: float = 0.50
     icon_placement_plan_max_placements: int = 128
+    icon_visible_fallback_enabled: bool = False
+    icon_visible_fallback_max_placements: int = 12
+    icon_visible_fallback_min_confidence: float = 0.85
+    icon_visible_fallback_mask_padding: int = 2
+    icon_visible_fallback_max_mask_size: int = 96
+    icon_visible_fallback_solid_bg_tolerance: int = 28
+    icon_visible_fallback_allowed_roles: list[str] = field(
+        default_factory=lambda: ["nav_icon", "header_nav_icon", "header_action_icon", "leading_icon"]
+    )
+    icon_visible_fallback_overlay_enabled: bool = True
 
 
 def get_settings() -> Settings:
@@ -166,6 +176,19 @@ def get_settings() -> Settings:
         icon_placement_plan_text_overlap_iou=float(os.getenv("ICON_PLACEMENT_PLAN_TEXT_OVERLAP_IOU", "0.10")),
         icon_placement_plan_slice_overlap_iou=float(os.getenv("ICON_PLACEMENT_PLAN_SLICE_OVERLAP_IOU", "0.50")),
         icon_placement_plan_max_placements=int(os.getenv("ICON_PLACEMENT_PLAN_MAX_PLACEMENTS", "128")),
+        icon_visible_fallback_enabled=parse_bool(os.getenv("ICON_VISIBLE_FALLBACK_ENABLED", "false")),
+        icon_visible_fallback_max_placements=int(os.getenv("ICON_VISIBLE_FALLBACK_MAX_PLACEMENTS", "12")),
+        icon_visible_fallback_min_confidence=float(os.getenv("ICON_VISIBLE_FALLBACK_MIN_CONFIDENCE", "0.85")),
+        icon_visible_fallback_mask_padding=int(os.getenv("ICON_VISIBLE_FALLBACK_MASK_PADDING", "2")),
+        icon_visible_fallback_max_mask_size=int(os.getenv("ICON_VISIBLE_FALLBACK_MAX_MASK_SIZE", "96")),
+        icon_visible_fallback_solid_bg_tolerance=int(os.getenv("ICON_VISIBLE_FALLBACK_SOLID_BG_TOLERANCE", "28")),
+        icon_visible_fallback_allowed_roles=parse_csv(
+            os.getenv(
+                "ICON_VISIBLE_FALLBACK_ALLOWED_ROLES",
+                "nav_icon,header_nav_icon,header_action_icon,leading_icon",
+            )
+        ),
+        icon_visible_fallback_overlay_enabled=parse_bool(os.getenv("ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED", "true")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

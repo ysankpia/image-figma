@@ -69,4 +69,49 @@ describe("renderDesign", () => {
     expect(result.success).toBe(true);
     expect(adapter.findNodeByName("Page Header / Text / 首页")?.characters).toBe("首页");
   });
+
+  it("renders M24 visible icon fallback cover and image nodes", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = structuredClone(mobileHome as DesignDSL);
+    dsl.assets.push({
+      assetId: "asset_icon_candidate_001",
+      type: "image",
+      role: "asset_icon_visible_fallback",
+      url: "http://localhost:8000/files/assets/task/icons/icon_candidate_001.png",
+      format: "png",
+      width: 20,
+      height: 20,
+      storage: "local"
+    });
+    dsl.root.children!.push(
+      {
+        id: "icon_fallback_cover_001",
+        type: "shape",
+        role: "icon_fallback_cover",
+        name: "Icon Fallback Cover / 001",
+        layout: { x: 10, y: 10, width: 24, height: 24 },
+        style: { visible: true, opacity: 1, fill: "#FFFFFF", radius: 0 }
+      },
+      {
+        id: "visible_icon_fallback_001",
+        type: "image",
+        role: "visible_icon_fallback",
+        name: "Visible Icon Fallback / 001",
+        layout: { x: 12, y: 12, width: 20, height: 20 },
+        source: { assetId: "asset_icon_candidate_001" },
+        imageFill: { mode: "fit" },
+        style: { visible: true, opacity: 1 }
+      }
+    );
+
+    const result = await renderDesign(dsl, { figma: adapter });
+
+    expect(result.success).toBe(true);
+    expect(adapter.findNodeByName("Icon Fallback Cover / 001")?.fills?.[0]).toEqual(
+      expect.objectContaining({ type: "SOLID" })
+    );
+    expect(adapter.findNodeByName("Visible Icon Fallback / 001")?.fills?.[0]).toEqual(
+      expect.objectContaining({ type: "IMAGE", scaleMode: "FIT" })
+    );
+  });
 });

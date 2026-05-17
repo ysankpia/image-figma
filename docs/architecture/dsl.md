@@ -312,6 +312,61 @@ M23 只允许修改 DSL 顶层 `meta`：
 
 M23 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M23 的 `futureDslNodeHint` 只存在于 report，不是 Renderer 输入。M23 不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M23 overlay 只画彩色 bbox，不画文字标签。
 
+M24 新增 visible icon fallback replay experiment harness。它默认关闭，因为它会改变可见 DSL/Figma 输出。开启 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后，M24 只消费 M23 已规划的 `needs_fallback_mask` placement，把 M20/M22 已裁出且低风险的 nav/header/leading icon 小范围回放到画布。
+
+M24 只允许四类 DSL 改动：
+
+```json
+{
+  "assets": [
+    {
+      "assetId": "asset_icon_candidate_005",
+      "type": "image",
+      "role": "asset_icon_visible_fallback",
+      "url": "http://localhost:8000/files/assets/task_xxx/icons/icon_candidate_005.png",
+      "format": "png",
+      "width": 52,
+      "height": 43,
+      "storage": "local",
+      "meta": {
+        "stage": "m24_visible_icon_fallback",
+        "sourceStage": "m20",
+        "sourceIconId": "icon_candidate_005"
+      }
+    }
+  ],
+  "root": {
+    "children": [
+      {
+        "id": "icon_fallback_cover_001",
+        "type": "shape",
+        "role": "icon_fallback_cover",
+        "layout": { "x": 131, "y": 1532, "width": 56, "height": 47 },
+        "style": { "visible": true, "opacity": 1, "fill": "#FFFFFF", "radius": 0 }
+      },
+      {
+        "id": "visible_icon_fallback_001",
+        "type": "image",
+        "role": "visible_icon_fallback",
+        "layout": { "x": 133, "y": 1534, "width": 52, "height": 43 },
+        "source": { "assetId": "asset_icon_candidate_005" },
+        "imageFill": { "mode": "fit" },
+        "style": { "visible": true, "opacity": 1 }
+      }
+    ]
+  },
+  "meta": {
+    "qualityFlags": ["m24_visible_icon_fallback_replay"],
+    "visibleIconFallbackSelectedCount": 8,
+    "visibleIconFallbackAppliedCount": 6,
+    "visibleIconFallbackBlockedCount": 2,
+    "visibleIconFallbackSkippedCount": 0
+  }
+}
+```
+
+M24 不允许修改任何已有 element 或已有 asset，不删除 fallback、original_ref、candidate_text、visible_text_replacement 或 text_replacement_cover。cover 必须是 `type: "shape"`，不是 `rect`；可见性在 `style.visible`，不是顶层 `visible`。M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair
