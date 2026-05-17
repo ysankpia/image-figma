@@ -290,6 +290,28 @@ M22 只允许修改 DSL 顶层 `meta`：
 
 M22 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M22 不做全局 icon detection，不做 Codia 式全量可拖动图层，不把 gap icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M22 overlay 只画彩色 bbox，不画文字标签。
 
+M23 新增 icon placement plan/layering readiness harness。它生成独立 `/icon-placement-plan` 报告，消费 M20 icon candidates、M22 gap icon candidates、M19 slice candidates 和当前 DSL collision facts，输出 placements、dedupedIcons、blockedIcons、placementOverlay 和 futureDslNodeHint。M23 不裁新 icon，不把 icon 放进画布；它只判断未来可见 icon fallback 前需要 fallback mask、slice coordination、review 还是 blocked。
+
+M23 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m23_icon_placement_plan"],
+    "iconPlacementPlanCount": 34,
+    "iconPlacementReadyCount": 0,
+    "iconPlacementNeedsFallbackMaskCount": 28,
+    "iconPlacementNeedsSliceCoordinationCount": 4,
+    "iconPlacementNeedsFallbackCoordinationCount": 0,
+    "iconPlacementReviewRequiredCount": 0,
+    "iconPlacementBlockedCount": 2,
+    "iconPlacementDedupedCount": 6
+  }
+}
+```
+
+M23 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M23 的 `futureDslNodeHint` 只存在于 report，不是 Renderer 输入。M23 不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M23 overlay 只画彩色 bbox，不画文字标签。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

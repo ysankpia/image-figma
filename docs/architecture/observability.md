@@ -222,7 +222,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -249,6 +249,8 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - icon coverage overlay PNG。
 - icon gap candidate JSON。
 - icon gap overlay PNG。
+- icon placement plan JSON。
+- icon placement overlay PNG。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

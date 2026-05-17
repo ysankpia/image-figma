@@ -57,6 +57,7 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         "m20_icon_candidate_extraction",
         "m21_icon_coverage_audit",
         "m22_icon_gap_candidates",
+        "m23_icon_placement_plan",
     ]
     assert dsl["meta"]["textPrimitiveBindingCount"] == 0
     assert dsl["meta"]["textPrimitiveContainerCount"] == 3
@@ -92,6 +93,14 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     assert dsl["meta"]["iconGapCroppedAssetCount"] == 0
     assert dsl["meta"]["iconGapBlockedCount"] == 0
     assert dsl["meta"]["iconGapFailedCropCount"] == 0
+    assert dsl["meta"]["iconPlacementPlanCount"] == 0
+    assert dsl["meta"]["iconPlacementReadyCount"] == 0
+    assert dsl["meta"]["iconPlacementNeedsFallbackMaskCount"] == 0
+    assert dsl["meta"]["iconPlacementNeedsSliceCoordinationCount"] == 0
+    assert dsl["meta"]["iconPlacementNeedsFallbackCoordinationCount"] == 0
+    assert dsl["meta"]["iconPlacementReviewRequiredCount"] == 0
+    assert dsl["meta"]["iconPlacementBlockedCount"] == 0
+    assert dsl["meta"]["iconPlacementDedupedCount"] == 0
 
     assets = {asset["assetId"]: asset for asset in dsl["assets"]}
     assert set(assets) == {

@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, and serves local asset URLs.
 
 ## Run
 
@@ -60,6 +60,7 @@ curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
 curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
+curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
 ```
 
 Visible text replacement is debug-only by default:
@@ -163,3 +164,16 @@ ICON_GAP_CANDIDATE_OVERLAY_ENABLED=true
 ```
 
 It writes `backend/storage/icon_gap_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons_gap/`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-gap-candidates`. M22 consumes M21 missed icon hints and a few region-guided probes to crop reliable header, bottom-nav, shortcut, and trailing icon gaps. M22 only updates top-level DSL meta and never adds gap icons or overlays to DSL `assets`, so Figma-visible output stays identical to M21. It does not do global icon detection, Codia-style all-layer extraction, SVG/icon semantic recognition, icon library matching, visible icon replacement, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.
+
+M23 icon placement plan is enabled by default:
+
+```bash
+ICON_PLACEMENT_PLAN_ENABLED=true
+ICON_PLACEMENT_PLAN_OVERLAY_ENABLED=true
+ICON_PLACEMENT_PLAN_DEDUP_IOU=0.50
+ICON_PLACEMENT_PLAN_TEXT_OVERLAP_IOU=0.10
+ICON_PLACEMENT_PLAN_SLICE_OVERLAP_IOU=0.50
+ICON_PLACEMENT_PLAN_MAX_PLACEMENTS=128
+```
+
+It writes `backend/storage/icon_placement_plans/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-placement-plan`. M23 consumes M20 icon candidates, M22 gap icon candidates, M19 slice candidates and current DSL collision facts to produce a placement plan with dedupe, blocked, fallback-mask, slice-coordination and future DSL node hints. M23 only updates top-level DSL meta and never adds icon nodes or placement overlays to DSL `assets`, so Figma-visible output stays identical to M22. It does not crop new icons, put icons on canvas, remove fallback, do global icon detection, Codia-style all-layer extraction, SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.

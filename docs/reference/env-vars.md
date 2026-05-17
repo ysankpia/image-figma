@@ -65,6 +65,12 @@
 | `ICON_GAP_CANDIDATE_RETRY_PADDING` | M22 候选贴 search window 边界时扩大重试的 padding 像素 | `12` | 否 |
 | `ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE` | M22 判断候选贴边/半截风险的像素容差 | `3` | 否 |
 | `ICON_GAP_CANDIDATE_OVERLAY_ENABLED` | 是否生成 M22 icon gap debug overlay PNG | `true` | 否 |
+| `ICON_PLACEMENT_PLAN_ENABLED` | 是否生成 M23 icon placement plan 报告和 placement overlay；不改变 Figma 可见输出 | `true` | 否 |
+| `ICON_PLACEMENT_PLAN_OVERLAY_ENABLED` | 是否生成 M23 icon placement debug overlay PNG | `true` | 否 |
+| `ICON_PLACEMENT_PLAN_DEDUP_IOU` | M23 判定 M20/M22 icon 重复的 bbox IoU 阈值 | `0.50` | 否 |
+| `ICON_PLACEMENT_PLAN_TEXT_OVERLAP_IOU` | M23 判定 icon 与 visible text/cover/candidate_text 冲突的 IoU 阈值 | `0.10` | 否 |
+| `ICON_PLACEMENT_PLAN_SLICE_OVERLAP_IOU` | M23 判定 icon 与 M19 slice 冲突的 IoU 阈值 | `0.50` | 否 |
+| `ICON_PLACEMENT_PLAN_MAX_PLACEMENTS` | M23 单任务最多 placement plan 数 | `128` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -100,3 +106,5 @@ M20 icon candidate 由 `ICON_CANDIDATE_ENABLED` 控制，默认开启并生成 `
 M21 icon coverage audit 由 `ICON_COVERAGE_AUDIT_ENABLED` 控制，默认开启并生成 `/icon-coverage-audit` 报告和 debug overlay PNG。它消费 M20 icon candidates、M19 slice candidates 和当前 DSL，输出 placements、missedIconHints、collision/readiness 统计和 overlay。M21 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不把 M20 icon 放进画布，不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。overlay 只画彩色 bbox，不画文字标签。
 
 M22 icon gap candidate 由 `ICON_GAP_CANDIDATE_ENABLED` 控制，默认开启并生成 `/icon-gap-candidates` 报告、`icons_gap/*.png` 候选资产和 debug overlay PNG。它消费 M21 missedIconHints、M20 icon candidates 和少量 region-guided probe，补裁可靠的 header、bottom nav、shortcut、trailing icon gap。M22 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不把 gap icon 放进画布，不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。overlay 只画彩色 bbox，不画文字标签。
+
+M23 icon placement plan 由 `ICON_PLACEMENT_PLAN_ENABLED` 控制，默认开启并生成 `/icon-placement-plan` 报告和 debug overlay PNG。它消费 M20 icon candidates、M22 gap icon candidates、M19 slice candidates 和当前 DSL collision facts，统一判断 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon。M23 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不裁新 icon，不把 icon 放进画布，不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。`futureDslNodeHint` 只存在于报告，不是 Renderer 输入。

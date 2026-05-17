@@ -249,6 +249,26 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS icon_placement_plan_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  plan_path TEXT,
+                  overlay_asset_id TEXT,
+                  placement_count INTEGER NOT NULL,
+                  ready_count INTEGER NOT NULL,
+                  needs_fallback_mask_count INTEGER NOT NULL,
+                  needs_slice_coordination_count INTEGER NOT NULL,
+                  needs_fallback_coordination_count INTEGER NOT NULL,
+                  review_required_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  deduped_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -564,6 +584,30 @@ class Database:
     def get_icon_gap_candidate_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM icon_gap_candidate_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_icon_placement_plan_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO icon_placement_plan_results (
+                  task_id, status, plan_path, overlay_asset_id, placement_count,
+                  ready_count, needs_fallback_mask_count, needs_slice_coordination_count,
+                  needs_fallback_coordination_count, review_required_count, blocked_count,
+                  deduped_count, warning_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :plan_path, :overlay_asset_id, :placement_count,
+                  :ready_count, :needs_fallback_mask_count, :needs_slice_coordination_count,
+                  :needs_fallback_coordination_count, :review_required_count, :blocked_count,
+                  :deduped_count, :warning_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_icon_placement_plan_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM icon_placement_plan_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

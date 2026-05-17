@@ -23,6 +23,7 @@ class Storage:
         self.icon_candidates_dir = root / "icon_candidates"
         self.icon_coverage_audits_dir = root / "icon_coverage_audits"
         self.icon_gap_candidates_dir = root / "icon_gap_candidates"
+        self.icon_placement_plans_dir = root / "icon_placement_plans"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -43,6 +44,7 @@ class Storage:
             self.icon_candidates_dir,
             self.icon_coverage_audits_dir,
             self.icon_gap_candidates_dir,
+            self.icon_placement_plans_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -97,6 +99,9 @@ class Storage:
 
     def icon_gap_candidate_path(self, task_id: str) -> Path:
         return self.icon_gap_candidates_dir / f"{task_id}.json"
+
+    def icon_placement_plan_path(self, task_id: str) -> Path:
+        return self.icon_placement_plans_dir / f"{task_id}.json"
 
     def asset_slice_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "slices" / filename
@@ -211,6 +216,12 @@ class Storage:
 
     def save_icon_gap_candidate(self, task_id: str, data: str) -> Path:
         path = self.icon_gap_candidate_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_icon_placement_plan(self, task_id: str, data: str) -> Path:
+        path = self.icon_placement_plan_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

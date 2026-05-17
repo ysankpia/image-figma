@@ -153,6 +153,7 @@ curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
 curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
+curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -253,6 +254,19 @@ ICON_GAP_CANDIDATE_OVERLAY_ENABLED=true
 
 M22 基于 M21 missedIconHints 和少量 header、bottom nav、shortcut、trailing 局部 probe 补裁可靠漏裁图标，写入 `backend/storage/assets/{taskId}/icons_gap/`。overlay 写入 `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`，只画彩色 bbox，不画文字标签。gap icon 和 overlay 都不进入 DSL `assets`，不会改变 Figma 可见输出。M22 不做全局 icon detection、不做 Codia 式全量可拖动图层、不把 gap icon 放进画布、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不按中文文案特化、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M23 icon placement plan 默认开启，生成 `/icon-placement-plan` 报告和 debug overlay PNG，并只更新 DSL 顶层 meta：
+
+```bash
+ICON_PLACEMENT_PLAN_ENABLED=true
+ICON_PLACEMENT_PLAN_OVERLAY_ENABLED=true
+ICON_PLACEMENT_PLAN_DEDUP_IOU=0.50
+ICON_PLACEMENT_PLAN_TEXT_OVERLAP_IOU=0.10
+ICON_PLACEMENT_PLAN_SLICE_OVERLAP_IOU=0.50
+ICON_PLACEMENT_PLAN_MAX_PLACEMENTS=128
+```
+
+M23 基于 M20/M22 icon assets、M19 slice candidates 和当前 DSL collision facts 规划 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon。overlay 写入 `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`，只画彩色 bbox，不画文字标签。placement plan、futureDslNodeHint 和 overlay 都不进入 DSL `assets`，不会改变 Figma 可见输出。M23 不裁新 icon、不把 icon 放进画布、不删除 fallback、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash
@@ -318,6 +332,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/icon-candidates` 默认返回 `status: "completed"`，包含 icons、blockedComponentIds 和 meta。
 - `/api/tasks/{taskId}/icon-coverage-audit` 默认返回 `status: "completed"`，包含 placements、missedIconHints、coverageOverlay 和 meta。
 - `/api/tasks/{taskId}/icon-gap-candidates` 默认返回 `status: "completed"`，包含 gapIcons、blockedHints、gapOverlay 和 meta。
+- `/api/tasks/{taskId}/icon-placement-plan` 默认返回 `status: "completed"`，包含 placements、dedupedIcons、blockedIcons、placementOverlay 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

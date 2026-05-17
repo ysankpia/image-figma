@@ -77,6 +77,12 @@ class Settings:
     icon_gap_candidate_retry_padding: int = 12
     icon_gap_candidate_edge_clip_tolerance: int = 3
     icon_gap_candidate_overlay_enabled: bool = True
+    icon_placement_plan_enabled: bool = True
+    icon_placement_plan_overlay_enabled: bool = True
+    icon_placement_plan_dedup_iou: float = 0.50
+    icon_placement_plan_text_overlap_iou: float = 0.10
+    icon_placement_plan_slice_overlap_iou: float = 0.50
+    icon_placement_plan_max_placements: int = 128
 
 
 def get_settings() -> Settings:
@@ -154,6 +160,12 @@ def get_settings() -> Settings:
         icon_gap_candidate_retry_padding=int(os.getenv("ICON_GAP_CANDIDATE_RETRY_PADDING", "12")),
         icon_gap_candidate_edge_clip_tolerance=int(os.getenv("ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE", "3")),
         icon_gap_candidate_overlay_enabled=parse_bool(os.getenv("ICON_GAP_CANDIDATE_OVERLAY_ENABLED", "true")),
+        icon_placement_plan_enabled=parse_bool(os.getenv("ICON_PLACEMENT_PLAN_ENABLED", "true")),
+        icon_placement_plan_overlay_enabled=parse_bool(os.getenv("ICON_PLACEMENT_PLAN_OVERLAY_ENABLED", "true")),
+        icon_placement_plan_dedup_iou=float(os.getenv("ICON_PLACEMENT_PLAN_DEDUP_IOU", "0.50")),
+        icon_placement_plan_text_overlap_iou=float(os.getenv("ICON_PLACEMENT_PLAN_TEXT_OVERLAP_IOU", "0.10")),
+        icon_placement_plan_slice_overlap_iou=float(os.getenv("ICON_PLACEMENT_PLAN_SLICE_OVERLAP_IOU", "0.50")),
+        icon_placement_plan_max_placements=int(os.getenv("ICON_PLACEMENT_PLAN_MAX_PLACEMENTS", "128")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

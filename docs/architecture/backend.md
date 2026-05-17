@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M22 当前管线：
+M23 当前管线：
 
 ```text
 receive multipart PNG
@@ -43,6 +43,7 @@ receive multipart PNG
 -> build icon candidate crops
 -> build icon coverage audit
 -> build region-guided icon gap candidates
+-> build icon placement plan
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -56,6 +57,7 @@ receive multipart PNG
 -> save icon candidate JSON
 -> save icon coverage audit JSON
 -> save icon gap candidate JSON
+-> save icon placement plan JSON
 -> mark task completed
 ```
 
@@ -96,6 +98,7 @@ backend/storage/
   icon_candidates/
   icon_coverage_audits/
   icon_gap_candidates/
+  icon_placement_plans/
   assets/{taskId}/slices/
   assets/{taskId}/icons/
   assets/{taskId}/icons_gap/
@@ -107,12 +110,12 @@ backend/storage/
 
 ## Task State
 
-M22 当前只实际写入：
+M23 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M22 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M23 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -243,9 +246,11 @@ M21 增加 icon coverage audit/placement readiness harness：后端基于 M20 ic
 
 M22 增加 region-guided icon gap candidate harness：后端基于 M21 missedIconHints、M20 icon candidates、M15-M17 结构索引、当前 DSL 和原始 PNG 像素，把可靠的 header、bottom nav、shortcut、card/row/button trailing 等漏裁区域补裁成本地 gap icon PNG，写入 `backend/storage/icon_gap_candidates/{taskId}.json`、`backend/storage/assets/{taskId}/icons_gap/*.png` 与 `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`，并通过 `/api/tasks/{taskId}/icon-gap-candidates` 暴露。M22 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；gap icon 和 overlay 都只是候选/调试资产，不进入 Renderer 可见路径。M22 不做全局 icon detection，不做 Codia 式全量可拖动图层，不把 icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不引入 Pillow/OpenCV。顶部右侧小程序胶囊只裁内部小 blob，不裁整块胶囊。
 
+M23 增加 icon placement plan/layering readiness harness：后端基于 M20 icon candidates、M22 gap icon candidates、M19 slice candidates、M15/M16 引用和当前 DSL collision facts，统一规划 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon，写入 `backend/storage/icon_placement_plans/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/icon_placement_overlay.png`，并通过 `/api/tasks/{taskId}/icon-placement-plan` 暴露。M23 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；futureDslNodeHint 和 overlay 都只是计划/调试信息，不进入 Renderer 可见路径。M23 不裁新 icon，不把 icon 放进画布，不删除 fallback，不做全局 icon detection，不做 Codia 式全量可拖动图层，不做 SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
+
 ## Backend Non-Goals
 
-M22 不做：
+M23 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -276,8 +281,10 @@ M22 不做：
 - 把 M20 icon candidate 写入 DSL `assets`。
 - 把 M21 overlay 写入 DSL `assets`。
 - 把 M22 gap icon 或 overlay 写入 DSL `assets`。
+- 把 M23 placement plan 或 overlay 写入 DSL `assets`。
 - 把 M20 icon 放进 Figma 可见画布。
 - 把 M22 gap icon 放进 Figma 可见画布。
+- 把 M23 futureDslNodeHint 放进 Figma 可见画布。
 - 全局 icon detection。
 - Codia 式全量可拖动图层。
 - SVG/icon semantic recognition 或图标库匹配。

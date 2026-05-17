@@ -635,3 +635,51 @@ def get_task_icon_gap_candidates(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/icon-placement-plan")
+def get_task_icon_placement_plan(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_icon_placement_plan_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ICON_PLACEMENT_PLAN_NOT_FOUND",
+            "Icon placement plan result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_placement_plan_lookup",
+            task_id=task_id,
+        )
+
+    plan_path = Path(result["plan_path"] or "")
+    if not plan_path.exists():
+        raise ApiError(
+            "ICON_PLACEMENT_PLAN_NOT_FOUND",
+            "Icon placement plan file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_placement_plan_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(plan_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "placements": document.get("placements", []),
+        "dedupedIcons": document.get("dedupedIcons", []),
+        "blockedIcons": document.get("blockedIcons", []),
+        "placementOverlay": document.get("placementOverlay"),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

@@ -28,6 +28,7 @@
 - 当前 icon candidate extraction/crop 计划：[plans/active/020-icon-candidate-extraction-crop-harness.md](plans/active/020-icon-candidate-extraction-crop-harness.md)
 - 当前 icon coverage audit/placement readiness 计划：[plans/active/021-icon-coverage-audit-placement-readiness.md](plans/active/021-icon-coverage-audit-placement-readiness.md)
 - 当前 region-guided icon gap candidate 计划：[plans/active/022-region-guided-icon-gap-candidates.md](plans/active/022-region-guided-icon-gap-candidates.md)
+- 当前 icon placement plan/layering readiness 计划：[plans/active/023-icon-placement-plan-layering-readiness.md](plans/active/023-icon-placement-plan-layering-readiness.md)
 
 ## By Task Type
 
@@ -100,6 +101,7 @@
 - M20 icon candidate 决策：[decisions/0023-crop-icon-candidates-before-visible-partial-replacement.md](decisions/0023-crop-icon-candidates-before-visible-partial-replacement.md)
 - M21 icon coverage audit 决策：[decisions/0024-audit-icon-coverage-before-visible-icon-replacement.md](decisions/0024-audit-icon-coverage-before-visible-icon-replacement.md)
 - M22 icon gap candidate 决策：[decisions/0025-crop-region-guided-icon-gaps-before-visible-icon-placement.md](decisions/0025-crop-region-guided-icon-gaps-before-visible-icon-placement.md)
+- M23 icon placement plan 决策：[decisions/0026-plan-icon-placement-before-visible-icon-layers.md](decisions/0026-plan-icon-placement-before-visible-icon-layers.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

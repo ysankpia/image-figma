@@ -30,6 +30,7 @@
 - 接入 icon candidate extraction/crop harness。
 - 接入 icon coverage audit/placement readiness harness。
 - 接入 region-guided icon gap candidate harness。
+- 接入 icon placement plan/layering readiness harness。
 - 做样例验收。
 
 不包含：
@@ -66,7 +67,7 @@
 20. 接入 icon candidate extraction/crop harness，生成 icon PNG 候选资产但不改变画布。状态：完成第一版。
 21. 加入 icon coverage audit 和 placement readiness 报告，基于 M20 icon 候选审计覆盖、漏裁和未来放回阻断。状态：完成第一版。
 22. 加入 region-guided icon gap candidate harness，基于 M21 missed hints 和局部 probe 补裁漏裁 icon，但不改变画布。状态：完成第一版。
-23. 加入 visible icon placement plan，基于 M20/M22 资产与 M21 readiness 决定后续可见替换边界。
+23. 加入 icon placement plan/layering readiness harness，基于 M20/M22 资产、M19 slice 和 DSL collision facts 决定后续可见替换边界。状态：完成第一版。
 24. 用固定样例做 MVP 收敛。
 
 ## Acceptance
@@ -178,6 +179,12 @@
 - 本地 `assets/{taskId}/icons_gap/*.png` 候选资产。
 - 本地 `assets/{taskId}/debug/icon_gap_overlay.png` 调试 overlay。
 - DSL 顶层 M22 meta，且不改任何已有 element 或 DSL assets。
+- IconPlacementPlanDocument v0.1 合同。
+- SQLite `icon_placement_plan_results`。
+- `GET /api/tasks/{taskId}/icon-placement-plan`。
+- icon placement plan 报告，包含 placements、dedupedIcons、blockedIcons、placementOverlay 和 placement readiness 统计。
+- 本地 `assets/{taskId}/debug/icon_placement_overlay.png` 调试 overlay。
+- DSL 顶层 M23 meta，且不改任何已有 element 或 DSL assets。
 - 单元测试。
 
 验证命令：
