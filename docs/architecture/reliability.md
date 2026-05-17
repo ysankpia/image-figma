@@ -153,6 +153,18 @@ M24 visible icon fallback replay 是默认关闭的实验路径：
 - PNG pixel decode unsupported 时保存 skipped document，DSL 保持 M23 输出。
 - M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不裁新 icon、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M25 region-guided business icon candidate 是可观测的非关键路径：
+
+- 默认 `ICON_BUSINESS_CANDIDATE_ENABLED=true`，但不改变 Figma 可见输出。
+- icon business candidate failed/skipped 写入 `icon_business_candidate_results` 和 `error_logs`。
+- icon business candidate validation failed 时 `/dsl` 回退 M24/M23 输出，只是不追加 M25 meta。
+- M25 只修改 DSL 顶层 `meta`；不能修改任何已有 element，也不能修改 DSL `assets` 数组。
+- 生成的 business icon PNG 和 overlay PNG 只作为候选/调试资产存在于 storage 和 `/icon-business-candidates` 报告里。
+- 单个 business icon crop 失败不能让 upload 失败。
+- overlay 生成或写入失败只记录 warning，不能让 upload 失败。
+- PNG pixel decode unsupported 时保存 skipped document，DSL 保持 M24/M23 输出。
+- M25 不做可见 replay、不处理插画/头像/建筑/床位平面图复杂资产、不做全图无边界 detection、不做 Codia 式全量拆层、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
+
 整页失败只发生在：
 
 - PNG 无法读取。

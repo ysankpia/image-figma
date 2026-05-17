@@ -285,6 +285,22 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS icon_business_candidate_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  business_path TEXT,
+                  overlay_asset_id TEXT,
+                  business_icon_count INTEGER NOT NULL,
+                  cropped_business_icon_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  failed_crop_count INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -646,6 +662,28 @@ class Database:
     def get_icon_visible_fallback_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM icon_visible_fallback_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_icon_business_candidate_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO icon_business_candidate_results (
+                  task_id, status, business_path, overlay_asset_id, business_icon_count,
+                  cropped_business_icon_count, blocked_count, failed_crop_count,
+                  warning_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :business_path, :overlay_asset_id, :business_icon_count,
+                  :cropped_business_icon_count, :blocked_count, :failed_crop_count,
+                  :warning_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_icon_business_candidate_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM icon_business_candidate_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

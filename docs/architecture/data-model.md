@@ -24,6 +24,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `icon_gap_candidate_results`
 - `icon_placement_plan_results`
 - `icon_visible_fallback_results`
+- `icon_business_candidate_results`
 
 后续建议表：
 
@@ -58,7 +59,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M24 当前只写入 `completed`。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M25 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -95,6 +96,8 @@ M24 当前只写入 `completed`。后续接真实处理管线再补 `pending`、
 - `asset_icon_gap_overlay`
 - `asset_icon_placement_overlay`
 - `asset_icon_visible_fallback_overlay`
+- `asset_icon_business_candidate`
+- `asset_icon_business_overlay`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -112,6 +115,8 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_icon_gap_overlay`：M22 生成的 debug overlay PNG，只通过 `/icon-gap-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 - `asset_icon_placement_overlay`：M23 生成的 placement decision debug overlay PNG，只通过 `/icon-placement-plan`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 - `asset_icon_visible_fallback_overlay`：M24 生成的 visible fallback replay debug overlay PNG，只通过 `/icon-visible-fallback`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
+- `asset_icon_business_*`：M25 生成的 business icon PNG 候选资产，只通过 `/icon-business-candidates` 暴露，不进入 DSL `assets`。
+- `asset_icon_business_overlay`：M25 生成的 debug overlay PNG，只通过 `/icon-business-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -454,6 +459,28 @@ Icon placement plan payload 本体写入 `backend/storage/icon_placement_plans/{
 - `created_at`
 
 Icon visible fallback payload 本体写入 `backend/storage/icon_visible_fallbacks/{taskId}.json`。它保存 `visibleIcons`、`blockedPlacements`、`visibleFallbackOverlay`、`warnings` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`，并以 `asset_icon_visible_fallback_overlay` role 登记到 `assets` 表。M24 默认关闭时不生成 result；开启后只把实际 applied 的 icon asset 追加进 DSL `assets`，并 append `icon_fallback_cover` / `visible_icon_fallback` 节点，不修改已有 assets 或已有 elements。
+
+## icon_business_candidate_results
+
+用途：记录 M25 region-guided business icon candidate 文件、overlay 资产和业务 icon 候选摘要。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `business_path`
+- `overlay_asset_id`
+- `business_icon_count`
+- `cropped_business_icon_count`
+- `blocked_count`
+- `failed_crop_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Icon business candidate payload 本体写入 `backend/storage/icon_business_candidates/{taskId}.json`。它保存 `businessIcons`、`blockedCandidates`、`businessOverlay`、`warnings` 和统计 meta。business icon PNG 写入 `backend/storage/assets/{taskId}/icons_business/`，并以 `asset_icon_business_candidate` role 登记到 `assets` 表。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`，并以 `asset_icon_business_overlay` role 登记到 `assets` 表。M25 不把 business icon 或 overlay 写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
 
 ## model_call_logs
 

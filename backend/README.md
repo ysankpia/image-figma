@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, optionally runs visible icon fallback replay, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, optionally runs visible icon fallback replay, builds region-guided business icon candidate reports, and serves local asset URLs.
 
 ## Run
 
@@ -61,6 +61,8 @@ curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
 curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
+curl http://localhost:8000/api/tasks/{taskId}/icon-visible-fallback
+curl http://localhost:8000/api/tasks/{taskId}/icon-business-candidates
 ```
 
 Visible text replacement is debug-only by default:
@@ -192,3 +194,26 @@ ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED=true
 ```
 
 When explicitly enabled, it writes `backend/storage/icon_visible_fallbacks/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-visible-fallback`. M24 consumes only M23 placement plan items that already point to M20/M22 cropped icon assets. It appends `icon_fallback_cover` shape nodes and `visible_icon_fallback` image nodes, and appends only actually used icon assets to DSL `assets`. M24 does not handle missing icons, M21 missed hints, M22 blocked hints, new icon crop, global icon detection, Codia-style all-layer extraction, transparent PNG/SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.
+
+M25 region-guided business icon candidates are enabled by default because they do not change visible output:
+
+```bash
+ICON_BUSINESS_CANDIDATE_ENABLED=true
+ICON_BUSINESS_CANDIDATE_MAX_CANDIDATES=80
+ICON_BUSINESS_CANDIDATE_MIN_CONFIDENCE=0.70
+ICON_BUSINESS_CANDIDATE_MIN_SIZE=8
+ICON_BUSINESS_CANDIDATE_MAX_SIZE=96
+ICON_BUSINESS_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_BUSINESS_CANDIDATE_RETRY_PADDING=12
+ICON_BUSINESS_CANDIDATE_EDGE_CLIP_TOLERANCE=3
+ICON_BUSINESS_CANDIDATE_OVERLAY_ENABLED=true
+ICON_BUSINESS_BOTTOM_NAV_ENABLED=true
+ICON_BUSINESS_PRIMARY_BUTTON_ENABLED=true
+ICON_BUSINESS_SHORTCUT_CARD_ENABLED=true
+ICON_BUSINESS_METRIC_CARD_ENABLED=true
+ICON_BUSINESS_ROOM_CARD_ENABLED=true
+ICON_BUSINESS_TRAILING_ENABLED=true
+ICON_BUSINESS_TIP_INFO_ENABLED=true
+```
+
+It writes `backend/storage/icon_business_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons_business/`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-business-candidates`. M25 bypasses weak business component recognition by probing stable regions such as bottom nav, primary button trailing arrow, shortcut tile, metric card, room card, trailing icon, and tip/info zones. M25 only updates top-level DSL meta and never adds business icon assets to DSL `assets`, so Figma-visible output stays identical to M24/M23. It does not do visible replay, global icon detection, Codia-style all-layer extraction, illustration/avatar/building/bed-map extraction, SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.

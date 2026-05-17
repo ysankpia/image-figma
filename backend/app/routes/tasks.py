@@ -730,3 +730,50 @@ def get_task_icon_visible_fallback(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/icon-business-candidates")
+def get_task_icon_business_candidates(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_icon_business_candidate_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ICON_BUSINESS_CANDIDATE_NOT_FOUND",
+            "Icon business candidate result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_business_candidate_lookup",
+            task_id=task_id,
+        )
+
+    business_path = Path(result["business_path"] or "")
+    if not business_path.exists():
+        raise ApiError(
+            "ICON_BUSINESS_CANDIDATE_NOT_FOUND",
+            "Icon business candidate file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_business_candidate_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(business_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "businessIcons": document.get("businessIcons", []),
+        "blockedCandidates": document.get("blockedCandidates", []),
+        "businessOverlay": document.get("businessOverlay"),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

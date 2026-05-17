@@ -25,6 +25,7 @@ class Storage:
         self.icon_gap_candidates_dir = root / "icon_gap_candidates"
         self.icon_placement_plans_dir = root / "icon_placement_plans"
         self.icon_visible_fallbacks_dir = root / "icon_visible_fallbacks"
+        self.icon_business_candidates_dir = root / "icon_business_candidates"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -47,6 +48,7 @@ class Storage:
             self.icon_gap_candidates_dir,
             self.icon_placement_plans_dir,
             self.icon_visible_fallbacks_dir,
+            self.icon_business_candidates_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -108,6 +110,9 @@ class Storage:
     def icon_visible_fallback_path(self, task_id: str) -> Path:
         return self.icon_visible_fallbacks_dir / f"{task_id}.json"
 
+    def icon_business_candidate_path(self, task_id: str) -> Path:
+        return self.icon_business_candidates_dir / f"{task_id}.json"
+
     def asset_slice_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "slices" / filename
 
@@ -116,6 +121,9 @@ class Storage:
 
     def icon_gap_candidate_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "icons_gap" / filename
+
+    def icon_business_candidate_image_path(self, task_id: str, filename: str) -> Path:
+        return self.assets_dir / task_id / "icons_business" / filename
 
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
@@ -134,6 +142,9 @@ class Storage:
 
     def icon_gap_candidate_image_url(self, task_id: str, filename: str) -> str:
         return f"{self.public_base_url}/files/assets/{task_id}/icons_gap/{filename}"
+
+    def icon_business_candidate_image_url(self, task_id: str, filename: str) -> str:
+        return f"{self.public_base_url}/files/assets/{task_id}/icons_business/{filename}"
 
     def save_upload(self, task_id: str, data: bytes) -> Path:
         path = self.upload_path(task_id)
@@ -233,6 +244,12 @@ class Storage:
 
     def save_icon_visible_fallback(self, task_id: str, data: str) -> Path:
         path = self.icon_visible_fallback_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_icon_business_candidate(self, task_id: str, data: str) -> Path:
+        path = self.icon_business_candidate_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

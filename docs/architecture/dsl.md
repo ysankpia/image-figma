@@ -367,6 +367,24 @@ M24 只允许四类 DSL 改动：
 
 M24 不允许修改任何已有 element 或已有 asset，不删除 fallback、original_ref、candidate_text、visible_text_replacement 或 text_replacement_cover。cover 必须是 `type: "shape"`，不是 `rect`；可见性在 `style.visible`，不是顶层 `visible`。M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。
 
+M25 新增 region-guided business icon candidate harness。它生成独立 `/icon-business-candidates` 报告，在 bottom nav、primary button trailing arrow、shortcut tile、metric card、room card、trailing、tip/info 等稳定业务区域裁业务 icon 候选 PNG。M25 只把 business icon PNG 和 overlay 写入 storage 与 `assets` 表，供 M26/M27 使用。
+
+M25 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m25_icon_business_candidates"],
+    "iconBusinessCandidateCount": 18,
+    "iconBusinessCroppedAssetCount": 16,
+    "iconBusinessBlockedCount": 2,
+    "iconBusinessFailedCropCount": 0
+  }
+}
+```
+
+M25 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M25 不把 business icon 放进画布，不做 visible replay，不处理插画、头像、建筑或床位平面图复杂资产，不做全图无边界 detection，不做 Codia 式全量拆层，不做 SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

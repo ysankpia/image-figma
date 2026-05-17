@@ -93,6 +93,22 @@ class Settings:
         default_factory=lambda: ["nav_icon", "header_nav_icon", "header_action_icon", "leading_icon"]
     )
     icon_visible_fallback_overlay_enabled: bool = True
+    icon_business_candidate_enabled: bool = True
+    icon_business_candidate_max_candidates: int = 80
+    icon_business_candidate_min_confidence: float = 0.70
+    icon_business_candidate_min_size: int = 8
+    icon_business_candidate_max_size: int = 96
+    icon_business_candidate_foreground_distance: int = 32
+    icon_business_candidate_retry_padding: int = 12
+    icon_business_candidate_edge_clip_tolerance: int = 3
+    icon_business_candidate_overlay_enabled: bool = True
+    icon_business_bottom_nav_enabled: bool = True
+    icon_business_primary_button_enabled: bool = True
+    icon_business_shortcut_card_enabled: bool = True
+    icon_business_metric_card_enabled: bool = True
+    icon_business_room_card_enabled: bool = True
+    icon_business_trailing_enabled: bool = True
+    icon_business_tip_info_enabled: bool = True
 
 
 def get_settings() -> Settings:
@@ -189,6 +205,22 @@ def get_settings() -> Settings:
             )
         ),
         icon_visible_fallback_overlay_enabled=parse_bool(os.getenv("ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED", "true")),
+        icon_business_candidate_enabled=parse_bool(os.getenv("ICON_BUSINESS_CANDIDATE_ENABLED", "true")),
+        icon_business_candidate_max_candidates=int(os.getenv("ICON_BUSINESS_CANDIDATE_MAX_CANDIDATES", "80")),
+        icon_business_candidate_min_confidence=float(os.getenv("ICON_BUSINESS_CANDIDATE_MIN_CONFIDENCE", "0.70")),
+        icon_business_candidate_min_size=int(os.getenv("ICON_BUSINESS_CANDIDATE_MIN_SIZE", "8")),
+        icon_business_candidate_max_size=int(os.getenv("ICON_BUSINESS_CANDIDATE_MAX_SIZE", "96")),
+        icon_business_candidate_foreground_distance=int(os.getenv("ICON_BUSINESS_CANDIDATE_FOREGROUND_DISTANCE", "32")),
+        icon_business_candidate_retry_padding=int(os.getenv("ICON_BUSINESS_CANDIDATE_RETRY_PADDING", "12")),
+        icon_business_candidate_edge_clip_tolerance=int(os.getenv("ICON_BUSINESS_CANDIDATE_EDGE_CLIP_TOLERANCE", "3")),
+        icon_business_candidate_overlay_enabled=parse_bool(os.getenv("ICON_BUSINESS_CANDIDATE_OVERLAY_ENABLED", "true")),
+        icon_business_bottom_nav_enabled=parse_bool(os.getenv("ICON_BUSINESS_BOTTOM_NAV_ENABLED", "true")),
+        icon_business_primary_button_enabled=parse_bool(os.getenv("ICON_BUSINESS_PRIMARY_BUTTON_ENABLED", "true")),
+        icon_business_shortcut_card_enabled=parse_bool(os.getenv("ICON_BUSINESS_SHORTCUT_CARD_ENABLED", "true")),
+        icon_business_metric_card_enabled=parse_bool(os.getenv("ICON_BUSINESS_METRIC_CARD_ENABLED", "true")),
+        icon_business_room_card_enabled=parse_bool(os.getenv("ICON_BUSINESS_ROOM_CARD_ENABLED", "true")),
+        icon_business_trailing_enabled=parse_bool(os.getenv("ICON_BUSINESS_TRAILING_ENABLED", "true")),
+        icon_business_tip_info_enabled=parse_bool(os.getenv("ICON_BUSINESS_TIP_INFO_ENABLED", "true")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

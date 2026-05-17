@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness、M21 icon coverage audit/placement readiness harness 和 M22 region-guided icon gap candidate harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness、M21 icon coverage audit/placement readiness harness、M22 region-guided icon gap candidate harness、M23 icon placement plan/layering readiness harness、M24 visible icon fallback replay experiment harness 和 M25 region-guided business icon candidate harness。
 
 ## Prerequisites
 
@@ -154,6 +154,8 @@ curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
 curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
+curl http://localhost:8000/api/tasks/{taskId}/icon-visible-fallback
+curl http://localhost:8000/api/tasks/{taskId}/icon-business-candidates
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -282,6 +284,29 @@ ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED=true
 
 开启后，M24 基于 M23 `needs_fallback_mask` placement 小范围回放 M20/M22 已裁出的 nav/header/leading icon。它会 append `icon_fallback_cover` shape、`visible_icon_fallback` image node，并只把实际使用的 icon asset 追加进 DSL `assets`。M24 写入 `backend/storage/icon_visible_fallbacks/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`，通过 `/api/tasks/{taskId}/icon-visible-fallback` 查询。M24 不处理没拆出来的 icon、不补 M21 missed hints、不处理 M22 blocked hints、不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。
 
+M25 region-guided business icon candidate 默认开启，只生成报告、业务 icon PNG 和 overlay，不改变 Figma 可见输出：
+
+```bash
+ICON_BUSINESS_CANDIDATE_ENABLED=true
+ICON_BUSINESS_CANDIDATE_MAX_CANDIDATES=80
+ICON_BUSINESS_CANDIDATE_MIN_CONFIDENCE=0.70
+ICON_BUSINESS_CANDIDATE_MIN_SIZE=8
+ICON_BUSINESS_CANDIDATE_MAX_SIZE=96
+ICON_BUSINESS_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_BUSINESS_CANDIDATE_RETRY_PADDING=12
+ICON_BUSINESS_CANDIDATE_EDGE_CLIP_TOLERANCE=3
+ICON_BUSINESS_CANDIDATE_OVERLAY_ENABLED=true
+ICON_BUSINESS_BOTTOM_NAV_ENABLED=true
+ICON_BUSINESS_PRIMARY_BUTTON_ENABLED=true
+ICON_BUSINESS_SHORTCUT_CARD_ENABLED=true
+ICON_BUSINESS_METRIC_CARD_ENABLED=true
+ICON_BUSINESS_ROOM_CARD_ENABLED=true
+ICON_BUSINESS_TRAILING_ENABLED=true
+ICON_BUSINESS_TIP_INFO_ENABLED=true
+```
+
+M25 绕开 M16 业务组件识别不足，直接在 bottom nav、primary button trailing arrow、shortcut tile、metric card、room card、trailing 和 tip/info 等稳定区域 probe 业务 icon candidate，写入 `backend/storage/icon_business_candidates/{taskId}.json`、`backend/storage/assets/{taskId}/icons_business/*.png` 和 `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`，通过 `/api/tasks/{taskId}/icon-business-candidates` 查询。M25 只追加 DSL 顶层 meta，不新增可见节点，不修改 DSL `assets`，不把 icon 放进画布；它也不做全图无边界 detection、Codia 式全量拆层、插画/头像/建筑/床位平面图复杂资产处理、SVG/icon 语义识别、图标库匹配、AI inpainting 或 Pillow/OpenCV。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash
@@ -348,6 +373,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/icon-coverage-audit` 默认返回 `status: "completed"`，包含 placements、missedIconHints、coverageOverlay 和 meta。
 - `/api/tasks/{taskId}/icon-gap-candidates` 默认返回 `status: "completed"`，包含 gapIcons、blockedHints、gapOverlay 和 meta。
 - `/api/tasks/{taskId}/icon-placement-plan` 默认返回 `status: "completed"`，包含 placements、dedupedIcons、blockedIcons、placementOverlay 和 meta。
+- `/api/tasks/{taskId}/icon-business-candidates` 默认返回 `status: "completed"`，包含 businessIcons、blockedCandidates、businessOverlay 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

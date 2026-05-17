@@ -79,6 +79,22 @@
 | `ICON_VISIBLE_FALLBACK_SOLID_BG_TOLERANCE` | M24 solid background sampling 最大通道差容忍度 | `28` | 否 |
 | `ICON_VISIBLE_FALLBACK_ALLOWED_ROLES` | M24 允许回放的 placementRole 列表 | `nav_icon,header_nav_icon,header_action_icon,leading_icon` | 否 |
 | `ICON_VISIBLE_FALLBACK_OVERLAY_ENABLED` | 是否生成 M24 visible fallback debug overlay PNG | `true` | 否 |
+| `ICON_BUSINESS_CANDIDATE_ENABLED` | 是否生成 M25 region-guided business icon candidate 报告、业务 icon PNG 和 overlay；不改变 Figma 可见输出 | `true` | 否 |
+| `ICON_BUSINESS_CANDIDATE_MAX_CANDIDATES` | M25 单任务最多实际生成的 business icon candidate 数 | `80` | 否 |
+| `ICON_BUSINESS_CANDIDATE_MIN_CONFIDENCE` | M25 business icon candidate 最低置信度，低于该值不裁剪 | `0.70` | 否 |
+| `ICON_BUSINESS_CANDIDATE_MIN_SIZE` | M25 business icon bbox 最小宽高像素 | `8` | 否 |
+| `ICON_BUSINESS_CANDIDATE_MAX_SIZE` | M25 business icon bbox 最大宽高像素 | `96` | 否 |
+| `ICON_BUSINESS_CANDIDATE_FOREGROUND_DISTANCE` | M25 局部前景像素与背景色的最小 RGB 通道距离 | `32` | 否 |
+| `ICON_BUSINESS_CANDIDATE_RETRY_PADDING` | M25 候选贴 search window 边界时扩大重试的 padding 像素 | `12` | 否 |
+| `ICON_BUSINESS_CANDIDATE_EDGE_CLIP_TOLERANCE` | M25 判断候选贴边/半截风险的像素容差 | `3` | 否 |
+| `ICON_BUSINESS_CANDIDATE_OVERLAY_ENABLED` | 是否生成 M25 business icon debug overlay PNG | `true` | 否 |
+| `ICON_BUSINESS_BOTTOM_NAV_ENABLED` | 是否启用 M25 bottom nav region probe | `true` | 否 |
+| `ICON_BUSINESS_PRIMARY_BUTTON_ENABLED` | 是否启用 M25 primary button probe | `true` | 否 |
+| `ICON_BUSINESS_SHORTCUT_CARD_ENABLED` | 是否启用 M25 shortcut/menu tile probe | `true` | 否 |
+| `ICON_BUSINESS_METRIC_CARD_ENABLED` | 是否启用 M25 metric/stat card probe | `true` | 否 |
+| `ICON_BUSINESS_ROOM_CARD_ENABLED` | 是否启用 M25 room card/status icon probe | `true` | 否 |
+| `ICON_BUSINESS_TRAILING_ENABLED` | 是否启用 M25 row/card trailing icon probe | `true` | 否 |
+| `ICON_BUSINESS_TIP_INFO_ENABLED` | 是否启用 M25 tip/info leading icon probe | `true` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -118,3 +134,5 @@ M22 icon gap candidate 由 `ICON_GAP_CANDIDATE_ENABLED` 控制，默认开启并
 M23 icon placement plan 由 `ICON_PLACEMENT_PLAN_ENABLED` 控制，默认开启并生成 `/icon-placement-plan` 报告和 debug overlay PNG。它消费 M20 icon candidates、M22 gap icon candidates、M19 slice candidates 和当前 DSL collision facts，统一判断 dedupe、blocked、needs_fallback_mask、needs_slice_coordination、needs_fallback_coordination、review_required 和 ready_for_visible_icon。M23 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不裁新 icon，不把 icon 放进画布，不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。`futureDslNodeHint` 只存在于报告，不是 Renderer 输入。
 
 M24 visible icon fallback replay 由 `ICON_VISIBLE_FALLBACK_ENABLED` 控制，默认关闭，因为它会改变可见 DSL/Figma 输出。开启后，它只消费 M23 `needs_fallback_mask` placement，把 M20/M22 已裁出且低风险的 nav/header/leading icon 用 `icon_fallback_cover` shape + `visible_icon_fallback` image node 小范围回放，并只把实际使用的 icon asset 追加进 DSL `assets`。M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不做新的 icon crop、不做全局 icon detection、不做 Codia 式全量可拖动图层、不做透明 PNG/SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。
+
+M25 business icon candidate 由 `ICON_BUSINESS_CANDIDATE_ENABLED` 控制，默认开启，因为它只生成旁路报告、候选 PNG、overlay 和 DSL 顶层 meta，不改变 Figma 可见输出。它绕开 M16 业务组件识别不足，基于 bottom nav、primary button trailing arrow、shortcut tile、metric card、room card、trailing 和 tip/info 等稳定区域 probe 裁业务 icon 候选。M25 不修改 DSL `assets`，不把 icon 放进画布，不做可见 replay，不做全图无边界 detection，不做 Codia 式全量拆层，不处理插画、头像、建筑或床位平面图复杂资产，不做 SVG/icon 语义识别、不做图标库替换、不引入 Pillow/OpenCV。

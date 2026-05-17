@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M24 当前管线：
+M25 当前管线：
 
 ```text
 receive multipart PNG
@@ -45,6 +45,7 @@ receive multipart PNG
 -> build region-guided icon gap candidates
 -> build icon placement plan
 -> optionally replay visible icon fallback
+-> build region-guided business icon candidates
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -60,6 +61,7 @@ receive multipart PNG
 -> save icon gap candidate JSON
 -> save icon placement plan JSON
 -> save icon visible fallback JSON when enabled
+-> save icon business candidate JSON
 -> mark task completed
 ```
 
@@ -102,9 +104,11 @@ backend/storage/
   icon_gap_candidates/
   icon_placement_plans/
   icon_visible_fallbacks/
+  icon_business_candidates/
   assets/{taskId}/slices/
   assets/{taskId}/icons/
   assets/{taskId}/icons_gap/
+  assets/{taskId}/icons_business/
   assets/{taskId}/debug/
   logs/
 ```
@@ -113,12 +117,12 @@ backend/storage/
 
 ## Task State
 
-M24 当前只实际写入：
+M25 当前任务主链路仍同步完成，任务表实际写入：
 
 - `completed`
 - `failed`
 
-M24 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`，例如 M25 在 PNG pixel decode unsupported 时保存 skipped document。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -253,9 +257,11 @@ M23 增加 icon placement plan/layering readiness harness：后端基于 M20 ico
 
 M24 增加 visible icon fallback replay experiment harness：后端默认不启用 `ICON_VISIBLE_FALLBACK_ENABLED=false`，因为它会改变可见 DSL/Figma 输出。显式开启后，M24 只消费 M23 `needs_fallback_mask` 且低风险的 M20/M22 icon placement，使用 solid background sampling 生成 `icon_fallback_cover` shape，再追加 `visible_icon_fallback` image node，并只把实际使用的 icon asset 追加进 DSL `assets`。M24 写入 `backend/storage/icon_visible_fallbacks/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/icon_visible_fallback_overlay.png`，并通过 `/api/tasks/{taskId}/icon-visible-fallback` 暴露。M24 不处理没拆出来的 icon，不补 M21 missed hints，不处理 M22 blocked hints，不裁新 icon，不做全局 icon detection，不做 Codia 式全量可拖动图层，不做透明 PNG/SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
 
+M25 增加 region-guided business icon candidate harness：后端基于当前 DSL、原始 PNG 像素、M20/M22/M23 已有 icon bbox 和 M24 visible icon bbox，在稳定业务区域直接 probe，裁出 bottom nav、primary button trailing arrow、shortcut tile、metric card、room card、row/card trailing 和 tip/info 等高价值业务 icon 候选 PNG。M25 写入 `backend/storage/icon_business_candidates/{taskId}.json`、`backend/storage/assets/{taskId}/icons_business/*.png` 与 `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`，并通过 `/api/tasks/{taskId}/icon-business-candidates` 暴露。M25 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；business icon 和 overlay 都只是候选/调试资产，不进入 Renderer 可见路径。M25 不依赖完整 M16 业务组件识别，不重新 OCR，不按中文文案特化，不处理插画、头像、建筑或床位平面图复杂资产，不做全图无边界 detection，不做 Codia 式全量拆层，不把 icon 放进画布，不做 SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
+
 ## Backend Non-Goals
 
-M24 不做：
+M25 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -293,6 +299,10 @@ M24 不做：
 - 默认把 M24 visible icon fallback 打开。
 - 在 M24 处理没拆出来的 icon、M21 missed hints 或 M22 blocked hints。
 - 在 M24 做新的 icon crop。
+- 把 M25 business icon candidate 写入 DSL `assets`。
+- 把 M25 business icon 放进 Figma 可见画布。
+- 在 M25 做可见 replay。
+- 在 M25 处理插画、头像、建筑或床位平面图复杂资产。
 - 全局 icon detection。
 - Codia 式全量可拖动图层。
 - SVG/icon semantic recognition 或图标库匹配。
