@@ -20,6 +20,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `layer_separation_results`
 - `asset_slice_results`
 - `icon_candidate_results`
+- `icon_coverage_audit_results`
 
 后续建议表：
 
@@ -86,6 +87,7 @@ M20 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploa
 - `asset_slice_candidate`
 - `asset_slice_filled_candidate`
 - `asset_icon_candidate`
+- `asset_icon_coverage_overlay`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -98,6 +100,7 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_region_bottom`：底部 region crop。
 - `asset_slice_*`：M19 生成的实验 slice PNG，只通过 `/asset-slice-candidates` 暴露，不进入 DSL `assets`。
 - `asset_icon_candidate_*`：M20 生成的 icon PNG 候选资产，只通过 `/icon-candidates` 暴露，不进入 DSL `assets`。
+- `asset_icon_coverage_overlay`：M21 生成的 debug overlay PNG，只通过 `/icon-coverage-audit`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -346,6 +349,30 @@ Asset slice payload 本体写入 `backend/storage/asset_slice_candidates/{taskId
 - `created_at`
 
 Icon candidate payload 本体写入 `backend/storage/icon_candidates/{taskId}.json`。它保存 `icons`、`blockedComponentIds` 和统计 meta。生成的 PNG 写入 `backend/storage/assets/{taskId}/icons/`，并以 `asset_icon_candidate` role 登记到 `assets` 表。M20 不把这些 icon 候选写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
+
+## icon_coverage_audit_results
+
+用途：记录 M21 icon coverage audit 文件、overlay 资产和 placement readiness 摘要。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `audit_path`
+- `overlay_asset_id`
+- `placement_count`
+- `missed_hint_count`
+- `ready_count`
+- `needs_fallback_coordination_count`
+- `needs_slice_coordination_count`
+- `blocked_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Icon coverage audit payload 本体写入 `backend/storage/icon_coverage_audits/{taskId}.json`。它保存 `placements`、`missedIconHints`、`coverageOverlay`、`blockedIconCandidateIds` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`，并以 `asset_icon_coverage_overlay` role 登记到 `assets` 表。M21 不把 overlay 或 icon 候选写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
 
 ## model_call_logs
 

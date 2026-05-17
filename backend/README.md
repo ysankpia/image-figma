@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, and serves local asset URLs.
 
 ## Run
 
@@ -58,6 +58,7 @@ curl http://localhost:8000/api/tasks/{taskId}/component-annotations
 curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
+curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
 ```
 
 Visible text replacement is debug-only by default:
@@ -132,3 +133,16 @@ ICON_CANDIDATE_MAX_COMPONENT_AREA_RATIO=0.20
 ```
 
 It writes `backend/storage/icon_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons/`, and exposes `GET /api/tasks/{taskId}/icon-candidates`. M20 consumes M15-M17 structure/index facts plus local PNG pixels to find high-confidence small icon bboxes inside components, then crops icon PNG candidates with the standard-library PNG tools. M20 only updates top-level DSL meta and never adds those icon assets to DSL `assets`, so Figma-visible output stays identical to M19. It does not do SVG/icon semantic recognition, icon library matching, visible icon replacement, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.
+
+M21 icon coverage audit is enabled by default:
+
+```bash
+ICON_COVERAGE_AUDIT_ENABLED=true
+ICON_COVERAGE_OVERLAY_ENABLED=true
+ICON_COVERAGE_MISSED_HINTS_ENABLED=true
+ICON_COVERAGE_MIN_HINT_CONFIDENCE=0.60
+ICON_COVERAGE_MAX_MISSED_HINTS=80
+ICON_COVERAGE_FOREGROUND_DISTANCE=32
+```
+
+It writes `backend/storage/icon_coverage_audits/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-coverage-audit`. M21 consumes M20 icon candidates, M19 slice candidates, current DSL, and local PNG pixels to report placement readiness and missed icon hints. M21 only updates top-level DSL meta and never adds overlay or icon assets to DSL `assets`, so Figma-visible output stays identical to M20. It does not put M20 icons on canvas, delete fallback, do SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction. The overlay only draws colored bbox rectangles; labels live in JSON.

@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M20 当前管线：
+M21 当前管线：
 
 ```text
 receive multipart PNG
@@ -41,6 +41,7 @@ receive multipart PNG
 -> build component-aware layer separation candidates
 -> build local asset slice candidates
 -> build icon candidate crops
+-> build icon coverage audit
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -52,6 +53,7 @@ receive multipart PNG
 -> save layer separation candidate JSON
 -> save asset slice candidate JSON
 -> save icon candidate JSON
+-> save icon coverage audit JSON
 -> mark task completed
 ```
 
@@ -90,8 +92,10 @@ backend/storage/
   layer_separation_candidates/
   asset_slice_candidates/
   icon_candidates/
+  icon_coverage_audits/
   assets/{taskId}/slices/
   assets/{taskId}/icons/
+  assets/{taskId}/debug/
   logs/
 ```
 
@@ -99,12 +103,12 @@ backend/storage/
 
 ## Task State
 
-M20 当前只实际写入：
+M21 当前只实际写入：
 
 - `completed`
 - `failed`
 
-M20 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
+M21 仍同步完成任务。后续接真实处理管线再补 `pending`、`uploaded`、`processing`。
 
 后续完整任务状态：
 
@@ -231,9 +235,11 @@ M19 增加 local asset slice candidate harness：后端基于 M18 的低风险 `
 
 M20 增加 icon candidate extraction/crop harness：后端基于 M15-M17 的结构索引，在 bottom nav label 上方、shortcut card 文本左侧、tip title 左侧和字段 label 左侧等 component-local search window 中寻找小型前景块，使用 `decode_png_pixels()` 和简单 connected component 找 bbox，再用 `crop_png()` 生成 icon PNG，写入 `backend/storage/assets/{taskId}/icons/` 与 `backend/storage/icon_candidates/{taskId}.json`，并通过 `/api/tasks/{taskId}/icon-candidates` 暴露。M20 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；生成的 PNG 只是候选资产，不进入 Renderer 可见路径。M20 不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不引入 Pillow/OpenCV。
 
+M21 增加 icon coverage audit/placement readiness harness：后端基于 M20 icon candidates、M19 slice candidates、当前 DSL 和原始 PNG 像素，生成 placement readiness、missedIconHints 和 debug overlay，写入 `backend/storage/icon_coverage_audits/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`，并通过 `/api/tasks/{taskId}/icon-coverage-audit` 暴露。M21 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组；overlay 只是调试资产，不进入 Renderer 可见路径。M21 不把 M20 icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不引入 Pillow/OpenCV。overlay 只画彩色 bbox，不画文字标签。
+
 ## Backend Non-Goals
 
-M20 不做：
+M21 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -262,6 +268,10 @@ M20 不做：
 - 通过 component annotation 结果创建真实 Figma group、component 或 Auto Layout。
 - 把 M19 实验 asset slice 写入 DSL `assets`。
 - 把 M20 icon candidate 写入 DSL `assets`。
+- 把 M21 overlay 写入 DSL `assets`。
+- 把 M20 icon 放进 Figma 可见画布。
+- SVG/icon semantic recognition 或图标库匹配。
+- 按中文文案特化 missed icon hints。
 - AI inpainting。
 - 引入 Pillow/OpenCV。
 - SVG/icon 语义识别或图标库匹配。

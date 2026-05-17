@@ -62,7 +62,8 @@
 18. 接入 component-aware layer separation candidate harness，先生成分层策略报告和 simple fill candidate，不改变画布。状态：完成第一版。
 19. 接入 local asset slice/simple fill experiment harness，生成候选 PNG 资产但不改变画布。状态：完成第一版。
 20. 接入 icon candidate extraction/crop harness，生成 icon PNG 候选资产但不改变画布。状态：完成第一版。
-21. 加入 visible icon fallback 或 partial fallback replacement 实验，基于 M19/M20 资产做局部替换验证。
+21. 加入 icon coverage audit 和 placement readiness 报告，基于 M20 icon 候选审计覆盖、漏裁和未来放回阻断。状态：完成第一版。
+22. 加入 visible icon fallback 或 partial fallback replacement 实验，基于 M19-M21 资产与审计结果做局部替换验证。
 22. 用固定样例做 MVP 收敛。
 
 ## Acceptance
@@ -161,6 +162,12 @@
 - icon candidate 报告，包含 icons、blockedComponentIds 和 cropped/failed 统计。
 - 本地 `assets/{taskId}/icons/*.png` 候选资产。
 - DSL 顶层 M20 meta，且不改任何已有 element 或 DSL assets。
+- IconCoverageAuditDocument v0.1 合同。
+- SQLite `icon_coverage_audit_results`。
+- `GET /api/tasks/{taskId}/icon-coverage-audit`。
+- icon coverage audit 报告，包含 placements、missedIconHints、coverageOverlay 和 readiness/collision 统计。
+- 本地 `assets/{taskId}/debug/icon_coverage_overlay.png` 调试 overlay。
+- DSL 顶层 M21 meta，且不改任何已有 element 或 DSL assets。
 - 单元测试。
 
 验证命令：

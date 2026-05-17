@@ -251,6 +251,27 @@ M20 只允许修改 DSL 顶层 `meta`：
 
 M20 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M20 不做 SVG/icon 语义识别，不做图标库匹配，不做可见 icon replacement，不删除 fallback，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout，也不做圆形、三角形、五角星或复杂图形重建。
 
+M21 新增 icon coverage audit/placement readiness harness。它生成独立 `/icon-coverage-audit` 报告，审计 M20 已裁 icon 在原图上的覆盖情况、未来放回 DSL/Figma 前的 collision/readiness，以及局部高价值区域的 missedIconHints。M21 生成 debug overlay PNG，但 overlay 只作为调试资产，不进入 Renderer 输入。
+
+M21 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m21_icon_coverage_audit"],
+    "iconCoverageCandidateCount": 34,
+    "iconCoveragePlacementCount": 34,
+    "iconCoverageMissedHintCount": 8,
+    "iconPlacementReadyCount": 0,
+    "iconPlacementNeedsFallbackCoordinationCount": 30,
+    "iconPlacementNeedsSliceCoordinationCount": 2,
+    "iconPlacementBlockedCount": 2
+  }
+}
+```
+
+M21 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M21 不把 M20 icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M21 overlay 只画彩色 bbox，不画文字标签。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

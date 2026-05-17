@@ -37,6 +37,15 @@ from ..icon_candidate import (
     build_skipped_icon_candidate_document,
     icon_asset_records,
 )
+from ..icon_coverage import (
+    IconCoverageAuditDocument,
+    IconCoverageStorageAdapter,
+    apply_icon_coverage_metadata,
+    build_failed_icon_coverage_document,
+    build_icon_coverage_audit_document,
+    build_skipped_icon_coverage_document,
+    overlay_asset_records,
+)
 from ..database import json_dumps
 from ..dsl_patch import (
     DSLPatchDocument,
@@ -236,7 +245,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             separated_dsl,
             now,
         )
-        final_dsl = save_icon_candidate_result(
+        icon_candidate_document, icon_candidate_dsl = save_icon_candidate_result(
             task_id,
             image,
             data,
@@ -246,6 +255,17 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             separation_document,
             asset_slice_document,
             sliced_dsl,
+            now,
+        )
+        final_dsl = save_icon_coverage_audit_result(
+            task_id,
+            image,
+            data,
+            binding_document,
+            structure_document,
+            icon_candidate_document,
+            asset_slice_document,
+            icon_candidate_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -1139,9 +1159,9 @@ def save_icon_candidate_result(
     asset_slice_document: AssetSliceCandidateDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[IconCandidateDocument | None, dict[str, object]]:
     if not state.settings.icon_candidate_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -1236,6 +1256,124 @@ def save_icon_candidate_result(
             "cropped_icon_count": int(document.meta.get("croppedIconCount", 0)),
             "blocked_count": int(document.meta.get("blockedCount", 0)),
             "failed_crop_count": int(document.meta.get("failedCropCount", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_icon_coverage_audit_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    binding_document: TextPrimitiveBindingDocument,
+    structure_document: ComponentStructureDocument,
+    icon_candidate_document: IconCandidateDocument | None,
+    asset_slice_document: AssetSliceCandidateDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.icon_coverage_audit_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if icon_candidate_document is None:
+            document = build_skipped_icon_coverage_document(
+                task_id=task_id,
+                image=image,
+                code="icon_candidate_not_completed",
+                message="Icon coverage audit skipped because icon candidates did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_icon_coverage_audit_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                binding_document=binding_document,
+                structure_document=structure_document,
+                icon_candidate_document=icon_candidate_document,
+                asset_slice_document=asset_slice_document,
+                dsl=input_dsl,
+                settings=state.settings,
+                storage=IconCoverageStorageAdapter(
+                    assets_root=state.storage.assets_dir,
+                    public_base_url=state.settings.public_base_url,
+                ),
+            )
+            final_dsl = apply_icon_coverage_metadata(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="icon_coverage_audit",
+                    error_code="ICON_COVERAGE_AUDIT_VALIDATION_FAILED",
+                    message="Icon coverage audit validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_icon_coverage_document(
+                    task_id=task_id,
+                    image=image,
+                    code="ICON_COVERAGE_AUDIT_VALIDATION_FAILED",
+                    message="Icon coverage audit validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_coverage_audit",
+            error_code="ICON_COVERAGE_AUDIT_FAILED",
+            message="Icon coverage audit failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_icon_coverage_document(
+            task_id=task_id,
+            image=image,
+            code="ICON_COVERAGE_AUDIT_FAILED",
+            message="Icon coverage audit failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_coverage_audit",
+            error_code=document.error["code"] if document.error else "ICON_COVERAGE_AUDIT_FAILED",
+            message=document.error["message"] if document.error else "Icon coverage audit failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in overlay_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="icon_coverage_audit",
+                error_code="asset_db_insert_failed",
+                message="Icon coverage overlay asset database insert failed.",
+                detail=str(error),
+            )
+
+    audit_path = state.storage.save_icon_coverage_audit(task_id, json_dumps(document.to_dict()))
+    state.database.insert_icon_coverage_audit_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "audit_path": str(audit_path),
+            "overlay_asset_id": document.coverageOverlay.assetId if document.coverageOverlay else None,
+            "placement_count": int(document.meta.get("placementCount", 0)),
+            "missed_hint_count": int(document.meta.get("missedIconHintCount", 0)),
+            "ready_count": int(document.meta.get("readyCount", 0)),
+            "needs_fallback_coordination_count": int(document.meta.get("needsFallbackCoordinationCount", 0)),
+            "needs_slice_coordination_count": int(document.meta.get("needsSliceCoordinationCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

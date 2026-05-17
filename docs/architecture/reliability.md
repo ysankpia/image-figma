@@ -108,6 +108,17 @@ M20 icon candidate extraction 是可观测的非关键路径：
 - PNG pixel decode unsupported 只记录 warning，不让上传失败。
 - M20 不做 SVG/icon 语义识别，不做图标库匹配，不做可见 icon replacement，不删除 fallback，不做 AI inpainting，不引入 Pillow/OpenCV，不重建圆形、三角形、五角星或复杂图形。
 
+M21 icon coverage audit 是可观测的非关键路径：
+
+- 默认 `ICON_COVERAGE_AUDIT_ENABLED=true`，但不改变 Figma 可见输出。
+- icon coverage audit failed/skipped 写入 `icon_coverage_audit_results` 和 `error_logs`。
+- icon coverage audit validation failed 时 `/dsl` 回退 M20 输出，只是不追加 M21 meta。
+- M21 只修改 DSL 顶层 `meta`；不能修改任何已有 element，也不能修改 DSL `assets` 数组。
+- 生成的 overlay PNG 只作为调试资产存在于 storage 和 `/icon-coverage-audit` 报告里。
+- overlay 生成或写入失败只记录 warning，不能让 upload 失败。
+- PNG pixel decode unsupported 只记录 warning，不让上传失败。
+- M21 不把 M20 icon 放进画布、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不按中文文案特化、不做 AI inpainting、不引入 Pillow/OpenCV。
+
 整页失败只发生在：
 
 - PNG 无法读取。

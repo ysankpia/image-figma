@@ -62,6 +62,12 @@ class Settings:
     icon_candidate_max_size: int = 96
     icon_candidate_foreground_distance: int = 32
     icon_candidate_max_component_area_ratio: float = 0.20
+    icon_coverage_audit_enabled: bool = True
+    icon_coverage_overlay_enabled: bool = True
+    icon_coverage_missed_hints_enabled: bool = True
+    icon_coverage_min_hint_confidence: float = 0.60
+    icon_coverage_max_missed_hints: int = 80
+    icon_coverage_foreground_distance: int = 32
 
 
 def get_settings() -> Settings:
@@ -124,6 +130,12 @@ def get_settings() -> Settings:
         icon_candidate_max_size=int(os.getenv("ICON_CANDIDATE_MAX_SIZE", "96")),
         icon_candidate_foreground_distance=int(os.getenv("ICON_CANDIDATE_FOREGROUND_DISTANCE", "32")),
         icon_candidate_max_component_area_ratio=float(os.getenv("ICON_CANDIDATE_MAX_COMPONENT_AREA_RATIO", "0.20")),
+        icon_coverage_audit_enabled=parse_bool(os.getenv("ICON_COVERAGE_AUDIT_ENABLED", "true")),
+        icon_coverage_overlay_enabled=parse_bool(os.getenv("ICON_COVERAGE_OVERLAY_ENABLED", "true")),
+        icon_coverage_missed_hints_enabled=parse_bool(os.getenv("ICON_COVERAGE_MISSED_HINTS_ENABLED", "true")),
+        icon_coverage_min_hint_confidence=float(os.getenv("ICON_COVERAGE_MIN_HINT_CONFIDENCE", "0.60")),
+        icon_coverage_max_missed_hints=int(os.getenv("ICON_COVERAGE_MAX_MISSED_HINTS", "80")),
+        icon_coverage_foreground_distance=int(os.getenv("ICON_COVERAGE_FOREGROUND_DISTANCE", "32")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

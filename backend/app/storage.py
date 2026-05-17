@@ -21,6 +21,7 @@ class Storage:
         self.layer_separation_candidates_dir = root / "layer_separation_candidates"
         self.asset_slice_candidates_dir = root / "asset_slice_candidates"
         self.icon_candidates_dir = root / "icon_candidates"
+        self.icon_coverage_audits_dir = root / "icon_coverage_audits"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -39,6 +40,7 @@ class Storage:
             self.layer_separation_candidates_dir,
             self.asset_slice_candidates_dir,
             self.icon_candidates_dir,
+            self.icon_coverage_audits_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -87,6 +89,9 @@ class Storage:
 
     def icon_candidate_path(self, task_id: str) -> Path:
         return self.icon_candidates_dir / f"{task_id}.json"
+
+    def icon_coverage_audit_path(self, task_id: str) -> Path:
+        return self.icon_coverage_audits_dir / f"{task_id}.json"
 
     def asset_slice_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "slices" / filename
@@ -183,6 +188,12 @@ class Storage:
 
     def save_icon_candidate(self, task_id: str, data: str) -> Path:
         path = self.icon_candidate_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_icon_coverage_audit(self, task_id: str, data: str) -> Path:
+        path = self.icon_coverage_audit_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

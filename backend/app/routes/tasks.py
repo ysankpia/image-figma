@@ -540,3 +540,51 @@ def get_task_icon_candidates(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/icon-coverage-audit")
+def get_task_icon_coverage_audit(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_icon_coverage_audit_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ICON_COVERAGE_AUDIT_NOT_FOUND",
+            "Icon coverage audit result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_coverage_audit_lookup",
+            task_id=task_id,
+        )
+
+    audit_path = Path(result["audit_path"] or "")
+    if not audit_path.exists():
+        raise ApiError(
+            "ICON_COVERAGE_AUDIT_NOT_FOUND",
+            "Icon coverage audit file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_coverage_audit_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(audit_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "placements": document.get("placements", []),
+        "missedIconHints": document.get("missedIconHints", []),
+        "coverageOverlay": document.get("coverageOverlay"),
+        "blockedIconCandidateIds": document.get("blockedIconCandidateIds", []),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)
