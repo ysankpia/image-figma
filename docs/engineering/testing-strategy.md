@@ -262,6 +262,19 @@ uv run python scripts/run_m27_sam_visual_smoke.py \
   --checkpoint "/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt"
 ```
 
+M28 single-image extraction smoke：
+
+```bash
+cd backend
+uv run pytest tests/test_ui_visual_extraction.py -q
+uv run python scripts/run_m28_single_visual_extraction.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --checkpoint "/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt" \
+  --output-dir "storage/m28_single_visual_extraction"
+```
+
+M28 smoke 产物是人工验收证据，不提交 `backend/storage/`。验收重点是 `preview_sheet` 中图片资产保持整块、图片内部碎片被阻断、文字和数字不进入 accepted icon/control。
+
 阶段级工作必须先形成独立 commit，再在该提交之上运行完整验证。这样测试结果能绑定到明确阶段，避免 M11、M12 这类阶段被堆在同一个 dirty tree 里。如果提交后验证失败，使用同阶段 fix commit 修正并重新跑验证；不要继续开发下一阶段。
 
 后续应继续扩展到：

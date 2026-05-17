@@ -261,3 +261,15 @@ SAM_VISUAL_CANDIDATE_OVERLAY_ENABLED=true
 ```
 
 When explicitly enabled, it writes `backend/storage/sam_visual_candidates/{taskId}.json`, emits `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`, and exposes `GET /api/tasks/{taskId}/sam-visual-candidates`. M27 runs SAM2 automatic masks and filters them against visible text, text covers, hidden candidate text, existing M20/M22/M23/M24/M25 icon bboxes, status/header/illustration/bed-map exclusion zones, and line/border/background-like masks. The SAM2 runtime is cached per checkpoint/config/device inside the backend process; `points_per_side=8` and `max_image_edge=960` are the default UI-bbox benchmark settings. M27 does not modify DSL, does not append DSL meta, does not crop new icon assets, does not generate transparent PNG, and does not feed Renderer. The local development checkpoint is kept outside tracked files at `/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt`.
+
+M28 single-image SAM2 UI visual extraction is a script-only evidence harness, not an upload stage:
+
+```bash
+cd backend
+uv run python scripts/run_m28_single_visual_extraction.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --checkpoint "/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt" \
+  --output-dir "storage/m28_single_visual_extraction"
+```
+
+It writes `icons/*.png`, `images/*.png`, `controls/*.png`, `m28_visual_extraction.json`, `m28_visual_extraction_overlay.png`, and `m28_visual_extraction_preview_sheet.png`. M28 treats SAM2 masks as proposals, first protects whole image assets such as hero/product/supplier images, then extracts UI icons and controls while blocking text, numeric labels, image-internal fragments, line/background/card fragments and status bar. It does not modify DSL, does not add assets to DSL, does not call Renderer, does not do visible replay, and does not enter batch processing.

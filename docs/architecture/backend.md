@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M27 当前管线：
+M28 当前上传管线：
 
 ```text
 receive multipart PNG
@@ -269,9 +269,11 @@ M26 增加 visual perception provider benchmark harness：后端默认不启用 
 
 M27 增加 SAM2-guided visual candidate filtering harness：后端默认不启用 `SAM_VISUAL_CANDIDATE_ENABLED=false`。显式开启且本地 checkpoint、torch、numpy 和 sam2 可用时，M27 运行 SAM2 automatic mask generation，把 mask bbox 映射回原图，再基于当前 DSL text/cover/candidate_text、M20/M22/M23/M24/M25 existing icon bbox、状态栏/header/插画/床位图排除区和 line/border/background-like 规则过滤成 accepted candidates 与 blocked candidates。M27 写入 `backend/storage/sam_visual_candidates/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，并通过 `/api/tasks/{taskId}/sam-visual-candidates` 暴露。M27 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不生成透明 PNG、不改变 Figma 可见输出、不把 SAM2 输出当 Renderer 输入。
 
+M28 增加 single-image SAM2 UI visual extraction harness：它是 `backend/scripts/run_m28_single_visual_extraction.py` 脚本能力，不进入上传主链路。M28 针对固定复杂样例图运行 SAM2 proposal，再按对象级边界输出 `icons/*.png`、`images/*.png`、`controls/*.png`、`m28_visual_extraction.json`、`m28_visual_extraction_overlay.png` 和 `m28_visual_extraction_preview_sheet.png`。M28 先把 hero/product/supplier 等图片槽作为整块 image asset 保护，再从非图片区域提取 UI icon/control，阻断文字、数字、状态栏、图片内部碎片、线条、背景和容器片段。M28 不修改 DSL、不写数据库、不暴露 API、不调用 Renderer、不做 Figma visible replay。
+
 ## Backend Non-Goals
 
-M27 不做：
+M28 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -317,6 +319,8 @@ M27 不做：
 - 把 M26 provider 输出写进 DSL、Renderer 或 Figma 可见画布。
 - 默认运行 M27 SAM visual filtering。
 - 把 M27 SAM candidates 写进 DSL、Renderer 或 Figma 可见画布。
+- 默认运行 M28 visual extraction。
+- 把 M28 `icons/`、`images/`、`controls/` 写进 DSL、Renderer 或 Figma 可见画布。
 - 把 OpenCV/UIED 作为默认生产依赖。
 - 默认下载 SAM2 checkpoint 或 vendoring UIED 源码。
 - 全局 icon detection。

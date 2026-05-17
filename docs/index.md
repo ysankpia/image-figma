@@ -33,6 +33,7 @@
 - 当前 region-guided business icon candidate 计划：[plans/active/025-region-guided-business-icon-candidates.md](plans/active/025-region-guided-business-icon-candidates.md)
 - 当前 visual perception provider benchmark 计划：[plans/active/026-visual-perception-provider-benchmark.md](plans/active/026-visual-perception-provider-benchmark.md)
 - 当前 SAM2 visual candidate filtering 计划：[plans/active/027-sam2-guided-ui-visual-candidate-filtering.md](plans/active/027-sam2-guided-ui-visual-candidate-filtering.md)
+- 当前 single-image SAM2 UI visual extraction 计划：[plans/active/028-single-image-sam2-ui-visual-extraction.md](plans/active/028-single-image-sam2-ui-visual-extraction.md)
 
 ## By Task Type
 
@@ -110,6 +111,7 @@
 - M25 business icon candidate 决策：[decisions/0028-crop-business-icon-candidates-before-visible-business-icon-replay.md](decisions/0028-crop-business-icon-candidates-before-visible-business-icon-replay.md)
 - M26 visual perception benchmark 决策：[decisions/0029-benchmark-visual-perception-providers-before-replacing-rule-probes.md](decisions/0029-benchmark-visual-perception-providers-before-replacing-rule-probes.md)
 - M27 SAM2 visual candidate filtering 决策：[decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md](decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md)
+- M28 UI visual extraction 决策：[decisions/0031-extract-ui-visual-objects-before-figma-replay.md](decisions/0031-extract-ui-visual-objects-before-figma-replay.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 
