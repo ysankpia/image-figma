@@ -301,7 +301,8 @@ def build_icon_gap_candidate_document(
             cover_bboxes=cover_bboxes,
             settings=settings,
             storage=storage,
-            index=len(gap_icons) + 1,
+            icon_index=len(gap_icons) + 1,
+            blocked_index=len(blocked_hints) + 1,
         )
         if isinstance(result, IconGapItem):
             gap_icons.append(result)
@@ -514,16 +515,17 @@ def build_gap_icon_for_probe(
     cover_bboxes: list[list[int]],
     settings: Settings,
     storage: IconGapStorageAdapter,
-    index: int,
+    icon_index: int,
+    blocked_index: int,
 ) -> IconGapItem | BlockedGapHint | None:
     if probe.source not in GAP_SOURCES:
-        return blocked_hint(index, probe, "gap_source_unsupported")
+        return blocked_hint(blocked_index, probe, "gap_source_unsupported")
     component = components.get(probe.component_id) if probe.component_id else None
     if probe.component_id is not None and component is None:
-        return blocked_hint(index, probe, "component_missing")
+        return blocked_hint(blocked_index, probe, "component_missing")
     if probe.source == "field_missing_icon" and probe.source_hint_id is not None:
         if probe.hint_bbox is not None and is_text_stroke_like(probe.hint_bbox, field_strict=True):
-            return blocked_hint(index, probe, "gap_bbox_text_like")
+            return blocked_hint(blocked_index, probe, "gap_bbox_text_like")
     pick = pick_candidate_bbox(
         pixels=pixels,
         image=image,
@@ -535,43 +537,43 @@ def build_gap_icon_for_probe(
         settings=settings,
     )
     if pick is None:
-        return blocked_hint(index, probe, "no_foreground_blob") if probe.source_hint_id else None
+        return blocked_hint(blocked_index, probe, "no_foreground_blob") if probe.source_hint_id else None
     if "edge_clipped_unresolved" in pick.reasons:
-        return blocked_hint(index, probe, "edge_clipped_unresolved", pick.bbox)
+        return blocked_hint(blocked_index, probe, "edge_clipped_unresolved", pick.bbox)
     reasons = list(pick.reasons)
     if component is not None and not bbox_inside(pick.bbox, component.bbox):
-        return blocked_hint(index, probe, "gap_bbox_outside_component", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_outside_component", pick.bbox)
     if probe.component_id is not None and component is not None:
         reasons.append("inside_component_bbox")
     if not bbox_in_bounds(pick.bbox, image):
-        return blocked_hint(index, probe, "gap_bbox_out_of_bounds", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_out_of_bounds", pick.bbox)
     if any(iou(pick.bbox, bbox) > 0.50 for bbox in existing_icon_bboxes):
-        return blocked_hint(index, probe, "gap_bbox_duplicate_m20", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_duplicate_m20", pick.bbox)
     if any(iou(pick.bbox, bbox) > 0.70 for bbox in seen_gap_bboxes):
-        return blocked_hint(index, probe, "duplicate_gap_candidate", pick.bbox)
+        return blocked_hint(blocked_index, probe, "duplicate_gap_candidate", pick.bbox)
     if any(iou(pick.bbox, bbox) > 0.10 for bbox in text_bboxes):
-        return blocked_hint(index, probe, "gap_bbox_overlaps_text", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_overlaps_text", pick.bbox)
     if any(iou(pick.bbox, bbox) > 0.10 for bbox in cover_bboxes):
-        return blocked_hint(index, probe, "gap_bbox_overlaps_cover", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_overlaps_cover", pick.bbox)
     if is_status_bar_bbox(pick.bbox, probe, image):
-        return blocked_hint(index, probe, "gap_bbox_status_bar", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_status_bar", pick.bbox)
     if not gap_size_like(pick.bbox, probe.source, settings):
-        return blocked_hint(index, probe, "gap_bbox_too_large" if max(pick.bbox[2], pick.bbox[3]) > settings.icon_gap_candidate_max_size else "gap_bbox_too_small", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_too_large" if max(pick.bbox[2], pick.bbox[3]) > settings.icon_gap_candidate_max_size else "gap_bbox_too_small", pick.bbox)
     if is_text_stroke_like(pick.bbox, field_strict=probe.source == "field_missing_icon"):
-        return blocked_hint(index, probe, "gap_bbox_text_like", pick.bbox)
+        return blocked_hint(blocked_index, probe, "gap_bbox_text_like", pick.bbox)
 
     confidence = score_gap_candidate(probe, pick, settings)
     if confidence < settings.icon_gap_candidate_min_confidence:
-        return blocked_hint(index, probe, "candidate_confidence_low", pick.bbox, confidence)
-    gap_id = f"icon_gap_{index:03d}"
+        return blocked_hint(blocked_index, probe, "candidate_confidence_low", pick.bbox, confidence)
+    gap_id = f"icon_gap_{icon_index:03d}"
     filename = f"{gap_id}.png"
     try:
         cropped = crop_png(png_data, PngRegion(gap_id, pick.bbox[0], pick.bbox[1], pick.bbox[2], pick.bbox[3]))
         path = storage.write_icon(task_id, filename, cropped)
     except UnsupportedPngCropError:
-        return failed_gap_icon(index, probe, pick.bbox, "png_crop_unsupported", confidence)
+        return failed_gap_icon(icon_index, probe, pick.bbox, "png_crop_unsupported", confidence)
     except OSError:
-        return failed_gap_icon(index, probe, pick.bbox, "asset_write_failed", confidence)
+        return failed_gap_icon(icon_index, probe, pick.bbox, "asset_write_failed", confidence)
 
     reasons.extend(
         [

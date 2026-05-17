@@ -241,6 +241,80 @@ def test_icon_gap_blocks_text_stroke_like_field_hint(tmp_path) -> None:
     assert any("gap_bbox_text_like" in hint.reasons for hint in document.blockedHints)
 
 
+def test_icon_gap_multiple_blocked_hints_keep_unique_ids(tmp_path) -> None:
+    image, binding, structure, annotation, dsl, png = field_label_fixture(icon_bboxes=[])
+    settings = make_gap_settings(icon_candidate_max_component_area_ratio=0.60)
+    icon_document = build_icon_candidate_document(
+        task_id="task_multiple_blocked_gap",
+        image=image,
+        png_data=png,
+        binding_document=binding,
+        structure_document=structure,
+        annotation_document=annotation,
+        layer_separation_document=None,
+        asset_slice_document=None,
+        dsl=dsl,
+        settings=settings,
+        storage=IconCandidateStorageAdapter(tmp_path / "icons", "http://localhost:8000"),
+    )
+    coverage_document = build_icon_coverage_audit_document(
+        task_id="task_multiple_blocked_gap",
+        image=image,
+        png_data=png,
+        binding_document=binding,
+        structure_document=structure,
+        icon_candidate_document=icon_document,
+        asset_slice_document=None,
+        dsl=dsl,
+        settings=settings,
+        storage=IconCoverageStorageAdapter(tmp_path / "coverage", "http://localhost:8000"),
+    )
+    from app.icon_coverage import MissedIconHintItem
+
+    coverage_document.missedIconHints = [
+        MissedIconHintItem(
+            id="missed_icon_hint_blocked_001",
+            source="field_icon_hint",
+            status="hint_only",
+            bbox=[56, 72, 18, 36],
+            componentId=structure.components[0].id,
+            componentRole=structure.components[0].role,
+            confidence=0.74,
+            suggestedNextRule="field_icon_candidate",
+            reasons=["field_leading_visual", "hint_only_no_crop"],
+        ),
+        MissedIconHintItem(
+            id="missed_icon_hint_blocked_002",
+            source="field_icon_hint",
+            status="hint_only",
+            bbox=[58, 112, 18, 36],
+            componentId=structure.components[0].id,
+            componentRole=structure.components[0].role,
+            confidence=0.74,
+            suggestedNextRule="field_icon_candidate",
+            reasons=["field_leading_visual", "hint_only_no_crop"],
+        ),
+    ]
+
+    document = build_icon_gap_candidate_document(
+        task_id="task_multiple_blocked_gap",
+        image=image,
+        png_data=png,
+        binding_document=binding,
+        structure_document=structure,
+        icon_candidate_document=icon_document,
+        icon_coverage_document=coverage_document,
+        dsl=dsl,
+        settings=settings,
+        storage=IconGapStorageAdapter(tmp_path / "gap", "http://localhost:8000"),
+    )
+
+    assert document.status == "completed"
+    assert len(document.blockedHints) == 2
+    blocked_ids = [hint.id for hint in document.blockedHints]
+    assert len(set(blocked_ids)) == len(blocked_ids)
+
+
 def test_icon_gap_retries_edge_clipped_candidate(tmp_path) -> None:
     document, coverage_document, icon_document, dsl, image = home_like_gap_document(
         tmp_path,
