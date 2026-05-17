@@ -25,6 +25,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `icon_placement_plan_results`
 - `icon_visible_fallback_results`
 - `icon_business_candidate_results`
+- `perception_benchmark_results`
 
 后续建议表：
 
@@ -59,7 +60,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M25 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
+M26 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -98,6 +99,10 @@ M25 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁
 - `asset_icon_visible_fallback_overlay`
 - `asset_icon_business_candidate`
 - `asset_icon_business_overlay`
+- `asset_perception_overlay_rules`
+- `asset_perception_overlay_opencv`
+- `asset_perception_overlay_sam2`
+- `asset_perception_overlay_uied`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -117,6 +122,7 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_icon_visible_fallback_overlay`：M24 生成的 visible fallback replay debug overlay PNG，只通过 `/icon-visible-fallback`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 - `asset_icon_business_*`：M25 生成的 business icon PNG 候选资产，只通过 `/icon-business-candidates` 暴露，不进入 DSL `assets`。
 - `asset_icon_business_overlay`：M25 生成的 debug overlay PNG，只通过 `/icon-business-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
+- `asset_perception_overlay_*`：M26 生成的 provider benchmark debug overlay PNG，只通过 `/perception-benchmark`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -481,6 +487,32 @@ Icon visible fallback payload 本体写入 `backend/storage/icon_visible_fallbac
 - `created_at`
 
 Icon business candidate payload 本体写入 `backend/storage/icon_business_candidates/{taskId}.json`。它保存 `businessIcons`、`blockedCandidates`、`businessOverlay`、`warnings` 和统计 meta。business icon PNG 写入 `backend/storage/assets/{taskId}/icons_business/`，并以 `asset_icon_business_candidate` role 登记到 `assets` 表。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`，并以 `asset_icon_business_overlay` role 登记到 `assets` 表。M25 不把 business icon 或 overlay 写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
+
+## perception_benchmark_results
+
+用途：记录 M26 visual perception provider benchmark 文件、provider overlay 资产和汇总指标。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `benchmark_path`
+- `rules_overlay_asset_id`
+- `opencv_overlay_asset_id`
+- `sam2_overlay_asset_id`
+- `uied_overlay_asset_id`
+- `provider_count`
+- `candidate_count`
+- `blocked_count`
+- `recommended_provider`
+- `elapsed_ms`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Perception benchmark payload 本体写入 `backend/storage/perception_benchmarks/{taskId}.json`。它保存 `providers`、`comparison`、`warnings` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/perception_overlay_*.png`，并以 `asset_perception_overlay_*` role 登记到 `assets` 表。M26 不把 provider candidates、blocked 或 overlay 写入 DSL，不追加 DSL meta，不改变 Figma 可见输出。
 
 ## model_call_logs
 

@@ -51,13 +51,13 @@ http://localhost:8000/api
 
 - 用途：上传 PNG 并创建任务。
 - 请求：multipart file。
-- M25 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
+- M26 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
 - 成功返回：`taskId`、文件信息、状态、阶段和进度。
 - 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
 - 默认大小上限：10MB。
 - 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
 - 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR、DSL patch、text replacement、text binding、component structure、component annotation、layer separation candidate、asset slice candidate、icon candidate、icon coverage audit、icon gap candidate、icon placement plan 和 business icon candidate 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy。M15 默认生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 默认生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups；M17 默认生成 component annotation 报告，并只把 M16 结构挂到已有 DSL element 的 `name`/`meta`；M18 默认生成 layer separation candidate 报告，并只追加 DSL 顶层 meta；M19 默认生成本地 asset slice candidate 报告和实验 PNG，并只追加 DSL 顶层 meta；M20 默认生成 icon candidate 报告和 icon PNG，并只追加 DSL 顶层 meta；M21 默认生成 icon coverage audit 报告和 debug overlay，并只追加 DSL 顶层 meta；M22 默认生成 region-guided icon gap candidate 报告、gap icon PNG 和 debug overlay，并只追加 DSL 顶层 meta；M23 默认生成 icon placement plan 报告和 debug overlay，并只追加 DSL 顶层 meta。M15-M23 都不改变 Figma 可见输出。M24 默认关闭；显式设置 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后才会追加 `icon_fallback_cover` 和 `visible_icon_fallback` 可见节点，并追加实际使用的 icon asset 到 DSL `assets`。M25 默认生成 region-guided business icon candidate 报告、业务 icon PNG 和 debug overlay，但只追加 DSL 顶层 meta，不新增可见节点，也不修改 DSL `assets`。
+- 上传链路会生成 visual primitives、OCR、DSL patch、text replacement、text binding、component structure、component annotation、layer separation candidate、asset slice candidate、icon candidate、icon coverage audit、icon gap candidate、icon placement plan 和 business icon candidate 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy。M15 默认生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 默认生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups；M17 默认生成 component annotation 报告，并只把 M16 结构挂到已有 DSL element 的 `name`/`meta`；M18 默认生成 layer separation candidate 报告，并只追加 DSL 顶层 meta；M19 默认生成本地 asset slice candidate 报告和实验 PNG，并只追加 DSL 顶层 meta；M20 默认生成 icon candidate 报告和 icon PNG，并只追加 DSL 顶层 meta；M21 默认生成 icon coverage audit 报告和 debug overlay，并只追加 DSL 顶层 meta；M22 默认生成 region-guided icon gap candidate 报告、gap icon PNG 和 debug overlay，并只追加 DSL 顶层 meta；M23 默认生成 icon placement plan 报告和 debug overlay，并只追加 DSL 顶层 meta。M15-M23 都不改变 Figma 可见输出。M24 默认关闭；显式设置 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后才会追加 `icon_fallback_cover` 和 `visible_icon_fallback` 可见节点，并追加实际使用的 icon asset 到 DSL `assets`。M25 默认生成 region-guided business icon candidate 报告、业务 icon PNG 和 debug overlay，但只追加 DSL 顶层 meta，不新增可见节点，也不修改 DSL `assets`。M26 默认关闭；显式设置 `PERCEPTION_BENCHMARK_ENABLED=true` 后生成 perception benchmark 报告和 provider overlays，但不修改 DSL、不追加 DSL meta、不裁新 asset、不改变 Figma 可见输出。
 
 `GET /api/tasks/{taskId}`
 
@@ -84,6 +84,7 @@ http://localhost:8000/api
 - M23 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m23_icon_placement_plan`，并写入 `iconPlacementPlanCount`、`iconPlacementReadyCount`、`iconPlacementNeedsFallbackMaskCount`、`iconPlacementNeedsSliceCoordinationCount`、`iconPlacementNeedsFallbackCoordinationCount`、`iconPlacementReviewRequiredCount`、`iconPlacementBlockedCount`、`iconPlacementDedupedCount`。M23 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
 - M24 默认不生成 result、不修改 DSL。开启 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后，DSL 顶层 `meta` 可追加 `m24_visible_icon_fallback_replay`，并写入 `visibleIconFallbackSelectedCount`、`visibleIconFallbackAppliedCount`、`visibleIconFallbackBlockedCount`、`visibleIconFallbackSkippedCount`。M24 只能 append 实际使用的 icon asset、`icon_fallback_cover` shape 和 `visible_icon_fallback` image node，不能修改任何已有 element 或已有 asset。
 - M25 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m25_icon_business_candidates`，并写入 `iconBusinessCandidateCount`、`iconBusinessCroppedAssetCount`、`iconBusinessBlockedCount`、`iconBusinessFailedCropCount`。M25 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
+- M26 不更新 DSL。即使 `PERCEPTION_BENCHMARK_ENABLED=true`，`/dsl` 也不包含 M26 quality flag，不追加可见节点，不修改任何已有 element，也不修改 DSL `assets` 数组。
 
 `GET /api/tasks/{taskId}/primitives`
 
@@ -220,6 +221,15 @@ http://localhost:8000/api
 - business candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
 - 返回 `businessIcons`、`blockedCandidates`、`businessOverlay`、`warnings` 和 `meta`。`businessIcons` 可包含 business icon PNG URL，`businessOverlay` 可包含 debug overlay PNG URL；二者都不会写入 DSL `assets`，不会让 Renderer 创建可见节点。
 
+`GET /api/tasks/{taskId}/perception-benchmark`
+
+- 用途：获取 M26 visual perception provider benchmark 报告。
+- 只读调试接口，不被插件主流程依赖。
+- task 不存在返回 `TASK_NOT_FOUND`。
+- result 不存在或文件缺失返回 `PERCEPTION_BENCHMARK_NOT_FOUND`。
+- benchmark failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
+- 返回 `providers`、`comparison`、`warnings` 和 `meta`。`providers` 可包含 `current_rules`、`opencv`、`sam2` 和 `uied` 的统一 candidates、blocked、overlay、elapsedMs 和误检代理指标。provider overlay 不写入 DSL `assets`，不会让 Renderer 创建可见节点。
+
 `GET /api/assets/{assetId}`
 
 - 用途：获取资产信息或文件访问。
@@ -291,6 +301,10 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `ICON_BUSINESS_CANDIDATE_NOT_FOUND`
 - `ICON_BUSINESS_CANDIDATE_FAILED`
 - `ICON_BUSINESS_CANDIDATE_VALIDATION_FAILED`
+- `PERCEPTION_BENCHMARK_NOT_FOUND`
+- `PERCEPTION_BENCHMARK_FAILED`
+- `PERCEPTION_BENCHMARK_VALIDATION_FAILED`
+- `PERCEPTION_PROVIDER_UNAVAILABLE`
 - `INTERNAL_ERROR`
 
 ## Plugin M5 Usage
@@ -305,7 +319,7 @@ GET /api/tasks/{taskId}/dsl
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M25 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan、icon-visible-fallback 或 icon-business-candidates endpoint。
+M26 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan、icon-visible-fallback、icon-business-candidates 或 perception-benchmark endpoint。
 
 ## Optional Endpoints
 

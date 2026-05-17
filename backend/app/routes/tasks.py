@@ -777,3 +777,49 @@ def get_task_icon_business_candidates(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/perception-benchmark")
+def get_task_perception_benchmark(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_perception_benchmark_result(task_id)
+    if result is None:
+        raise ApiError(
+            "PERCEPTION_BENCHMARK_NOT_FOUND",
+            "Perception benchmark result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="perception_benchmark_lookup",
+            task_id=task_id,
+        )
+
+    benchmark_path = Path(result["benchmark_path"] or "")
+    if not benchmark_path.exists():
+        raise ApiError(
+            "PERCEPTION_BENCHMARK_NOT_FOUND",
+            "Perception benchmark file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="perception_benchmark_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "providers": document.get("providers", []),
+        "comparison": document.get("comparison", {}),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

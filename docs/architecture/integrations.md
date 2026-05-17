@@ -75,6 +75,19 @@ AI / CV 用于：
 - AI 抄写完整文字内容。
 - AI 失败导致上传主链路失败。
 
+## Visual Perception Providers
+
+M26 增加 visual perception provider benchmark，但它不是生产替换层。目标是把候选发现从“继续堆固定区域规则”拉回到可测量的 provider 对比。
+
+当前 provider：
+
+- `current_rules`：读取 M20/M22/M25 已有候选作为 baseline，不重新跑规则。
+- `opencv`：可选 benchmark provider；只有 `PERCEPTION_OPENCV_ENABLED=true` 且 `cv2`/`numpy` 可 import 时运行。它是快速 bbox proposal，不是语义引擎。
+- `sam2`：可选/offline provider；只有 `PERCEPTION_SAM2_ENABLED=true`、checkpoint 存在且 `torch`/`sam2` 可 import 时运行 automatic mask generation。它是 mask proposal engine，不是 UI parser。
+- `uied`：只支持 `PERCEPTION_UIED_COMMAND` 外部命令 adapter，不 vendoring UIED 源码。
+
+M26 不默认引入 OpenCV、torch、sam2 或 UIED 到生产依赖，不默认下载模型，不把 provider 输出直接写入 DSL、Renderer 或 Figma。provider 缺依赖时只记录 `unavailable`。
+
 ## DSL Patch
 
 M9 DSL patch builder 用于把 OCR boxes 和 visual primitives 转为可验证 patch：

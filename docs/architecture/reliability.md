@@ -165,6 +165,16 @@ M25 region-guided business icon candidate 是可观测的非关键路径：
 - PNG pixel decode unsupported 时保存 skipped document，DSL 保持 M24/M23 输出。
 - M25 不做可见 replay、不处理插画/头像/建筑/床位平面图复杂资产、不做全图无边界 detection、不做 Codia 式全量拆层、不做 SVG/icon 语义识别、不做图标库匹配、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M26 visual perception provider benchmark 是默认关闭的评估路径：
+
+- 默认 `PERCEPTION_BENCHMARK_ENABLED=false`，正常 upload 不生成 result，不修改 DSL。
+- 显式开启后，benchmark failed/skipped 写入 `perception_benchmark_results` 和 `error_logs`，但不影响 `/dsl`。
+- provider 依赖缺失或未配置时只把该 provider 标为 `unavailable`，document 仍可 completed。
+- 单个 provider exception 只把该 provider 标为 `failed`，不能拖垮其他 provider 或上传主链路。
+- overlay 生成或写入失败只记录 warning，不能让 upload 失败。
+- validation failed 时保存 failed document，写 `error_logs(stage=perception_benchmark)`，不影响 DSL。
+- M26 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不把 OpenCV/SAM2/UIED 输出当 Renderer 输入，也不默认引入 OpenCV、torch、sam2 或 UIED 到生产依赖。
+
 整页失败只发生在：
 
 - PNG 无法读取。

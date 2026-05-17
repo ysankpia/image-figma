@@ -385,6 +385,20 @@ M25 只允许修改 DSL 顶层 `meta`：
 
 M25 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M25 不把 business icon 放进画布，不做 visible replay，不处理插画、头像、建筑或床位平面图复杂资产，不做全图无边界 detection，不做 Codia 式全量拆层，不做 SVG/icon 语义识别，不做图标库匹配，不引入 Pillow/OpenCV。
 
+M26 新增 visual perception provider benchmark harness。它生成独立 `/perception-benchmark` 报告，对比 `current_rules`、可选 OpenCV、可选 SAM2 automatic masks 和可选 UIED command adapter。
+
+M26 不允许修改 DSL：
+
+```json
+{
+  "meta": {
+    "qualityFlags": []
+  }
+}
+```
+
+M26 即使显式启用 `PERCEPTION_BENCHMARK_ENABLED=true`，也不追加 DSL meta，不新增可见 DSL 节点，不修改任何已有 element，不修改 DSL `assets` 数组，不裁新 icon asset，不把 provider candidate/blocked/overlay 写入 Renderer 输入。M26 是评估层，不是 production replacement；OpenCV/SAM2/UIED 输出不能直接成为 DSL 权威。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

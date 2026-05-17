@@ -76,11 +76,19 @@ from ..icon_visible_fallback import (
 )
 from ..icon_business_candidate import (
     IconBusinessStorageAdapter,
+    IconBusinessCandidateDocument,
     apply_icon_business_metadata,
     build_failed_icon_business_document,
     build_icon_business_candidate_document,
     business_icon_asset_records,
     business_overlay_asset_records,
+)
+from ..perception_benchmark import (
+    PerceptionBenchmarkDocument,
+    PerceptionStorageAdapter,
+    build_failed_perception_document,
+    build_perception_benchmark_document,
+    perception_overlay_asset_records,
 )
 from ..database import json_dumps
 from ..dsl_patch import (
@@ -337,7 +345,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             icon_placement_dsl,
             now,
         )
-        final_dsl = save_icon_business_candidate_result(
+        icon_business_document, final_dsl = save_icon_business_candidate_result(
             task_id,
             image,
             data,
@@ -345,6 +353,16 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             icon_gap_document,
             icon_placement_document,
             icon_visible_dsl,
+            now,
+        )
+        save_perception_benchmark_result(
+            task_id,
+            image,
+            data,
+            icon_candidate_document,
+            icon_gap_document,
+            icon_business_document,
+            final_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -1831,9 +1849,9 @@ def save_icon_business_candidate_result(
     icon_placement_document: IconPlacementPlanDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[IconBusinessCandidateDocument | None, dict[str, object]]:
     if not state.settings.icon_business_candidate_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -1924,4 +1942,99 @@ def save_icon_business_candidate_result(
             "created_at": created_at,
         }
     )
-    return final_dsl
+    return document, final_dsl
+
+
+def save_perception_benchmark_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    icon_candidate_document: IconCandidateDocument | None,
+    icon_gap_document: IconGapCandidateDocument | None,
+    icon_business_document: IconBusinessCandidateDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> PerceptionBenchmarkDocument | None:
+    if not state.settings.perception_benchmark_enabled:
+        return None
+
+    failed_logged = False
+    try:
+        document = build_perception_benchmark_document(
+            task_id=task_id,
+            image=image,
+            png_data=png_data,
+            dsl=input_dsl,
+            icon_candidate_document=icon_candidate_document,
+            icon_gap_document=icon_gap_document,
+            icon_business_document=icon_business_document,
+            settings=state.settings,
+            storage=PerceptionStorageAdapter(
+                assets_root=state.storage.assets_dir,
+                public_base_url=state.settings.public_base_url,
+            ),
+        )
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="perception_benchmark",
+            error_code="PERCEPTION_BENCHMARK_FAILED",
+            message="Perception benchmark failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_perception_document(
+            task_id=task_id,
+            image=image,
+            code="PERCEPTION_BENCHMARK_FAILED",
+            message="Perception benchmark failed.",
+        )
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="perception_benchmark",
+            error_code=document.error["code"] if document.error else "PERCEPTION_BENCHMARK_FAILED",
+            message=document.error["message"] if document.error else "Perception benchmark failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in perception_overlay_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="perception_benchmark",
+                error_code="asset_db_insert_failed",
+                message="Perception benchmark overlay asset database insert failed.",
+                detail=str(error),
+            )
+
+    benchmark_path = state.storage.save_perception_benchmark(task_id, json_dumps(document.to_dict()))
+    overlays = {
+        provider.provider: provider.overlay.assetId
+        for provider in document.providers
+        if provider.overlay is not None
+    }
+    state.database.insert_perception_benchmark_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "benchmark_path": str(benchmark_path),
+            "rules_overlay_asset_id": overlays.get("current_rules"),
+            "opencv_overlay_asset_id": overlays.get("opencv"),
+            "sam2_overlay_asset_id": overlays.get("sam2"),
+            "uied_overlay_asset_id": overlays.get("uied"),
+            "provider_count": int(document.meta.get("providerCount", 0)),
+            "candidate_count": int(document.meta.get("totalCandidateCount", 0)),
+            "blocked_count": int(document.meta.get("totalBlockedCount", 0)),
+            "recommended_provider": document.comparison.get("recommendedProvider"),
+            "elapsed_ms": int(document.meta.get("elapsedMs", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document

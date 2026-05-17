@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, optionally runs visible icon fallback replay, builds region-guided business icon candidate reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, builds icon placement plan reports, optionally runs visible icon fallback replay, builds region-guided business icon candidate reports, optionally runs visual perception provider benchmark reports, and serves local asset URLs.
 
 ## Run
 
@@ -63,6 +63,7 @@ curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
 curl http://localhost:8000/api/tasks/{taskId}/icon-visible-fallback
 curl http://localhost:8000/api/tasks/{taskId}/icon-business-candidates
+curl http://localhost:8000/api/tasks/{taskId}/perception-benchmark
 ```
 
 Visible text replacement is debug-only by default:
@@ -217,3 +218,24 @@ ICON_BUSINESS_TIP_INFO_ENABLED=true
 ```
 
 It writes `backend/storage/icon_business_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons_business/`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-business-candidates`. M25 bypasses weak business component recognition by probing stable regions such as bottom nav, primary button trailing arrow, shortcut tile, metric card, room card, trailing icon, and tip/info zones. M25 only updates top-level DSL meta and never adds business icon assets to DSL `assets`, so Figma-visible output stays identical to M24/M23. It does not do visible replay, global icon detection, Codia-style all-layer extraction, illustration/avatar/building/bed-map extraction, SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.
+
+M26 visual perception provider benchmark is disabled by default because it is an evaluation layer:
+
+```bash
+PERCEPTION_BENCHMARK_ENABLED=false
+PERCEPTION_BENCHMARK_PROVIDERS=current_rules,opencv
+PERCEPTION_BENCHMARK_MAX_CANDIDATES_PER_PROVIDER=300
+PERCEPTION_BENCHMARK_OVERLAY_ENABLED=true
+PERCEPTION_OPENCV_ENABLED=false
+PERCEPTION_OPENCV_IMPORT_NAME=cv2
+PERCEPTION_SAM2_ENABLED=false
+PERCEPTION_SAM2_MODEL_CFG=
+PERCEPTION_SAM2_CHECKPOINT=
+PERCEPTION_SAM2_DEVICE=auto
+PERCEPTION_SAM2_MAX_IMAGE_EDGE=1280
+PERCEPTION_SAM2_MAX_MASKS=300
+PERCEPTION_UIED_ENABLED=false
+PERCEPTION_UIED_COMMAND=
+```
+
+When explicitly enabled, it writes `backend/storage/perception_benchmarks/{taskId}.json`, emits provider overlays under `backend/storage/assets/{taskId}/debug/perception_overlay_*.png`, and exposes `GET /api/tasks/{taskId}/perception-benchmark`. M26 compares `current_rules`, optional OpenCV, optional SAM2 automatic masks, and optional UIED command adapter under one candidate contract. It does not modify DSL, does not append DSL meta, does not crop new icon assets, does not feed Renderer, and does not add OpenCV/SAM2/UIED as production dependencies. Local smoke evidence shows OpenCV is fast but noisy, SAM2 is slower but cleaner, and UIED is not worth vendoring beyond an external adapter.

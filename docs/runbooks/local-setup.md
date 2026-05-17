@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness、M21 icon coverage audit/placement readiness harness、M22 region-guided icon gap candidate harness、M23 icon placement plan/layering readiness harness、M24 visible icon fallback replay experiment harness 和 M25 region-guided business icon candidate harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness、M21 icon coverage audit/placement readiness harness、M22 region-guided icon gap candidate harness、M23 icon placement plan/layering readiness harness、M24 visible icon fallback replay experiment harness 和 M25 region-guided business icon candidate harness、M26 visual perception provider benchmark harness。
 
 ## Prerequisites
 
@@ -156,6 +156,7 @@ curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-placement-plan
 curl http://localhost:8000/api/tasks/{taskId}/icon-visible-fallback
 curl http://localhost:8000/api/tasks/{taskId}/icon-business-candidates
+curl http://localhost:8000/api/tasks/{taskId}/perception-benchmark
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -307,6 +308,51 @@ ICON_BUSINESS_TIP_INFO_ENABLED=true
 
 M25 绕开 M16 业务组件识别不足，直接在 bottom nav、primary button trailing arrow、shortcut tile、metric card、room card、trailing 和 tip/info 等稳定区域 probe 业务 icon candidate，写入 `backend/storage/icon_business_candidates/{taskId}.json`、`backend/storage/assets/{taskId}/icons_business/*.png` 和 `backend/storage/assets/{taskId}/debug/icon_business_overlay.png`，通过 `/api/tasks/{taskId}/icon-business-candidates` 查询。M25 只追加 DSL 顶层 meta，不新增可见节点，不修改 DSL `assets`，不把 icon 放进画布；它也不做全图无边界 detection、Codia 式全量拆层、插画/头像/建筑/床位平面图复杂资产处理、SVG/icon 语义识别、图标库匹配、AI inpainting 或 Pillow/OpenCV。
 
+M26 visual perception provider benchmark 默认关闭，只生成评估报告和 provider overlay，不改变 DSL/Figma 输出：
+
+```bash
+PERCEPTION_BENCHMARK_ENABLED=false
+PERCEPTION_BENCHMARK_PROVIDERS=current_rules,opencv
+PERCEPTION_BENCHMARK_MAX_CANDIDATES_PER_PROVIDER=300
+PERCEPTION_BENCHMARK_OVERLAY_ENABLED=true
+PERCEPTION_OPENCV_ENABLED=false
+PERCEPTION_OPENCV_IMPORT_NAME=cv2
+PERCEPTION_SAM2_ENABLED=false
+PERCEPTION_SAM2_MODEL_CFG=
+PERCEPTION_SAM2_CHECKPOINT=
+PERCEPTION_SAM2_DEVICE=auto
+PERCEPTION_SAM2_MAX_IMAGE_EDGE=1280
+PERCEPTION_SAM2_MAX_MASKS=300
+PERCEPTION_UIED_ENABLED=false
+PERCEPTION_UIED_COMMAND=
+```
+
+开启后，M26 把 `current_rules`、可选 OpenCV、可选 SAM2 automatic masks 和可选 UIED command adapter 放到统一候选合同下比较，写入 `backend/storage/perception_benchmarks/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/perception_overlay_*.png`，通过 `/api/tasks/{taskId}/perception-benchmark` 查询。M26 不追加 DSL meta，不裁新 icon asset，不把 provider 输出喂给 Renderer，也不默认安装 OpenCV、torch、sam2 或 UIED。
+
+M26 smoke：
+
+```bash
+cd backend
+uv run python scripts/run_m26_perception_smoke.py --providers current_rules
+uv run --with opencv-python-headless python scripts/run_m26_perception_smoke.py --providers current_rules,opencv
+```
+
+SAM2 smoke 需要本机已有 checkpoint 和依赖：
+
+```bash
+cd backend
+PERCEPTION_SAM2_CHECKPOINT=/absolute/path/to/sam2.1_hiera_tiny.pt \
+uv run python scripts/run_m26_perception_smoke.py --providers current_rules,sam2
+```
+
+UIED smoke 只在配置外部命令时运行：
+
+```bash
+cd backend
+PERCEPTION_UIED_COMMAND="python /absolute/path/to/uied_adapter.py" \
+uv run python scripts/run_m26_perception_smoke.py --providers current_rules,uied
+```
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash
@@ -374,6 +420,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/icon-gap-candidates` 默认返回 `status: "completed"`，包含 gapIcons、blockedHints、gapOverlay 和 meta。
 - `/api/tasks/{taskId}/icon-placement-plan` 默认返回 `status: "completed"`，包含 placements、dedupedIcons、blockedIcons、placementOverlay 和 meta。
 - `/api/tasks/{taskId}/icon-business-candidates` 默认返回 `status: "completed"`，包含 businessIcons、blockedCandidates、businessOverlay 和 meta。
+- `/api/tasks/{taskId}/perception-benchmark` 默认返回 `PERCEPTION_BENCHMARK_NOT_FOUND`；只有显式开启 M26 benchmark 后才返回 providers、comparison 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

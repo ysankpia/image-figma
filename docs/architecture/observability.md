@@ -231,6 +231,26 @@ M25 business icon candidate result 至少包含：
 - `errorCode`
 - `businessPath`
 
+M26 perception benchmark result 至少包含：
+
+- `taskId`
+- `status`
+- `providerCount`
+- `candidateCount`
+- `blockedCount`
+- `recommendedProvider`
+- `elapsedMs`
+- per-provider `elapsedMs`
+- per-provider candidate/blocked/duplicate/text overlap/background/small stroke 数量
+- likely hit proxy counts: bottom nav、button arrow、card tile、room status
+- `rulesOverlayAssetId`
+- `opencvOverlayAssetId`
+- `sam2OverlayAssetId`
+- `uiedOverlayAssetId`
+- `warningCount`
+- `errorCode`
+- `benchmarkPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -261,6 +281,9 @@ M25 business icon candidate result 至少包含：
 - icon visible fallback selected/applied/blocked/skipped 数量。
 - business icon candidate/cropped/blocked/failed 数量。
 - business icon source/blocked reason 分布。
+- perception benchmark provider/candidate/blocked 数量。
+- perception benchmark provider 耗时和 recommended provider。
+- perception benchmark likely hit 与误检代理指标。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -275,7 +298,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> icon_visible_fallback -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> icon_visible_fallback -> icon_business_candidate -> perception_benchmark -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -306,6 +329,10 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - icon placement overlay PNG。
 - icon visible fallback JSON。
 - icon visible fallback overlay PNG。
+- icon business candidate JSON。
+- icon business overlay PNG。
+- perception benchmark JSON。
+- perception benchmark provider overlay PNG。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

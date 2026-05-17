@@ -301,6 +301,26 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS perception_benchmark_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  benchmark_path TEXT,
+                  rules_overlay_asset_id TEXT,
+                  opencv_overlay_asset_id TEXT,
+                  sam2_overlay_asset_id TEXT,
+                  uied_overlay_asset_id TEXT,
+                  provider_count INTEGER NOT NULL,
+                  candidate_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  recommended_provider TEXT,
+                  elapsed_ms INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -684,6 +704,30 @@ class Database:
     def get_icon_business_candidate_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM icon_business_candidate_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_perception_benchmark_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO perception_benchmark_results (
+                  task_id, status, benchmark_path, rules_overlay_asset_id,
+                  opencv_overlay_asset_id, sam2_overlay_asset_id, uied_overlay_asset_id,
+                  provider_count, candidate_count, blocked_count, recommended_provider,
+                  elapsed_ms, warning_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :benchmark_path, :rules_overlay_asset_id,
+                  :opencv_overlay_asset_id, :sam2_overlay_asset_id, :uied_overlay_asset_id,
+                  :provider_count, :candidate_count, :blocked_count, :recommended_provider,
+                  :elapsed_ms, :warning_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_perception_benchmark_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM perception_benchmark_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

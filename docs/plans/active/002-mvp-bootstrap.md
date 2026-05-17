@@ -33,6 +33,7 @@
 - 接入 icon placement plan/layering readiness harness。
 - 接入 visible icon fallback replay experiment harness。
 - 接入 region-guided business icon candidate harness。
+- 接入 visual perception provider benchmark harness。
 - 做样例验收。
 
 不包含：
@@ -72,7 +73,8 @@
 23. 加入 icon placement plan/layering readiness harness，基于 M20/M22 资产、M19 slice 和 DSL collision facts 决定后续可见替换边界。状态：完成第一版。
 24. 加入 visible icon fallback replay experiment harness，默认关闭；显式开启后只回放 M23 规划的低风险 icon。状态：完成第一版。
 25. 加入 region-guided business icon candidate harness，默认开启；基于稳定业务区域 probe 裁业务 icon PNG 候选但不改变画布。状态：完成第一版。
-26. 用固定样例做 MVP 收敛。
+26. 加入 visual perception provider benchmark harness，默认关闭；对比 current_rules、可选 OpenCV、可选 SAM2 和可选 UIED adapter，不改变 DSL/Figma 输出。状态：完成第一版。
+27. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 
@@ -202,6 +204,17 @@
 - 本地 `assets/{taskId}/icons_business/*.png` 候选资产。
 - 本地 `assets/{taskId}/debug/icon_business_overlay.png` 调试 overlay。
 - DSL 顶层 M25 meta，且不改任何已有 element 或 DSL assets。
+- PerceptionBenchmarkDocument v0.1 合同。
+- SQLite `perception_benchmark_results`。
+- `GET /api/tasks/{taskId}/perception-benchmark`。
+- visual perception provider benchmark 报告，包含 providers、comparison、warnings 和 meta。
+- `current_rules` baseline provider。
+- 可选 OpenCV provider，缺依赖时 `unavailable`。
+- 可选 SAM2 automatic mask provider，缺 checkpoint/依赖时 `unavailable`。
+- 可选 UIED external command adapter。
+- 本地 `assets/{taskId}/debug/perception_overlay_*.png` provider 调试 overlay。
+- M26 默认关闭，且不修改 DSL、不追加 DSL meta、不裁新 icon asset。
+- M26 单图证据：OpenCV restored high-recall 在 01 图上 124 candidates / 59 blocked / 277ms；SAM2 tiny 在 01 图上 21 candidates / 10 blocked / 9268ms；UIED adapter 在 01 图上 75 candidates / 35 blocked / 724ms。
 - 单元测试。
 
 验证命令：

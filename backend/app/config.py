@@ -109,6 +109,20 @@ class Settings:
     icon_business_room_card_enabled: bool = True
     icon_business_trailing_enabled: bool = True
     icon_business_tip_info_enabled: bool = True
+    perception_benchmark_enabled: bool = False
+    perception_benchmark_providers: list[str] = field(default_factory=lambda: ["current_rules", "opencv"])
+    perception_benchmark_max_candidates_per_provider: int = 300
+    perception_benchmark_overlay_enabled: bool = True
+    perception_opencv_enabled: bool = False
+    perception_opencv_import_name: str = "cv2"
+    perception_sam2_enabled: bool = False
+    perception_sam2_model_cfg: str = ""
+    perception_sam2_checkpoint: str = ""
+    perception_sam2_device: str = "auto"
+    perception_sam2_max_image_edge: int = 1280
+    perception_sam2_max_masks: int = 300
+    perception_uied_enabled: bool = False
+    perception_uied_command: str = ""
 
 
 def get_settings() -> Settings:
@@ -221,6 +235,20 @@ def get_settings() -> Settings:
         icon_business_room_card_enabled=parse_bool(os.getenv("ICON_BUSINESS_ROOM_CARD_ENABLED", "true")),
         icon_business_trailing_enabled=parse_bool(os.getenv("ICON_BUSINESS_TRAILING_ENABLED", "true")),
         icon_business_tip_info_enabled=parse_bool(os.getenv("ICON_BUSINESS_TIP_INFO_ENABLED", "true")),
+        perception_benchmark_enabled=parse_bool(os.getenv("PERCEPTION_BENCHMARK_ENABLED", "false")),
+        perception_benchmark_providers=parse_csv(os.getenv("PERCEPTION_BENCHMARK_PROVIDERS", "current_rules,opencv")),
+        perception_benchmark_max_candidates_per_provider=int(os.getenv("PERCEPTION_BENCHMARK_MAX_CANDIDATES_PER_PROVIDER", "300")),
+        perception_benchmark_overlay_enabled=parse_bool(os.getenv("PERCEPTION_BENCHMARK_OVERLAY_ENABLED", "true")),
+        perception_opencv_enabled=parse_bool(os.getenv("PERCEPTION_OPENCV_ENABLED", "false")),
+        perception_opencv_import_name=os.getenv("PERCEPTION_OPENCV_IMPORT_NAME", "cv2").strip() or "cv2",
+        perception_sam2_enabled=parse_bool(os.getenv("PERCEPTION_SAM2_ENABLED", "false")),
+        perception_sam2_model_cfg=os.getenv("PERCEPTION_SAM2_MODEL_CFG", "").strip(),
+        perception_sam2_checkpoint=os.getenv("PERCEPTION_SAM2_CHECKPOINT", "").strip(),
+        perception_sam2_device=os.getenv("PERCEPTION_SAM2_DEVICE", "auto").strip() or "auto",
+        perception_sam2_max_image_edge=int(os.getenv("PERCEPTION_SAM2_MAX_IMAGE_EDGE", "1280")),
+        perception_sam2_max_masks=int(os.getenv("PERCEPTION_SAM2_MAX_MASKS", "300")),
+        perception_uied_enabled=parse_bool(os.getenv("PERCEPTION_UIED_ENABLED", "false")),
+        perception_uied_command=os.getenv("PERCEPTION_UIED_COMMAND", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

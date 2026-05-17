@@ -69,6 +69,14 @@ M10 OCR provider 默认仍是 `fake`，可选 `baidu_ppocrv5` 通过 HTTP 调用
 - 不引入 `rapidocr`。
 - 不引入 `onnxruntime`。
 
+M26 perception benchmark 的 OpenCV/SAM2/UIED 依赖是可选实验依赖，不进入主 dependencies：
+
+- OpenCV smoke 可用 `uv run --with opencv-python-headless python scripts/run_m26_perception_smoke.py --providers current_rules,opencv` 临时安装运行。
+- SAM2 smoke 需要本机已有 checkpoint，并在外部环境或临时 `uv --with` 环境中提供 `torch`、`torchvision` 和 `sam2`；M26 不默认下载 checkpoint，不把 SAM2 写进主依赖。
+- UIED 只允许通过 `PERCEPTION_UIED_COMMAND` 外部命令 adapter 接入，不复制 UIED 源码，不把旧项目依赖塞进 backend。
+
+这三类 provider 的输出只进入 benchmark report 和 overlay，不直接进入 DSL 或 Renderer。
+
 模型调用必须有：
 
 - 超时。

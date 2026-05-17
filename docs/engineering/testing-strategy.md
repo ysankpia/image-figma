@@ -125,6 +125,7 @@ Backend API：
 - Renderer 必须覆盖 M24 `icon_fallback_cover` shape 和 `visible_icon_fallback` image node，且 imageFill `fit` 能解析。
 - M25 business icon candidate 必须覆盖默认生成报告、`ICON_BUSINESS_CANDIDATE_ENABLED=false` 不生成报告、`/icon-business-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M25 回归必须保护 bottom nav、primary button trailing、shortcut tile、metric/stat、room card、row/card trailing 和 tip/info region probes；text/cover/hidden candidate_text 冲突必须 blocked；M20/M22/M23/M24 existing icon 不重复裁；状态栏、header title、banner/illustration、文字笔画、分割线和卡片边框不误裁。
+- M26 perception benchmark 必须覆盖默认 `PERCEPTION_BENCHMARK_ENABLED=false` 不生成 result 且 DSL 不出现 M26 meta、显式开启后生成 `/perception-benchmark` 报告和 provider overlay、task/result/file not found 错误、current_rules provider 转换 M20/M22/M25 candidates、provider dependency missing 时 `unavailable`、单 provider exception 不拖垮 document、SAM2 checkpoint missing `unavailable`、UIED mock command JSON 转成统一 candidates。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
@@ -149,6 +150,7 @@ PNG cropper / sampler：
 - M23 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素按 decision 染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。M23 不生成新的 icon PNG。
 - M24 overlay PNG 必须覆盖尺寸等于原图、applied cover/icon 和 blocked bbox 被染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。M24 不生成新的 icon PNG，只复用 M20/M22 asset。
 - M25 business icon crop 必须覆盖 business icon PNG 输出，生成资产宽高必须等于 bbox；M25 overlay PNG 必须覆盖尺寸等于原图、candidate/blocked/failed/duplicate bbox 边缘像素被染色、overlay asset 写入 `assets` 表，PNG decode/crop/overlay 写入失败不能影响 upload completed。
+- M26 perception overlay PNG 必须覆盖尺寸等于原图、provider candidates 和 blocked bbox 被染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。M26 不生成新 icon PNG，也不修改 DSL。
 
 Visual Primitives：
 
@@ -238,6 +240,16 @@ pnpm run check
 cd backend
 uv run pytest
 ```
+
+M26 optional smoke：
+
+```bash
+cd backend
+uv run python scripts/run_m26_perception_smoke.py --providers current_rules
+uv run --with opencv-python-headless python scripts/run_m26_perception_smoke.py --providers current_rules,opencv
+```
+
+SAM2 smoke 只在本机已安装 `torch`/`sam2` 且配置 `PERCEPTION_SAM2_CHECKPOINT` 后运行。UIED smoke 只在配置 `PERCEPTION_UIED_COMMAND` 后运行。
 
 阶段级工作必须先形成独立 commit，再在该提交之上运行完整验证。这样测试结果能绑定到明确阶段，避免 M11、M12 这类阶段被堆在同一个 dirty tree 里。如果提交后验证失败，使用同阶段 fix commit 修正并重新跑验证；不要继续开发下一阶段。
 
