@@ -88,6 +88,10 @@ M26 增加 visual perception provider benchmark，但它不是生产替换层。
 
 M26 不默认引入 OpenCV、torch、sam2 或 UIED 到生产依赖，不默认下载模型，不把 provider 输出直接写入 DSL、Renderer 或 Figma。provider 缺依赖时只记录 `unavailable`。
 
+M27 在 M26 证据之后新增 SAM2-guided visual candidate filtering。它不是新 provider benchmark，而是单独把 SAM2 automatic masks 过滤成 accepted/blocked visual candidates。M27 默认 `SAM_VISUAL_CANDIDATE_ENABLED=false`，需要本地 checkpoint 和 backend uv `perception-sam2` dependency group。当前本机 checkpoint 位于 `/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt`，不进入 git。
+
+M27 不把 SAM2 mask 直接当 UI 语义层，不写 DSL，不裁新 icon asset，不生成透明 PNG，不喂给 Renderer。它只生成 `/sam-visual-candidates` 报告和 overlay，作为 M28 候选池合并输入。
+
 ## DSL Patch
 
 M9 DSL patch builder 用于把 OCR boxes 和 visual primitives 转为可验证 patch：

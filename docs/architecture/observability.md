@@ -284,6 +284,8 @@ M26 perception benchmark result 至少包含：
 - perception benchmark provider/candidate/blocked 数量。
 - perception benchmark provider 耗时和 recommended provider。
 - perception benchmark likely hit 与误检代理指标。
+- SAM visual raw mask/candidate/blocked 数量。
+- SAM visual elapsedMs、kind summary 和 blocked reason summary。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -298,7 +300,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> icon_visible_fallback -> icon_business_candidate -> perception_benchmark -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> icon_placement_plan -> icon_visible_fallback -> icon_business_candidate -> perception_benchmark -> sam_visual_candidate -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -333,6 +335,8 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - icon business overlay PNG。
 - perception benchmark JSON。
 - perception benchmark provider overlay PNG。
+- SAM visual candidate JSON。
+- SAM visual candidate overlay PNG。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

@@ -321,6 +321,23 @@ class Database:
                   error_message TEXT,
                   created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS sam_visual_candidate_results (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id TEXT NOT NULL UNIQUE,
+                  status TEXT NOT NULL,
+                  candidate_path TEXT,
+                  overlay_asset_id TEXT,
+                  raw_mask_count INTEGER NOT NULL,
+                  candidate_count INTEGER NOT NULL,
+                  blocked_count INTEGER NOT NULL,
+                  failed_count INTEGER NOT NULL,
+                  elapsed_ms INTEGER NOT NULL,
+                  warning_count INTEGER NOT NULL,
+                  error_code TEXT,
+                  error_message TEXT,
+                  created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -728,6 +745,28 @@ class Database:
     def get_perception_benchmark_result(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM perception_benchmark_results WHERE task_id = ?", (task_id,)).fetchone()
+
+    def insert_sam_visual_candidate_result(self, result: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO sam_visual_candidate_results (
+                  task_id, status, candidate_path, overlay_asset_id, raw_mask_count,
+                  candidate_count, blocked_count, failed_count, elapsed_ms,
+                  warning_count, error_code, error_message, created_at
+                )
+                VALUES (
+                  :task_id, :status, :candidate_path, :overlay_asset_id, :raw_mask_count,
+                  :candidate_count, :blocked_count, :failed_count, :elapsed_ms,
+                  :warning_count, :error_code, :error_message, :created_at
+                )
+                """,
+                result,
+            )
+
+    def get_sam_visual_candidate_result(self, task_id: str) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            return connection.execute("SELECT * FROM sam_visual_candidate_results WHERE task_id = ?", (task_id,)).fetchone()
 
     def insert_error(
         self,

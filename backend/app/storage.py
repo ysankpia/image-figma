@@ -27,6 +27,7 @@ class Storage:
         self.icon_visible_fallbacks_dir = root / "icon_visible_fallbacks"
         self.icon_business_candidates_dir = root / "icon_business_candidates"
         self.perception_benchmarks_dir = root / "perception_benchmarks"
+        self.sam_visual_candidates_dir = root / "sam_visual_candidates"
         self.logs_dir = root / "logs"
         self.ensure_dirs()
 
@@ -51,6 +52,7 @@ class Storage:
             self.icon_visible_fallbacks_dir,
             self.icon_business_candidates_dir,
             self.perception_benchmarks_dir,
+            self.sam_visual_candidates_dir,
             self.logs_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -117,6 +119,9 @@ class Storage:
 
     def perception_benchmark_path(self, task_id: str) -> Path:
         return self.perception_benchmarks_dir / f"{task_id}.json"
+
+    def sam_visual_candidate_path(self, task_id: str) -> Path:
+        return self.sam_visual_candidates_dir / f"{task_id}.json"
 
     def asset_slice_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "slices" / filename
@@ -261,6 +266,12 @@ class Storage:
 
     def save_perception_benchmark(self, task_id: str, data: str) -> Path:
         path = self.perception_benchmark_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
+        return path
+
+    def save_sam_visual_candidate(self, task_id: str, data: str) -> Path:
+        path = self.sam_visual_candidate_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(data, encoding="utf-8")
         return path

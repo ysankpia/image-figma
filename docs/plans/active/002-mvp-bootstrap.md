@@ -34,6 +34,7 @@
 - 接入 visible icon fallback replay experiment harness。
 - 接入 region-guided business icon candidate harness。
 - 接入 visual perception provider benchmark harness。
+- 接入 SAM2-guided visual candidate filtering harness。
 - 做样例验收。
 
 不包含：
@@ -74,7 +75,8 @@
 24. 加入 visible icon fallback replay experiment harness，默认关闭；显式开启后只回放 M23 规划的低风险 icon。状态：完成第一版。
 25. 加入 region-guided business icon candidate harness，默认开启；基于稳定业务区域 probe 裁业务 icon PNG 候选但不改变画布。状态：完成第一版。
 26. 加入 visual perception provider benchmark harness，默认关闭；对比 current_rules、可选 OpenCV、可选 SAM2 和可选 UIED adapter，不改变 DSL/Figma 输出。状态：完成第一版。
-27. 用固定样例做 MVP 收敛。
+27. 加入 SAM2-guided visual candidate filtering harness，默认关闭；使用本地 SAM2 masks 生成过滤后的 visual candidates，不改变 DSL/Figma 输出。状态：完成第一版。
+28. 用固定样例做 MVP 收敛。
 
 ## Acceptance
 

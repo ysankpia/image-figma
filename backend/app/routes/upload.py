@@ -90,6 +90,13 @@ from ..perception_benchmark import (
     build_perception_benchmark_document,
     perception_overlay_asset_records,
 )
+from ..sam_visual_candidate import (
+    SamVisualCandidateDocument,
+    SamVisualStorageAdapter,
+    build_failed_sam_visual_document,
+    build_sam_visual_candidate_document,
+    sam_visual_overlay_asset_records,
+)
 from ..database import json_dumps
 from ..dsl_patch import (
     DSLPatchDocument,
@@ -361,6 +368,17 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             data,
             icon_candidate_document,
             icon_gap_document,
+            icon_business_document,
+            final_dsl,
+            now,
+        )
+        save_sam_visual_candidate_result(
+            task_id,
+            image,
+            data,
+            icon_candidate_document,
+            icon_gap_document,
+            icon_placement_document,
             icon_business_document,
             final_dsl,
             now,
@@ -2031,6 +2049,95 @@ def save_perception_benchmark_result(
             "blocked_count": int(document.meta.get("totalBlockedCount", 0)),
             "recommended_provider": document.comparison.get("recommendedProvider"),
             "elapsed_ms": int(document.meta.get("elapsedMs", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document
+
+
+def save_sam_visual_candidate_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    icon_candidate_document: IconCandidateDocument | None,
+    icon_gap_document: IconGapCandidateDocument | None,
+    icon_placement_document: IconPlacementPlanDocument | None,
+    icon_business_document: IconBusinessCandidateDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> SamVisualCandidateDocument | None:
+    if not state.settings.sam_visual_candidate_enabled:
+        return None
+
+    failed_logged = False
+    try:
+        document = build_sam_visual_candidate_document(
+            task_id=task_id,
+            image=image,
+            png_data=png_data,
+            dsl=input_dsl,
+            icon_candidate_document=icon_candidate_document,
+            icon_gap_document=icon_gap_document,
+            icon_placement_document=icon_placement_document,
+            icon_business_document=icon_business_document,
+            settings=state.settings,
+            storage=SamVisualStorageAdapter(
+                assets_root=state.storage.assets_dir,
+                public_base_url=state.settings.public_base_url,
+            ),
+        )
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="sam_visual_candidate",
+            error_code="SAM_VISUAL_CANDIDATE_FAILED",
+            message="SAM visual candidate filtering failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_sam_visual_document(
+            task_id=task_id,
+            image=image,
+            code="SAM_VISUAL_CANDIDATE_FAILED",
+            message="SAM visual candidate filtering failed.",
+        )
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="sam_visual_candidate",
+            error_code=document.error["code"] if document.error else "SAM_VISUAL_CANDIDATE_FAILED",
+            message=document.error["message"] if document.error else "SAM visual candidate filtering failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in sam_visual_overlay_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="sam_visual_candidate",
+                error_code="asset_db_insert_failed",
+                message="SAM visual candidate overlay asset database insert failed.",
+                detail=str(error),
+            )
+
+    candidate_path = state.storage.save_sam_visual_candidate(task_id, json_dumps(document.to_dict()))
+    state.database.insert_sam_visual_candidate_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "candidate_path": str(candidate_path),
+            "overlay_asset_id": document.overlay.assetId if document.overlay else None,
+            "raw_mask_count": int(document.meta.get("rawMaskCount", 0)),
+            "candidate_count": int(document.meta.get("candidateCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "failed_count": 1 if document.status == "failed" else 0,
+            "elapsed_ms": int(document.sam.elapsedMs),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,

@@ -26,6 +26,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `icon_visible_fallback_results`
 - `icon_business_candidate_results`
 - `perception_benchmark_results`
+- `sam_visual_candidate_results`
 
 后续建议表：
 
@@ -60,7 +61,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `completed`
 - `failed`
 
-M26 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
+M27 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
 
 ## assets
 
@@ -103,6 +104,7 @@ M26 当前任务主链路仍同步写入 `completed` 或 `failed`。各阶段旁
 - `asset_perception_overlay_opencv`
 - `asset_perception_overlay_sam2`
 - `asset_perception_overlay_uied`
+- `asset_sam_visual_candidate_overlay`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -123,6 +125,7 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_icon_business_*`：M25 生成的 business icon PNG 候选资产，只通过 `/icon-business-candidates` 暴露，不进入 DSL `assets`。
 - `asset_icon_business_overlay`：M25 生成的 debug overlay PNG，只通过 `/icon-business-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 - `asset_perception_overlay_*`：M26 生成的 provider benchmark debug overlay PNG，只通过 `/perception-benchmark`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
+- `asset_sam_visual_candidate_overlay`：M27 生成的 SAM visual candidate debug overlay PNG，只通过 `/sam-visual-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -513,6 +516,29 @@ Icon business candidate payload 本体写入 `backend/storage/icon_business_cand
 - `created_at`
 
 Perception benchmark payload 本体写入 `backend/storage/perception_benchmarks/{taskId}.json`。它保存 `providers`、`comparison`、`warnings` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/perception_overlay_*.png`，并以 `asset_perception_overlay_*` role 登记到 `assets` 表。M26 不把 provider candidates、blocked 或 overlay 写入 DSL，不追加 DSL meta，不改变 Figma 可见输出。
+
+## sam_visual_candidate_results
+
+用途：记录 M27 SAM2-guided visual candidate filtering 文件、overlay 资产和汇总指标。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `candidate_path`
+- `overlay_asset_id`
+- `raw_mask_count`
+- `candidate_count`
+- `blocked_count`
+- `failed_count`
+- `elapsed_ms`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+SAM visual candidate payload 本体写入 `backend/storage/sam_visual_candidates/{taskId}.json`。它保存 `sam` runtime 摘要、`candidates`、`blockedCandidates`、`overlay`、`warnings` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，并以 `asset_sam_visual_candidate_overlay` role 登记到 `assets` 表。M27 不把 SAM candidates、blocked 或 overlay 写入 DSL，不追加 DSL meta，不裁新 icon asset，不改变 Figma 可见输出。
 
 ## model_call_logs
 

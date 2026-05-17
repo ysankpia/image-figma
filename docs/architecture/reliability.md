@@ -175,6 +175,16 @@ M26 visual perception provider benchmark 是默认关闭的评估路径：
 - validation failed 时保存 failed document，写 `error_logs(stage=perception_benchmark)`，不影响 DSL。
 - M26 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不把 OpenCV/SAM2/UIED 输出当 Renderer 输入，也不默认引入 OpenCV、torch、sam2 或 UIED 到生产依赖。
 
+M27 SAM2 visual candidate filtering 是默认关闭的评估路径：
+
+- 默认 `SAM_VISUAL_CANDIDATE_ENABLED=false`，正常 upload 不生成 result，不修改 DSL。
+- 显式开启后，SAM visual candidate failed/skipped 写入 `sam_visual_candidate_results` 和 `error_logs`，但不影响 `/dsl`。
+- checkpoint 缺失、torch/numpy/sam2 依赖缺失或 PNG decode unsupported 时保存 skipped document，错误码为 `SAM_VISUAL_PROVIDER_UNAVAILABLE`。
+- 单个 mask 不安全时进入 `blockedCandidates`，不影响其他 mask，也不让 upload 失败。
+- overlay 生成或写入失败只记录 warning，不能让 upload 失败。
+- validation failed 时保存 failed document，写 `error_logs(stage=sam_visual_candidate)`，不影响 DSL。
+- M27 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不生成透明 PNG、不把 SAM2 输出当 Renderer 输入。
+
 整页失败只发生在：
 
 - PNG 无法读取。

@@ -353,6 +353,43 @@ PERCEPTION_UIED_COMMAND="python /absolute/path/to/uied_adapter.py" \
 uv run python scripts/run_m26_perception_smoke.py --providers current_rules,uied
 ```
 
+M27 SAM2 visual candidate filtering 默认关闭，只生成 SAM visual candidate report 和 overlay，不改变 DSL/Figma 输出：
+
+```bash
+SAM_VISUAL_CANDIDATE_ENABLED=false
+SAM_VISUAL_CANDIDATE_MODEL_CFG=
+SAM_VISUAL_CANDIDATE_CHECKPOINT=
+SAM_VISUAL_CANDIDATE_DEVICE=auto
+SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=1280
+SAM_VISUAL_CANDIDATE_MAX_MASKS=300
+SAM_VISUAL_CANDIDATE_MAX_CANDIDATES=120
+SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE=0.72
+SAM_VISUAL_CANDIDATE_MIN_AREA=64
+SAM_VISUAL_CANDIDATE_MAX_AREA_RATIO=0.12
+SAM_VISUAL_CANDIDATE_TEXT_OVERLAP_IOU=0.10
+SAM_VISUAL_CANDIDATE_EXISTING_ICON_IOU=0.50
+SAM_VISUAL_CANDIDATE_OVERLAY_ENABLED=true
+```
+
+本机 M27 SAM2 runtime 安装在 backend 的 uv `perception-sam2` dependency group；checkpoint 放在移动硬盘稳定目录：
+
+```bash
+cd backend
+uv sync --group dev --group perception-sam2
+ls -lh /Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt
+```
+
+M27 smoke：
+
+```bash
+cd backend
+uv run python scripts/run_m27_sam_visual_smoke.py \
+  --input-dir "/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计图/学生端/" \
+  --checkpoint "/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt"
+```
+
+开启后，M27 运行 SAM2 automatic masks，过滤 text/cover/candidate_text、已有 icon、状态栏、header、插画、床位图、线条、边框和背景块，写入 `backend/storage/sam_visual_candidates/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，通过 `/api/tasks/{taskId}/sam-visual-candidates` 查询。M27 不追加 DSL meta，不裁新 icon asset，不生成透明 PNG，不把 SAM2 输出喂给 Renderer。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash

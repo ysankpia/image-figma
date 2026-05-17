@@ -399,6 +399,20 @@ M26 不允许修改 DSL：
 
 M26 即使显式启用 `PERCEPTION_BENCHMARK_ENABLED=true`，也不追加 DSL meta，不新增可见 DSL 节点，不修改任何已有 element，不修改 DSL `assets` 数组，不裁新 icon asset，不把 provider candidate/blocked/overlay 写入 Renderer 输入。M26 是评估层，不是 production replacement；OpenCV/SAM2/UIED 输出不能直接成为 DSL 权威。
 
+M27 新增 SAM2-guided visual candidate filtering harness。它生成独立 `/sam-visual-candidates` 报告，把本地 SAM2 automatic masks 过滤成 accepted/blocked visual candidates，并写入 `backend/storage/sam_visual_candidates/{taskId}.json` 与 `asset_sam_visual_candidate_overlay` debug overlay。
+
+M27 不允许修改 DSL：
+
+```json
+{
+  "meta": {
+    "qualityFlags": []
+  }
+}
+```
+
+M27 即使显式启用 `SAM_VISUAL_CANDIDATE_ENABLED=true`，也不追加 DSL meta，不新增可见 DSL 节点，不修改任何已有 element，不修改 DSL `assets` 数组，不裁新 icon asset，不生成透明 PNG，不把 SAM2 candidate/blocked/overlay 写入 Renderer 输入。M27 是 M28 候选池合并前的过滤证据层，不是 visible replay，也不是 Codia 式全量拆层；SAM2 mask 不能直接成为 DSL 权威。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

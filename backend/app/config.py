@@ -123,6 +123,19 @@ class Settings:
     perception_sam2_max_masks: int = 300
     perception_uied_enabled: bool = False
     perception_uied_command: str = ""
+    sam_visual_candidate_enabled: bool = False
+    sam_visual_candidate_model_cfg: str = ""
+    sam_visual_candidate_checkpoint: str = ""
+    sam_visual_candidate_device: str = "auto"
+    sam_visual_candidate_max_image_edge: int = 1280
+    sam_visual_candidate_max_masks: int = 300
+    sam_visual_candidate_max_candidates: int = 120
+    sam_visual_candidate_min_confidence: float = 0.72
+    sam_visual_candidate_min_area: int = 64
+    sam_visual_candidate_max_area_ratio: float = 0.12
+    sam_visual_candidate_text_overlap_iou: float = 0.10
+    sam_visual_candidate_existing_icon_iou: float = 0.50
+    sam_visual_candidate_overlay_enabled: bool = True
 
 
 def get_settings() -> Settings:
@@ -249,6 +262,19 @@ def get_settings() -> Settings:
         perception_sam2_max_masks=int(os.getenv("PERCEPTION_SAM2_MAX_MASKS", "300")),
         perception_uied_enabled=parse_bool(os.getenv("PERCEPTION_UIED_ENABLED", "false")),
         perception_uied_command=os.getenv("PERCEPTION_UIED_COMMAND", "").strip(),
+        sam_visual_candidate_enabled=parse_bool(os.getenv("SAM_VISUAL_CANDIDATE_ENABLED", "false")),
+        sam_visual_candidate_model_cfg=os.getenv("SAM_VISUAL_CANDIDATE_MODEL_CFG", "").strip(),
+        sam_visual_candidate_checkpoint=os.getenv("SAM_VISUAL_CANDIDATE_CHECKPOINT", "").strip(),
+        sam_visual_candidate_device=os.getenv("SAM_VISUAL_CANDIDATE_DEVICE", "auto").strip() or "auto",
+        sam_visual_candidate_max_image_edge=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE", "1280")),
+        sam_visual_candidate_max_masks=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_MASKS", "300")),
+        sam_visual_candidate_max_candidates=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_CANDIDATES", "120")),
+        sam_visual_candidate_min_confidence=float(os.getenv("SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE", "0.72")),
+        sam_visual_candidate_min_area=int(os.getenv("SAM_VISUAL_CANDIDATE_MIN_AREA", "64")),
+        sam_visual_candidate_max_area_ratio=float(os.getenv("SAM_VISUAL_CANDIDATE_MAX_AREA_RATIO", "0.12")),
+        sam_visual_candidate_text_overlap_iou=float(os.getenv("SAM_VISUAL_CANDIDATE_TEXT_OVERLAP_IOU", "0.10")),
+        sam_visual_candidate_existing_icon_iou=float(os.getenv("SAM_VISUAL_CANDIDATE_EXISTING_ICON_IOU", "0.50")),
+        sam_visual_candidate_overlay_enabled=parse_bool(os.getenv("SAM_VISUAL_CANDIDATE_OVERLAY_ENABLED", "true")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

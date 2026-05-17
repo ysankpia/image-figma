@@ -17,7 +17,7 @@
 
 ## Processing Pipeline
 
-M26 当前管线：
+M27 当前管线：
 
 ```text
 receive multipart PNG
@@ -47,6 +47,7 @@ receive multipart PNG
 -> optionally replay visible icon fallback
 -> build region-guided business icon candidates
 -> optionally run visual perception provider benchmark
+-> optionally run SAM2 visual candidate filtering
 -> save DSL JSON
 -> save primitive JSON
 -> save OCR JSON
@@ -64,6 +65,7 @@ receive multipart PNG
 -> save icon visible fallback JSON when enabled
 -> save icon business candidate JSON
 -> save perception benchmark JSON when enabled
+-> save SAM visual candidate JSON when enabled
 -> mark task completed
 ```
 
@@ -108,6 +110,7 @@ backend/storage/
   icon_visible_fallbacks/
   icon_business_candidates/
   perception_benchmarks/
+  sam_visual_candidates/
   assets/{taskId}/slices/
   assets/{taskId}/icons/
   assets/{taskId}/icons_gap/
@@ -120,7 +123,7 @@ backend/storage/
 
 ## Task State
 
-M26 当前任务主链路仍同步完成，任务表实际写入：
+M27 当前任务主链路仍同步完成，任务表实际写入：
 
 - `completed`
 - `failed`
@@ -264,9 +267,11 @@ M25 增加 region-guided business icon candidate harness：后端基于当前 DS
 
 M26 增加 visual perception provider benchmark harness：后端默认不启用 `PERCEPTION_BENCHMARK_ENABLED=false`。显式开启后，M26 基于当前任务已有 M20/M22/M25 候选、当前 DSL collision facts 和原始 PNG 像素，生成统一 provider benchmark document。`current_rules` provider 只读取已有候选作为 baseline；`opencv` provider 只有安装并启用 OpenCV 时才运行轻量 connected-component bbox proposal；`sam2` provider 只有启用、checkpoint 存在且 `torch`/`sam2` 可 import 时才运行 automatic mask generation；`uied` provider 只作为外部命令 adapter。M26 写入 `backend/storage/perception_benchmarks/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/perception_overlay_*.png`，并通过 `/api/tasks/{taskId}/perception-benchmark` 暴露。M26 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不改变 Figma 可见输出、不把 provider 输出当 Renderer 输入；OpenCV/SAM2/UIED 都不是默认生产依赖。
 
+M27 增加 SAM2-guided visual candidate filtering harness：后端默认不启用 `SAM_VISUAL_CANDIDATE_ENABLED=false`。显式开启且本地 checkpoint、torch、numpy 和 sam2 可用时，M27 运行 SAM2 automatic mask generation，把 mask bbox 映射回原图，再基于当前 DSL text/cover/candidate_text、M20/M22/M23/M24/M25 existing icon bbox、状态栏/header/插画/床位图排除区和 line/border/background-like 规则过滤成 accepted candidates 与 blocked candidates。M27 写入 `backend/storage/sam_visual_candidates/{taskId}.json` 与 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，并通过 `/api/tasks/{taskId}/sam-visual-candidates` 暴露。M27 不修改 DSL、不追加 DSL meta、不裁新 icon asset、不生成透明 PNG、不改变 Figma 可见输出、不把 SAM2 输出当 Renderer 输入。
+
 ## Backend Non-Goals
 
-M26 不做：
+M27 不做：
 
 - 用户系统。
 - 支付和额度。
@@ -310,7 +315,9 @@ M26 不做：
 - 在 M25 处理插画、头像、建筑或床位平面图复杂资产。
 - 默认运行 M26 benchmark。
 - 把 M26 provider 输出写进 DSL、Renderer 或 Figma 可见画布。
-- 把 OpenCV/SAM2/UIED 作为默认生产依赖。
+- 默认运行 M27 SAM visual filtering。
+- 把 M27 SAM candidates 写进 DSL、Renderer 或 Figma 可见画布。
+- 把 OpenCV/UIED 作为默认生产依赖。
 - 默认下载 SAM2 checkpoint 或 vendoring UIED 源码。
 - 全局 icon detection。
 - Codia 式全量可拖动图层。
