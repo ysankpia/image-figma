@@ -36,6 +36,10 @@ def main() -> int:
         os.environ["SAM_VISUAL_CANDIDATE_DEVICE"] = args.device
     if args.max_image_edge:
         os.environ["SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE"] = str(args.max_image_edge)
+    if args.points_per_side:
+        os.environ["SAM_VISUAL_CANDIDATE_POINTS_PER_SIDE"] = str(args.points_per_side)
+    if args.points_per_batch:
+        os.environ["SAM_VISUAL_CANDIDATE_POINTS_PER_BATCH"] = str(args.points_per_batch)
 
     from app.main import create_app
 
@@ -70,6 +74,9 @@ def main() -> int:
         "storageRoot": str(storage_root),
         "inputDir": str(input_dir),
         "checkpoint": str(checkpoint),
+        "maxImageEdge": args.max_image_edge,
+        "pointsPerSide": args.points_per_side,
+        "pointsPerBatch": args.points_per_batch,
         "fileCount": len(rows),
         "rows": rows,
     }
@@ -97,18 +104,26 @@ def build_markdown_summary(summary: dict[str, object]) -> str:
         f"- Input: `{summary['inputDir']}`",
         f"- Storage: `{summary['storageRoot']}`",
         f"- Checkpoint: `{summary['checkpoint']}`",
+        f"- Max image edge: `{summary['maxImageEdge']}`",
+        f"- Points per side: `{summary['pointsPerSide']}`",
+        f"- Points per batch: `{summary['pointsPerBatch']}`",
         "",
-        "| File | Status | ms | Raw masks | Candidates | Blocked | Overlay |",
-        "| --- | --- | ---: | ---: | ---: | ---: | --- |",
+        "| File | Status | Total ms | Load ms | Infer ms | Post ms | Cached | Device | Raw masks | Candidates | Blocked | Overlay |",
+        "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | --- |",
     ]
     for row in summary["rows"]:
         sam = row.get("sam", {}) if isinstance(row, dict) else {}
         meta = row.get("meta", {}) if isinstance(row, dict) else {}
         lines.append(
-            "| {file} | {status} | {elapsed} | {raw} | {candidates} | {blocked} | {overlay} |".format(
+            "| {file} | {status} | {elapsed} | {load} | {infer} | {post} | {cached} | {device} | {raw} | {candidates} | {blocked} | {overlay} |".format(
                 file=row.get("file"),
                 status=row.get("status"),
                 elapsed=sam.get("elapsedMs"),
+                load=sam.get("loadMs"),
+                infer=sam.get("inferenceMs"),
+                post=sam.get("postprocessMs"),
+                cached=sam.get("cached"),
+                device=sam.get("device"),
                 raw=meta.get("rawMaskCount"),
                 candidates=meta.get("candidateCount"),
                 blocked=meta.get("blockedCount"),
@@ -135,7 +150,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default="/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt")
     parser.add_argument("--model-cfg", default="")
     parser.add_argument("--device", default="")
-    parser.add_argument("--max-image-edge", type=int, default=1280)
+    parser.add_argument("--max-image-edge", type=int, default=960)
+    parser.add_argument("--points-per-side", type=int, default=8)
+    parser.add_argument("--points-per-batch", type=int, default=64)
     parser.add_argument("--public-base-url", default="http://localhost:8000")
     return parser.parse_args()
 

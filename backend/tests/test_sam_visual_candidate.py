@@ -15,7 +15,9 @@ from app.sam_visual_candidate import (
     SamVisualStorageAdapter,
     append_mask_candidate,
     build_sam_visual_candidate_document,
+    clear_sam2_runtime_cache,
     collect_existing_icon_bboxes,
+    get_sam2_runtime,
     header_title_zones,
     illustration_zones,
     status_bar_zones,
@@ -266,6 +268,69 @@ def test_sam_visual_builder_skips_when_dependency_missing_after_checkpoint(monke
     assert document.warnings[0].code == "dependency_missing"
 
 
+def test_sam2_runtime_is_cached_for_same_checkpoint_config_and_device(monkeypatch, tmp_path) -> None:
+    checkpoint = tmp_path / "sam2.1_hiera_tiny.pt"
+    checkpoint.write_bytes(b"placeholder")
+    settings = make_sam_settings(sam_visual_candidate_checkpoint=str(checkpoint), sam_visual_candidate_device="cpu")
+    clear_sam2_runtime_cache()
+    build_calls = []
+
+    class FakeCuda:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class FakeMps:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class FakeBackends:
+        mps = FakeMps()
+
+    class FakeTorch:
+        cuda = FakeCuda()
+        backends = FakeBackends()
+
+    class FakeNumpy:
+        uint8 = object()
+
+    class FakeBuildModule:
+        @staticmethod
+        def build_sam2(config, checkpoint_path, *, device, apply_postprocessing):
+            build_calls.append((config, checkpoint_path, device, apply_postprocessing))
+            return object()
+
+    class FakeMaskModule:
+        class SAM2AutomaticMaskGenerator:
+            def __init__(self, model, **params):
+                self.model = model
+                self.params = params
+
+    def fake_import(name: str):
+        modules = {
+            "torch": FakeTorch,
+            "numpy": FakeNumpy,
+            "sam2.build_sam": FakeBuildModule,
+            "sam2.automatic_mask_generator": FakeMaskModule,
+        }
+        return modules[name]
+
+    import app.sam_visual_candidate as module
+
+    monkeypatch.setattr(module.importlib, "import_module", fake_import)
+    first, first_cached = get_sam2_runtime(settings)
+    second, second_cached = get_sam2_runtime(settings)
+
+    assert first is second
+    assert first_cached is False
+    assert second_cached is True
+    assert len(build_calls) == 1
+    assert first.device == "cpu"
+    assert first.loadMs >= 0
+    clear_sam2_runtime_cache()
+
+
 def build_context(
     tmp_path,
     image: PngMetadata,
@@ -310,8 +375,10 @@ def make_sam_settings(**overrides: Any):
         "sam_visual_candidate_model_cfg": "",
         "sam_visual_candidate_checkpoint": "",
         "sam_visual_candidate_device": "auto",
-        "sam_visual_candidate_max_image_edge": 1280,
+        "sam_visual_candidate_max_image_edge": 960,
         "sam_visual_candidate_max_masks": 300,
+        "sam_visual_candidate_points_per_side": 8,
+        "sam_visual_candidate_points_per_batch": 64,
         "sam_visual_candidate_max_candidates": 120,
         "sam_visual_candidate_min_confidence": 0.72,
         "sam_visual_candidate_min_area": 64,

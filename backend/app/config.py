@@ -127,8 +127,10 @@ class Settings:
     sam_visual_candidate_model_cfg: str = ""
     sam_visual_candidate_checkpoint: str = ""
     sam_visual_candidate_device: str = "auto"
-    sam_visual_candidate_max_image_edge: int = 1280
+    sam_visual_candidate_max_image_edge: int = 960
     sam_visual_candidate_max_masks: int = 300
+    sam_visual_candidate_points_per_side: int = 8
+    sam_visual_candidate_points_per_batch: int = 64
     sam_visual_candidate_max_candidates: int = 120
     sam_visual_candidate_min_confidence: float = 0.72
     sam_visual_candidate_min_area: int = 64
@@ -266,8 +268,10 @@ def get_settings() -> Settings:
         sam_visual_candidate_model_cfg=os.getenv("SAM_VISUAL_CANDIDATE_MODEL_CFG", "").strip(),
         sam_visual_candidate_checkpoint=os.getenv("SAM_VISUAL_CANDIDATE_CHECKPOINT", "").strip(),
         sam_visual_candidate_device=os.getenv("SAM_VISUAL_CANDIDATE_DEVICE", "auto").strip() or "auto",
-        sam_visual_candidate_max_image_edge=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE", "1280")),
+        sam_visual_candidate_max_image_edge=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE", "960")),
         sam_visual_candidate_max_masks=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_MASKS", "300")),
+        sam_visual_candidate_points_per_side=int(os.getenv("SAM_VISUAL_CANDIDATE_POINTS_PER_SIDE", "8")),
+        sam_visual_candidate_points_per_batch=int(os.getenv("SAM_VISUAL_CANDIDATE_POINTS_PER_BATCH", "64")),
         sam_visual_candidate_max_candidates=int(os.getenv("SAM_VISUAL_CANDIDATE_MAX_CANDIDATES", "120")),
         sam_visual_candidate_min_confidence=float(os.getenv("SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE", "0.72")),
         sam_visual_candidate_min_area=int(os.getenv("SAM_VISUAL_CANDIDATE_MIN_AREA", "64")),

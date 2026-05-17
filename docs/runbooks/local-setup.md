@@ -360,8 +360,10 @@ SAM_VISUAL_CANDIDATE_ENABLED=false
 SAM_VISUAL_CANDIDATE_MODEL_CFG=
 SAM_VISUAL_CANDIDATE_CHECKPOINT=
 SAM_VISUAL_CANDIDATE_DEVICE=auto
-SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=1280
+SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=960
 SAM_VISUAL_CANDIDATE_MAX_MASKS=300
+SAM_VISUAL_CANDIDATE_POINTS_PER_SIDE=8
+SAM_VISUAL_CANDIDATE_POINTS_PER_BATCH=64
 SAM_VISUAL_CANDIDATE_MAX_CANDIDATES=120
 SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE=0.72
 SAM_VISUAL_CANDIDATE_MIN_AREA=64
@@ -388,7 +390,7 @@ uv run python scripts/run_m27_sam_visual_smoke.py \
   --checkpoint "/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt"
 ```
 
-开启后，M27 运行 SAM2 automatic masks，过滤 text/cover/candidate_text、已有 icon、状态栏、header、插画、床位图、线条、边框和背景块，写入 `backend/storage/sam_visual_candidates/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，通过 `/api/tasks/{taskId}/sam-visual-candidates` 查询。M27 不追加 DSL meta，不裁新 icon asset，不生成透明 PNG，不把 SAM2 输出喂给 Renderer。
+开启后，M27 运行 SAM2 automatic masks，过滤 text/cover/candidate_text、已有 icon、状态栏、header、插画、床位图、线条、边框和背景块，写入 `backend/storage/sam_visual_candidates/{taskId}.json` 和 `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`，通过 `/api/tasks/{taskId}/sam-visual-candidates` 查询。M27 会在同一 backend 进程内缓存 SAM2 runtime，默认使用 `max_image_edge=960`、`points_per_side=8`、`points_per_batch=64` 降低 automatic mask 成本。M27 不追加 DSL meta，不裁新 icon asset，不生成透明 PNG，不把 SAM2 输出喂给 Renderer。
 
 如果要确认完全回退 M7 base DSL：
 

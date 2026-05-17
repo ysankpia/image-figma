@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -43,6 +44,17 @@ OVERLAY_COLORS = {
     "exclusion": (150, 80, 220),
     "duplicate": (128, 128, 128),
 }
+
+SAM2_GENERATOR_PARAMS = {
+    "pred_iou_thresh": 0.72,
+    "stability_score_thresh": 0.82,
+    "crop_n_layers": 0,
+    "min_mask_region_area": 16,
+    "output_mode": "binary_mask",
+}
+
+_SAM2_RUNTIME_CACHE: dict[tuple[str, str, str, tuple[tuple[str, object], ...]], "Sam2Runtime"] = {}
+_SAM2_RUNTIME_LOCK = threading.Lock()
 
 
 @dataclass
@@ -106,6 +118,27 @@ class SamVisualRuntime:
     elapsedMs: int
     rawMaskCount: int
     maxImageEdge: int
+    loadMs: int = 0
+    inferenceMs: int = 0
+    postprocessMs: int = 0
+    cached: bool = False
+
+
+@dataclass
+class Sam2Runtime:
+    torch: Any
+    np: Any
+    generator: Any
+    config: str
+    checkpoint: str
+    device: str
+    loadMs: int
+
+
+class SamVisualProviderUnavailable(Exception):
+    def __init__(self, *, message: str, warning_code: str) -> None:
+        super().__init__(message)
+        self.warning_code = warning_code
 
 
 @dataclass
@@ -199,20 +232,6 @@ def build_sam_visual_candidate_document(
         )
 
     try:
-        torch = importlib.import_module("torch")
-        np = importlib.import_module("numpy")
-        build_module = importlib.import_module("sam2.build_sam")
-        mask_module = importlib.import_module("sam2.automatic_mask_generator")
-    except Exception as error:
-        return build_skipped_sam_visual_document(
-            task_id=task_id,
-            image=image,
-            code="SAM_VISUAL_PROVIDER_UNAVAILABLE",
-            message=f"SAM2 dependency import failed: {error}",
-            warning_code="dependency_missing",
-        )
-
-    try:
         pixels = decode_png_pixels(png_data)
     except UnsupportedPngCropError:
         return build_skipped_sam_visual_document(
@@ -254,23 +273,15 @@ def build_sam_visual_candidate_document(
     )
 
     try:
-        device = sam2_device(settings.sam_visual_candidate_device, torch)
-        config = settings.sam_visual_candidate_model_cfg or infer_sam2_config(checkpoint)
-        rgb = np.frombuffer(b"".join(pixels.rows), dtype=np.uint8).reshape((image.height, image.width, 3))
-        scaled_rgb, scale = resize_rgb_for_sam2(rgb, settings.sam_visual_candidate_max_image_edge, np)
-        model = build_module.build_sam2(config, checkpoint, device=device, apply_postprocessing=False)
-        generator = mask_module.SAM2AutomaticMaskGenerator(
-            model,
-            points_per_side=16,
-            points_per_batch=32,
-            pred_iou_thresh=0.72,
-            stability_score_thresh=0.82,
-            crop_n_layers=0,
-            min_mask_region_area=16,
-            output_mode="binary_mask",
+        runtime, cached = get_sam2_runtime(settings)
+    except SamVisualProviderUnavailable as error:
+        return build_skipped_sam_visual_document(
+            task_id=task_id,
+            image=image,
+            code="SAM_VISUAL_PROVIDER_UNAVAILABLE",
+            message=str(error),
+            warning_code=error.warning_code,
         )
-        with torch.inference_mode():
-            masks = generator.generate(scaled_rgb)
     except Exception as error:
         return build_failed_sam_visual_document(
             task_id=task_id,
@@ -279,6 +290,23 @@ def build_sam_visual_candidate_document(
             message=str(error),
         )
 
+    try:
+        rgb = runtime.np.frombuffer(b"".join(pixels.rows), dtype=runtime.np.uint8).reshape((image.height, image.width, 3))
+        scaled_rgb, scale = resize_rgb_for_sam2(rgb, settings.sam_visual_candidate_max_image_edge, runtime.np)
+        inference_started = time.perf_counter()
+        with runtime.torch.inference_mode():
+            masks = runtime.generator.generate(scaled_rgb)
+        synchronize_torch_device(runtime)
+        inference_ms = elapsed_ms(inference_started)
+    except Exception as error:
+        return build_failed_sam_visual_document(
+            task_id=task_id,
+            image=image,
+            code="SAM_VISUAL_CANDIDATE_FAILED",
+            message=str(error),
+        )
+
+    postprocess_started = time.perf_counter()
     candidates: list[SamVisualCandidate] = []
     blocked: list[BlockedSamVisualCandidate] = []
     warnings: list[SamVisualWarning] = []
@@ -306,12 +334,13 @@ def build_sam_visual_candidate_document(
             )
             break
 
-    elapsed = elapsed_ms(started)
-    if elapsed > 20000:
-        warnings.append(SamVisualWarning(code="runtime_over_threshold", message="SAM visual candidate runtime exceeded 20s."))
     overlay = build_overlay(context, candidates, blocked) if settings.sam_visual_candidate_overlay_enabled else None
     if overlay is None and settings.sam_visual_candidate_overlay_enabled:
         warnings.append(SamVisualWarning(code="overlay_write_failed", message="SAM visual candidate overlay could not be written."))
+    postprocess_ms = elapsed_ms(postprocess_started)
+    elapsed = elapsed_ms(started)
+    if elapsed > 20000:
+        warnings.append(SamVisualWarning(code="runtime_over_threshold", message="SAM visual candidate runtime exceeded 20s."))
 
     document = SamVisualCandidateDocument(
         version="0.1",
@@ -319,12 +348,16 @@ def build_sam_visual_candidate_document(
         status="completed",
         imageSize={"width": image.width, "height": image.height},
         sam=SamVisualRuntime(
-            model=config,
-            device=device,
+            model=runtime.config,
+            device=runtime.device,
             checkpoint="configured",
             elapsedMs=elapsed,
             rawMaskCount=len(masks),
             maxImageEdge=settings.sam_visual_candidate_max_image_edge,
+            loadMs=0 if cached else runtime.loadMs,
+            inferenceMs=inference_ms,
+            postprocessMs=postprocess_ms,
+            cached=cached,
         ),
         candidates=candidates,
         blockedCandidates=blocked,
@@ -342,6 +375,72 @@ def build_sam_visual_candidate_document(
             warnings=[SamVisualWarning(code="SAM_VISUAL_CANDIDATE_VALIDATION_ERROR", message=error) for error in validation_errors],
         )
     return document
+
+
+def get_sam2_runtime(settings: Settings) -> tuple[Sam2Runtime, bool]:
+    checkpoint = settings.sam_visual_candidate_checkpoint
+    if not checkpoint or not Path(checkpoint).exists():
+        raise SamVisualProviderUnavailable(
+            message="SAM2 checkpoint is not configured or does not exist.",
+            warning_code="model_missing",
+        )
+
+    try:
+        torch = importlib.import_module("torch")
+        np = importlib.import_module("numpy")
+        build_module = importlib.import_module("sam2.build_sam")
+        mask_module = importlib.import_module("sam2.automatic_mask_generator")
+    except Exception as error:
+        raise SamVisualProviderUnavailable(
+            message=f"SAM2 dependency import failed: {error}",
+            warning_code="dependency_missing",
+        ) from error
+
+    device = sam2_device(settings.sam_visual_candidate_device, torch)
+    resolved_checkpoint = str(Path(checkpoint).expanduser().resolve())
+    config = settings.sam_visual_candidate_model_cfg or infer_sam2_config(resolved_checkpoint)
+    generator_params = sam2_generator_params(settings)
+    cache_key = (resolved_checkpoint, config, device, tuple(sorted(generator_params.items())))
+
+    with _SAM2_RUNTIME_LOCK:
+        cached_runtime = _SAM2_RUNTIME_CACHE.get(cache_key)
+        if cached_runtime is not None:
+            return cached_runtime, True
+
+        load_started = time.perf_counter()
+        model = build_module.build_sam2(config, resolved_checkpoint, device=device, apply_postprocessing=False)
+        generator = mask_module.SAM2AutomaticMaskGenerator(model, **generator_params)
+        runtime = Sam2Runtime(
+            torch=torch,
+            np=np,
+            generator=generator,
+            config=config,
+            checkpoint=resolved_checkpoint,
+            device=device,
+            loadMs=elapsed_ms(load_started),
+        )
+        _SAM2_RUNTIME_CACHE[cache_key] = runtime
+        return runtime, False
+
+
+def synchronize_torch_device(runtime: Sam2Runtime) -> None:
+    if runtime.device == "cuda" and hasattr(runtime.torch, "cuda"):
+        runtime.torch.cuda.synchronize()
+    if runtime.device == "mps" and hasattr(runtime.torch, "mps") and hasattr(runtime.torch.mps, "synchronize"):
+        runtime.torch.mps.synchronize()
+
+
+def clear_sam2_runtime_cache() -> None:
+    with _SAM2_RUNTIME_LOCK:
+        _SAM2_RUNTIME_CACHE.clear()
+
+
+def sam2_generator_params(settings: Settings) -> dict[str, object]:
+    return {
+        **SAM2_GENERATOR_PARAMS,
+        "points_per_side": max(1, settings.sam_visual_candidate_points_per_side),
+        "points_per_batch": max(1, settings.sam_visual_candidate_points_per_batch),
+    }
 
 
 def append_mask_candidate(

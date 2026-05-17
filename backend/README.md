@@ -247,8 +247,10 @@ SAM_VISUAL_CANDIDATE_ENABLED=false
 SAM_VISUAL_CANDIDATE_MODEL_CFG=
 SAM_VISUAL_CANDIDATE_CHECKPOINT=
 SAM_VISUAL_CANDIDATE_DEVICE=auto
-SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=1280
+SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=960
 SAM_VISUAL_CANDIDATE_MAX_MASKS=300
+SAM_VISUAL_CANDIDATE_POINTS_PER_SIDE=8
+SAM_VISUAL_CANDIDATE_POINTS_PER_BATCH=64
 SAM_VISUAL_CANDIDATE_MAX_CANDIDATES=120
 SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE=0.72
 SAM_VISUAL_CANDIDATE_MIN_AREA=64
@@ -258,4 +260,4 @@ SAM_VISUAL_CANDIDATE_EXISTING_ICON_IOU=0.50
 SAM_VISUAL_CANDIDATE_OVERLAY_ENABLED=true
 ```
 
-When explicitly enabled, it writes `backend/storage/sam_visual_candidates/{taskId}.json`, emits `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`, and exposes `GET /api/tasks/{taskId}/sam-visual-candidates`. M27 runs SAM2 automatic masks and filters them against visible text, text covers, hidden candidate text, existing M20/M22/M23/M24/M25 icon bboxes, status/header/illustration/bed-map exclusion zones, and line/border/background-like masks. It does not modify DSL, does not append DSL meta, does not crop new icon assets, does not generate transparent PNG, and does not feed Renderer. The local development checkpoint is kept outside tracked files at `/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt`.
+When explicitly enabled, it writes `backend/storage/sam_visual_candidates/{taskId}.json`, emits `backend/storage/assets/{taskId}/debug/sam_visual_candidate_overlay.png`, and exposes `GET /api/tasks/{taskId}/sam-visual-candidates`. M27 runs SAM2 automatic masks and filters them against visible text, text covers, hidden candidate text, existing M20/M22/M23/M24/M25 icon bboxes, status/header/illustration/bed-map exclusion zones, and line/border/background-like masks. The SAM2 runtime is cached per checkpoint/config/device inside the backend process; `points_per_side=8` and `max_image_edge=960` are the default UI-bbox benchmark settings. M27 does not modify DSL, does not append DSL meta, does not crop new icon assets, does not generate transparent PNG, and does not feed Renderer. The local development checkpoint is kept outside tracked files at `/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt`.

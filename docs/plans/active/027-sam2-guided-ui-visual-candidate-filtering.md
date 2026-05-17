@@ -23,8 +23,10 @@ SAM_VISUAL_CANDIDATE_ENABLED=false
 SAM_VISUAL_CANDIDATE_MODEL_CFG=
 SAM_VISUAL_CANDIDATE_CHECKPOINT=
 SAM_VISUAL_CANDIDATE_DEVICE=auto
-SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=1280
+SAM_VISUAL_CANDIDATE_MAX_IMAGE_EDGE=960
 SAM_VISUAL_CANDIDATE_MAX_MASKS=300
+SAM_VISUAL_CANDIDATE_POINTS_PER_SIDE=8
+SAM_VISUAL_CANDIDATE_POINTS_PER_BATCH=64
 SAM_VISUAL_CANDIDATE_MAX_CANDIDATES=120
 SAM_VISUAL_CANDIDATE_MIN_CONFIDENCE=0.72
 SAM_VISUAL_CANDIDATE_MIN_AREA=64
@@ -35,6 +37,8 @@ SAM_VISUAL_CANDIDATE_OVERLAY_ENABLED=true
 ```
 
 The local development backend installs SAM2 runtime in the `perception-sam2` uv dependency group. The checkpoint is stored outside repo-tracked files at `/Volumes/WorkDrive/Models/sam2/sam2.1_hiera_tiny.pt`. No checkpoint is committed.
+
+The SAM2 model/generator is cached per checkpoint/config/device inside the backend process. M27 uses UI-bbox benchmark defaults rather than dense full-image segmentation defaults: `max_image_edge=960`, `points_per_side=8`, and `points_per_batch=64`. Earlier smoke evidence showed `points_per_side=16` preserved candidates but spent most time in automatic mask inference; the lighter defaults keep the candidate count close while reducing warm inference time.
 
 ## Behavior
 
