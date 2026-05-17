@@ -167,6 +167,21 @@ M21 icon coverage audit result 至少包含：
 - `errorCode`
 - `auditPath`
 
+M22 icon gap candidate result 至少包含：
+
+- `taskId`
+- `status`
+- `gapIconCount`
+- `croppedGapIconCount`
+- `blockedCount`
+- `failedCropCount`
+- source summary
+- blocked reason summary
+- `overlayAssetId`
+- `warningCount`
+- `errorCode`
+- `gapPath`
+
 ## Metrics
 
 开发阶段优先从日志中观察：
@@ -191,6 +206,8 @@ M21 icon coverage audit result 至少包含：
 - icon candidate source/role 分布。
 - icon coverage placement/missed hint/ready/coordination/blocked 数量。
 - icon coverage source/hint 分布。
+- icon gap candidate/cropped/blocked/failed 数量。
+- icon gap source/blocked reason 分布。
 - DSL 生成耗时。
 - 资产裁切耗时。
 - Renderer 渲染耗时。
@@ -205,7 +222,7 @@ v0.1 不做分布式 trace。
 任务内用 `taskId` 串起：
 
 ```text
-upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> dsl_validate
+upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_patch_build -> text_replacement -> text_binding -> component_structure -> component_annotation -> layer_separation -> asset_slice -> icon_candidate -> icon_coverage_audit -> icon_gap_candidate -> dsl_validate
 ```
 
 插件渲染阶段用 `taskId` 和 DSL `version` 关联。
@@ -230,6 +247,8 @@ upload -> preprocess -> asset_crop -> primitive_extract -> ocr_extract -> dsl_pa
 - icon candidate JSON。
 - icon coverage audit JSON。
 - icon coverage overlay PNG。
+- icon gap candidate JSON。
+- icon gap overlay PNG。
 - DSL 文件。
 - 资产 metadata。
 - Renderer warning。

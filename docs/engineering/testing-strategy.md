@@ -116,6 +116,8 @@ Backend API：
 - M20 回归必须保护 bottom nav label 上方、shortcut card 左侧、tip title 左侧和 field label 左侧的小图能生成 icon PNG，text/cover bbox 不能被误裁成 icon，candidate limit 和 bbox/置信度门禁能阻断不安全候选。
 - M21 icon coverage audit 必须覆盖默认生成报告、`ICON_COVERAGE_AUDIT_ENABLED=false` 不生成报告、`/icon-coverage-audit` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M21 回归必须保护 M20 source 到 placementRole 的映射、fallback/slice/text/cover collision readiness、asset missing blocked、missedIconHints 去重和 overlay PNG 可读。
+- M22 icon gap candidate 必须覆盖默认生成报告、`ICON_GAP_CANDIDATE_ENABLED=false` 不生成报告、`/icon-gap-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
+- M22 回归必须保护 M21 missed hint 升级为 header/right/trailing/bottom-nav/shortcut gap icon、M20 icon 不重复裁、visible text/cover/hidden candidate_text 不误裁、状态栏不误裁、field text-stroke blocked、edge-clipped retry/blocked 逻辑和 overlay PNG 可读。
 - unsupported PNG sampling 或 replacement validation failed 时上传仍 completed，`/dsl` 回退 M10/M9 输出。
 
 当前命令：
@@ -136,6 +138,7 @@ PNG cropper / sampler：
 - M19 `encode_rgb_png` 和 `crop_and_fill_png` 必须覆盖可读 PNG 输出、solid fill 生效和 fill 越界拒绝。
 - M20 `crop_png` 必须覆盖 icon crop 输出，生成资产宽高必须等于 icon bbox，PNG decode unsupported 或 crop out of bounds 不能影响 upload completed。
 - M21 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素被染色、overlay asset 写入 `assets` 表，PNG decode/overlay 写入失败不能影响 upload completed。
+- M22 gap icon crop 必须覆盖 gap icon PNG 输出，生成资产宽高必须等于 bbox；M22 overlay PNG 必须覆盖尺寸等于原图、bbox 边缘像素被染色、overlay asset 写入 `assets` 表，PNG decode/crop/overlay 写入失败不能影响 upload completed。
 
 Visual Primitives：
 

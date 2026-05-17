@@ -588,3 +588,50 @@ def get_task_icon_coverage_audit(task_id: str) -> dict[str, object]:
     if document.get("error"):
         data["error"] = document["error"]
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/icon-gap-candidates")
+def get_task_icon_gap_candidates(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    result = state.database.get_icon_gap_candidate_result(task_id)
+    if result is None:
+        raise ApiError(
+            "ICON_GAP_CANDIDATE_NOT_FOUND",
+            "Icon gap candidate result not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_gap_candidate_lookup",
+            task_id=task_id,
+        )
+
+    gap_path = Path(result["gap_path"] or "")
+    if not gap_path.exists():
+        raise ApiError(
+            "ICON_GAP_CANDIDATE_NOT_FOUND",
+            "Icon gap candidate file not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="icon_gap_candidate_lookup",
+            task_id=task_id,
+        )
+
+    document = json.loads(gap_path.read_text(encoding="utf-8"))
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": result["status"],
+        "gapIcons": document.get("gapIcons", []),
+        "blockedHints": document.get("blockedHints", []),
+        "gapOverlay": document.get("gapOverlay"),
+        "warnings": document.get("warnings", []),
+        "meta": document.get("meta", {}),
+    }
+    if document.get("error"):
+        data["error"] = document["error"]
+    return success_response(data)

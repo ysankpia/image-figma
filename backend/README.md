@@ -1,6 +1,6 @@
 # Image-to-Figma Backend
 
-Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, and serves local asset URLs.
+Backend for the Image-to-Figma MVP. It accepts one PNG, stores local files, creates a completed task, builds deterministic region fallback DSL from real PNG dimensions, saves visual primitive candidates, saves OCR, DSL patch, text replacement candidates, uses UI-aware sampling to reduce text replacement false rejections, quality-gates visible replacements, builds text-to-container binding reports, builds component structure reports, annotates DSL elements with component structure metadata, builds layer separation candidate reports, builds local asset slice candidate reports, builds icon candidate crop reports, builds icon coverage audit reports, builds region-guided icon gap candidate reports, and serves local asset URLs.
 
 ## Run
 
@@ -59,6 +59,7 @@ curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
+curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 ```
 
 Visible text replacement is debug-only by default:
@@ -146,3 +147,19 @@ ICON_COVERAGE_FOREGROUND_DISTANCE=32
 ```
 
 It writes `backend/storage/icon_coverage_audits/{taskId}.json`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-coverage-audit`. M21 consumes M20 icon candidates, M19 slice candidates, current DSL, and local PNG pixels to report placement readiness and missed icon hints. M21 only updates top-level DSL meta and never adds overlay or icon assets to DSL `assets`, so Figma-visible output stays identical to M20. It does not put M20 icons on canvas, delete fallback, do SVG/icon semantic recognition, icon library matching, AI inpainting, Pillow/OpenCV, or complex shape reconstruction. The overlay only draws colored bbox rectangles; labels live in JSON.
+
+M22 icon gap candidates are enabled by default:
+
+```bash
+ICON_GAP_CANDIDATE_ENABLED=true
+ICON_GAP_CANDIDATE_MIN_CONFIDENCE=0.72
+ICON_GAP_CANDIDATE_MAX_CANDIDATES=48
+ICON_GAP_CANDIDATE_MIN_SIZE=8
+ICON_GAP_CANDIDATE_MAX_SIZE=80
+ICON_GAP_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_GAP_CANDIDATE_RETRY_PADDING=12
+ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE=3
+ICON_GAP_CANDIDATE_OVERLAY_ENABLED=true
+```
+
+It writes `backend/storage/icon_gap_candidates/{taskId}.json`, emits PNGs under `backend/storage/assets/{taskId}/icons_gap/`, emits a debug overlay at `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`, and exposes `GET /api/tasks/{taskId}/icon-gap-candidates`. M22 consumes M21 missed icon hints and a few region-guided probes to crop reliable header, bottom-nav, shortcut, and trailing icon gaps. M22 only updates top-level DSL meta and never adds gap icons or overlays to DSL `assets`, so Figma-visible output stays identical to M21. It does not do global icon detection, Codia-style all-layer extraction, SVG/icon semantic recognition, icon library matching, visible icon replacement, AI inpainting, Pillow/OpenCV, or complex shape reconstruction.

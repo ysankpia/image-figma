@@ -272,6 +272,24 @@ M21 只允许修改 DSL 顶层 `meta`：
 
 M21 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M21 不把 M20 icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M21 overlay 只画彩色 bbox，不画文字标签。
 
+M22 新增 region-guided icon gap candidate harness。它生成独立 `/icon-gap-candidates` 报告，消费 M21 `missedIconHints` 和少量 header、bottom nav、shortcut、trailing 局部 probe，把可靠漏裁区域补裁成本地 gap icon PNG。M22 生成 debug overlay PNG，但 gap icon 和 overlay 都只是候选/调试资产，不进入 Renderer 输入。
+
+M22 只允许修改 DSL 顶层 `meta`：
+
+```json
+{
+  "meta": {
+    "qualityFlags": ["m22_icon_gap_candidates"],
+    "iconGapCandidateCount": 6,
+    "iconGapCroppedAssetCount": 5,
+    "iconGapBlockedCount": 1,
+    "iconGapFailedCropCount": 0
+  }
+}
+```
+
+M22 不新增可见 DSL 节点，不修改任何已有 element 的 `name`、`meta`、`layout`、`style`、`content`、`source`、`imageFill`、`visible` 或 `children`，也不修改 DSL `assets` 数组。M22 不做全局 icon detection，不做 Codia 式全量可拖动图层，不把 gap icon 放进画布，不删除 fallback，不做 SVG/icon 语义识别，不做图标库匹配，不按中文文案特化，不做 AI inpainting，不引入 Pillow/OpenCV，不创建真实 Figma group、Component/Instance 或 Auto Layout。M22 overlay 只画彩色 bbox，不画文字标签。
+
 OCR boxes 和 visual primitives 只能转成 DSL patch。这个 patch 必须经过后端结构断言，不能让模型输出直接成为 DSL 权威。
 
 ## Validation And Repair

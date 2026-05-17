@@ -68,6 +68,15 @@ class Settings:
     icon_coverage_min_hint_confidence: float = 0.60
     icon_coverage_max_missed_hints: int = 80
     icon_coverage_foreground_distance: int = 32
+    icon_gap_candidate_enabled: bool = True
+    icon_gap_candidate_min_confidence: float = 0.72
+    icon_gap_candidate_max_candidates: int = 48
+    icon_gap_candidate_min_size: int = 8
+    icon_gap_candidate_max_size: int = 80
+    icon_gap_candidate_foreground_distance: int = 32
+    icon_gap_candidate_retry_padding: int = 12
+    icon_gap_candidate_edge_clip_tolerance: int = 3
+    icon_gap_candidate_overlay_enabled: bool = True
 
 
 def get_settings() -> Settings:
@@ -136,6 +145,15 @@ def get_settings() -> Settings:
         icon_coverage_min_hint_confidence=float(os.getenv("ICON_COVERAGE_MIN_HINT_CONFIDENCE", "0.60")),
         icon_coverage_max_missed_hints=int(os.getenv("ICON_COVERAGE_MAX_MISSED_HINTS", "80")),
         icon_coverage_foreground_distance=int(os.getenv("ICON_COVERAGE_FOREGROUND_DISTANCE", "32")),
+        icon_gap_candidate_enabled=parse_bool(os.getenv("ICON_GAP_CANDIDATE_ENABLED", "true")),
+        icon_gap_candidate_min_confidence=float(os.getenv("ICON_GAP_CANDIDATE_MIN_CONFIDENCE", "0.72")),
+        icon_gap_candidate_max_candidates=int(os.getenv("ICON_GAP_CANDIDATE_MAX_CANDIDATES", "48")),
+        icon_gap_candidate_min_size=int(os.getenv("ICON_GAP_CANDIDATE_MIN_SIZE", "8")),
+        icon_gap_candidate_max_size=int(os.getenv("ICON_GAP_CANDIDATE_MAX_SIZE", "80")),
+        icon_gap_candidate_foreground_distance=int(os.getenv("ICON_GAP_CANDIDATE_FOREGROUND_DISTANCE", "32")),
+        icon_gap_candidate_retry_padding=int(os.getenv("ICON_GAP_CANDIDATE_RETRY_PADDING", "12")),
+        icon_gap_candidate_edge_clip_tolerance=int(os.getenv("ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE", "3")),
+        icon_gap_candidate_overlay_enabled=parse_bool(os.getenv("ICON_GAP_CANDIDATE_OVERLAY_ENABLED", "true")),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),

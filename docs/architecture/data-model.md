@@ -21,6 +21,7 @@ v0.1 使用 SQLite 记录任务、资产、DSL 结果和调试信息。
 - `asset_slice_results`
 - `icon_candidate_results`
 - `icon_coverage_audit_results`
+- `icon_gap_candidate_results`
 
 后续建议表：
 
@@ -88,6 +89,8 @@ M20 只写入 `completed`。后续接真实处理管线再补 `pending`、`uploa
 - `asset_slice_filled_candidate`
 - `asset_icon_candidate`
 - `asset_icon_coverage_overlay`
+- `asset_icon_gap_candidate`
+- `asset_icon_gap_overlay`
 
 M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 
@@ -101,6 +104,8 @@ M9 写入真实 PNG 宽高到 `assets.width` 和 `assets.height`。
 - `asset_slice_*`：M19 生成的实验 slice PNG，只通过 `/asset-slice-candidates` 暴露，不进入 DSL `assets`。
 - `asset_icon_candidate_*`：M20 生成的 icon PNG 候选资产，只通过 `/icon-candidates` 暴露，不进入 DSL `assets`。
 - `asset_icon_coverage_overlay`：M21 生成的 debug overlay PNG，只通过 `/icon-coverage-audit`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
+- `asset_icon_gap_*`：M22 生成的 gap icon PNG 候选资产，只通过 `/icon-gap-candidates` 暴露，不进入 DSL `assets`。
+- `asset_icon_gap_overlay`：M22 生成的 debug overlay PNG，只通过 `/icon-gap-candidates`、`/api/assets/{assetId}` 或静态文件访问，不进入 DSL `assets`。
 
 如果 cropper 不支持该 PNG 格式，DSL 只使用 `asset_original` 和 `asset_banner`，并在 `meta.qualityFlags` 标记 `region_crop_unsupported`。
 
@@ -373,6 +378,28 @@ Icon candidate payload 本体写入 `backend/storage/icon_candidates/{taskId}.js
 - `created_at`
 
 Icon coverage audit payload 本体写入 `backend/storage/icon_coverage_audits/{taskId}.json`。它保存 `placements`、`missedIconHints`、`coverageOverlay`、`blockedIconCandidateIds` 和统计 meta。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`，并以 `asset_icon_coverage_overlay` role 登记到 `assets` 表。M21 不把 overlay 或 icon 候选写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
+
+## icon_gap_candidate_results
+
+用途：记录 M22 region-guided icon gap candidate 文件、overlay 资产和漏裁补齐摘要。
+
+核心字段：
+
+- `id`
+- `task_id`
+- `status`
+- `gap_path`
+- `overlay_asset_id`
+- `gap_icon_count`
+- `cropped_gap_icon_count`
+- `blocked_count`
+- `failed_crop_count`
+- `warning_count`
+- `error_code`
+- `error_message`
+- `created_at`
+
+Icon gap candidate payload 本体写入 `backend/storage/icon_gap_candidates/{taskId}.json`。它保存 `gapIcons`、`blockedHints`、`gapOverlay`、`warnings` 和统计 meta。gap icon PNG 写入 `backend/storage/assets/{taskId}/icons_gap/`，并以 `asset_icon_gap_candidate` role 登记到 `assets` 表。overlay PNG 写入 `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`，并以 `asset_icon_gap_overlay` role 登记到 `assets` 表。M22 不把 gap icon 或 overlay 写入 DSL `assets` 数组，不改变 Figma 可见输出，不声明 icon 语义。
 
 ## model_call_logs
 

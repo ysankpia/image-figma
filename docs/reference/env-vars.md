@@ -56,6 +56,15 @@
 | `ICON_COVERAGE_MIN_HINT_CONFIDENCE` | M21 missed icon hint 最低置信度 | `0.60` | 否 |
 | `ICON_COVERAGE_MAX_MISSED_HINTS` | M21 单任务最多 missed icon hints 数 | `80` | 否 |
 | `ICON_COVERAGE_FOREGROUND_DISTANCE` | M21 hint 扫描的前景像素与背景色最小 RGB 通道距离 | `32` | 否 |
+| `ICON_GAP_CANDIDATE_ENABLED` | 是否生成 M22 region-guided icon gap candidate 报告、gap icon PNG 和 overlay；不改变 Figma 可见输出 | `true` | 否 |
+| `ICON_GAP_CANDIDATE_MIN_CONFIDENCE` | M22 gap icon candidate 最低置信度，低于该值不裁剪 | `0.72` | 否 |
+| `ICON_GAP_CANDIDATE_MAX_CANDIDATES` | M22 单任务最多实际生成的 gap icon candidate 数 | `48` | 否 |
+| `ICON_GAP_CANDIDATE_MIN_SIZE` | M22 gap icon bbox 最小宽高像素 | `8` | 否 |
+| `ICON_GAP_CANDIDATE_MAX_SIZE` | M22 gap icon bbox 最大宽高像素 | `80` | 否 |
+| `ICON_GAP_CANDIDATE_FOREGROUND_DISTANCE` | M22 gap scan 的前景像素与背景色最小 RGB 通道距离 | `32` | 否 |
+| `ICON_GAP_CANDIDATE_RETRY_PADDING` | M22 候选贴 search window 边界时扩大重试的 padding 像素 | `12` | 否 |
+| `ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE` | M22 判断候选贴边/半截风险的像素容差 | `3` | 否 |
+| `ICON_GAP_CANDIDATE_OVERLAY_ENABLED` | 是否生成 M22 icon gap debug overlay PNG | `true` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
@@ -89,3 +98,5 @@ M19 asset slice 由 `ASSET_SLICE_ENABLED` 控制，默认开启并生成 `/asset
 M20 icon candidate 由 `ICON_CANDIDATE_ENABLED` 控制，默认开启并生成 `/icon-candidates` 报告和本地 icon PNG 候选资产。它消费 M15-M17 的结构索引，在 component 内部限定 search window 找小型前景块并用标准库 PNG 工具裁剪。M20 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不做 SVG/icon 语义识别、图标库匹配、可见 icon 替换、AI inpainting，不引入 Pillow/OpenCV，也不重建复杂形状。
 
 M21 icon coverage audit 由 `ICON_COVERAGE_AUDIT_ENABLED` 控制，默认开启并生成 `/icon-coverage-audit` 报告和 debug overlay PNG。它消费 M20 icon candidates、M19 slice candidates 和当前 DSL，输出 placements、missedIconHints、collision/readiness 统计和 overlay。M21 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不把 M20 icon 放进画布，不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。overlay 只画彩色 bbox，不画文字标签。
+
+M22 icon gap candidate 由 `ICON_GAP_CANDIDATE_ENABLED` 控制，默认开启并生成 `/icon-gap-candidates` 报告、`icons_gap/*.png` 候选资产和 debug overlay PNG。它消费 M21 missedIconHints、M20 icon candidates 和少量 region-guided probe，补裁可靠的 header、bottom nav、shortcut、trailing icon gap。M22 只追加 DSL 顶层 meta，不修改已有 DSL element，不修改 DSL `assets` 数组，不删除 fallback，不把 gap icon 放进画布，不做全局 icon detection、不做 Codia 式全量可拖动图层、不做 SVG/icon 语义识别、图标库匹配、可见 icon replacement、AI inpainting，不引入 Pillow/OpenCV。overlay 只画彩色 bbox，不画文字标签。

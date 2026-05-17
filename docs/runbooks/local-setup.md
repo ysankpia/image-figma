@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness 和 M21 icon coverage audit/placement readiness harness。
+当前仓库已经初始化最小 monorepo，并实现了 `@image-figma/dsl-schema`、`@image-figma/image-to-figma-renderer`、Figma 插件最小 UI、FastAPI 后端、deterministic region fallback 上传链路、M8 visual primitive contract harness、M9 OCR/DSL patch harness、M10 百度 PP-OCRv5 异步 OCR provider、M11 低风险可见文字替换 harness、M12 文字替换覆盖率扩展、M13 text replacement 质量控制、M14 UI-aware sampling、M15 text-primitive binding、M16 component structure、M17 component annotation/layer naming、M18 layer separation candidate、M19 local asset slice/simple fill experiment harness、M20 icon candidate extraction/crop harness、M21 icon coverage audit/placement readiness harness 和 M22 region-guided icon gap candidate harness。
 
 ## Prerequisites
 
@@ -152,6 +152,7 @@ curl http://localhost:8000/api/tasks/{taskId}/layer-separation-candidates
 curl http://localhost:8000/api/tasks/{taskId}/asset-slice-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-candidates
 curl http://localhost:8000/api/tasks/{taskId}/icon-coverage-audit
+curl http://localhost:8000/api/tasks/{taskId}/icon-gap-candidates
 ```
 
 M14 text replacement 默认只记录 decisions、sampling strategy 和 quality/application 报告，不改变可见 DSL：
@@ -236,6 +237,22 @@ ICON_COVERAGE_FOREGROUND_DISTANCE=32
 
 M21 基于 M20 icon candidates 判断未来放回 DSL/Figma 前的 readiness，并在局部高价值区域生成 missedIconHints。overlay 写入 `backend/storage/assets/{taskId}/debug/icon_coverage_overlay.png`，只画彩色 bbox，不画文字标签。overlay、icon 和 missed hints 都不进入 DSL `assets`，不会改变 Figma 可见输出。M21 不把 M20 icon 放进画布、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不按中文文案特化、不做 AI inpainting、不引入 Pillow/OpenCV。
 
+M22 icon gap candidate 默认开启，生成 `/icon-gap-candidates` 报告、本地 gap icon PNG 和 debug overlay PNG，并只更新 DSL 顶层 meta：
+
+```bash
+ICON_GAP_CANDIDATE_ENABLED=true
+ICON_GAP_CANDIDATE_MIN_CONFIDENCE=0.72
+ICON_GAP_CANDIDATE_MAX_CANDIDATES=48
+ICON_GAP_CANDIDATE_MIN_SIZE=8
+ICON_GAP_CANDIDATE_MAX_SIZE=80
+ICON_GAP_CANDIDATE_FOREGROUND_DISTANCE=32
+ICON_GAP_CANDIDATE_RETRY_PADDING=12
+ICON_GAP_CANDIDATE_EDGE_CLIP_TOLERANCE=3
+ICON_GAP_CANDIDATE_OVERLAY_ENABLED=true
+```
+
+M22 基于 M21 missedIconHints 和少量 header、bottom nav、shortcut、trailing 局部 probe 补裁可靠漏裁图标，写入 `backend/storage/assets/{taskId}/icons_gap/`。overlay 写入 `backend/storage/assets/{taskId}/debug/icon_gap_overlay.png`，只画彩色 bbox，不画文字标签。gap icon 和 overlay 都不进入 DSL `assets`，不会改变 Figma 可见输出。M22 不做全局 icon detection、不做 Codia 式全量可拖动图层、不把 gap icon 放进画布、不删除 fallback、不做 SVG/icon 语义识别、不做图标库匹配、不按中文文案特化、不做 AI inpainting、不引入 Pillow/OpenCV。
+
 如果要确认完全回退 M7 base DSL：
 
 ```bash
@@ -300,6 +317,7 @@ curl -F "file=@/Users/luhui/Downloads/宿舍床位可视化选择系统_UI设计
 - `/api/tasks/{taskId}/asset-slice-candidates` 默认返回 `status: "completed"`，包含 slices、blockedComponentIds 和 meta。
 - `/api/tasks/{taskId}/icon-candidates` 默认返回 `status: "completed"`，包含 icons、blockedComponentIds 和 meta。
 - `/api/tasks/{taskId}/icon-coverage-audit` 默认返回 `status: "completed"`，包含 placements、missedIconHints、coverageOverlay 和 meta。
+- `/api/tasks/{taskId}/icon-gap-candidates` 默认返回 `status: "completed"`，包含 gapIcons、blockedHints、gapOverlay 和 meta。
 - 上传链路不出现 sample 专属的 `search_icon` warning。
 
 ## Configuration

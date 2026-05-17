@@ -46,6 +46,16 @@ from ..icon_coverage import (
     build_skipped_icon_coverage_document,
     overlay_asset_records,
 )
+from ..icon_gap_candidate import (
+    IconGapCandidateDocument,
+    IconGapStorageAdapter,
+    apply_icon_gap_metadata,
+    build_failed_icon_gap_document,
+    build_icon_gap_candidate_document,
+    build_skipped_icon_gap_document,
+    gap_icon_asset_records,
+    gap_overlay_asset_records,
+)
 from ..database import json_dumps
 from ..dsl_patch import (
     DSLPatchDocument,
@@ -257,7 +267,7 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             sliced_dsl,
             now,
         )
-        final_dsl = save_icon_coverage_audit_result(
+        icon_coverage_document, icon_coverage_dsl = save_icon_coverage_audit_result(
             task_id,
             image,
             data,
@@ -266,6 +276,17 @@ async def upload_png(file: UploadFile = File(...)) -> dict[str, object]:
             icon_candidate_document,
             asset_slice_document,
             icon_candidate_dsl,
+            now,
+        )
+        final_dsl = save_icon_gap_candidate_result(
+            task_id,
+            image,
+            data,
+            binding_document,
+            structure_document,
+            icon_candidate_document,
+            icon_coverage_document,
+            icon_coverage_dsl,
             now,
         )
         dsl_path = state.storage.dsl_path(task_id)
@@ -1275,9 +1296,9 @@ def save_icon_coverage_audit_result(
     asset_slice_document: AssetSliceCandidateDocument | None,
     input_dsl: dict[str, object],
     created_at: str,
-) -> dict[str, object]:
+) -> tuple[IconCoverageAuditDocument | None, dict[str, object]]:
     if not state.settings.icon_coverage_audit_enabled:
-        return input_dsl
+        return None, input_dsl
 
     failed_logged = False
     try:
@@ -1374,6 +1395,122 @@ def save_icon_coverage_audit_result(
             "needs_fallback_coordination_count": int(document.meta.get("needsFallbackCoordinationCount", 0)),
             "needs_slice_coordination_count": int(document.meta.get("needsSliceCoordinationCount", 0)),
             "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "warning_count": len(document.warnings),
+            "error_code": document.error["code"] if document.error else None,
+            "error_message": document.error["message"] if document.error else None,
+            "created_at": created_at,
+        }
+    )
+    return document, final_dsl
+
+
+def save_icon_gap_candidate_result(
+    task_id: str,
+    image: PngMetadata,
+    png_data: bytes,
+    binding_document: TextPrimitiveBindingDocument,
+    structure_document: ComponentStructureDocument,
+    icon_candidate_document: IconCandidateDocument | None,
+    icon_coverage_document: IconCoverageAuditDocument | None,
+    input_dsl: dict[str, object],
+    created_at: str,
+) -> dict[str, object]:
+    if not state.settings.icon_gap_candidate_enabled:
+        return input_dsl
+
+    failed_logged = False
+    try:
+        if icon_coverage_document is None:
+            document = build_skipped_icon_gap_document(
+                task_id=task_id,
+                image=image,
+                code="icon_coverage_audit_not_completed",
+                message="Icon gap candidate extraction skipped because icon coverage audit did not complete.",
+            )
+            final_dsl = input_dsl
+        else:
+            document = build_icon_gap_candidate_document(
+                task_id=task_id,
+                image=image,
+                png_data=png_data,
+                binding_document=binding_document,
+                structure_document=structure_document,
+                icon_candidate_document=icon_candidate_document,
+                icon_coverage_document=icon_coverage_document,
+                dsl=input_dsl,
+                settings=state.settings,
+                storage=IconGapStorageAdapter(
+                    assets_root=state.storage.assets_dir,
+                    public_base_url=state.settings.public_base_url,
+                ),
+            )
+            final_dsl = apply_icon_gap_metadata(input_dsl, document)
+            validation_errors = validate_enhanced_dsl(final_dsl)
+            if validation_errors:
+                state.database.insert_error(
+                    task_id=task_id,
+                    stage="icon_gap_candidate",
+                    error_code="ICON_GAP_CANDIDATE_VALIDATION_FAILED",
+                    message="Icon gap candidate validation failed.",
+                    detail=json_dumps(validation_errors),
+                )
+                failed_logged = True
+                document = build_failed_icon_gap_document(
+                    task_id=task_id,
+                    image=image,
+                    code="ICON_GAP_CANDIDATE_VALIDATION_FAILED",
+                    message="Icon gap candidate validation failed.",
+                )
+                final_dsl = input_dsl
+    except Exception as error:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_gap_candidate",
+            error_code="ICON_GAP_CANDIDATE_FAILED",
+            message="Icon gap candidate extraction failed.",
+            detail=str(error),
+        )
+        failed_logged = True
+        document = build_failed_icon_gap_document(
+            task_id=task_id,
+            image=image,
+            code="ICON_GAP_CANDIDATE_FAILED",
+            message="Icon gap candidate extraction failed.",
+        )
+        final_dsl = input_dsl
+
+    if document.status == "failed" and not failed_logged:
+        state.database.insert_error(
+            task_id=task_id,
+            stage="icon_gap_candidate",
+            error_code=document.error["code"] if document.error else "ICON_GAP_CANDIDATE_FAILED",
+            message=document.error["message"] if document.error else "Icon gap candidate extraction failed.",
+            detail=json_dumps([warning.__dict__ for warning in document.warnings]),
+        )
+
+    for asset in gap_icon_asset_records(document, task_id, created_at) + gap_overlay_asset_records(document, task_id, created_at):
+        try:
+            state.database.insert_asset(asset)
+        except Exception as error:
+            state.database.insert_error(
+                task_id=task_id,
+                stage="icon_gap_candidate",
+                error_code="asset_db_insert_failed",
+                message="Icon gap candidate asset database insert failed.",
+                detail=str(error),
+            )
+
+    gap_path = state.storage.save_icon_gap_candidate(task_id, json_dumps(document.to_dict()))
+    state.database.insert_icon_gap_candidate_result(
+        {
+            "task_id": task_id,
+            "status": document.status,
+            "gap_path": str(gap_path),
+            "overlay_asset_id": document.gapOverlay.assetId if document.gapOverlay else None,
+            "gap_icon_count": int(document.meta.get("gapIconCount", 0)),
+            "cropped_gap_icon_count": int(document.meta.get("croppedGapIconCount", 0)),
+            "blocked_count": int(document.meta.get("blockedCount", 0)),
+            "failed_crop_count": int(document.meta.get("failedCropCount", 0)),
             "warning_count": len(document.warnings),
             "error_code": document.error["code"] if document.error else None,
             "error_message": document.error["message"] if document.error else None,
