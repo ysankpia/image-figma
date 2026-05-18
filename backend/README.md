@@ -320,3 +320,14 @@ uv run python scripts/run_m29_0_3_visual_evidence_normalization.py \
 ```
 
 It reads `m29_0_2*/text_masked_media_audit.json`, preserves every media evidence item exactly once, exports original-source crops, and writes `m29_0_3/visual_evidence.json`, `visual_evidence.md`, `preview_visual_evidence.png`, bucket overlays, and bucketed assets. The key contract is that `source` is only provenance; `visualKind` and `decision` determine accepted image, media candidate, icon candidate, text noise, or other candidate. M29.0.3 does not change M29/M29.1 outputs, upload APIs, DSL, Renderer, or Figma output. M20-M28 remain legacy experiments; M29+ visual evidence is the source for subsequent reconstruction work.
+
+M29.0.4 generic visual object candidate audit builds an auditable object-candidate graph over normalized M29+ evidence:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_4_visual_object_candidate_audit.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph
+```
+
+It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_4/visual_object_candidates.json`, `edge_audit.json`, `visual_object_candidates.md`, `preview_visual_objects.png`, object/set/split overlays, and bucketed object crops. Its candidate universe is only M29.0.3 `VisualEvidenceItem` plus M29.0.2 `textBoxes`; M29 nodes, blocked evidence, M29.1 groups, and M29.0.2 mediaEvidence are lookup/debug refs only. It is audit-first: `text_noise` may appear as weak visual evidence with risk, wide source bboxes become split candidates, and no UI-pattern contracts such as navigation, toolbar, shortcut, purchase tool, or category tile are introduced.
