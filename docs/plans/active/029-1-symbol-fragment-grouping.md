@@ -47,7 +47,7 @@ overlays/10_symbol_groups.png
 overlays/11_grouped_vs_original.png
 ```
 
-`preview_sheet.png` 是人工审计入口，必须同时展示源图、group overlay、父级 M29 已保留的 `assets/images/*.png` 和 M29.1 新增的 `assets/symbol_groups/*.png`。M29.1 不处理 image，但 preview 不能让 retained image asset 看起来像在 M29.1 消失。
+`preview_sheet.png` 是人工审计入口，不是只展示 accepted groups。它必须同时展示源图、group overlay、父级 M29 已保留的 `assets/images/*.png`、父级 M29 raw `assets/symbols/*.png`、M29.1 fragment candidates、accepted symbol groups、uncertain groups 和 rejected groups。M29.1 不处理 image，但 preview 不能让 retained image asset 看起来像在 M29.1 消失；M29.1 也不能把未 accepted 的候选藏到 JSON 里让人工误判为没有识别。
 
 CLI：
 
@@ -79,7 +79,7 @@ overlay PNG 可读
 
 真实图 smoke 只作为人工诊断证据，不用 group 数量作为质量目标。验收重点是 grouped asset 是否更完整、是否出现明显误合并、edge audit 是否解释得通、原始 symbol 是否保留。
 
-Preview 验收还要确认父级 M29 image assets 仍在 M29.1 sheet 中可见，避免把“未参与 symbol grouping”误读为“被 M29.1 删除或拆没”。
+Preview 验收还要确认父级 M29 image assets、raw symbols、fragment candidates、accepted groups、uncertain groups 和 rejected groups 都在 M29.1 sheet 中可见，避免把“未参与 symbol grouping / 未 accepted”误读为“被 M29.1 删除或没识别到”。
 
 验证命令：
 

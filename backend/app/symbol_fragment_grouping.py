@@ -275,7 +275,7 @@ def extract_m291_symbol_fragment_grouping(
     asset_audit = build_asset_audit(candidates, edges, groups, options)
     debug = write_m291_overlays(pixels, output_dir, candidates, groups, asset_audit)
     preview_path = output_dir / "preview_sheet.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug))
+    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, candidates, groups))
     meta = build_m291_meta(candidates, edges, groups, asset_audit)
     document = M291Document(
         schema_name="M291SymbolFragmentGroupingDocument",
@@ -806,29 +806,46 @@ def overlay_grouped_vs_original(pixels: PngPixels, candidates: list[M291Fragment
     return encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows])
 
 
-def build_preview_sheet(pixels: PngPixels, output_dir: Path, debug: M291DebugArtifacts) -> bytes:
+def build_preview_sheet(
+    pixels: PngPixels,
+    output_dir: Path,
+    debug: M291DebugArtifacts,
+    candidates: list[M291FragmentCandidate] | None = None,
+    groups: list[M291SymbolGroup] | None = None,
+) -> bytes:
     group_overlay = decode_png_pixels((output_dir / (debug.symbol_groups or "overlays/10_symbol_groups.png")).read_bytes())
     m29_output_dir = output_dir.parent
     retained_image_previews = crop_previews(m29_output_dir / "assets" / "images", 160)
-    grouped_symbol_previews = crop_previews(output_dir / "assets" / "symbol_groups", 120)
+    retained_symbol_previews = crop_previews(m29_output_dir / "assets" / "symbols", 96)
+    candidate_previews = bbox_previews(pixels, [candidate.bbox for candidate in candidates or []], 72)
+    accepted_group_previews = crop_previews(output_dir / "assets" / "symbol_groups", 120)
+    uncertain_group_previews = bbox_previews(pixels, [group.bbox for group in groups or [] if group.decision == "uncertain"], 96)
+    rejected_group_previews = bbox_previews(pixels, [group.bbox for group in groups or [] if group.decision == "rejected"], 72)
+    preview_sections = [
+        section
+        for section in [
+            retained_image_previews,
+            retained_symbol_previews,
+            candidate_previews,
+            accepted_group_previews,
+            uncertain_group_previews,
+            rejected_group_previews,
+        ]
+        if section
+    ]
     sheet_width = 1400
     margin = 24
     gap = 18
     scale = min(0.55, (sheet_width - margin * 2 - gap) / max(1, pixels.width * 2))
     source_w = max(1, round(pixels.width * scale))
     source_h = max(1, round(pixels.height * scale))
-    sheet_height = (
-        source_h
-        + grid_height(retained_image_previews, sheet_width, margin, gap)
-        + grid_height(grouped_symbol_previews, sheet_width, margin, gap)
-        + margin * 5
-    )
+    sheet_height = source_h + sum(grid_height(section, sheet_width, margin, gap) for section in preview_sections) + margin * (3 + len(preview_sections))
     canvas = [bytearray(b"\xfa\xfa\xfa" * sheet_width) for _ in range(sheet_height)]
     paste_scaled(canvas, sheet_width, pixels, margin, margin, source_w, source_h)
     paste_scaled(canvas, sheet_width, group_overlay, margin + source_w + gap, margin, source_w, source_h)
     y = margin + source_h + margin
-    y = paste_grid(canvas, sheet_width, retained_image_previews, margin, y, gap) + margin
-    paste_grid(canvas, sheet_width, grouped_symbol_previews, margin, y, gap)
+    for section in preview_sections:
+        y = paste_grid(canvas, sheet_width, section, margin, y, gap) + margin
     return encode_rgb_png(sheet_width, sheet_height, [bytes(row) for row in canvas])
 
 
@@ -1027,6 +1044,20 @@ def crop_previews(path: Path, max_edge: int) -> list[tuple[PngPixels, int, int]]
             continue
         scale = min(1.0, max_edge / max(1, pixels.width, pixels.height))
         previews.append((pixels, max(1, round(pixels.width * scale)), max(1, round(pixels.height * scale))))
+    return previews
+
+
+def bbox_previews(pixels: PngPixels, bboxes: list[list[int]], max_edge: int) -> list[tuple[PngPixels, int, int]]:
+    previews: list[tuple[PngPixels, int, int]] = []
+    for bbox in sorted(bboxes, key=lambda item: (item[1], item[0], bbox_area(item))):
+        clamped = bbox_clamp(bbox, pixels.width, pixels.height)
+        if clamped is None:
+            continue
+        x, y, width, height = clamped
+        rows = [pixels.rows[row_index][x * 3 : (x + width) * 3] for row_index in range(y, y + height)]
+        preview = PngPixels(width=width, height=height, rows=rows)
+        scale = min(1.0, max_edge / max(1, width, height))
+        previews.append((preview, max(1, round(width * scale)), max(1, round(height * scale))))
     return previews
 
 

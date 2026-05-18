@@ -182,6 +182,26 @@ def test_preview_sheet_retains_parent_m29_image_assets(tmp_path: Path) -> None:
     assert result.meta["counts"]["acceptedGroups"] >= 1
 
 
+def test_preview_sheet_includes_candidates_and_nonaccepted_groups(tmp_path: Path) -> None:
+    canvas = make_canvas(140, 80, (255, 255, 255))
+    document = make_m29_document(
+        [
+            symbol("glyph_1", [10, 20, 8, 10]),
+            symbol("glyph_2", [24, 20, 8, 10]),
+            symbol("glyph_3", [38, 20, 8, 10]),
+            symbol("glyph_4", [52, 20, 8, 10]),
+        ]
+    )
+
+    result = run_grouping(document, tmp_path, canvas, M291Options(neighbor_search_radius=18))
+
+    preview = read_png_metadata((tmp_path / "preview_sheet.png").read_bytes())
+    assert preview is not None
+    assert result.candidates
+    assert any(group.decision == "rejected" for group in result.groups)
+    assert preview.height > canvas.height
+
+
 def run_grouping(document: dict, output_dir: Path, canvas: PngPixels, options: M291Options | None = None):
     output_dir.mkdir(parents=True, exist_ok=True)
     source_path = output_dir / "source.png"

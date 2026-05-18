@@ -85,6 +85,8 @@ overlays/07_symbols.png
 overlays/08_final_nodes.png
 ```
 
+`preview_sheet.png` 是人工审计入口，不是只展示 accepted assets。它必须同时展示源图、final overlay、accepted image assets、accepted symbol assets、unknown crops 和 blocked evidence crops。这样真实图 smoke 时可以确认“已经发现但被 blocked/unknown”的候选，而不是误判为没有识别到。
+
 ## Acceptance
 
 合成测试必须严格：
@@ -103,6 +105,8 @@ document validation 拒绝坏 bbox、重复 id、缺失 asset、坏 relation
 ```
 
 真实图 smoke 是 diagnostic，不以 0 误检为硬门槛。人工验收重点看 `preview_sheet.png` 和 overlays：图片资产是否整块保护、shape 是否从背景/容器中分离、文字是否避免进入 symbol、symbol 是否没有被大 image protection 吞掉。
+
+Preview 验收还要确认 accepted、unknown、blocked 三类证据都可见；如果候选没有成为 accepted asset，也必须能在 sheet 或 overlay 中解释。
 
 ## Validation
 

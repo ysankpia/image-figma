@@ -427,7 +427,7 @@ def extract_m29_visual_primitive_graph(
         blocked=blocked,
     )
     preview_path = output_dir / "preview_sheet.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug))
+    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, nodes, blocked))
 
     document = M29VisualPrimitiveGraphDocument(
         version="0.1",
@@ -957,24 +957,33 @@ def overlay_nodes(pixels: PngPixels, nodes: list[M29PrimitiveNode], blocked: lis
     return encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows])
 
 
-def build_preview_sheet(pixels: PngPixels, output_dir: Path, debug: M29DebugArtifacts) -> bytes:
+def build_preview_sheet(
+    pixels: PngPixels,
+    output_dir: Path,
+    debug: M29DebugArtifacts,
+    nodes: list[M29PrimitiveNode] | None = None,
+    blocked: list[M29BlockedPrimitive] | None = None,
+) -> bytes:
     final_overlay = decode_png_pixels((output_dir / (debug.final_nodes or "overlays/08_final_nodes.png")).read_bytes())
     image_previews = crop_previews(output_dir / "assets" / "images", 160)
     symbol_previews = crop_previews(output_dir / "assets" / "symbols", 96)
+    unknown_previews = bbox_previews(pixels, [node.bbox for node in nodes or [] if node.type == "unknown"], 96)
+    blocked_previews = bbox_previews(pixels, [item.bbox for item in blocked or []], 72)
+    preview_sections = [section for section in [image_previews, symbol_previews, unknown_previews, blocked_previews] if section]
     sheet_width = 1400
     margin = 24
     gap = 18
     source_scale = min(0.55, (sheet_width - margin * 2 - gap) / max(1, pixels.width * 2))
     source_w = max(1, round(pixels.width * source_scale))
     source_h = max(1, round(pixels.height * source_scale))
-    sheet_height = source_h + grid_height(image_previews, sheet_width, margin, gap) + grid_height(symbol_previews, sheet_width, margin, gap) + margin * 6
+    sheet_height = source_h + sum(grid_height(section, sheet_width, margin, gap) for section in preview_sections) + margin * (3 + len(preview_sections))
     canvas = [bytearray(b"\xfa\xfa\xfa" * sheet_width) for _ in range(sheet_height)]
     y = margin
     paste_scaled(canvas, sheet_width, pixels, margin, y, source_w, source_h)
     paste_scaled(canvas, sheet_width, final_overlay, margin + source_w + gap, y, source_w, source_h)
     y += source_h + margin
-    y = paste_grid(canvas, sheet_width, image_previews, margin, y, gap) + margin
-    paste_grid(canvas, sheet_width, symbol_previews, margin, y, gap)
+    for section in preview_sections:
+        y = paste_grid(canvas, sheet_width, section, margin, y, gap) + margin
     return encode_rgb_png(sheet_width, sheet_height, [bytes(row) for row in canvas])
 
 
@@ -989,6 +998,20 @@ def crop_previews(path: Path, max_edge: int) -> list[tuple[PngPixels, int, int]]
             continue
         scale = min(1.0, max_edge / max(1, pixels.width, pixels.height))
         previews.append((pixels, max(1, round(pixels.width * scale)), max(1, round(pixels.height * scale))))
+    return previews
+
+
+def bbox_previews(pixels: PngPixels, bboxes: list[list[int]], max_edge: int) -> list[tuple[PngPixels, int, int]]:
+    previews: list[tuple[PngPixels, int, int]] = []
+    for bbox in sorted(bboxes, key=lambda item: (item[1], item[0], bbox_area(item))):
+        clamped = bbox_clamp(bbox, pixels.width, pixels.height)
+        if clamped is None:
+            continue
+        x, y, width, height = clamped
+        rows = [pixels.rows[row_index][x * 3 : (x + width) * 3] for row_index in range(y, y + height)]
+        preview = PngPixels(width=width, height=height, rows=rows)
+        scale = min(1.0, max_edge / max(1, width, height))
+        previews.append((preview, max(1, round(width * scale)), max(1, round(height * scale))))
     return previews
 
 

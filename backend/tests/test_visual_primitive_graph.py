@@ -197,6 +197,23 @@ def test_blocked_evidence_has_fine_reasons_context_and_meta(tmp_path: Path) -> N
     assert {"area", "maxEdge", "textOverlapRatio", "imageOverlapRatio", "protectiveShapeOverlapRatio", "insideImage", "nearImage", "nearProtectiveShape", "nearestShapeId"} <= set(sample)
 
 
+def test_preview_sheet_includes_blocked_evidence_crops(tmp_path: Path) -> None:
+    canvas = make_canvas(96, 96, (255, 255, 255))
+    draw_noise_patch(canvas, 16, 16, 24, 24)
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        options=M29VisualPrimitiveOptions(min_image_area=2000),
+    )
+
+    preview = read_png_metadata((tmp_path / "preview_sheet.png").read_bytes())
+    assert preview is not None
+    assert document.blocked
+    assert preview.height > canvas.height
+
+
 def test_blocked_reason_taxonomy_from_symbol_detector() -> None:
     pixels = make_canvas(80, 80, (255, 255, 255))
     text_mask = mask_from_bboxes(80, 80, [[4, 4, 12, 12]])
