@@ -332,6 +332,18 @@ uv run python scripts/run_m29_0_4_visual_object_candidate_audit.py \
 
 It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_4/visual_object_candidates.json`, `edge_audit.json`, `visual_object_candidates.md`, `preview_visual_objects.png`, object/set/split overlays, and bucketed object crops. Its candidate universe is only M29.0.3 `VisualEvidenceItem` plus M29.0.2 `textBoxes`; M29 nodes, blocked evidence, M29.1 groups, and M29.0.2 mediaEvidence are lookup/debug refs only. It is audit-first: `text_noise` may appear as weak visual evidence with risk, wide source bboxes become split candidates, and no UI-pattern contracts such as navigation, toolbar, shortcut, purchase tool, or category tile are introduced.
 
+M29.0.4 can optionally consume M29.0.7 ownership routing:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_4_visual_object_candidate_audit.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph \
+  --m2907-ownership-json storage/m29_visual_primitive_graph/m29_0_7/text_visual_ownership_gate.json
+```
+
+Without `--m2907-ownership-json`, M29.0.4 keeps baseline behavior. With it, M29.0.4 still uses original M29.0.3/M29.0.2 evidence, but object-forming visual-side eligibility is controlled by M29.0.7 routing flags. Text-owned evidence can remain usable as text side; it is not treated as visual side.
+
 M29.0.5 text-aware visual object refinement splits each M29.0.4 object candidate into visual assets, shape candidates, text members, unresolved members, and audit crops:
 
 ```bash
@@ -353,3 +365,14 @@ uv run python scripts/run_m29_0_6_member_boundary_quality_audit.py \
 ```
 
 It reads `m29_0_5*/refined_visual_objects.json`, `m29_0_4*/visual_object_candidates.json`, `m29_0_3*/visual_evidence.json`, and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_6/member_boundary_quality_audit.json`, duplicate source/asset audits, success baseline, overlays, top-K examples, and optional batch summary JSON/CSV. It is audit-only: it does not create new bboxes, formal visual assets, repairs, deduped assets, DSL, Renderer output, or Figma output. The key output is raw/dedup attribution for unresolved members, weak text-noise dominance, source/member duplicate topology, visual asset duplicate facts/candidates, and suggested upstream layers.
+
+M29.0.7 text ownership gate is a script-only routing layer before object-forming consumption:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_7_text_visual_ownership_gate.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph
+```
+
+It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_7/text_visual_ownership_gate.json`, routing views, audit JSON, overlays, top-K examples, and a preview sheet. M29.0.7 decides whether existing evidence is `text_owned`, `visual_owned`, `shape_owned`, `mixed_or_uncertain`, or `audit_only`. It does not call OCR, discover new bboxes, generate formal visual assets, create text-removed images, rewrite prior M29 JSON, or emit DSL/Figma output.

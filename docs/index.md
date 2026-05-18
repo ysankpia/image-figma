@@ -42,6 +42,7 @@
 - 当前 M29.0.4 generic visual object candidate audit 计划：[plans/active/029-0-4-generic-visual-object-candidate-audit.md](plans/active/029-0-4-generic-visual-object-candidate-audit.md)
 - 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
 - 当前 M29.0.6 member boundary quality audit 计划：[plans/active/029-0-6-member-boundary-quality-audit.md](plans/active/029-0-6-member-boundary-quality-audit.md)
+- 当前 M29.0.7 text ownership gate 计划：[plans/active/029-0-7-text-ownership-gate.md](plans/active/029-0-7-text-ownership-gate.md)
 
 ## By Task Type
 
@@ -127,6 +128,7 @@
 - M29.0.4 generic visual object candidate 决策：[decisions/0036-generic-visual-object-candidates-after-evidence-normalization.md](decisions/0036-generic-visual-object-candidates-after-evidence-normalization.md)
 - M29.0.5 text-aware visual object refinement 决策：[decisions/0037-refine-visual-objects-into-text-and-visual-members.md](decisions/0037-refine-visual-objects-into-text-and-visual-members.md)
 - M29.0.6 member boundary quality audit 决策：[decisions/0038-audit-member-boundary-quality-after-text-aware-refinement.md](decisions/0038-audit-member-boundary-quality-after-text-aware-refinement.md)
+- M29.0.7 text ownership gate 决策：[decisions/0039-route-text-owned-evidence-before-object-graph.md](decisions/0039-route-text-owned-evidence-before-object-graph.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

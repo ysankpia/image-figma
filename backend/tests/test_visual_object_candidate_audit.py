@@ -98,6 +98,58 @@ def test_icon_like_text_noise_is_only_weak_visual_member(tmp_path: Path) -> None
     assert "icon_like_text_noise" in pair.risks
 
 
+def test_ownership_absent_keeps_baseline_weak_text_noise_objecting(tmp_path: Path) -> None:
+    canvas = make_canvas(160, 120)
+    m2903 = {"items": [visual_item("weak_icon", "text_noise", [20, 40, 22, 22], text_overlap=0.92)]}
+    m2902 = {"textBoxes": [text_box("near_text", [48, 42, 30, 14], "A")]}
+
+    document = extract_visual_object_candidate_audit(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2903_document=m2903,
+        m2903_visual_evidence_json_path="/tmp/m29_0_3/visual_evidence.json",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+    )
+
+    assert any(item.object_kind == "visual_text_pair" and any(member.member_role == "weak_visual" for member in item.members) for item in document.objects)
+    assert all("ownershipRouting" not in node.to_dict() for node in document.evidence_nodes)
+
+
+def test_ownership_blocks_weak_text_noise_as_visual_side(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 120)
+    m2903 = {"items": [visual_item("weak_icon", "text_noise", [20, 40, 22, 22], text_overlap=0.92), visual_item("real_icon", "icon_candidate", [50, 40, 22, 22])]}
+    m2902 = {"textBoxes": [text_box("near_text", [140, 92, 30, 14], "A")]}
+    ownership = ownership_document(
+        [
+            ownership_decision("weak_icon", "text_owned", allowed_visual=False, allowed_text=True, suppressed=True),
+            ownership_decision("real_icon", "visual_owned", allowed_visual=True, allowed_text=False, suppressed=False),
+            ownership_text_box("near_text"),
+        ]
+    )
+
+    document = extract_visual_object_candidate_audit(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2903_document=m2903,
+        m2903_visual_evidence_json_path="/tmp/m29_0_3/visual_evidence.json",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+        m2907_ownership_document=ownership,
+    )
+
+    assert not any(item.object_kind == "uncertain_compound" and any(member.source_id == "weak_icon" for member in item.members) for item in document.objects)
+    assert not any(item.object_kind == "compound_visual" and any(member.source_id == "weak_icon" for member in item.members) for item in document.objects)
+    pair = next(item for item in document.objects if item.object_kind == "visual_text_pair" and any(member.source_id == "real_icon" for member in item.members))
+    weak_member = next(member for member in pair.members if member.source_id == "weak_icon")
+    assert weak_member.member_role == "text"
+    weak_node = next(node for node in document.evidence_nodes if node.source_id == "weak_icon")
+    assert weak_node.ownership_routing is not None
+    assert "ownership_suppressed_as_visual" in weak_node.risks
+
+
 def test_pure_text_fragments_do_not_become_accepted_visual_object(tmp_path: Path) -> None:
     canvas = make_canvas(180, 100)
     m2902 = {"textBoxes": [text_box("text_1", [20, 40, 30, 12], "A"), text_box("text_2", [56, 40, 30, 12], "B")]}
@@ -289,6 +341,61 @@ def text_box(id: str, bbox: list[int], text: str) -> dict:
         "confidence": 0.98,
         "source": "ocr",
         "kind": "line",
+    }
+
+
+def ownership_document(decisions: list[dict]) -> dict:
+    return {
+        "schemaName": "M2907TextVisualOwnershipGateDocument",
+        "schemaVersion": "0.1",
+        "ownershipDecisions": decisions,
+    }
+
+
+def ownership_decision(
+    source_id: str,
+    ownership: str,
+    *,
+    allowed_visual: bool,
+    allowed_text: bool,
+    suppressed: bool,
+) -> dict:
+    return {
+        "id": f"own_{source_id}",
+        "source": "m2903_visual_evidence",
+        "sourceEvidenceId": source_id,
+        "sourceVisualEvidenceItemId": source_id,
+        "sourceTextBoxId": None,
+        "sourceVisualKind": "text_noise" if ownership == "text_owned" else "icon_candidate",
+        "ownership": ownership,
+        "decision": "accepted",
+        "ownershipReasonKind": "weak_visual_text_noise_owned_by_text" if ownership == "text_owned" else "visual_candidate_kept",
+        "matchedTextBoxIds": ["near_text"] if ownership == "text_owned" else [],
+        "textPreview": "A" if ownership == "text_owned" else "",
+        "suppressedAsVisual": suppressed,
+        "allowedForObjectFormingVisualSide": allowed_visual,
+        "allowedForTextSide": allowed_text,
+        "allowedForAuditOnly": True,
+    }
+
+
+def ownership_text_box(text_id: str) -> dict:
+    return {
+        "id": f"own_{text_id}",
+        "source": "m2902_text_box",
+        "sourceEvidenceId": text_id,
+        "sourceVisualEvidenceItemId": None,
+        "sourceTextBoxId": text_id,
+        "sourceVisualKind": None,
+        "ownership": "text_owned",
+        "decision": "accepted",
+        "ownershipReasonKind": "high_ocr_overlap_text_noise",
+        "matchedTextBoxIds": [text_id],
+        "textPreview": "A",
+        "suppressedAsVisual": False,
+        "allowedForObjectFormingVisualSide": False,
+        "allowedForTextSide": True,
+        "allowedForAuditOnly": True,
     }
 
 

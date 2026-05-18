@@ -74,13 +74,17 @@ class M2904SourceExpansionRefs:
     m29_nodes_json: str | None = None
     m291_group_nodes_json: str | None = None
     m2902_media_evidence_json: str | None = None
+    m2907_ownership_json: str | None = None
 
     def to_dict(self) -> dict[str, str | None]:
-        return {
+        data = {
             "m29NodesJson": self.m29_nodes_json,
             "m291GroupNodesJson": self.m291_group_nodes_json,
             "m2902MediaEvidenceJson": self.m2902_media_evidence_json,
         }
+        if self.m2907_ownership_json is not None:
+            data["m2907OwnershipJson"] = self.m2907_ownership_json
+        return data
 
 
 @dataclass(frozen=True)
@@ -98,9 +102,10 @@ class VisualObjectEvidenceNode:
     metrics: M29PrimitiveMetrics | None
     risks: list[str]
     reasons: list[str]
+    ownership_routing: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "id": self.id,
             "source": self.source,
             "sourceId": self.source_id,
@@ -115,6 +120,9 @@ class VisualObjectEvidenceNode:
             "risks": self.risks,
             "reasons": self.reasons,
         }
+        if self.ownership_routing is not None:
+            data["ownershipRouting"] = self.ownership_routing
+        return data
 
 
 @dataclass(frozen=True)
@@ -312,13 +320,15 @@ def extract_visual_object_candidate_audit(
     output_dir: Path,
     source_expansion_refs: M2904SourceExpansionRefs | None = None,
     options: M2904Options | None = None,
+    m2907_ownership_document: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
 ) -> M2904Document:
     options = options or M2904Options()
     source_expansion_refs = source_expansion_refs or M2904SourceExpansionRefs(m2902_media_evidence_json=m2902_audit_json_path)
     pixels = decode_png_pixels(png_data)
     output_dir.mkdir(parents=True, exist_ok=True)
-    evidence_nodes, node_warnings = build_evidence_nodes(m2903_document, m2902_document, pixels.width, pixels.height, options)
+    ownership_routing, ownership_warnings = build_ownership_routing(m2907_ownership_document)
+    evidence_nodes, node_warnings = build_evidence_nodes(m2903_document, m2902_document, pixels.width, pixels.height, options, ownership_routing)
     evidence_edges = build_evidence_edges(evidence_nodes, pixels.width, pixels.height, options)
     edge_audit = [EdgeAuditItem(edge.id, edge.left_id, edge.right_id, edge.decision, edge.score, edge.reasons, edge.risks, edge.metrics) for edge in evidence_edges]
     objects = build_object_candidates(pixels, output_dir, evidence_nodes, evidence_edges, options)
@@ -340,7 +350,7 @@ def extract_visual_object_candidate_audit(
         sets=sets,
         edge_audit=edge_audit,
         debug=debug,
-        warnings=[*(warnings or []), *node_warnings],
+        warnings=[*(warnings or []), *ownership_warnings, *node_warnings],
         meta=build_meta(evidence_nodes, evidence_edges, objects, sets),
     )
     validate_visual_object_candidate_audit_document(document, output_dir, pixels.width, pixels.height)
@@ -354,6 +364,7 @@ def build_evidence_nodes(
     width: int,
     height: int,
     options: M2904Options,
+    ownership_routing: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[VisualObjectEvidenceNode], list[str]]:
     warnings: list[str] = []
     nodes: list[VisualObjectEvidenceNode] = []
@@ -369,6 +380,7 @@ def build_evidence_nodes(
         visual_kind = str(raw.get("visualKind") or "")
         metrics = parse_metrics(raw.get("metrics"))
         node_kind, risks, reasons = classify_m2903_node(raw, bbox, metrics, options, warnings)
+        ownership = (ownership_routing or {}).get(f"m2903_visual_evidence:{source_id}")
         nodes.append(
             VisualObjectEvidenceNode(
                 id=f"evidence_{len(nodes) + 1:04d}",
@@ -382,8 +394,9 @@ def build_evidence_nodes(
                 text_preview=None,
                 confidence=float(raw.get("confidence", 0.5)),
                 metrics=metrics,
-                risks=risks,
-                reasons=[*reasons, *[str(reason) for reason in raw.get("reasons", [])]],
+                risks=ownership_augmented_risks(risks, ownership),
+                reasons=ownership_augmented_reasons([*reasons, *[str(reason) for reason in raw.get("reasons", [])]], ownership),
+                ownership_routing=ownership,
             )
         )
     for raw in m2902_document.get("textBoxes", []):
@@ -396,6 +409,7 @@ def build_evidence_nodes(
         if not source_id:
             continue
         text = str(raw.get("text") or "").strip() or None
+        ownership = (ownership_routing or {}).get(f"m2902_text_box:{source_id}")
         nodes.append(
             VisualObjectEvidenceNode(
                 id=f"evidence_{len(nodes) + 1:04d}",
@@ -409,11 +423,69 @@ def build_evidence_nodes(
                 text_preview=truncate_text(text, options.text_preview_max_chars),
                 confidence=float(raw.get("confidence", 1.0)),
                 metrics=None,
-                risks=[],
-                reasons=["m2902_text_box"],
+                risks=ownership_augmented_risks([], ownership),
+                reasons=ownership_augmented_reasons(["m2902_text_box"], ownership),
+                ownership_routing=ownership,
             )
         )
     return nodes, warnings
+
+
+def build_ownership_routing(document: dict[str, Any] | None) -> tuple[dict[str, dict[str, Any]] | None, list[str]]:
+    if document is None:
+        return None, []
+    if document.get("schemaName") != "M2907TextVisualOwnershipGateDocument" or document.get("schemaVersion") != "0.1":
+        raise ValueError("M29.0.4 ownership input must be M2907TextVisualOwnershipGateDocument v0.1")
+    routing: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+    for raw in document.get("ownershipDecisions", []):
+        if not isinstance(raw, dict):
+            continue
+        source = str(raw.get("source") or "")
+        if source == "m2903_visual_evidence":
+            source_id = str(raw.get("sourceVisualEvidenceItemId") or "")
+        elif source == "m2902_text_box":
+            source_id = str(raw.get("sourceTextBoxId") or "")
+        else:
+            warnings.append(f"unknown_m2907_ownership_source:{source or '<empty>'}")
+            continue
+        if not source_id:
+            warnings.append(f"missing_m2907_ownership_source_id:{raw.get('id', '<missing>')}")
+            continue
+        routing[f"{source}:{source_id}"] = {
+            "ownershipDecisionId": str(raw.get("id") or ""),
+            "ownership": str(raw.get("ownership") or ""),
+            "decision": str(raw.get("decision") or ""),
+            "ownershipReasonKind": str(raw.get("ownershipReasonKind") or ""),
+            "matchedTextBoxIds": [str(item) for item in raw.get("matchedTextBoxIds", [])],
+            "textPreview": raw.get("textPreview"),
+            "suppressedAsVisual": bool(raw.get("suppressedAsVisual")),
+            "allowedForObjectFormingVisualSide": bool(raw.get("allowedForObjectFormingVisualSide")),
+            "allowedForTextSide": bool(raw.get("allowedForTextSide")),
+            "allowedForAuditOnly": bool(raw.get("allowedForAuditOnly", True)),
+        }
+    return routing, warnings
+
+
+def ownership_augmented_risks(risks: list[str], ownership: dict[str, Any] | None) -> list[str]:
+    if ownership is None:
+        return risks
+    additions: list[str] = []
+    if bool(ownership.get("suppressedAsVisual")):
+        additions.append("ownership_suppressed_as_visual")
+    if str(ownership.get("ownership") or "") == "mixed_or_uncertain":
+        additions.append("ownership_mixed_or_uncertain")
+    return dedupe_strings([*risks, *additions])
+
+
+def ownership_augmented_reasons(reasons: list[str], ownership: dict[str, Any] | None) -> list[str]:
+    if ownership is None:
+        return reasons
+    additions = [
+        "m2907_ownership_routing",
+        str(ownership.get("ownershipReasonKind") or ""),
+    ]
+    return dedupe_strings([*reasons, *additions])
 
 
 def classify_m2903_node(
@@ -561,7 +633,7 @@ def build_object_candidates(
             continue
         if left.id in used_nodes or right.id in used_nodes:
             continue
-        if left.node_kind in {"visual", "weak_visual_text_noise"} and right.node_kind in {"visual", "weak_visual_text_noise"}:
+        if object_forming_visual_side(left) and object_forming_visual_side(right):
             decision = "candidate" if edge.decision == "accepted" else "uncertain"
             objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "compound_visual", decision, [left, right], [edge], options))
             used_nodes.update({left.id, right.id})
@@ -592,13 +664,13 @@ def build_object_candidates(
     for node in nodes:
         if node.id in used_nodes:
             continue
-        if node.node_kind == "visual":
+        if node.node_kind == "visual" and object_forming_visual_side(node):
             objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "single_visual", "candidate", [node], [], options))
             used_nodes.add(node.id)
         elif node.node_kind == "wide_visual_source":
             objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "split_candidate", "uncertain", [node], [], options))
             used_nodes.add(node.id)
-        elif node.node_kind in {"noise", "weak_visual_text_noise"}:
+        elif node.node_kind in {"noise", "weak_visual_text_noise"} and object_forming_visual_side(node):
             objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "uncertain_compound", "uncertain", [node], [], options))
             used_nodes.add(node.id)
     return dedupe_objects(objects)
@@ -981,9 +1053,9 @@ def compact_union_score(bboxes: list[list[int]], options: M2904Options) -> float
 def source_compatibility(left: VisualObjectEvidenceNode, right: VisualObjectEvidenceNode) -> float:
     if duplicate_source(left, right):
         return 0.0
-    if {left.node_kind, right.node_kind} <= {"visual", "weak_visual_text_noise"}:
+    if object_forming_visual_side(left) and object_forming_visual_side(right):
         return 0.9
-    if "text" in {left.node_kind, right.node_kind} and {"visual", "weak_visual_text_noise", "wide_visual_source"} & {left.node_kind, right.node_kind}:
+    if (object_forming_visual_side(left) and text_side_allowed(right)) or (object_forming_visual_side(right) and text_side_allowed(left)):
         return 0.9
     if left.node_kind == right.node_kind == "text":
         return 0.75
@@ -1040,14 +1112,27 @@ def duplicate_source(left: VisualObjectEvidenceNode, right: VisualObjectEvidence
     return left.source == right.source and left.source_id == right.source_id
 
 
+def object_forming_visual_side(node: VisualObjectEvidenceNode) -> bool:
+    if node.ownership_routing is not None:
+        return bool(node.ownership_routing.get("allowedForObjectFormingVisualSide"))
+    return node.node_kind in {"visual", "weak_visual_text_noise", "wide_visual_source"}
+
+
+def text_side_allowed(node: VisualObjectEvidenceNode) -> bool:
+    if node.ownership_routing is not None:
+        return bool(node.ownership_routing.get("allowedForTextSide"))
+    return node.node_kind == "text"
+
+
 def is_visual_text_pair_nodes(left: VisualObjectEvidenceNode, right: VisualObjectEvidenceNode) -> bool:
-    kinds = {left.node_kind, right.node_kind}
-    return "text" in kinds and bool(kinds & {"visual", "weak_visual_text_noise", "wide_visual_source"})
+    return (object_forming_visual_side(left) and text_side_allowed(right)) or (object_forming_visual_side(right) and text_side_allowed(left))
 
 
 def member_from_node(node: VisualObjectEvidenceNode) -> VisualObjectMember:
     role: MemberRole
-    if node.node_kind == "visual":
+    if node.ownership_routing is not None and text_side_allowed(node) and not object_forming_visual_side(node):
+        role = "text"
+    elif node.node_kind == "visual":
         role = "visual"
     elif node.node_kind == "text":
         role = "text"

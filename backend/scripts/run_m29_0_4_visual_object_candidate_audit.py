@@ -26,10 +26,13 @@ def main() -> int:
     m2902_output = Path(args.m2902_output).expanduser().resolve() if args.m2902_output else resolve_latest_output(m29_output, "m29_0_2", "text_masked_media_audit.json")
     m2903_json = m2903_output / "visual_evidence.json"
     m2902_json = m2902_output / "text_masked_media_audit.json"
+    m2907_json = Path(args.m2907_ownership_json).expanduser().resolve() if args.m2907_ownership_json else None
     if not m2903_json.exists():
         raise FileNotFoundError(f"M29.0.3 visual evidence JSON not found: {m2903_json}")
     if not m2902_json.exists():
         raise FileNotFoundError(f"M29.0.2 audit JSON not found: {m2902_json}")
+    if m2907_json is not None and not m2907_json.exists():
+        raise FileNotFoundError(f"M29.0.7 ownership JSON not found: {m2907_json}")
     output_dir = resolve_output_dir(m29_output / "m29_0_4", overwrite=args.overwrite)
     document = extract_visual_object_candidate_audit(
         png_data=source.read_bytes(),
@@ -43,6 +46,7 @@ def main() -> int:
             m29_nodes_json=str(Path(args.m29_nodes_json).expanduser().resolve()) if args.m29_nodes_json else None,
             m291_group_nodes_json=str(Path(args.m291_group_nodes_json).expanduser().resolve()) if args.m291_group_nodes_json else None,
             m2902_media_evidence_json=str(m2902_json),
+            m2907_ownership_json=str(m2907_json) if m2907_json is not None else None,
         ),
         options=M2904Options(
             edge_threshold=args.edge_threshold,
@@ -50,6 +54,7 @@ def main() -> int:
             max_object_members=args.max_object_members,
             output_preview_max_thumb=args.output_preview_max_thumb,
         ),
+        m2907_ownership_document=json.loads(m2907_json.read_text(encoding="utf-8")) if m2907_json is not None else None,
     )
     print(f"Resolved M29.0.3 visual evidence: {m2903_json}")
     print(f"Resolved M29.0.2 audit: {m2902_json}")
@@ -70,6 +75,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m29-output", default="storage/m29_visual_primitive_graph")
     parser.add_argument("--m2903-output", default="")
     parser.add_argument("--m2902-output", default="")
+    parser.add_argument("--m2907-ownership-json", default="")
     parser.add_argument("--m29-nodes-json", default="")
     parser.add_argument("--m291-group-nodes-json", default="")
     parser.add_argument("--overwrite", action="store_true")
