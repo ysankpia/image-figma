@@ -40,6 +40,7 @@
 - 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)
 - 当前 M29.0.3 visual evidence normalization 计划：[plans/active/029-0-3-visual-evidence-normalization.md](plans/active/029-0-3-visual-evidence-normalization.md)
 - 当前 M29.0.4 generic visual object candidate audit 计划：[plans/active/029-0-4-generic-visual-object-candidate-audit.md](plans/active/029-0-4-generic-visual-object-candidate-audit.md)
+- 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
 
 ## By Task Type
 
@@ -123,6 +124,7 @@
 - M29.0.2 text mask media audit 决策：[decisions/0034-use-text-mask-before-media-recovery.md](decisions/0034-use-text-mask-before-media-recovery.md)
 - M29.0.3 visual evidence normalization 决策：[decisions/0035-normalize-visual-evidence-after-text-mask.md](decisions/0035-normalize-visual-evidence-after-text-mask.md)
 - M29.0.4 generic visual object candidate 决策：[decisions/0036-generic-visual-object-candidates-after-evidence-normalization.md](decisions/0036-generic-visual-object-candidates-after-evidence-normalization.md)
+- M29.0.5 text-aware visual object refinement 决策：[decisions/0037-refine-visual-objects-into-text-and-visual-members.md](decisions/0037-refine-visual-objects-into-text-and-visual-members.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

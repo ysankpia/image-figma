@@ -331,3 +331,14 @@ uv run python scripts/run_m29_0_4_visual_object_candidate_audit.py \
 ```
 
 It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_4/visual_object_candidates.json`, `edge_audit.json`, `visual_object_candidates.md`, `preview_visual_objects.png`, object/set/split overlays, and bucketed object crops. Its candidate universe is only M29.0.3 `VisualEvidenceItem` plus M29.0.2 `textBoxes`; M29 nodes, blocked evidence, M29.1 groups, and M29.0.2 mediaEvidence are lookup/debug refs only. It is audit-first: `text_noise` may appear as weak visual evidence with risk, wide source bboxes become split candidates, and no UI-pattern contracts such as navigation, toolbar, shortcut, purchase tool, or category tile are introduced.
+
+M29.0.5 text-aware visual object refinement splits each M29.0.4 object candidate into visual assets, shape candidates, text members, unresolved members, and audit crops:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_5_text_aware_visual_object_refinement.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph
+```
+
+It reads `m29_0_4*/visual_object_candidates.json`, `m29_0_3*/visual_evidence.json`, and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_5/refined_visual_objects.json`, `text_visual_separation_audit.json`, `refined_visual_objects.md`, `preview_text_aware_refinement.png`, overlays, and separated evidence crops. Its refinement universe is exactly M29.0.4 objects and members; M29.0.3 and M29.0.2 are lookup refs only. Combined object crops are audit-only and may contain text. Formal visual assets are only low-text-overlap image/icon member crops from the original source PNG. Shape-like members become shape candidates rather than forced image assets, and unsafe overlap/wide sources remain unresolved or split-needed.
