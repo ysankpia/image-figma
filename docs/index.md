@@ -36,6 +36,7 @@
 - 当前 single-image SAM2 UI visual extraction 计划：[plans/active/028-single-image-sam2-ui-visual-extraction.md](plans/active/028-single-image-sam2-ui-visual-extraction.md)
 - 当前 visual primitive graph 计划：[plans/active/029-visual-primitive-graph-harness.md](plans/active/029-visual-primitive-graph-harness.md)
 - 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
+- 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
 
 ## By Task Type
 
@@ -115,6 +116,7 @@
 - M27 SAM2 visual candidate filtering 决策：[decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md](decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md)
 - M28 UI visual extraction 决策：[decisions/0031-extract-ui-visual-objects-before-figma-replay.md](decisions/0031-extract-ui-visual-objects-before-figma-replay.md)
 - M29 visual primitive graph 决策：[decisions/0032-build-visual-primitive-graph-before-figma-replay.md](decisions/0032-build-visual-primitive-graph-before-figma-replay.md)
+- M29.1 symbol fragment grouping 决策：[decisions/0033-group-symbol-fragments-after-primitive-graph.md](decisions/0033-group-symbol-fragments-after-primitive-graph.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

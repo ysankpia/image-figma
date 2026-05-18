@@ -286,3 +286,14 @@ uv run python scripts/run_m29_visual_primitive_graph.py \
 It writes `nodes.json`, `preview_sheet.png`, `assets/images/*.png`, `assets/symbols/*.png`, and debug overlays under `overlays/`. M29 separates decoded PNG pixels into `text`, `shape`, `image`, `symbol`, and `unknown` primitive nodes with metrics and reasons. It keeps image detection conservative, creates protection zones only for high-confidence image primitives, and runs symbol detection only on remaining foreground. M29 does not modify DSL, does not write database rows, does not expose an API, does not call Renderer, does not use SAM2/OpenCV/OCR providers by default, and does not migrate the existing M8 `VisualPrimitiveDocument` contract.
 
 M29.0.1 keeps the same M29 script and document version but upgrades blocked evidence to `meta.blockedEvidenceVersion=0.2`. Blocked items now carry fine-grained reasons, metrics, and minimal context facts so later grouping can decide eligible versus hard-blocked fragments without rerunning detection. This remains local evidence only: accepted nodes, upload APIs, DSL, Renderer, and Figma output are unchanged.
+
+M29.1 symbol fragment grouping is a separate post-processing harness over M29.0.1 output:
+
+```bash
+cd backend
+uv run python scripts/run_m29_1_symbol_grouping.py \
+  --m29-output storage/m29_visual_primitive_graph \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png"
+```
+
+It requires `meta.blockedEvidenceVersion=0.2`, reads only accepted symbol nodes plus eligible blocked primitives, and writes `m29_1/group_nodes.json`, `symbol_asset_audit.json`, `edge_audit.json`, grouped symbol PNGs and overlays. It does not rerun detection, does not change M29 `nodes.json`, does not overwrite original symbol assets, and does not modify upload APIs, DSL, Renderer, or Figma output.

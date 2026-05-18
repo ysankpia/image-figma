@@ -275,6 +275,8 @@ M29 增加 visual primitive graph harness：它是 `backend/scripts/run_m29_visu
 
 M29.0.1 增强 M29 blocked evidence，不改变 accepted nodes 或检测接受逻辑。M29 document 仍为 `version=0.1`，但 `meta.blockedEvidenceVersion=0.2`；每个 blocked item 必须保留 bbox、metrics、细粒度 reasons 和最小 context。`symbol_metrics_rejected` 被拆成 color/texture/edge/area/line/text/image/protective 等可消费 reason，供后续 M29.1 判断 eligible blocked fragments。M29.0.1 不新增 detector，不接 OCR/SAM2/SVG/Figma/DSL，不进入上传主链路。
 
+M29.1 增加 symbol fragment grouping harness：它是 `backend/scripts/run_m29_1_symbol_grouping.py` 脚本能力，要求读取 M29.0.1 的 `meta.blockedEvidenceVersion=0.2` 输出。M29.1 的候选全集固定为 accepted symbol nodes 与 eligible blocked primitives；它建立 fragment edge audit，保守生成 grouped symbol candidates 和 icon button group relation，输出 `m29_1/group_nodes.json`、`symbol_asset_audit.json`、`edge_audit.json`、`assets/symbol_groups/*.png`、group overlays 和 preview sheet。M29.1 不重新扫描整图、不重新跑 connected components、不重新做 detector、不回写 M29 `nodes.json`、不覆盖原始 symbol assets、不接 OCR/SAM2/SVG/Figma/DSL、不进入上传主链路。
+
 ## Backend Non-Goals
 
 M29 不做：
