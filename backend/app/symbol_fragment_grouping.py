@@ -808,18 +808,27 @@ def overlay_grouped_vs_original(pixels: PngPixels, candidates: list[M291Fragment
 
 def build_preview_sheet(pixels: PngPixels, output_dir: Path, debug: M291DebugArtifacts) -> bytes:
     group_overlay = decode_png_pixels((output_dir / (debug.symbol_groups or "overlays/10_symbol_groups.png")).read_bytes())
-    previews = crop_previews(output_dir / "assets" / "symbol_groups", 120)
+    m29_output_dir = output_dir.parent
+    retained_image_previews = crop_previews(m29_output_dir / "assets" / "images", 160)
+    grouped_symbol_previews = crop_previews(output_dir / "assets" / "symbol_groups", 120)
     sheet_width = 1400
     margin = 24
     gap = 18
     scale = min(0.55, (sheet_width - margin * 2 - gap) / max(1, pixels.width * 2))
     source_w = max(1, round(pixels.width * scale))
     source_h = max(1, round(pixels.height * scale))
-    sheet_height = source_h + grid_height(previews, sheet_width, margin, gap) + margin * 4
+    sheet_height = (
+        source_h
+        + grid_height(retained_image_previews, sheet_width, margin, gap)
+        + grid_height(grouped_symbol_previews, sheet_width, margin, gap)
+        + margin * 5
+    )
     canvas = [bytearray(b"\xfa\xfa\xfa" * sheet_width) for _ in range(sheet_height)]
     paste_scaled(canvas, sheet_width, pixels, margin, margin, source_w, source_h)
     paste_scaled(canvas, sheet_width, group_overlay, margin + source_w + gap, margin, source_w, source_h)
-    paste_grid(canvas, sheet_width, previews, margin, margin + source_h + margin, gap)
+    y = margin + source_h + margin
+    y = paste_grid(canvas, sheet_width, retained_image_previews, margin, y, gap) + margin
+    paste_grid(canvas, sheet_width, grouped_symbol_previews, margin, y, gap)
     return encode_rgb_png(sheet_width, sheet_height, [bytes(row) for row in canvas])
 
 

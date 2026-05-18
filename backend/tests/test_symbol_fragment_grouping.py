@@ -165,7 +165,25 @@ def test_outputs_and_audits_are_written(tmp_path: Path) -> None:
     assert any(edge.decision in {"accepted", "weak", "rejected"} for edge in result.edge_audit)
 
 
+def test_preview_sheet_retains_parent_m29_image_assets(tmp_path: Path) -> None:
+    m29_output = tmp_path / "m29_output"
+    m291_output = m29_output / "m29_1"
+    (m29_output / "assets" / "images").mkdir(parents=True)
+    canvas = make_canvas(96, 80, (255, 255, 255))
+    draw_rect(canvas, 8, 8, 36, 24, (20, 120, 60))
+    (m29_output / "assets" / "images" / "image_001.png").write_bytes(encode_rgb_png(canvas.width, canvas.height, canvas.rows))
+    document = make_m29_document([symbol("symbol_001", [20, 44, 8, 8])], blocked=[blocked("blocked_001", [30, 44, 6, 6], ["weak_symbol_metrics"])])
+
+    result = run_grouping(document, m291_output, canvas)
+
+    preview = read_png_metadata((m291_output / "preview_sheet.png").read_bytes())
+    assert preview is not None
+    assert preview.height > 180
+    assert result.meta["counts"]["acceptedGroups"] >= 1
+
+
 def run_grouping(document: dict, output_dir: Path, canvas: PngPixels, options: M291Options | None = None):
+    output_dir.mkdir(parents=True, exist_ok=True)
     source_path = output_dir / "source.png"
     png = encode_rgb_png(canvas.width, canvas.height, canvas.rows)
     source_path.write_bytes(png)
@@ -257,3 +275,12 @@ def bbox_area(bbox: list[int]) -> int:
 
 def make_canvas(width: int, height: int, fill: tuple[int, int, int]) -> PngPixels:
     return PngPixels(width=width, height=height, rows=[bytes(fill) * width for _ in range(height)])
+
+
+def draw_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    for row_index in range(y, min(canvas.height, y + height)):
+        for column in range(x, min(canvas.width, x + width)):
+            rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
