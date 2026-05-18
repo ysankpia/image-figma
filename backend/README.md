@@ -342,3 +342,14 @@ uv run python scripts/run_m29_0_5_text_aware_visual_object_refinement.py \
 ```
 
 It reads `m29_0_4*/visual_object_candidates.json`, `m29_0_3*/visual_evidence.json`, and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_5/refined_visual_objects.json`, `text_visual_separation_audit.json`, `refined_visual_objects.md`, `preview_text_aware_refinement.png`, overlays, and separated evidence crops. Its refinement universe is exactly M29.0.4 objects and members; M29.0.3 and M29.0.2 are lookup refs only. Combined object crops are audit-only and may contain text. Formal visual assets are only low-text-overlap image/icon member crops from the original source PNG. Shape-like members become shape candidates rather than forced image assets, and unsafe overlap/wide sources remain unresolved or split-needed.
+
+M29.0.6 member boundary quality audit diagnoses why M29.0.5 could not safely separate members:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_6_member_boundary_quality_audit.py \
+  --batch-root storage/m29_batch_smoke_20260518_221638 \
+  --input-root "/Users/luhui/Downloads/m29"
+```
+
+It reads `m29_0_5*/refined_visual_objects.json`, `m29_0_4*/visual_object_candidates.json`, `m29_0_3*/visual_evidence.json`, and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_6/member_boundary_quality_audit.json`, duplicate source/asset audits, success baseline, overlays, top-K examples, and optional batch summary JSON/CSV. It is audit-only: it does not create new bboxes, formal visual assets, repairs, deduped assets, DSL, Renderer output, or Figma output. The key output is raw/dedup attribution for unresolved members, weak text-noise dominance, source/member duplicate topology, visual asset duplicate facts/candidates, and suggested upstream layers.
