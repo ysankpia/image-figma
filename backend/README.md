@@ -273,3 +273,14 @@ uv run python scripts/run_m28_single_visual_extraction.py \
 ```
 
 It writes `icons/*.png`, `images/*.png`, `controls/*.png`, `m28_visual_extraction.json`, `m28_visual_extraction_overlay.png`, and `m28_visual_extraction_preview_sheet.png`. M28 treats SAM2 masks as proposals, first protects whole image assets such as hero/product/supplier images, then extracts UI icons and controls while blocking text, numeric labels, image-internal fragments, line/background/card fragments and status bar. It does not modify DSL, does not add assets to DSL, does not call Renderer, does not do visible replay, and does not enter batch processing.
+
+M29 visual primitive graph is also a script-only evidence harness, not an upload stage and not a replacement for the M8 `/primitives` API:
+
+```bash
+cd backend
+uv run python scripts/run_m29_visual_primitive_graph.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --output-dir "storage/m29_visual_primitive_graph"
+```
+
+It writes `nodes.json`, `preview_sheet.png`, `assets/images/*.png`, `assets/symbols/*.png`, and debug overlays under `overlays/`. M29 separates decoded PNG pixels into `text`, `shape`, `image`, `symbol`, and `unknown` primitive nodes with metrics and reasons. It keeps image detection conservative, creates protection zones only for high-confidence image primitives, and runs symbol detection only on remaining foreground. M29 does not modify DSL, does not write database rows, does not expose an API, does not call Renderer, does not use SAM2/OpenCV/OCR providers by default, and does not migrate the existing M8 `VisualPrimitiveDocument` contract.

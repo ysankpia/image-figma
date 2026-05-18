@@ -275,6 +275,18 @@ uv run python scripts/run_m28_single_visual_extraction.py \
 
 M28 smoke 产物是人工验收证据，不提交 `backend/storage/`。验收重点是 `preview_sheet` 中图片资产保持整块、图片内部碎片被阻断、文字和数字不进入 accepted icon/control。
 
+M29 visual primitive graph smoke：
+
+```bash
+cd backend
+uv run pytest tests/test_visual_primitive_graph.py -q
+uv run python scripts/run_m29_visual_primitive_graph.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --output-dir "storage/m29_visual_primitive_graph"
+```
+
+M29 合成测试严格校验 bbox/mask、metrics、components、text exclusion、shape/image/symbol 分类、asset export、overlay 和 document validation。真实图 smoke 是人工诊断证据，不要求 0 false positive；验收重点是 `preview_sheet` 和 overlays 能解释 accepted/blocked reasons，并且 M29 不污染 M8 `/primitives`、DSL、Renderer 或 Figma 可见输出。
+
 阶段级工作必须先形成独立 commit，再在该提交之上运行完整验证。这样测试结果能绑定到明确阶段，避免 M11、M12 这类阶段被堆在同一个 dirty tree 里。如果提交后验证失败，使用同阶段 fix commit 修正并重新跑验证；不要继续开发下一阶段。
 
 后续应继续扩展到：
