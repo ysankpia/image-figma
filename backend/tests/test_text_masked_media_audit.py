@@ -11,6 +11,7 @@ from app.text_masked_media_audit import (
     TextMaskedMediaAuditOptions,
     build_text_suppressed_pixels,
     extract_text_masked_media_audit,
+    preview_sort_key,
     text_boxes_from_ocr_document,
     validate_text_masked_media_audit,
 )
@@ -90,6 +91,14 @@ def test_extract_audit_writes_masks_preview_and_original_crops(tmp_path: Path) -
     sources = {item.source for item in document.media_evidence}
     assert {"m29_image", "m29_unknown", "m29_symbol", "m29_blocked", "m291_group"} <= sources
     assert any(item.suggested_next_action == "likely_text_noise" for item in document.media_evidence)
+    image_asset = next(item for item in document.media_evidence if item.source == "m29_image").asset_path
+    assert image_asset is not None
+    image_crop = decode_png_pixels((tmp_path / image_asset).read_bytes())
+    assert image_crop.width == 34 and image_crop.height == 30
+    group_asset = next(item for item in document.media_evidence if item.source == "m291_group").asset_path
+    assert group_asset is not None
+    group_crop = decode_png_pixels((tmp_path / group_asset).read_bytes())
+    assert group_crop.width == 14 and group_crop.height == 14
     unknown_asset = next(item for item in document.media_evidence if item.source == "m29_unknown").asset_path
     assert unknown_asset is not None
     cropped = decode_png_pixels((tmp_path / unknown_asset).read_bytes())
@@ -160,6 +169,37 @@ def test_validation_rejects_missing_asset(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="missing or unreadable"):
         validate_text_masked_media_audit(broken, tmp_path, 40, 40)
+
+
+def test_preview_sort_prioritizes_real_media_over_text_noise() -> None:
+    noisy_text = MediaEvidenceItem(
+        id="text_noise",
+        source="m29_blocked",
+        bbox=[1, 1, 40, 20],
+        region_name="full",
+        decision="image_like_blocked",
+        asset_path="assets/media_like_blocked/text_noise.png",
+        text_overlap_ratio=1.0,
+        image_overlap_ratio=0.0,
+        metrics=zero_metrics(),
+        reasons=["text_overlap"],
+        suggested_next_action="likely_text_noise",
+    )
+    accepted_banner = MediaEvidenceItem(
+        id="banner",
+        source="m29_image",
+        bbox=[1, 30, 90, 40],
+        region_name="hero/banner",
+        decision="accepted_image",
+        asset_path="assets/accepted_images/banner.png",
+        text_overlap_ratio=0.1,
+        image_overlap_ratio=1.0,
+        metrics=zero_metrics(),
+        reasons=["conservative_image_accept"],
+        suggested_next_action="keep_accepted_image",
+    )
+
+    assert sorted([noisy_text, accepted_banner], key=preview_sort_key) == [accepted_banner, noisy_text]
 
 
 def make_canvas(width: int, height: int, fill: tuple[int, int, int]) -> PngPixels:

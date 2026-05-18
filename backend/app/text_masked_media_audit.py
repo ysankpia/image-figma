@@ -388,7 +388,7 @@ def collect_media_evidence(
                 decision=decision,
                 bbox=bbox,
                 region_name=region_for_bbox(bbox, regions),
-                asset_path=export_evidence_asset(pixels, output_dir, source, bbox, counters) if node_type in {"unknown", "symbol"} else None,
+                asset_path=export_evidence_asset(pixels, output_dir, source, bbox, counters),
                 text_mask=text_mask,
                 image_mask=image_mask,
                 metrics=parse_metrics(node.get("metrics")) or measure_region(pixels, bbox),
@@ -429,7 +429,7 @@ def collect_media_evidence(
                     decision="symbol_group",
                     bbox=bbox,
                     region_name=region_for_bbox(bbox, regions),
-                    asset_path=None,
+                    asset_path=export_evidence_asset(pixels, output_dir, "m291_group", bbox, counters),
                     text_mask=text_mask,
                     image_mask=image_mask,
                     metrics=measure_region(pixels, bbox),
@@ -509,9 +509,11 @@ def export_evidence_asset(
     counters: dict[str, int],
 ) -> str:
     folder = {
+        "m29_image": "accepted_images",
         "m29_unknown": "media_like_unknowns",
         "m29_symbol": "media_like_symbols",
         "m29_blocked": "media_like_blocked",
+        "m291_group": "symbol_groups",
         "after_text_mask_candidate": "media_like_unknowns",
     }.get(source, "media_like_symbols")
     target_dir = output_dir / "assets" / folder
@@ -680,9 +682,9 @@ def crop_previews_for_evidence(
     output_dir: Path,
     evidence: list[MediaEvidenceItem],
     max_edge: int,
-) -> list[tuple[PngPixels, int, int]]:
-    previews: list[tuple[PngPixels, int, int]] = []
-    for item in evidence:
+) -> list[tuple[MediaEvidenceItem, PngPixels, int, int]]:
+    previews: list[tuple[MediaEvidenceItem, PngPixels, int, int]] = []
+    for item in sorted(evidence, key=preview_sort_key):
         if item.asset_path is None:
             continue
         try:
@@ -690,17 +692,43 @@ def crop_previews_for_evidence(
         except UnsupportedPngCropError:
             continue
         scale = min(1.0, max_edge / max(1, pixels.width, pixels.height))
-        previews.append((pixels, max(1, round(pixels.width * scale)), max(1, round(pixels.height * scale))))
+        previews.append((item, pixels, max(1, round(pixels.width * scale)), max(1, round(pixels.height * scale))))
     return previews
 
 
-def grid_height(previews: list[tuple[PngPixels, int, int]], sheet_width: int, margin: int, gap: int) -> int:
+def preview_sort_key(item: MediaEvidenceItem) -> tuple[int, int, int, int, int, str]:
+    source_rank = {
+        "m29_image": 0,
+        "m29_unknown": 1,
+        "m29_blocked": 2,
+        "m29_symbol": 3,
+        "m291_group": 4,
+        "after_text_mask_candidate": 5,
+    }.get(item.source, 9)
+    noise_rank = 1 if item.suggested_next_action == "likely_text_noise" else 0
+    return (noise_rank, source_rank, -bbox_area(item.bbox), item.bbox[1], item.bbox[0], item.id)
+
+
+def preview_border_color(item: MediaEvidenceItem) -> tuple[int, int, int]:
+    if item.suggested_next_action == "likely_text_noise":
+        return (190, 190, 190)
+    return {
+        "accepted_image": (0, 180, 210),
+        "image_like_unknown": (238, 190, 40),
+        "image_like_symbol": (0, 200, 90),
+        "image_like_blocked": (235, 64, 52),
+        "symbol_group": (60, 120, 255),
+        "text_suppressed_candidate": (220, 60, 220),
+    }.get(item.decision, (140, 140, 140))
+
+
+def grid_height(previews: list[tuple[MediaEvidenceItem, PngPixels, int, int]], sheet_width: int, margin: int, gap: int) -> int:
     if not previews:
         return 48
     x = margin
     row_h = 0
     total = 0
-    for _pixels, width, height in previews:
+    for _item, _pixels, width, height in previews:
         if x + width > sheet_width - margin:
             total += row_h + gap
             x = margin
@@ -710,18 +738,19 @@ def grid_height(previews: list[tuple[PngPixels, int, int]], sheet_width: int, ma
     return total + row_h
 
 
-def paste_grid(canvas: list[bytearray], sheet_width: int, previews: list[tuple[PngPixels, int, int]], x: int, y: int, gap: int) -> int:
+def paste_grid(canvas: list[bytearray], sheet_width: int, previews: list[tuple[MediaEvidenceItem, PngPixels, int, int]], x: int, y: int, gap: int) -> int:
     row_h = 0
     margin = x
     if not previews:
         fill_rect(canvas, sheet_width, x, y, sheet_width - x * 2, 48, (232, 232, 232))
         return y + 48
-    for preview, width, height in previews:
+    for item, preview, width, height in previews:
         if x + width > sheet_width - margin:
             y += row_h + gap
             x = margin
             row_h = 0
-        fill_rect(canvas, sheet_width, x - 3, y - 3, width + 6, height + 6, (232, 232, 232))
+        fill_rect(canvas, sheet_width, x - 4, y - 4, width + 8, height + 8, preview_border_color(item))
+        fill_rect(canvas, sheet_width, x - 2, y - 2, width + 4, height + 4, (244, 244, 244))
         paste_scaled(canvas, sheet_width, preview, x, y, width, height)
         x += width + gap
         row_h = max(row_h, height)

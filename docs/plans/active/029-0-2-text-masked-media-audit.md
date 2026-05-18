@@ -56,9 +56,11 @@ overlays/09_text_mask.png
 overlays/10_text_suppressed_analysis.png
 overlays/11_media_before_after.png
 overlays/12_media_evidence_map.png
+assets/accepted_images/*.png
 assets/media_like_unknowns/*.png
 assets/media_like_symbols/*.png
 assets/media_like_blocked/*.png
+assets/symbol_groups/*.png
 ```
 
 ## Run
@@ -92,6 +94,7 @@ OCRDocument.blocks -> M29TextBox
 text_mask 和 text-suppressed analysis PNG 可读
 text-suppressed analysis 只改 text_mask 区域
 evidence asset 从原图裁，不从擦字图裁
+accepted image 和 M29.1 group 也必须导出 evidence crop，避免 JSON 有记录但 preview grid 不展示
 纯文字碎片在 text_mask 后不再污染 symbol
 文字旁边 icon 仍能保留为候选
 mediaEvidence 区分 m29_image / m29_unknown / m29_symbol / m29_blocked / m291_group / after_text_mask_candidate

@@ -8,6 +8,7 @@
 
 最近 resolved bug：
 
+- [005-m2902-preview-hides-accepted-image-evidence.md](resolved/005-m2902-preview-hides-accepted-image-evidence.md)：M29.0.2 只在 JSON/overlay 记录 accepted image 和 M29.1 group，没有导出 preview crop，导致轮播图等证据在底部证据区不可见。
 - [004-icon-gap-multiple-blocked-hints-fail-validation.md](resolved/004-icon-gap-multiple-blocked-hints-fail-validation.md)：M22 多个 blocked hints 共用候选计数生成重复 id，导致真实图 `icon-gap-candidates` 文档校验失败。
 
 ## Structure
