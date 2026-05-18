@@ -38,6 +38,7 @@
 - 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
 - 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
 - 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)
+- 当前 M29.0.3 visual evidence normalization 计划：[plans/active/029-0-3-visual-evidence-normalization.md](plans/active/029-0-3-visual-evidence-normalization.md)
 
 ## By Task Type
 
@@ -119,6 +120,7 @@
 - M29 visual primitive graph 决策：[decisions/0032-build-visual-primitive-graph-before-figma-replay.md](decisions/0032-build-visual-primitive-graph-before-figma-replay.md)
 - M29.1 symbol fragment grouping 决策：[decisions/0033-group-symbol-fragments-after-primitive-graph.md](decisions/0033-group-symbol-fragments-after-primitive-graph.md)
 - M29.0.2 text mask media audit 决策：[decisions/0034-use-text-mask-before-media-recovery.md](decisions/0034-use-text-mask-before-media-recovery.md)
+- M29.0.3 visual evidence normalization 决策：[decisions/0035-normalize-visual-evidence-after-text-mask.md](decisions/0035-normalize-visual-evidence-after-text-mask.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

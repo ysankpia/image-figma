@@ -309,3 +309,14 @@ uv run python scripts/run_m29_0_2_text_masked_media_audit.py \
 ```
 
 It writes `m29_0_2/text_masked_media_audit.json`, `text_masked_media_audit.md`, `preview_text_masked_media_audit.png`, text-mask/media overlays, and local evidence crops. The text-suppressed image is only used for analysis; exported evidence crops remain cut from the original source PNG. Remote Paddle OCR is only used when explicitly requested with `--ocr-provider baidu_ppocrv5`; by default the script uses supplied text boxes/OCR JSON or records that no text source was provided.
+
+M29.0.3 visual evidence normalization is the next script-only evidence layer after M29.0.2:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_3_visual_evidence_normalization.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph
+```
+
+It reads `m29_0_2*/text_masked_media_audit.json`, preserves every media evidence item exactly once, exports original-source crops, and writes `m29_0_3/visual_evidence.json`, `visual_evidence.md`, `preview_visual_evidence.png`, bucket overlays, and bucketed assets. The key contract is that `source` is only provenance; `visualKind` and `decision` determine accepted image, media candidate, icon candidate, text noise, or other candidate. M29.0.3 does not change M29/M29.1 outputs, upload APIs, DSL, Renderer, or Figma output. M20-M28 remain legacy experiments; M29+ visual evidence is the source for subsequent reconstruction work.
