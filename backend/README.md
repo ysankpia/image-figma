@@ -297,3 +297,15 @@ uv run python scripts/run_m29_1_symbol_grouping.py \
 ```
 
 It requires `meta.blockedEvidenceVersion=0.2`, reads only accepted symbol nodes plus eligible blocked primitives, and writes `m29_1/group_nodes.json`, `symbol_asset_audit.json`, `edge_audit.json`, grouped symbol PNGs and overlays. It does not rerun detection, does not change M29 `nodes.json`, does not overwrite original symbol assets, and does not modify upload APIs, DSL, Renderer, or Figma output.
+
+M29.0.2 text-masked visual media audit is a diagnostic harness for separating text noise from media evidence:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_2_text_masked_media_audit.py \
+  --input "/Users/luhui/Downloads/m28/ChatGPT Image 2026年5月17日 14_47_13 (2).png" \
+  --m29-output storage/m29_visual_primitive_graph \
+  --text-boxes-json storage/m29_text_boxes_smoke.json
+```
+
+It writes `m29_0_2/text_masked_media_audit.json`, `text_masked_media_audit.md`, `preview_text_masked_media_audit.png`, text-mask/media overlays, and local evidence crops. The text-suppressed image is only used for analysis; exported evidence crops remain cut from the original source PNG. Remote Paddle OCR is only used when explicitly requested with `--ocr-provider baidu_ppocrv5`; by default the script uses supplied text boxes/OCR JSON or records that no text source was provided.

@@ -118,6 +118,7 @@ Backend API：
 - M21 回归必须保护 M20 source 到 placementRole 的映射、fallback/slice/text/cover collision readiness、asset missing blocked、missedIconHints 去重和 overlay PNG 可读。
 - M22 icon gap candidate 必须覆盖默认生成报告、`ICON_GAP_CANDIDATE_ENABLED=false` 不生成报告、`/icon-gap-candidates` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M22 回归必须保护 M21 missed hint 升级为 header/right/trailing/bottom-nav/shortcut gap icon、M20 icon 不重复裁、visible text/cover/hidden candidate_text 不误裁、状态栏不误裁、field text-stroke blocked、edge-clipped retry/blocked 逻辑和 overlay PNG 可读。
+- M29.0.2 text-masked media audit 必须覆盖 OCR/text box 到 text mask 的转换、text-suppressed analysis 只作为分析视图、evidence crop 始终从原图裁、mediaEvidence 能区分 M29 image/unknown/symbol/blocked、M29.1 group 和 after-text-mask candidate，overlay/preview PNG 可读。
 - M23 icon placement plan 必须覆盖默认生成报告、`ICON_PLACEMENT_PLAN_ENABLED=false` 不生成报告、`/icon-placement-plan` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M23 回归必须保护 M20/M22 icon 去重、fallback 内 icon 标记 `needs_fallback_mask`、M19 slice 内 icon 标记 `needs_slice_coordination`、text/cover/candidate_text 冲突 blocked、ready icon 的 futureDslNodeHint 只存在于 report，以及 overlay PNG 可读。
 - M24 visible icon fallback 必须覆盖 `ICON_VISIBLE_FALLBACK_ENABLED=false` 默认不生成 result 且 DSL 保持 M23 输出、`ICON_VISIBLE_FALLBACK_ENABLED=true` 时生成 `/icon-visible-fallback` 报告并 append DSL nodes/assets、endpoint not found、validation failed 回退 M23 输出。
