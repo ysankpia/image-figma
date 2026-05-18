@@ -284,3 +284,5 @@ uv run python scripts/run_m29_visual_primitive_graph.py \
 ```
 
 It writes `nodes.json`, `preview_sheet.png`, `assets/images/*.png`, `assets/symbols/*.png`, and debug overlays under `overlays/`. M29 separates decoded PNG pixels into `text`, `shape`, `image`, `symbol`, and `unknown` primitive nodes with metrics and reasons. It keeps image detection conservative, creates protection zones only for high-confidence image primitives, and runs symbol detection only on remaining foreground. M29 does not modify DSL, does not write database rows, does not expose an API, does not call Renderer, does not use SAM2/OpenCV/OCR providers by default, and does not migrate the existing M8 `VisualPrimitiveDocument` contract.
+
+M29.0.1 keeps the same M29 script and document version but upgrades blocked evidence to `meta.blockedEvidenceVersion=0.2`. Blocked items now carry fine-grained reasons, metrics, and minimal context facts so later grouping can decide eligible versus hard-blocked fragments without rerunning detection. This remains local evidence only: accepted nodes, upload APIs, DSL, Renderer, and Figma output are unchanged.

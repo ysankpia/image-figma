@@ -35,6 +35,7 @@
 - 当前 SAM2 visual candidate filtering 计划：[plans/active/027-sam2-guided-ui-visual-candidate-filtering.md](plans/active/027-sam2-guided-ui-visual-candidate-filtering.md)
 - 当前 single-image SAM2 UI visual extraction 计划：[plans/active/028-single-image-sam2-ui-visual-extraction.md](plans/active/028-single-image-sam2-ui-visual-extraction.md)
 - 当前 visual primitive graph 计划：[plans/active/029-visual-primitive-graph-harness.md](plans/active/029-visual-primitive-graph-harness.md)
+- 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
 
 ## By Task Type
 

@@ -16,7 +16,7 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 -> Figma 可编辑设计稿
 ```
 
-当前 M29 默认仍使用 fake OCR 和 `TEXT_REPLACEMENT_MODE=debug`；显式设置 `OCR_PROVIDER=baidu_ppocrv5` 和百度 token 后，上传链路会生成真实 OCR candidates。`TEXT_REPLACEMENT_MODE=apply` 会写入通过 quality gate 的 accepted visible text replacement；M14 在 M13 quality gate 前增加 UI-aware sampling。M15-M18 生成 binding、structure、annotation 和 layer separation 报告，M19 生成本地 slice PNG 实验资产，M20 生成 text/component-guided icon PNG 候选资产，M21 审计 icon 覆盖和漏裁 hints，M22 补裁可靠 gap icon，M23 把 M20/M22 icon 统一成 placement plan，M24 默认关闭但可做小范围 visible icon fallback replay。M25 默认开启，绕开 M16 业务组件识别不足，使用 region-guided probes 裁高价值业务 icon 候选 PNG。M26 默认关闭，只生成 `/perception-benchmark` 报告比较 current_rules、可选 OpenCV、可选 SAM2 和可选 UIED adapter。M27 默认关闭；显式开启后，它只生成 `/sam-visual-candidates` 报告和 SAM2 visual candidate overlay。M28 和 M29 都是独立脚本 harness，不接 upload pipeline，不修改 DSL/Figma 输出；M28 输出单图 UI visual object crops，M29 输出 `text/shape/image/symbol/unknown` visual primitive graph、assets、overlays 和 preview sheet。调试接口包括 `/ocr`、`/primitives`、`/dsl-patch`、`/text-replacements`、`/text-bindings`、`/component-structures`、`/component-annotations`、`/layer-separation-candidates`、`/asset-slice-candidates`、`/icon-candidates`、`/icon-coverage-audit`、`/icon-gap-candidates`、`/icon-placement-plan`、`/icon-visible-fallback`、`/icon-business-candidates`、`/perception-benchmark` 和 `/sam-visual-candidates`。
+当前 M29.0.1 默认仍使用 fake OCR 和 `TEXT_REPLACEMENT_MODE=debug`；显式设置 `OCR_PROVIDER=baidu_ppocrv5` 和百度 token 后，上传链路会生成真实 OCR candidates。`TEXT_REPLACEMENT_MODE=apply` 会写入通过 quality gate 的 accepted visible text replacement；M14 在 M13 quality gate 前增加 UI-aware sampling。M15-M18 生成 binding、structure、annotation 和 layer separation 报告，M19 生成本地 slice PNG 实验资产，M20 生成 text/component-guided icon PNG 候选资产，M21 审计 icon 覆盖和漏裁 hints，M22 补裁可靠 gap icon，M23 把 M20/M22 icon 统一成 placement plan，M24 默认关闭但可做小范围 visible icon fallback replay。M25 默认开启，绕开 M16 业务组件识别不足，使用 region-guided probes 裁高价值业务 icon 候选 PNG。M26 默认关闭，只生成 `/perception-benchmark` 报告比较 current_rules、可选 OpenCV、可选 SAM2 和可选 UIED adapter。M27 默认关闭；显式开启后，它只生成 `/sam-visual-candidates` 报告和 SAM2 visual candidate overlay。M28 和 M29 都是独立脚本 harness，不接 upload pipeline，不修改 DSL/Figma 输出；M28 输出单图 UI visual object crops，M29 输出 `text/shape/image/symbol/unknown` visual primitive graph、assets、overlays 和 preview sheet，M29.0.1 只把 M29 blocked evidence 升级到 `meta.blockedEvidenceVersion=0.2`，不改变 accepted nodes。调试接口包括 `/ocr`、`/primitives`、`/dsl-patch`、`/text-replacements`、`/text-bindings`、`/component-structures`、`/component-annotations`、`/layer-separation-candidates`、`/asset-slice-candidates`、`/icon-candidates`、`/icon-coverage-audit`、`/icon-gap-candidates`、`/icon-placement-plan`、`/icon-visible-fallback`、`/icon-business-candidates`、`/perception-benchmark` 和 `/sam-visual-candidates`。
 
 下一步执行顺序：
 
@@ -24,6 +24,6 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 2. 继续验证插件上传链路和 Figma 手动烟测。
 3. 用固定样例目录持续验证三段 region fallback。
 4. 持续用样例图验证 `TEXT_REPLACEMENT_MODE=debug/apply` 的 accepted/rejected/blocked 决策。
-5. 下一步基于 M29 primitive graph 证据决定 M30 symbol vectorization；仍不要盲目做全局 icon detection 或直接 visible replay。
+5. 下一步基于 M29.0.1 blocked evidence 做 M29.1 symbol fragment grouping；仍不要盲目做全局 icon detection、OCR/SVG/Figma replay 或直接 visible replay。
 
 从 [docs/index.md](docs/index.md) 开始阅读。

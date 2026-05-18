@@ -4,6 +4,9 @@ from pathlib import Path
 
 from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata
 from app.visual_primitive_graph import (
+    M29ConnectedComponent,
+    M29PrimitiveMetrics,
+    M29PrimitiveNode,
     M29TextBox,
     M29VisualPrimitiveOptions,
     bbox_area,
@@ -15,7 +18,9 @@ from app.visual_primitive_graph import (
     bbox_y2,
     build_text_exclusion_mask,
     connected_components,
+    detect_symbols,
     extract_m29_visual_primitive_graph,
+    is_protective_shape,
     mask_empty,
     mask_from_bboxes,
     mask_get,
@@ -148,6 +153,7 @@ def test_image_protection_blocks_internal_fragments(tmp_path: Path) -> None:
 
     assert document.meta["counts"]["image"] >= 1
     assert any("inside_image_primitive" in item.reasons for item in document.blocked)
+    assert any("image_internal_texture" in item.reasons for item in document.blocked)
 
 
 def test_document_exports_assets_only_for_image_and_symbol(tmp_path: Path) -> None:
@@ -170,6 +176,93 @@ def test_document_exports_assets_only_for_image_and_symbol(tmp_path: Path) -> No
             assert node.asset_path is None
 
 
+def test_blocked_evidence_has_fine_reasons_context_and_meta(tmp_path: Path) -> None:
+    canvas = make_canvas(96, 96, (255, 255, 255))
+    draw_noise_patch(canvas, 16, 16, 24, 24)
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        options=M29VisualPrimitiveOptions(min_image_area=2000),
+    )
+
+    assert document.meta["blockedEvidenceVersion"] == "0.2"
+    assert document.meta["blockedReasonSummary"]
+    assert all("symbol_metrics_rejected" not in item.reasons for item in document.blocked)
+    assert any("symbol_color_too_high" in item.reasons for item in document.blocked)
+    assert any("symbol_texture_too_high" in item.reasons for item in document.blocked)
+    assert all(item.metrics is not None for item in document.blocked)
+    assert all(item.context is not None for item in document.blocked)
+    sample = document.blocked[0].context or {}
+    assert {"area", "maxEdge", "textOverlapRatio", "imageOverlapRatio", "protectiveShapeOverlapRatio", "insideImage", "nearImage", "nearProtectiveShape", "nearestShapeId"} <= set(sample)
+
+
+def test_blocked_reason_taxonomy_from_symbol_detector() -> None:
+    pixels = make_canvas(80, 80, (255, 255, 255))
+    text_mask = mask_from_bboxes(80, 80, [[4, 4, 12, 12]])
+    image_mask = mask_from_bboxes(80, 80, [[18, 4, 12, 12]])
+    protective_shape = M29PrimitiveNode(
+        id="shape_001",
+        type="shape",
+        subtype="card_background",
+        bbox=[40, 4, 20, 20],
+        confidence=0.8,
+        source="test",
+        source_order=0,
+        layer_hint="container",
+        reasons=["test"],
+        metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 240, (240, 240, 240)),
+    )
+    assert is_protective_shape(protective_shape)
+    options = M29VisualPrimitiveOptions(symbol_min_area=16, symbol_max_area=120)
+    components = [
+        make_component("text", [5, 5, 8, 8], area=64, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20))),
+        make_component("image", [20, 5, 8, 8], area=64, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20))),
+        make_component("shape", [40, 4, 20, 20], area=400, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20))),
+        make_component("small", [64, 6, 2, 2], area=4, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20))),
+        make_component("large", [4, 36, 20, 20], area=400, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20))),
+        make_component("line", [32, 36, 24, 2], area=48, metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 12.0, 20, (20, 20, 20))),
+        make_component("metrics", [60, 36, 10, 10], area=100, metrics=M29PrimitiveMetrics(80, 0.6, 0.5, 0.8, 1.0, 80, (80, 80, 80))),
+        make_component("weak", [60, 52, 10, 10], area=100, metrics=M29PrimitiveMetrics(30, 0.25, 0.2, 0.8, 1.0, 80, (80, 80, 80))),
+    ]
+
+    _symbols, blocked = detect_symbols(components, pixels, text_mask, image_mask, [protective_shape], options)
+    reasons = {reason for item in blocked for reason in item.reasons}
+
+    assert "text_overlap" in reasons
+    assert "inside_image_primitive" in reasons
+    assert "protective_shape_overlap" in reasons
+    assert "symbol_area_too_small" in reasons
+    assert "symbol_area_too_large" in reasons
+    assert "line_like" in reasons
+    assert "symbol_color_too_high" in reasons
+    assert "symbol_texture_too_high" in reasons
+    assert "symbol_edge_too_high" in reasons
+    assert "weak_symbol_metrics" in reasons
+    assert "symbol_metrics_rejected" not in reasons
+    assert all(item.context is not None for item in blocked)
+
+
+def test_blocked_evidence_does_not_change_accepted_node_signature(tmp_path: Path) -> None:
+    canvas = make_canvas(96, 96, (255, 255, 255))
+    draw_rect(canvas, 6, 6, 40, 26, (232, 232, 232))
+    draw_noise_patch(canvas, 52, 8, 36, 36)
+    draw_circle(canvas, 20, 72, 6, (30, 30, 30))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        options=M29VisualPrimitiveOptions(min_image_area=500, image_accept_threshold=0.70),
+    )
+
+    accepted_signature = [(node.type, node.subtype, node.bbox) for node in document.nodes]
+    assert accepted_signature
+    assert document.meta["counts"]["blocked"] == len(document.blocked)
+    assert all(item.context is not None for item in document.blocked)
+    assert [(node.type, node.subtype, node.bbox) for node in document.nodes] == accepted_signature
+
+
 def test_validation_rejects_missing_asset(tmp_path: Path) -> None:
     canvas = make_canvas(80, 80, (255, 255, 255))
     draw_circle(canvas, 40, 40, 8, (20, 20, 20))
@@ -189,6 +282,18 @@ def test_validation_rejects_missing_asset(tmp_path: Path) -> None:
 
 def make_canvas(width: int, height: int, fill: tuple[int, int, int]) -> PngPixels:
     return PngPixels(width=width, height=height, rows=[bytes(fill) * width for _ in range(height)])
+
+
+def make_component(id_suffix: str, bbox: list[int], *, area: int, metrics: M29PrimitiveMetrics) -> M29ConnectedComponent:
+    return M29ConnectedComponent(
+        id=f"component_{id_suffix}",
+        bbox=bbox,
+        area=area,
+        centroid=(bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2),
+        fill_ratio=round(area / max(1, bbox_area(bbox)), 4),
+        metrics=metrics,
+        source="test",
+    )
 
 
 def draw_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, color: tuple[int, int, int]) -> None:

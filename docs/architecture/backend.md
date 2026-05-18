@@ -273,6 +273,8 @@ M28 增加 single-image SAM2 UI visual extraction harness：它是 `backend/scri
 
 M29 增加 visual primitive graph harness：它是 `backend/scripts/run_m29_visual_primitive_graph.py` 脚本能力，不进入上传主链路，也不替换 M8 `backend/app/visual_primitives.py` 与 `/api/tasks/{taskId}/primitives` 合同。M29 直接从 PNG pixels 构建 `text`、`shape`、`image`、`symbol`、`unknown` primitive graph，输出 `nodes.json`、`assets/images/*.png`、`assets/symbols/*.png`、`overlays/*.png` 和 `preview_sheet.png`。M29 固定 bbox 为 `[x, y, width, height]` 原图像素坐标，mask 为 row-major 1 byte per pixel。M29 先做 text exclusion、obvious shape detection 和 conservative image protection，再从剩余 foreground 中找 symbol candidate。M29 不修改 DSL、不写数据库、不暴露 API、不调用 Renderer、不接 SAM2/OpenCV/OCR provider，不做 SVG/vectorization。
 
+M29.0.1 增强 M29 blocked evidence，不改变 accepted nodes 或检测接受逻辑。M29 document 仍为 `version=0.1`，但 `meta.blockedEvidenceVersion=0.2`；每个 blocked item 必须保留 bbox、metrics、细粒度 reasons 和最小 context。`symbol_metrics_rejected` 被拆成 color/texture/edge/area/line/text/image/protective 等可消费 reason，供后续 M29.1 判断 eligible blocked fragments。M29.0.1 不新增 detector，不接 OCR/SAM2/SVG/Figma/DSL，不进入上传主链路。
+
 ## Backend Non-Goals
 
 M29 不做：

@@ -14,6 +14,7 @@ M29LayerHint = Literal["background", "container", "content", "overlay", "unknown
 M29TextSource = Literal["ocr", "manual", "detector", "test"]
 M29TextKind = Literal["line", "word", "block", "unknown"]
 M29RelationType = Literal["contains", "overlaps", "protects", "near", "aligned"]
+M29_BLOCKED_EVIDENCE_VERSION = "0.2"
 
 LAYER_ORDER: dict[str, int] = {"background": 0, "container": 1, "content": 2, "overlay": 3, "unknown": 4}
 OVERLAY_COLORS: dict[str, tuple[int, int, int]] = {
@@ -106,6 +107,7 @@ class M29BlockedPrimitive:
     source: str
     reasons: list[str]
     metrics: M29PrimitiveMetrics | None = None
+    context: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -116,6 +118,8 @@ class M29BlockedPrimitive:
         }
         if self.metrics is not None:
             data["metrics"] = metrics_to_dict(self.metrics)
+        if self.context is not None:
+            data["context"] = self.context
         return data
 
 
@@ -273,6 +277,12 @@ def bbox_iou(left: list[int], right: list[int]) -> float:
     return intersection / max(1, union)
 
 
+def bbox_gap_distance(left: list[int], right: list[int]) -> int:
+    x_gap = max(0, max(left[0], right[0]) - min(bbox_x2(left), bbox_x2(right)))
+    y_gap = max(0, max(left[1], right[1]) - min(bbox_y2(left), bbox_y2(right)))
+    return max(x_gap, y_gap)
+
+
 def bbox_clamp(bbox: list[int], image_width: int, image_height: int) -> list[int] | None:
     if len(bbox) != 4:
         return None
@@ -332,6 +342,10 @@ def mask_intersects_bbox(mask: M29BinaryMask, bbox: list[int]) -> bool:
         if any(mask.data[start : start + width]):
             return True
     return False
+
+
+def mask_bbox_near(mask: M29BinaryMask, bbox: list[int], padding: int) -> bool:
+    return mask_intersects_bbox(mask, pad_bbox(bbox, padding))
 
 
 def mask_to_png(mask: M29BinaryMask) -> bytes:
@@ -719,19 +733,10 @@ def detect_symbols(
     symbols: list[M29PrimitiveNode] = []
     blocked: list[M29BlockedPrimitive] = []
     for component in components:
-        reasons: list[str] = []
-        if mask_intersects_bbox(text_mask, component.bbox):
-            reasons.append("text_overlap")
-        if mask_intersects_bbox(image_mask, component.bbox):
-            reasons.append("inside_image_primitive")
-        if any(bbox_iou(component.bbox, shape.bbox) > 0.70 and is_protective_shape(shape) for shape in shapes):
-            reasons.append("protective_shape_overlap")
-        if component.area < options.symbol_min_area or bbox_area(component.bbox) > options.symbol_max_area:
-            reasons.append("symbol_area_out_of_range")
-        if is_line_like(component.bbox, component.metrics, options):
-            reasons.append("line_like")
+        context = build_blocked_context(component, text_mask=text_mask, image_mask=image_mask, shapes=shapes)
+        reasons = hard_block_reasons(component, context, options)
         if reasons:
-            blocked.append(M29BlockedPrimitive(f"blocked_{len(blocked) + 1:03d}", component.bbox, "symbol_detector", reasons, component.metrics))
+            blocked.append(M29BlockedPrimitive(f"blocked_{len(blocked) + 1:03d}", component.bbox, "symbol_detector", reasons, component.metrics, context))
             continue
         if component.metrics.color_count <= options.symbol_color_threshold or component.metrics.texture_score <= options.symbol_texture_threshold:
             symbols.append(
@@ -749,17 +754,90 @@ def detect_symbols(
                 )
             )
         else:
-            blocked.append(M29BlockedPrimitive(f"blocked_{len(blocked) + 1:03d}", component.bbox, "symbol_detector", ["symbol_metrics_rejected"], component.metrics))
+            blocked.append(M29BlockedPrimitive(f"blocked_{len(blocked) + 1:03d}", component.bbox, "symbol_detector", metric_block_reasons(component, options), component.metrics, context))
     return symbols, blocked
+
+
+def build_blocked_context(
+    component: M29ConnectedComponent,
+    *,
+    text_mask: M29BinaryMask,
+    image_mask: M29BinaryMask,
+    shapes: list[M29PrimitiveNode],
+) -> dict[str, object]:
+    protective_shapes = [shape for shape in shapes if is_protective_shape(shape)]
+    overlaps = [(shape, bbox_iou(component.bbox, shape.bbox)) for shape in protective_shapes]
+    nearest_shape = min(protective_shapes, key=lambda shape: bbox_gap_distance(component.bbox, shape.bbox), default=None)
+    max_overlap_shape, max_overlap = max(overlaps, key=lambda item: item[1], default=(None, 0.0))
+    return {
+        "area": component.area,
+        "maxEdge": max(component.bbox[2], component.bbox[3]),
+        "textOverlapRatio": round(mask_bbox_overlap_ratio(text_mask, component.bbox), 4),
+        "imageOverlapRatio": round(mask_bbox_overlap_ratio(image_mask, component.bbox), 4),
+        "protectiveShapeOverlapRatio": round(max_overlap, 4),
+        "insideImage": mask_intersects_bbox(image_mask, component.bbox),
+        "nearImage": mask_bbox_near(image_mask, component.bbox, 4),
+        "nearProtectiveShape": nearest_shape is not None and bbox_gap_distance(component.bbox, nearest_shape.bbox) <= 8,
+        "nearestShapeId": (max_overlap_shape or nearest_shape).id if (max_overlap_shape or nearest_shape) is not None else None,
+    }
+
+
+def hard_block_reasons(component: M29ConnectedComponent, context: dict[str, object], options: M29VisualPrimitiveOptions) -> list[str]:
+    reasons: list[str] = []
+    if float(context["textOverlapRatio"]) > 0:
+        reasons.append("text_overlap")
+    if float(context["imageOverlapRatio"]) > 0:
+        reasons.append("inside_image_primitive")
+    if float(context["protectiveShapeOverlapRatio"]) > 0.70:
+        reasons.append("protective_shape_overlap")
+        if not is_overlay_sized(component.bbox):
+            reasons.append("large_container_fragment")
+    if component.area < options.symbol_min_area:
+        reasons.append("symbol_area_too_small")
+    if bbox_area(component.bbox) > options.symbol_max_area:
+        reasons.append("symbol_area_too_large")
+    if is_line_like(component.bbox, component.metrics, options):
+        reasons.append("line_like")
+    return reasons
+
+
+def metric_block_reasons(component: M29ConnectedComponent, options: M29VisualPrimitiveOptions) -> list[str]:
+    metrics = component.metrics
+    reasons: list[str] = []
+    if metrics.color_count > options.symbol_color_threshold:
+        reasons.append("symbol_color_too_high")
+    if metrics.texture_score > options.symbol_texture_threshold:
+        reasons.append("symbol_texture_too_high")
+    if metrics.edge_score >= 0.30:
+        reasons.append("symbol_edge_too_high")
+    if (
+        metrics.color_count <= options.symbol_color_threshold * 3
+        or metrics.texture_score <= options.symbol_texture_threshold + 0.35
+        or metrics.edge_score < 0.50
+    ):
+        reasons.append("weak_symbol_metrics")
+    return reasons or ["weak_symbol_metrics"]
 
 
 def blocked_inside_images(components: list[M29ConnectedComponent], images: list[M29PrimitiveNode]) -> list[M29BlockedPrimitive]:
     blocked: list[M29BlockedPrimitive] = []
     for component in components:
-        if any(bbox_contains(image.bbox, component.bbox) and bbox_iou(image.bbox, component.bbox) < 0.95 for image in images):
+        containing = next((image for image in images if bbox_contains(image.bbox, component.bbox) and bbox_iou(image.bbox, component.bbox) < 0.95), None)
+        if containing is not None:
             if any(existing.bbox == component.bbox for existing in blocked):
                 continue
-            blocked.append(M29BlockedPrimitive(f"blocked_image_internal_{len(blocked) + 1:03d}", component.bbox, "image_protection", ["inside_image_primitive"], component.metrics))
+            context = {
+                "area": component.area,
+                "maxEdge": max(component.bbox[2], component.bbox[3]),
+                "textOverlapRatio": 0.0,
+                "imageOverlapRatio": 1.0,
+                "protectiveShapeOverlapRatio": 0.0,
+                "insideImage": True,
+                "nearImage": True,
+                "nearProtectiveShape": False,
+                "nearestShapeId": None,
+            }
+            blocked.append(M29BlockedPrimitive(f"blocked_image_internal_{len(blocked) + 1:03d}", component.bbox, "image_protection", ["inside_image_primitive", "image_internal_texture"], component.metrics, context))
     return blocked
 
 
@@ -993,8 +1071,38 @@ def validate_m29_document(document: M29VisualPrimitiveGraphDocument, output_dir:
     for relation in document.relations:
         if relation.parent_id not in seen or relation.child_id not in seen:
             raise ValueError("M29 relation references a missing node")
+    for item in document.blocked:
+        if not bbox_in_bounds(item.bbox, width, height):
+            raise ValueError(f"M29 blocked bbox out of bounds: {item.id}")
+        if item.metrics is None:
+            raise ValueError(f"M29 blocked metrics missing: {item.id}")
+        if not item.reasons:
+            raise ValueError(f"M29 blocked reasons missing: {item.id}")
+        if item.context is None:
+            raise ValueError(f"M29 blocked context missing: {item.id}")
+        validate_blocked_context(item)
     for path in document.debug.to_dict().values():
         assert_readable_relative_png(output_dir, path)
+
+
+def validate_blocked_context(item: M29BlockedPrimitive) -> None:
+    context = item.context or {}
+    required = {
+        "area": int,
+        "maxEdge": int,
+        "textOverlapRatio": (int, float),
+        "imageOverlapRatio": (int, float),
+        "protectiveShapeOverlapRatio": (int, float),
+        "insideImage": bool,
+        "nearImage": bool,
+        "nearProtectiveShape": bool,
+    }
+    for key, expected_type in required.items():
+        if key not in context or not isinstance(context[key], expected_type):
+            raise ValueError(f"M29 blocked context missing or invalid {key}: {item.id}")
+    nearest_shape = context.get("nearestShapeId")
+    if nearest_shape is not None and not isinstance(nearest_shape, str):
+        raise ValueError(f"M29 blocked context nearestShapeId invalid: {item.id}")
 
 
 def assert_readable_relative_png(output_dir: Path, path: str) -> None:
@@ -1007,7 +1115,17 @@ def build_meta(nodes: list[M29PrimitiveNode], blocked: list[M29BlockedPrimitive]
     counts = {"text": 0, "shape": 0, "image": 0, "symbol": 0, "unknown": 0, "blocked": len(blocked)}
     for node in nodes:
         counts[node.type] += 1
-    return {"notes": "m29_visual_primitive_graph_harness", "counts": counts, "options": options.to_dict()}
+    reason_summary: dict[str, int] = {}
+    for item in blocked:
+        for reason in item.reasons:
+            reason_summary[reason] = reason_summary.get(reason, 0) + 1
+    return {
+        "notes": "m29_visual_primitive_graph_harness",
+        "blockedEvidenceVersion": M29_BLOCKED_EVIDENCE_VERSION,
+        "counts": counts,
+        "blockedReasonSummary": dict(sorted(reason_summary.items())),
+        "options": options.to_dict(),
+    }
 
 
 def is_line_like(bbox: list[int], metrics: M29PrimitiveMetrics, options: M29VisualPrimitiveOptions) -> bool:

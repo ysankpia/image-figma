@@ -287,6 +287,8 @@ uv run python scripts/run_m29_visual_primitive_graph.py \
 
 M29 合成测试严格校验 bbox/mask、metrics、components、text exclusion、shape/image/symbol 分类、asset export、overlay 和 document validation。真实图 smoke 是人工诊断证据，不要求 0 false positive；验收重点是 `preview_sheet` 和 overlays 能解释 accepted/blocked reasons，并且 M29 不污染 M8 `/primitives`、DSL、Renderer 或 Figma 可见输出。
 
+M29.0.1 回归必须保护 accepted nodes 的 type/subtype/bbox 签名不因 blocked evidence 增强而变化；同时校验 blocked item 都有 bbox、metrics、细粒度 reasons、最小 context、`meta.blockedEvidenceVersion=0.2` 和 `meta.blockedReasonSummary`。真实图 smoke 重点看 blocked reasons 不再塌缩为 `symbol_metrics_rejected`。
+
 阶段级工作必须先形成独立 commit，再在该提交之上运行完整验证。这样测试结果能绑定到明确阶段，避免 M11、M12 这类阶段被堆在同一个 dirty tree 里。如果提交后验证失败，使用同阶段 fix commit 修正并重新跑验证；不要继续开发下一阶段。
 
 后续应继续扩展到：
