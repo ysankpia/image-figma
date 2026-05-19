@@ -10,13 +10,13 @@ from typing import Any, Literal
 
 from .dsl_factory import build_deterministic_dsl
 from .mixed_symbol_text_conflict_audit import find_forbidden_contract_terms
-from .png_tools import PngMetadata, decode_png_pixels, encode_rgb_png, read_png_metadata
+from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
 from .visual_evidence_normalization import parse_bbox
 from .visual_primitive_graph import bbox_in_bounds, draw_rect
 
 
 M30Mode = Literal["augment-existing-dsl", "bootstrap-dsl-from-m29"]
-MaterializedKind = Literal["text", "shape", "image"]
+MaterializedKind = Literal["text", "shape", "image", "text_cover"]
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,14 @@ class M30Options:
     default_text_color: str = "#111827"
     min_text_font_size: int = 8
     max_text_font_size: int = 36
+    text_cover_enabled: bool = True
+    text_cover_background_tolerance: int = 24
+    text_cover_min_sample_confidence: float = 0.72
+    text_cover_max_text_visual_overlap: float = 0.02
+    text_cover_min_width: int = 4
+    text_cover_min_height: int = 4
+    text_cover_max_area_ratio: float = 0.08
+    text_cover_padding: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -49,6 +57,12 @@ class M30MaterializedNode:
             "confidence": self.confidence,
             "reasons": self.reasons,
         }
+
+
+@dataclass(frozen=True)
+class M30PendingNode:
+    node: dict[str, Any]
+    materialized: M30MaterializedNode
 
 
 @dataclass(frozen=True)
@@ -94,9 +108,11 @@ class M30Report:
     options: M30Options
     summary: dict[str, Any]
     materialized_text_nodes: list[M30MaterializedNode]
+    materialized_text_cover_nodes: list[M30MaterializedNode]
     materialized_shape_nodes: list[M30MaterializedNode]
     materialized_image_nodes: list[M30MaterializedNode]
     skipped_items: list[M30SkippedItem]
+    skipped_text_cover_items: list[M30SkippedItem]
     audit_only_references: list[dict[str, Any]]
     warnings: list[str]
     debug: M30DebugArtifacts
@@ -115,9 +131,11 @@ class M30Report:
             "options": self.options.to_dict(),
             "summary": self.summary,
             "materializedTextNodes": [item.to_dict() for item in self.materialized_text_nodes],
+            "materializedTextCoverNodes": [item.to_dict() for item in self.materialized_text_cover_nodes],
             "materializedShapeNodes": [item.to_dict() for item in self.materialized_shape_nodes],
             "materializedImageNodes": [item.to_dict() for item in self.materialized_image_nodes],
             "skippedItems": [item.to_dict() for item in self.skipped_items],
+            "skippedTextCoverItems": [item.to_dict() for item in self.skipped_text_cover_items],
             "auditOnlyReferences": self.audit_only_references,
             "warnings": self.warnings,
             "debug": self.debug.to_dict(),
@@ -172,17 +190,41 @@ def materialize_evidence_grounded_dsl(
     assets_by_id = {str(asset.get("assetId")) for asset in dsl.get("assets", []) if isinstance(asset, dict) and asset.get("assetId")}
 
     materialized_text: list[M30MaterializedNode] = []
+    materialized_text_cover: list[M30MaterializedNode] = []
     materialized_shape: list[M30MaterializedNode] = []
     materialized_image: list[M30MaterializedNode] = []
+    pending_text_nodes: list[M30PendingNode] = []
+    pending_text_cover_nodes: list[M30PendingNode] = []
+    pending_shape_nodes: list[M30PendingNode] = []
+    pending_image_nodes: list[M30PendingNode] = []
     skipped: list[M30SkippedItem] = []
+    skipped_text_cover: list[M30SkippedItem] = []
 
-    append_text_nodes(dsl, existing_ids, m2905_document, image, options, materialized_text, skipped)
-    append_shape_nodes(dsl, existing_ids, m2905_document, image, options, materialized_shape, skipped)
-    append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, materialized_image, skipped)
+    append_text_nodes(existing_ids, m2905_document, image, options, pending_text_nodes, skipped)
+    append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
+    append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
+    append_text_cover_nodes(
+        existing_ids=existing_ids,
+        pixels=pixels,
+        image=image,
+        options=options,
+        text_nodes=pending_text_nodes,
+        image_nodes=pending_image_nodes,
+        cover_nodes=pending_text_cover_nodes,
+        skipped=skipped_text_cover,
+    )
+    append_pending_nodes(dsl, pending_shape_nodes)
+    append_pending_nodes(dsl, pending_image_nodes)
+    append_pending_nodes(dsl, pending_text_cover_nodes)
+    append_pending_nodes(dsl, pending_text_nodes)
+    materialized_text = [item.materialized for item in pending_text_nodes]
+    materialized_text_cover = [item.materialized for item in pending_text_cover_nodes]
+    materialized_shape = [item.materialized for item in pending_shape_nodes]
+    materialized_image = [item.materialized for item in pending_image_nodes]
 
     audit_refs = collect_audit_only_references(m2905_document)
-    preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text]) if emit_preview_artifacts else None
-    update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_shape, materialized_image, audit_refs)
+    preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text_cover, *materialized_text]) if emit_preview_artifacts else None
+    update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_text_cover, materialized_shape, materialized_image, audit_refs)
 
     output_dsl_path = output_dir / "m30_materialized_dsl.json"
     report_path = output_dir / "m30_materialization_report.json"
@@ -191,9 +233,11 @@ def materialize_evidence_grounded_dsl(
         mode=mode,
         m2905_document=m2905_document,
         materialized_text=materialized_text,
+        materialized_text_cover=materialized_text_cover,
         materialized_shape=materialized_shape,
         materialized_image=materialized_image,
         skipped=skipped,
+        skipped_text_cover=skipped_text_cover,
         audit_refs=audit_refs,
     )
     report = M30Report(
@@ -207,9 +251,11 @@ def materialize_evidence_grounded_dsl(
         options=options,
         summary=summary,
         materialized_text_nodes=materialized_text,
+        materialized_text_cover_nodes=materialized_text_cover,
         materialized_shape_nodes=materialized_shape,
         materialized_image_nodes=materialized_image,
         skipped_items=skipped,
+        skipped_text_cover_items=skipped_text_cover,
         audit_only_references=audit_refs,
         warnings=warnings or [],
         debug=M30DebugArtifacts(materialization_preview=preview_path),
@@ -244,12 +290,11 @@ def build_bootstrap_dsl(source_path: Path, image: PngMetadata, output_dir: Path)
 
 
 def append_text_nodes(
-    dsl: dict[str, Any],
     existing_ids: set[str],
     m2905_document: dict[str, Any],
     image: PngMetadata,
     options: M30Options,
-    materialized: list[M30MaterializedNode],
+    materialized: list[M30PendingNode],
     skipped: list[M30SkippedItem],
 ) -> None:
     for item in list_dicts(m2905_document.get("textMembers")):
@@ -292,17 +337,15 @@ def append_text_nodes(
                 "riskFlags": list_strings(item.get("risks")),
             },
         }
-        dsl["root"].setdefault("children", []).append(node)
-        materialized.append(M30MaterializedNode(node_id, "text", source_id, bbox, "medium", ["source_evidence_trace"]))
+        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "text", source_id, bbox, "medium", ["source_evidence_trace"])))
 
 
 def append_shape_nodes(
-    dsl: dict[str, Any],
     existing_ids: set[str],
     m2905_document: dict[str, Any],
     image: PngMetadata,
     options: M30Options,
-    materialized: list[M30MaterializedNode],
+    materialized: list[M30PendingNode],
     skipped: list[M30SkippedItem],
 ) -> None:
     for item in list_dicts(m2905_document.get("shapeCandidates")):
@@ -346,8 +389,7 @@ def append_shape_nodes(
                 "riskFlags": risks,
             },
         }
-        dsl["root"].setdefault("children", []).append(node)
-        materialized.append(M30MaterializedNode(node_id, "shape", source_id, bbox, "medium", ["solid_fill_candidate", "source_evidence_trace"]))
+        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "shape", source_id, bbox, "medium", ["solid_fill_candidate", "source_evidence_trace"])))
 
 
 def append_image_nodes(
@@ -359,7 +401,7 @@ def append_image_nodes(
     output_dir: Path,
     image: PngMetadata,
     options: M30Options,
-    materialized: list[M30MaterializedNode],
+    materialized: list[M30PendingNode],
     skipped: list[M30SkippedItem],
 ) -> None:
     asset_dir = output_dir / "assets" / "m30_visual_assets"
@@ -430,8 +472,116 @@ def append_image_nodes(
                 "riskFlags": risks,
             },
         }
-        dsl["root"].setdefault("children", []).append(node)
-        materialized.append(M30MaterializedNode(node_id, "image", source_id, bbox, "medium", ["source_evidence_trace"]))
+        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "image", source_id, bbox, "medium", ["source_evidence_trace"])))
+
+
+def append_text_cover_nodes(
+    *,
+    existing_ids: set[str],
+    pixels: Any,
+    image: PngMetadata,
+    options: M30Options,
+    text_nodes: list[M30PendingNode],
+    image_nodes: list[M30PendingNode],
+    cover_nodes: list[M30PendingNode],
+    skipped: list[M30SkippedItem],
+) -> None:
+    if not options.text_cover_enabled:
+        for text_node in text_nodes:
+            meta = text_node.node.get("meta") if isinstance(text_node.node.get("meta"), dict) else {}
+            source_id = str(meta.get("sourceTextMemberId") or text_node.materialized.source_id)
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "text_cover_disabled", text_node.materialized.bbox, list_strings(meta.get("riskFlags"))))
+        return
+
+    image_area = max(1, image.width * image.height)
+    visual_bboxes = [item.materialized.bbox for item in image_nodes]
+    high_risks = {"high_text_overlap", "unresolved_boundary", "text_contamination_possible", "text_touching_visual"}
+
+    for text_node in text_nodes:
+        node = text_node.node
+        meta = node.get("meta") if isinstance(node.get("meta"), dict) else {}
+        source_id = str(meta.get("sourceTextMemberId") or text_node.materialized.source_id)
+        bbox = pad_cover_bbox(text_node.materialized.bbox, options.text_cover_padding)
+        risks = list_strings(meta.get("riskFlags"))
+        content = node.get("content") if isinstance(node.get("content"), dict) else {}
+        text = str(content.get("text") or "").strip()
+        confidence = to_float(meta.get("ocrConfidence"))
+
+        if not bbox_in_bounds(bbox, image.width, image.height):
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "invalid_bbox", bbox, risks))
+            continue
+        if not text:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "missing_text", bbox, risks))
+            continue
+        if confidence < 0.70:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "low_text_confidence", bbox, risks))
+            continue
+        if bbox[2] < options.text_cover_min_width or bbox[3] < options.text_cover_min_height:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "bbox_too_small", bbox, risks))
+            continue
+        if bbox_area(bbox) / image_area > options.text_cover_max_area_ratio:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "bbox_too_large", bbox, risks))
+            continue
+        if any(risk in high_risks for risk in risks):
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "high_risk_text_member", bbox, risks))
+            continue
+        if any(bbox_overlap_ratio(bbox, visual_bbox) > options.text_cover_max_text_visual_overlap for visual_bbox in visual_bboxes):
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "unsafe_visual_overlap", bbox, risks))
+            continue
+
+        try:
+            sample = sample_rect_edges_dominant_background(
+                pixels,
+                bbox,
+                sides={"top", "bottom", "left", "right"},
+                inset=0,
+                thickness=1,
+                tolerance=options.text_cover_background_tolerance,
+                min_fraction=0.58,
+            )
+        except UnsupportedPngCropError:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "background_sample_failed", bbox, risks))
+            continue
+        if sample.confidence < options.text_cover_min_sample_confidence or sample.max_channel_delta > options.text_cover_background_tolerance:
+            skipped.append(M30SkippedItem(source_id, "m30_text_cover", "unstable_background_sample", bbox, risks))
+            continue
+
+        node_id = next_unique_id(existing_ids, f"m30_text_cover_{len(cover_nodes) + 1:04d}")
+        cover_node = {
+            "id": node_id,
+            "type": "shape",
+            "role": "m30_text_cover",
+            "name": f"M30 Text Cover / {source_id}",
+            "layout": layout_from_bbox(bbox),
+            "style": {
+                "visible": True,
+                "opacity": 1,
+                "fill": sample.color,
+            },
+            "meta": {
+                "m30Materialized": True,
+                "sourceKind": "m30_text_cover",
+                "sourceTextMemberId": source_id,
+                "sourceTextNodeId": node.get("id"),
+                "sourceBBox": bbox,
+                "coverFill": sample.color,
+                "backgroundSampleConfidence": sample.confidence,
+                "coverConfidence": "medium",
+                "riskFlags": [],
+            },
+        }
+        cover_nodes.append(
+            M30PendingNode(
+                cover_node,
+                M30MaterializedNode(node_id, "text_cover", source_id, bbox, "medium", ["stable_background_sample", "source_evidence_trace"]),
+            )
+        )
+
+
+def append_pending_nodes(dsl: dict[str, Any], nodes: list[M30PendingNode]) -> None:
+    children = dsl["root"].setdefault("children", [])
+    for item in nodes:
+        children.append(item.node)
 
 
 def collect_audit_only_references(m2905_document: dict[str, Any]) -> list[dict[str, Any]]:
@@ -447,6 +597,7 @@ def update_dsl_meta(
     mode: M30Mode,
     before_children: list[dict[str, Any]],
     materialized_text: list[M30MaterializedNode],
+    materialized_text_cover: list[M30MaterializedNode],
     materialized_shape: list[M30MaterializedNode],
     materialized_image: list[M30MaterializedNode],
     audit_refs: list[dict[str, Any]],
@@ -461,6 +612,7 @@ def update_dsl_meta(
         "mode": mode,
         "baseChildCount": len(before_children),
         "textNodeCount": len(materialized_text),
+        "textCoverNodeCount": len(materialized_text_cover),
         "shapeNodeCount": len(materialized_shape),
         "imageNodeCount": len(materialized_image),
         "auditOnlyReferenceCount": len(audit_refs),
@@ -474,9 +626,11 @@ def build_summary(
     mode: M30Mode,
     m2905_document: dict[str, Any],
     materialized_text: list[M30MaterializedNode],
+    materialized_text_cover: list[M30MaterializedNode],
     materialized_shape: list[M30MaterializedNode],
     materialized_image: list[M30MaterializedNode],
     skipped: list[M30SkippedItem],
+    skipped_text_cover: list[M30SkippedItem],
     audit_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     visual_skips = [item for item in skipped if item.source_kind == "m2905_visual_asset"]
@@ -486,6 +640,10 @@ def build_summary(
         "mode": mode,
         "textMemberCount": len(list_dicts(m2905_document.get("textMembers"))),
         "materializedTextCount": len(materialized_text),
+        "textCoverCandidateCount": len(materialized_text_cover) + len(skipped_text_cover),
+        "materializedTextCoverCount": len(materialized_text_cover),
+        "skippedTextCoverCount": len(skipped_text_cover),
+        "skippedTextCoverReasons": reason_counts(skipped_text_cover),
         "shapeCandidateCount": len(list_dicts(m2905_document.get("shapeCandidates"))),
         "materializedShapeCount": len(materialized_shape),
         "visualAssetCount": len(list_dicts(m2905_document.get("visualAssets"))),
@@ -504,7 +662,7 @@ def build_summary(
 
 def write_preview(pixels: Any, output_dir: Path, nodes: list[M30MaterializedNode]) -> str:
     rows = [bytearray(row) for row in pixels.rows]
-    colors = {"shape": (42, 157, 143), "image": (38, 70, 83), "text": (231, 111, 81)}
+    colors = {"shape": (42, 157, 143), "image": (38, 70, 83), "text_cover": (80, 160, 220), "text": (231, 111, 81)}
     for node in nodes:
         draw_rect(rows, pixels.width, pixels.height, node.bbox, colors[node.kind], 2)
     path = output_dir / "m30_materialization_preview.png"
@@ -523,13 +681,15 @@ def validate_m30_result(dsl: dict[str, Any], report: M30Report, output_dir: Path
         raise ValueError("M30 has permission violation")
     if report.summary.get("visibleAuditOnlyChildCount") != 0:
         raise ValueError("M30 audit-only references cannot be visible DSL children")
-    materialized_nodes = [*report.materialized_text_nodes, *report.materialized_shape_nodes, *report.materialized_image_nodes]
+    materialized_nodes = [*report.materialized_text_nodes, *report.materialized_text_cover_nodes, *report.materialized_shape_nodes, *report.materialized_image_nodes]
     for item in materialized_nodes:
         if not bbox_in_bounds(item.bbox, width, height):
             raise ValueError(f"M30 materialized bbox out of bounds: {item.id}")
     for child in materialized_children(dsl["root"]):
         if child.get("type") == "icon":
             raise ValueError(f"M30 must not emit DSL icon nodes: {child.get('id')}")
+        if child.get("role") == "m30_text_cover" and child.get("type") != "shape":
+            raise ValueError(f"M30 text cover must be a DSL shape node: {child.get('id')}")
     if report.debug.materialization_preview is not None:
         preview = output_dir / report.debug.materialization_preview
         metadata = read_png_metadata(preview.read_bytes()) if preview.exists() else None
@@ -593,9 +753,11 @@ def replace_forbidden_check(report: M30Report, hits: list[str]) -> M30Report:
         options=report.options,
         summary={**report.summary, "forbiddenHitCount": len(hits)},
         materialized_text_nodes=report.materialized_text_nodes,
+        materialized_text_cover_nodes=report.materialized_text_cover_nodes,
         materialized_shape_nodes=report.materialized_shape_nodes,
         materialized_image_nodes=report.materialized_image_nodes,
         skipped_items=report.skipped_items,
+        skipped_text_cover_items=report.skipped_text_cover_items,
         audit_only_references=report.audit_only_references,
         warnings=report.warnings,
         debug=report.debug,
@@ -661,6 +823,40 @@ def image_format_for(path: Path) -> str:
     if suffix == ".webp":
         return "webp"
     return "png"
+
+
+def pad_cover_bbox(bbox: list[int], padding: int) -> list[int]:
+    if padding <= 0:
+        return list(bbox)
+    return [bbox[0] - padding, bbox[1] - padding, bbox[2] + (padding * 2), bbox[3] + (padding * 2)]
+
+
+def bbox_area(bbox: list[int]) -> int:
+    return max(0, bbox[2]) * max(0, bbox[3])
+
+
+def bbox_intersection_area(left: list[int], right: list[int]) -> int:
+    left_x2 = left[0] + left[2]
+    left_y2 = left[1] + left[3]
+    right_x2 = right[0] + right[2]
+    right_y2 = right[1] + right[3]
+    width = max(0, min(left_x2, right_x2) - max(left[0], right[0]))
+    height = max(0, min(left_y2, right_y2) - max(left[1], right[1]))
+    return width * height
+
+
+def bbox_overlap_ratio(left: list[int], right: list[int]) -> float:
+    area = bbox_area(left)
+    if area <= 0:
+        return 0.0
+    return bbox_intersection_area(left, right) / area
+
+
+def reason_counts(items: list[M30SkippedItem]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        counts[item.reason] = counts.get(item.reason, 0) + 1
+    return counts
 
 
 def list_dicts(value: object) -> list[dict[str, Any]]:

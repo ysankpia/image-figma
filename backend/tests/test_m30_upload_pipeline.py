@@ -31,6 +31,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "m30_evidence_grounded_materialization" in dsl["meta"]["qualityFlags"]
     assert has_role(dsl, "fallback_region")
     assert has_role(dsl, "m30_text_member")
+    assert has_role(dsl, "m30_text_cover")
     assert not any(child.get("type") == "icon" for child in dsl["root"]["children"])
     assert visible_audit_only_children(dsl) == 0
 
@@ -47,6 +48,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert report_data["summary"]["fallbackPreserved"] is True
     assert report_data["summary"]["permissionViolationCount"] == 0
     assert report_data["summary"]["createdNewBBoxCount"] == 0
+    assert "materializedTextCoverCount" in report_data["summary"]
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
     assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m29_0_5", "m30_materialization"}

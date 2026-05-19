@@ -33,13 +33,13 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization
+-> M30 evidence-grounded DSL materialization with conservative text cover
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
 ```
 
-This pipeline is the plugin preview main path. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M24 visible fallback, M26-M28, Auto Layout, Figma Component/Instance, SVG/vectorization, text cover, or any 图标恢复 path.
+This pipeline is the plugin preview main path. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M24 visible fallback, M26-M28, Auto Layout, Figma Component/Instance, SVG/vectorization, fallback masking, or any 图标恢复 path. M30.2 text cover is limited to ordinary DSL shape nodes under materialized text.
 
 M30.1 separates artifact profiles:
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.evidence_grounded_dsl_materialization import (
+    M30Options,
     materialize_evidence_grounded_dsl,
 )
 from app.mixed_symbol_text_conflict_audit import FORBIDDEN_CONTRACT_TERMS, find_forbidden_contract_terms
@@ -31,12 +32,15 @@ def test_bootstrap_dsl_from_m29_creates_fallback_and_materialized_nodes(tmp_path
     children = result.dsl["root"]["children"]
     assert any(child["id"] == "fallback_full_image" for child in children)
     assert count_children(result.dsl, "m30_text_member") == 1
+    assert count_children(result.dsl, "m30_text_cover") == 1
     assert count_children(result.dsl, "m30_shape_candidate") == 1
     assert count_children(result.dsl, "m30_visual_asset") == 1
     assert not any(child.get("type") == "icon" for child in children)
     assert result.report.summary["createdNewBBoxCount"] == 0
     assert result.report.summary["permissionViolationCount"] == 0
     assert result.report.summary["fallbackPreserved"] is True
+    assert result.report.summary["textCoverCandidateCount"] == 1
+    assert result.report.summary["materializedTextCoverCount"] == 1
     assert read_png_metadata((tmp_path / "m30" / "m30_materialization_preview.png").read_bytes()).width == 120
 
 
@@ -85,6 +89,116 @@ def test_text_nodes_keep_source_trace(tmp_path: Path) -> None:
     assert text_node["meta"]["sourceTextBoxId"] == "ocr_001"
     assert text_node["meta"]["sourceEvidenceNodeId"] == "evidence_text_001"
     assert text_node["meta"]["sourceBBox"] == [10, 10, 40, 12]
+
+
+def test_stable_background_text_member_generates_text_cover_shape(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(100, 80, fill=(250, 250, 250)))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    cover_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_cover")
+    assert cover_node["type"] == "shape"
+    assert cover_node["layout"] == {"x": 10, "y": 10, "width": 40, "height": 12}
+    assert cover_node["style"]["fill"] == "#FAFAFA"
+    assert cover_node["meta"]["sourceKind"] == "m30_text_cover"
+    assert cover_node["meta"]["sourceTextMemberId"] == "text_member_0001"
+    assert cover_node["meta"]["sourceTextNodeId"].startswith("m30_text_")
+    assert result.report.materialized_text_cover_nodes[0].kind == "text_cover"
+
+
+def test_text_cover_layer_order_keeps_text_above_cover(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir)
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    roles = [child.get("role") for child in result.dsl["root"]["children"]]
+    assert roles.index("fallback_region") < roles.index("m30_shape_candidate")
+    assert roles.index("m30_shape_candidate") < roles.index("m30_visual_asset")
+    assert roles.index("m30_visual_asset") < roles.index("m30_text_cover")
+    assert roles.index("m30_text_cover") < roles.index("m30_text_member")
+
+
+def test_unstable_background_skips_text_cover(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_noisy_text_edge_canvas(100, 80, [10, 10, 40, 12]))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_cover_background_tolerance=1, text_cover_min_sample_confidence=0.99),
+    )
+
+    assert count_children(result.dsl, "m30_text_cover") == 0
+    assert result.report.summary["materializedTextCoverCount"] == 0
+    assert result.report.summary["skippedTextCoverReasons"]["unstable_background_sample"] == 1
+
+
+def test_high_risk_text_member_skips_text_cover(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(100, 80))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[], text_risks=["unresolved_boundary"])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 1
+    assert count_children(result.dsl, "m30_text_cover") == 0
+    assert result.report.summary["skippedTextCoverReasons"]["high_risk_text_member"] == 1
+
+
+def test_visual_asset_overlap_skips_text_cover(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0002.png", make_canvas(40, 12))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_0002", [10, 10, 40, 12], str(visual_asset_path.relative_to(m2905_dir))),
+        ],
+        shape_candidates=[],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_visual_asset") == 1
+    assert count_children(result.dsl, "m30_text_cover") == 0
+    assert result.report.summary["skippedTextCoverReasons"]["unsafe_visual_overlap"] == 1
 
 
 def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
@@ -167,7 +281,15 @@ def test_m29_inputs_are_not_rewritten_and_no_new_bbox_is_emitted(tmp_path: Path)
         for item in m2905.get(key, [])
         if item.get("bbox")
     }
-    emitted_bboxes = {tuple(item.bbox) for item in [*result.report.materialized_text_nodes, *result.report.materialized_shape_nodes, *result.report.materialized_image_nodes]}
+    emitted_bboxes = {
+        tuple(item.bbox)
+        for item in [
+            *result.report.materialized_text_nodes,
+            *result.report.materialized_text_cover_nodes,
+            *result.report.materialized_shape_nodes,
+            *result.report.materialized_image_nodes,
+        ]
+    }
     assert emitted_bboxes <= source_bboxes
     assert result.report.summary["createdNewBBoxCount"] == 0
 
@@ -205,6 +327,7 @@ def m2905_document(
     *,
     visual_assets: list[dict] | None = None,
     shape_candidates: list[dict] | None = None,
+    text_risks: list[str] | None = None,
 ) -> dict:
     visual_asset_path = write_png(root / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(18, 18))
     return {
@@ -225,7 +348,7 @@ def m2905_document(
                 "textPreview": "Hello",
                 "text": "Hello",
                 "confidence": 0.96,
-                "risks": [],
+                "risks": text_risks or [],
                 "reasons": ["text_member_from_existing_object_member"],
                 "previewAssetPath": None,
             }
@@ -304,6 +427,19 @@ def write_json(path: Path, payload: dict) -> Path:
 
 def make_canvas(width: int, height: int, fill: tuple[int, int, int] = (240, 240, 240)) -> PngPixels:
     return PngPixels(width=width, height=height, rows=[bytes(fill) * width for _ in range(height)])
+
+
+def make_noisy_text_edge_canvas(width: int, height: int, bbox: list[int]) -> PngPixels:
+    rows = [bytearray(row) for row in make_canvas(width, height).rows]
+    x, y, box_width, box_height = bbox
+    colors = [bytes((220, 220, 220)), bytes((255, 255, 255))]
+    for column in range(x, x + box_width):
+        for row_index in (y, y + box_height - 1):
+            rows[row_index][column * 3 : column * 3 + 3] = colors[column % 2]
+    for row_index in range(y, y + box_height):
+        for column in (x, x + box_width - 1):
+            rows[row_index][column * 3 : column * 3 + 3] = colors[row_index % 2]
+    return PngPixels(width=width, height=height, rows=[bytes(row) for row in rows])
 
 
 def count_children(dsl: dict, role: str) -> int:

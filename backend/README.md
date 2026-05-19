@@ -469,7 +469,7 @@ uv run python scripts/run_m30_evidence_grounded_dsl_materialization.py \
 
 The output directory contains `m30_materialized_dsl.json`, `m30_materialization_report.json`, and `m30_materialization_preview.png`. M30 only materializes M29.0.5 `textMembers`, safe `shapeCandidates`, and safe `visualAssets`; safe visual assets are emitted as DSL `image` nodes, not `icon` nodes, because the current renderer does not implement DSL `icon` rendering.
 
-M30.1 intentionally keeps fallback visible and does not do automatic text cover. It can produce editable text/shape/image nodes over fallback for bridge validation, while mixed/future/residual audit-only evidence remains in report/meta only.
+M30.2 keeps fallback visible and adds conservative `m30_text_cover` shape nodes only when a text member has a stable sampled background. It can produce editable text/shape/image nodes over fallback for bridge validation, while mixed/future/residual audit-only evidence remains in report/meta only.
 
 ## M30.1 Plugin M29-to-M30 Upload Preview
 
@@ -484,7 +484,7 @@ GET /api/tasks/{taskId}/m30-materialization
 
 `/api/upload-m30-preview` saves the uploaded PNG, creates a `processing` task, and runs the OCR + M29 + M30 pipeline in a FastAPI background task. The stage root is `storage/m30_1_uploads/{taskId}/`. On success, `dsl_results.dsl_path` points to `storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json`, so the existing `/api/tasks/{taskId}/dsl` contract stays unchanged.
 
-The M30.1 pipeline calls OCR, M29, M29.1, M29.0.2, M29.0.3 with lineage, M29.0.7, M29.0.4 with ownership routing, M29.0.5, and M30 materialization. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M26-M28, visible fallback replay, text cover, Auto Layout, Components, SVG/vectorization, or any 图标恢复 path.
+The M30.1 pipeline calls OCR, M29, M29.1, M29.0.2, M29.0.3 with lineage, M29.0.7, M29.0.4 with ownership routing, M29.0.5, and M30 materialization with M30.2 conservative text cover. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M26-M28, visible fallback replay, fallback masking, Auto Layout, Components, SVG/vectorization, or any 图标恢复 path.
 
 M30.1 has a preview artifact profile:
 

@@ -463,7 +463,17 @@ bootstrap-dsl-from-m29:
   create a minimal root frame with a full-image fallback, then append M30 nodes
 ```
 
-M30 must preserve `original_reference`, `fallback_region_*`, `fallback_full_image`, and hidden `candidate_text` nodes. It must not delete fallback or overwrite the input DSL. M30.1 does not create cover shapes for text replacement; automatic cover is deferred to a later stage.
+M30 must preserve `original_reference`, `fallback_region_*`, `fallback_full_image`, and hidden `candidate_text` nodes. It must not delete fallback or overwrite the input DSL.
+
+M30.2 may add conservative text cover shapes:
+
+```text
+type: shape
+role: m30_text_cover
+style.fill: sampled solid background color
+```
+
+These cover nodes are ordinary DSL v0.1 shapes placed below `m30_text_member` nodes to reduce fallback text ghosting. They reuse existing text bboxes and source traces; they do not change the DSL schema, hide fallback, or perform fallback masking.
 
 M30 never emits DSL `icon` nodes. The renderer currently treats `icon` as unsupported, so safe M29.0.5 visual assets are represented as DSL `image` nodes with `role: "m30_visual_asset"` and registered image assets.
 
