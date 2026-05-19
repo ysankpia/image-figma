@@ -116,3 +116,44 @@ def get_task_m30_materialization(task_id: str) -> dict[str, object]:
         "stageTimings": timings,
     }
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/m31-reconstruction")
+def get_task_m31_reconstruction(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    report_path = state.settings.storage_root / "m30_1_uploads" / task_id / "m31" / "m31_reconstruction_tree_report.json"
+    if not report_path.exists():
+        raise ApiError(
+            "M31_RECONSTRUCTION_NOT_FOUND",
+            "M31 reconstruction report not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="m31_reconstruction_lookup",
+            task_id=task_id,
+        )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    timings_path = report_path.parent.parent / "stage_timings.json"
+    timings = json.loads(timings_path.read_text(encoding="utf-8")) if timings_path.exists() else {}
+    overlay_path = report_path.parent / "m31_reconstruction_tree_overlay.png"
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": task["status"],
+        "stage": task["stage"],
+        "summary": report.get("summary", {}),
+        "warnings": report.get("warnings", []),
+        "reviewBuckets": report.get("reviewBuckets", []),
+        "unitSummaries": report.get("unitSummaries", []),
+        "outputTree": report.get("outputTree"),
+        "debugOverlayPath": str(overlay_path) if overlay_path.exists() else None,
+        "stageTimings": timings,
+    }
+    return success_response(data)

@@ -12,6 +12,7 @@ from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
+from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
 from .text_aware_visual_object_refinement import (
@@ -48,6 +49,7 @@ class M30PipelinePaths:
     m2907: Path
     m2904: Path
     m2905: Path
+    m31: Path
     m30: Path
 
 
@@ -115,6 +117,21 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
     m29_json = paths.m29 / "nodes.json"
+
+    if state.settings.m31_upload_diagnostics_enabled:
+        update_task(task_id, "m31_reconstruction", 24, "Building M31 reconstruction diagnostics.")
+        run_m31_diagnostic_stage(
+            task_id=task_id,
+            paths=paths,
+            timings=timings,
+            upload_path=upload_path,
+            png_data=png_data,
+            ocr_document=ocr_document.to_dict(),
+            ocr_json=paths.ocr / "ocr.json",
+            m29_document=m29_document.to_dict(),
+            m29_json=m29_json,
+            policy=policy,
+        )
 
     update_task(task_id, "m29_1", 30, "Running M29.1 symbol grouping.")
     m291_document = run_stage(paths, timings, "m29_1", lambda: extract_m291_symbol_fragment_grouping(
@@ -278,6 +295,40 @@ def run_ocr(task_id: str, image: PngMetadata, upload_path: Path, output_dir: Pat
     return document
 
 
+def run_m31_diagnostic_stage(
+    *,
+    task_id: str,
+    paths: M30PipelinePaths,
+    timings: list[StageTiming],
+    upload_path: Path,
+    png_data: bytes,
+    ocr_document: dict[str, Any],
+    ocr_json: Path,
+    m29_document: dict[str, Any],
+    m29_json: Path,
+    policy: M30ArtifactPolicy,
+) -> None:
+    action = lambda: extract_m31_reconstruction_ui_tree(
+        source_image_path=str(upload_path),
+        ocr_document=ocr_document,
+        ocr_json_path=str(ocr_json),
+        m29_document=m29_document,
+        m29_nodes_json_path=str(m29_json),
+        output_dir=paths.m31,
+        profile=policy.profile,
+        png_data=png_data,
+    )
+    if state.settings.m31_upload_diagnostics_strict:
+        try:
+            run_stage(paths, timings, "m31_reconstruction", action)
+        except M30UploadPipelineError:
+            raise
+        except Exception as error:
+            raise M30UploadPipelineError("m31_reconstruction", error.__class__.__name__, str(error)) from error
+        return
+    run_optional_stage(paths, timings, "m31_reconstruction", action, task_id=task_id)
+
+
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
     public_dir = state.storage.assets_dir / task_id / "m30"
     public_dir.mkdir(parents=True, exist_ok=True)
@@ -368,6 +419,34 @@ def run_stage(paths: M30PipelinePaths, timings: list[StageTiming], stage: str, a
     return result
 
 
+def run_optional_stage(paths: M30PipelinePaths, timings: list[StageTiming], stage: str, action, *, task_id: str):
+    started_perf = time.perf_counter()
+    timing = StageTiming(
+        stage=stage,
+        started_at=datetime.now(UTC).isoformat(),
+        completed_at=None,
+        elapsed_seconds=None,
+        status="running",
+    )
+    timings.append(timing)
+    write_stage_timings(paths, timings)
+    try:
+        result = action()
+    except Exception as error:  # noqa: BLE001 - optional diagnostics must not block M30 output.
+        finish_stage_timing(timing, started_perf, "failed", error.__class__.__name__, str(error))
+        write_stage_timings(paths, timings)
+        state.database.insert_error(
+            task_id=task_id,
+            stage=stage,
+            error_code=error.__class__.__name__,
+            message=str(error),
+        )
+        return None
+    finish_stage_timing(timing, started_perf, "completed", None, None)
+    write_stage_timings(paths, timings)
+    return result
+
+
 def finish_stage_timing(
     timing: StageTiming,
     started_perf: float,
@@ -404,6 +483,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m2907=root / "m29_0_7",
         m2904=root / "m29_0_4",
         m2905=root / "m29_0_5",
+        m31=root / "m31",
         m30=root / "m30",
     )
 

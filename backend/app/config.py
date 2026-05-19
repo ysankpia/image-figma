@@ -24,6 +24,8 @@ class Settings:
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
     m30_preview_profile: str = "production"
+    m31_upload_diagnostics_enabled: bool = True
+    m31_upload_diagnostics_strict: bool = False
 
 
 def get_settings() -> Settings:
@@ -49,6 +51,8 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         m30_preview_profile=parse_m30_preview_profile(os.getenv("M30_PREVIEW_PROFILE", "production")),
+        m31_upload_diagnostics_enabled=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "true"), default=True),
+        m31_upload_diagnostics_strict=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "false"), default=False),
     )
 
 
@@ -97,3 +101,16 @@ def parse_m30_preview_profile(value: str) -> str:
     if profile not in {"production", "development"}:
         return "production"
     return profile
+
+
+def parse_bool(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if not normalized:
+        return default
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

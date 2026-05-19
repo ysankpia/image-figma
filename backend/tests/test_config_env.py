@@ -56,9 +56,24 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv("OCR_PROVIDER", "baidu_ppocrv5")
     monkeypatch.setenv("M30_PREVIEW_PROFILE", "development")
+    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "false")
+    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "true")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
 
     settings = config.get_settings()
 
     assert settings.ocr_provider == "baidu_ppocrv5"
     assert settings.m30_preview_profile == "development"
+    assert settings.m31_upload_diagnostics_enabled is False
+    assert settings.m31_upload_diagnostics_strict is True
+
+
+def test_parse_bool_supports_common_env_values() -> None:
+    assert config.parse_bool("true", default=False) is True
+    assert config.parse_bool("1", default=False) is True
+    assert config.parse_bool("yes", default=False) is True
+    assert config.parse_bool("false", default=True) is False
+    assert config.parse_bool("0", default=True) is False
+    assert config.parse_bool("off", default=True) is False
+    assert config.parse_bool("", default=True) is True
+    assert config.parse_bool("not-a-bool", default=False) is False

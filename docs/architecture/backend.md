@@ -1,6 +1,6 @@
 # 后端架构
 
-后端负责接收 PNG、创建任务、运行 OCR + M29 + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
+后端负责接收 PNG、创建任务、运行 OCR + M29 + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
 
 ## Runtime Surface
 
@@ -12,6 +12,7 @@ POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
 GET  /api/tasks/{taskId}/m30-materialization
+GET  /api/tasks/{taskId}/m31-reconstruction
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -30,6 +31,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> create task status=processing stage=m30_queued
 -> OCR
 -> M29 visual primitive graph
+-> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
 -> M29.0.3 visual evidence normalization with M29.1 lineage
@@ -56,7 +58,7 @@ SVG/vectorization
 icon recovery
 ```
 
-M31 reconstruction UI tree is not part of this runtime path yet. It is a script-only diagnostic consumer of source PNG, OCR JSON, and M29 `nodes.json`.
+M31 reconstruction UI tree is a runtime diagnostic side path. It consumes only source PNG, OCR JSON/document, and M29 `nodes.json`/document, writes report artifacts, and does not change M30 DSL or renderer output.
 
 ## Artifact Profiles
 
@@ -98,6 +100,7 @@ Each M30 preview task writes:
 storage/uploads/{taskId}/original.png
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 storage/m30_1_uploads/{taskId}/m29/
+storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
 storage/m30_1_uploads/{taskId}/m29_0_2/
 storage/m30_1_uploads/{taskId}/m29_0_3/
@@ -135,6 +138,7 @@ Current stage names are concrete pipeline stages, for example:
 m30_queued
 ocr
 m29
+m31_reconstruction
 m29_1
 m29_0_2
 m29_0_3
@@ -165,7 +169,7 @@ In the current M30 preview path, OCR is required evidence. A missing Baidu token
 
 M29/M30 stages should fail fast when their required source artifacts or contracts are invalid. The product path should not fabricate visible nodes from audit-only or missing evidence.
 
-M31 failures do not fail plugin uploads in M31.0 because M31 is not registered in the upload pipeline. Its report is used to evaluate primitive ownership and fallback coverage before later runtime integration.
+M31 diagnostics are optional by default. If `M31_UPLOAD_DIAGNOSTICS_STRICT=false`, M31 failure writes a failed `m31_reconstruction` timing and an `error_logs` row, then the pipeline continues to M30 DSL. If `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
 
 ## Database
 

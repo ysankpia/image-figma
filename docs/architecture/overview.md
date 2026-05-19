@@ -16,7 +16,7 @@ Figma Plugin UI
 -> Figma Canvas
 ```
 
-M31 是当前新增的诊断组织层，不改变上述 runtime：
+M31 是当前新增的诊断组织层，M31.1 会随上传链路生成诊断产物，但不改变 DSL/Renderer/Figma 可见输出：
 
 ```text
 source PNG + OCR JSON + M29 nodes.json
@@ -63,9 +63,9 @@ docs/
 - Plugin Main：调用 API、轮询任务、获取 DSL、调用 Renderer、操作 Figma API。
 - DSL Schema：定义后端和 Renderer 的稳定合同。
 - Renderer：把 DSL 转成 Figma 节点。
-- Backend API：上传、任务状态、DSL、M30 report、资产、健康检查。
-- Processing Pipeline：OCR、M29 evidence、M30 DSL materialization。
-- M31 Reconstruction UI Tree：script-only 诊断，把 M29 primitive refs 组织成 reconstruction units。
+- Backend API：上传、任务状态、DSL、M30/M31 report、资产、健康检查。
+- Processing Pipeline：OCR、M29 evidence、M31 diagnostics、M30 DSL materialization。
+- M31 Reconstruction UI Tree：上传旁路诊断，把 M29 primitive refs 组织成 reconstruction units。
 - Storage：原图、M29/M30 evidence JSON、M30 DSL/report、发布给 renderer 的 image assets、错误日志。
 
 ## Module Boundaries

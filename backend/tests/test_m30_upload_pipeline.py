@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -51,7 +52,21 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "materializedTextCoverCount" in report_data["summary"]
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
-    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m29_0_5", "m30_materialization"}
+    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m31_reconstruction", "m29_0_5", "m30_materialization"}
+
+    m31 = client.get(f"/api/tasks/{task_id}/m31-reconstruction")
+    assert m31.status_code == 200
+    m31_data = m31.json()["data"]
+    assert m31_data["status"] == "completed"
+    assert m31_data["stage"] == "m30_completed"
+    assert m31_data["summary"]["createdDetectionBBoxCount"] == 0
+    assert m31_data["summary"]["permissionViolationCount"] == 0
+    assert m31_data["summary"]["rootLeafPrimitiveCount"] == 0
+    assert m31_data["summary"]["unitFallbackCoverage"] == 1.0
+    assert m31_data["summary"]["forbiddenHitCount"] == 0
+    assert str(m31_data["outputTree"]).endswith("m31_reconstruction_tree.json")
+    assert m31_data["debugOverlayPath"] is None
+    assert {item["stage"] for item in m31_data["stageTimings"]["stages"]} >= {"m31_reconstruction"}
 
 
 def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
@@ -70,9 +85,13 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
 
     task_root = Path(report["outputDsl"]).parent.parent
     assert (task_root / "stage_timings.json").exists()
+    assert (task_root / "m31" / "m31_reconstruction_tree.json").exists()
+    assert (task_root / "m31" / "m31_reconstruction_tree_report.json").exists()
+    assert (task_root / "m31" / "m31_unit_fallback_assets").exists()
     assert not list(task_root.glob("**/overlays"))
     assert not list(task_root.glob("**/preview*.png"))
     assert not (task_root / "m30" / "m30_materialization_preview.png").exists()
+    assert not (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
     assert (task_root / "ocr" / "ocr.json").exists()
     assert (task_root / "m29" / "nodes.json").exists()
     assert (task_root / "m29_0_5" / "refined_visual_objects.json").exists()
@@ -101,6 +120,98 @@ def test_upload_m30_preview_development_profile_keeps_diagnostics(tmp_path: Path
     assert (task_root / "m29" / "overlays").exists()
     assert (task_root / "m29" / "preview_sheet.png").exists()
     assert (task_root / "m30" / "m30_materialization_preview.png").exists()
+    assert (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
+
+
+def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+        m31 = local_client.get(f"/api/tasks/{task_id}/m31-reconstruction")
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert not (task_root / "m31").exists()
+    assert "m31_reconstruction" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert m31.status_code == 404
+    assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
+
+
+def test_m31_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "extract_m31_reconstruction_ui_tree", fail_m31)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        assert task.json()["data"]["status"] == "completed"
+
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
+        assert dsl.status_code == 200
+
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+        m31 = local_client.get(f"/api/tasks/{task_id}/m31-reconstruction")
+
+    m31_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m31_reconstruction")
+    assert m31_timing["status"] == "failed"
+    assert m31_timing["errorCode"] == "RuntimeError"
+    assert m31.status_code == 404
+    assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
+
+
+def test_m31_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "true")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "extract_m31_reconstruction_ui_tree", fail_m31)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        data = task.json()["data"]
+        assert data["status"] == "failed"
+        assert data["stage"] == "m31_reconstruction"
+        assert "forced m31 failure" in data["message"]
+
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
+        assert dsl.status_code == 409
 
 
 def test_upload_m30_preview_rejects_non_png(client: TestClient) -> None:
@@ -163,3 +274,7 @@ def visible_audit_only_children(dsl: dict) -> int:
 def make_png(width: int, height: int) -> bytes:
     canvas = PngPixels(width=width, height=height, rows=[bytes((240, 240, 240)) * width for _ in range(height)])
     return encode_rgb_png(canvas.width, canvas.height, canvas.rows)
+
+
+def fail_m31(**_kwargs: Any) -> None:
+    raise RuntimeError("forced m31 failure")

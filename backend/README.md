@@ -8,6 +8,7 @@ The product runtime is now:
 Figma plugin
 -> POST /api/upload-m30-preview
 -> OCR + M29 evidence pipeline
+-> M31 reconstruction diagnostics
 -> M30 materialized DSL
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
@@ -15,7 +16,7 @@ Figma plugin
 
 The frozen pre-M29 upload chain has been removed from runtime source. `POST /api/upload` and the old task debug endpoints are not product contracts.
 
-M31 is a script-only diagnostic layer after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change the plugin upload path yet.
+M31 is attached as a diagnostic side path after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change M30 DSL or Figma output.
 
 ## Run
 
@@ -50,6 +51,7 @@ POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
 GET  /api/tasks/{taskId}/m30-materialization
+GET  /api/tasks/{taskId}/m31-reconstruction
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -69,6 +71,8 @@ progress = 100
 
 `GET /api/tasks/{taskId}/m30-materialization` returns the M30 report summary, warnings, skipped items, output DSL path, optional debug preview path, and `stage_timings.json`.
 
+`GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
+
 ## Current Pipeline
 
 The upload preview pipeline runs:
@@ -76,6 +80,7 @@ The upload preview pipeline runs:
 ```text
 OCR
 -> M29 visual primitive graph
+-> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
 -> M29.0.3 visual evidence normalization with lineage
@@ -118,6 +123,25 @@ M30_PREVIEW_PROFILE=development  # full diagnostics for local debugging
 
 `development` preserves full diagnostic output. Single-stage M29/M30 scripts still default to development-style output through their own function defaults.
 
+## M31 Upload Diagnostics
+
+```bash
+M31_UPLOAD_DIAGNOSTICS_ENABLED=true   # default
+M31_UPLOAD_DIAGNOSTICS_STRICT=false   # default
+```
+
+When enabled, `/api/upload-m30-preview` writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m31/m31_reconstruction_tree.json
+storage/m30_1_uploads/{taskId}/m31/m31_reconstruction_tree_report.json
+storage/m30_1_uploads/{taskId}/m31/m31_unit_fallback_assets/
+```
+
+`M30_PREVIEW_PROFILE=production` skips the M31 overlay. `M30_PREVIEW_PROFILE=development` also writes `m31_reconstruction_tree_overlay.png`.
+
+M31 failures are optional by default: they write failed stage timing and an error log, then the pipeline continues to M30. With `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
+
 ## M30 Materialization
 
 M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:
@@ -156,7 +180,7 @@ uv run python scripts/run_m31_reconstruction_ui_tree.py \
   --profile development
 ```
 
-M31.0 is not a Renderer input and is not registered as an API. It deliberately does not consume M29.0.2/M29.0.3/M29.0.4/M29.0.5 or M30 DSL as structural truth. Those stages remain in the current product runtime until later M32-M34 stages replace their responsibility.
+M31.1 is a runtime diagnostic API, not a Renderer input. It deliberately does not consume M29.0.2/M29.0.3/M29.0.4/M29.0.5 or M30 DSL as structural truth. Those stages remain in the current product runtime until later M32-M34 stages replace their responsibility.
 
 ## Storage
 
@@ -172,6 +196,12 @@ storage/ocr/
 storage/logs/
 storage/m30_1_uploads/
 storage/m31_runs/
+```
+
+Each upload task may now include:
+
+```text
+storage/m30_1_uploads/{taskId}/m31/
 ```
 
 M30 preview tasks also publish renderer-fetchable image assets to:

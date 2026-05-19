@@ -2,6 +2,35 @@
 
 v0.1 只做能定位问题的日志，不做完整监控平台。
 
+## Current Upload Diagnostics
+
+当前 `/api/upload-m30-preview` 的主要诊断入口是：
+
+```text
+storage/m30_1_uploads/{taskId}/stage_timings.json
+GET /api/tasks/{taskId}/m30-materialization
+GET /api/tasks/{taskId}/m31-reconstruction
+```
+
+`stage_timings.json` 记录每个 stage 的开始时间、结束时间、耗时、状态、错误码和错误消息。M31.1 增加 `m31_reconstruction` stage，用来观察 M29 primitive evidence 是否能组织成 reconstruction units。
+
+M31 reconstruction report 至少观察：
+
+```text
+primitiveRefCount
+unitCount
+reviewBucketCount
+primitiveOwnershipRate
+orphanPrimitiveCount
+rootLeafPrimitiveCount
+unitFallbackCoverage
+createdDetectionBBoxCount
+permissionViolationCount
+forbiddenHitCount
+```
+
+这些是结构质量指标，不是视觉相似度指标。M31 默认非阻塞失败；失败时 `stage_timings.json` 会记录 failed `m31_reconstruction`，同时写入 `error_logs`。
+
 ## Logs
 
 后端任务日志至少包含：

@@ -21,6 +21,8 @@
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
 | `M30_PREVIEW_PROFILE` | M30.1 插件 preview artifact profile，支持 `production`、`development` | `production` | 否 |
+| `M31_UPLOAD_DIAGNOSTICS_ENABLED` | 是否在 `/api/upload-m30-preview` 后台链路中生成 M31 reconstruction diagnostics | `true` | 否 |
+| `M31_UPLOAD_DIAGNOSTICS_STRICT` | M31 diagnostics 失败是否阻断 task completed | `false` | 否 |
 
 ## OCR
 
@@ -52,6 +54,32 @@ M30_PREVIEW_PROFILE=development
 ```
 
 `development` keeps full diagnostics for local evidence debugging. This variable affects only `/api/upload-m30-preview`; single-stage M29/M30 scripts keep their own development defaults.
+
+## M31 Upload Diagnostics
+
+```bash
+M31_UPLOAD_DIAGNOSTICS_ENABLED=true
+```
+
+默认每次 `/api/upload-m30-preview` 都在 M29 后生成 M31 reconstruction tree/report。M31 只消费 source PNG、OCR JSON/document 和 M29 `nodes.json`/document，不读取 M29.0.x 或 M30 DSL 作为结构事实来源。
+
+```bash
+M31_UPLOAD_DIAGNOSTICS_ENABLED=false
+```
+
+关闭后不生成 `storage/m30_1_uploads/{taskId}/m31/`，`GET /api/tasks/{taskId}/m31-reconstruction` 返回 `M31_RECONSTRUCTION_NOT_FOUND`。
+
+```bash
+M31_UPLOAD_DIAGNOSTICS_STRICT=false
+```
+
+默认非阻塞：M31 失败只写 `stage_timings.json` 和 `error_logs`，M30 DSL 继续生成。
+
+```bash
+M31_UPLOAD_DIAGNOSTICS_STRICT=true
+```
+
+开发验收模式：M31 失败会让 task failed，stage 为 `m31_reconstruction`。
 
 ## Removed Variables
 

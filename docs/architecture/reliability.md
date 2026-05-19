@@ -18,6 +18,7 @@ failed
 m30_queued
 ocr
 m29
+m31_reconstruction
 m29_1
 m29_0_2
 m29_0_3
@@ -49,6 +50,20 @@ message = concrete error
 ```
 
 The backend also writes `error_logs`.
+
+M31.1 diagnostics have explicit optional/strict behavior:
+
+```text
+M31_UPLOAD_DIAGNOSTICS_STRICT=false
+  M31 failure records failed timing + error log
+  task continues to M30 DSL
+
+M31_UPLOAD_DIAGNOSTICS_STRICT=true
+  M31 failure marks task failed
+  stage = m31_reconstruction
+```
+
+This keeps plugin preview usable while M31 grouping/ownership is being validated on real uploads.
 
 ## OCR As Required Evidence
 
@@ -86,6 +101,8 @@ storage/m30_1_uploads/{taskId}/stage_timings.json
 ```
 
 `GET /api/tasks/{taskId}/m30-materialization` returns the same timings so slow stages can be traced without scanning logs.
+
+`GET /api/tasks/{taskId}/m31-reconstruction` returns the M31 summary and the same timings. If diagnostics are disabled or optional M31 failed before writing a report, it returns `M31_RECONSTRUCTION_NOT_FOUND`.
 
 ## Timeouts
 

@@ -95,6 +95,10 @@ Required backend coverage:
 - completed task returns M30 DSL from `m30_materialized_dsl.json`.
 - unfinished task returns `DSL_NOT_READY`.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
+- `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
+- default upload creates M31 diagnostics after M29.
+- M31 optional failure does not block M30 DSL when strict mode is off.
+- M31 failure blocks the task at `m31_reconstruction` when strict mode is on.
 - M30 image assets are published under `/files/assets/{taskId}/m30/...`.
 - OCR provider failures fail the task and do not create fake completed DSL.
 - CORS covers `/api/upload-m30-preview`.
@@ -158,7 +162,8 @@ Required M31 coverage:
 - `createdDetectionBBoxCount = 0`.
 - `permissionViolationCount = 0`.
 - M31 does not rewrite source M29 JSON.
-- M31 remains script-only and does not change `/api/upload-m30-preview`.
+- M31 upload diagnostics do not change M30 DSL, Renderer behavior, or plugin contract.
+- production upload profile skips M31 overlay; development upload profile writes it.
 
 ## Static Guards
 

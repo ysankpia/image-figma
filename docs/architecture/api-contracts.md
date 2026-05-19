@@ -4,7 +4,7 @@ API v0.1 serves the current single-image preview path:
 
 ```text
 PNG upload
--> OCR + M29 + M30
+-> OCR + M29 + M31 diagnostics + M30
 -> DSL v0.1
 -> Figma Renderer
 ```
@@ -99,6 +99,7 @@ Immediate success response:
 ```
 
 The endpoint creates a task and runs OCR + M29 + M30 in a background task. It does not run the removed pre-M29 upload chain.
+M31 reconstruction diagnostics run after M29 when `M31_UPLOAD_DIAGNOSTICS_ENABLED=true`; they do not change the DSL output.
 
 ### `GET /api/tasks/{taskId}`
 
@@ -159,6 +160,42 @@ stageTimings
 ```
 
 This endpoint is read-only and is not required by the Figma renderer.
+
+### `GET /api/tasks/{taskId}/m31-reconstruction`
+
+Returns M31 reconstruction diagnostics generated from source PNG, OCR JSON, and M29 `nodes.json`.
+
+Response data:
+
+```json
+{
+  "taskId": "task_abc",
+  "status": "completed",
+  "stage": "m30_completed",
+  "summary": {
+    "primitiveRefCount": 12,
+    "unitCount": 5,
+    "reviewBucketCount": 0,
+    "primitiveOwnershipRate": 1.0,
+    "orphanPrimitiveCount": 0,
+    "rootLeafPrimitiveCount": 0,
+    "unitFallbackCoverage": 1.0,
+    "createdDetectionBBoxCount": 0,
+    "permissionViolationCount": 0,
+    "forbiddenHitCount": 0
+  },
+  "warnings": [],
+  "reviewBuckets": [],
+  "unitSummaries": [],
+  "outputTree": "/abs/path/m31_reconstruction_tree.json",
+  "debugOverlayPath": null,
+  "stageTimings": {}
+}
+```
+
+This endpoint is read-only, returns report-level data only, and is not required by the Figma renderer. It does not return the full tree JSON.
+
+If the task exists but M31 diagnostics are disabled or failed in optional mode, the endpoint returns `M31_RECONSTRUCTION_NOT_FOUND`.
 
 ### `GET /api/assets/{assetId}`
 
