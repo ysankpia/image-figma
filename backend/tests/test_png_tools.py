@@ -11,6 +11,7 @@ from app.png_tools import (
     PngRegion,
     UnsupportedPngCropError,
     crop_and_fill_png,
+    crop_pixels_to_png,
     crop_png,
     decode_png_pixels,
     encode_rgb_png,
@@ -70,6 +71,40 @@ def test_crop_png_writes_valid_png_with_region_dimensions() -> None:
     assert metadata.bit_depth == 8
     assert metadata.color_type == 2
     assert metadata.interlace == 0
+
+
+def test_crop_pixels_to_png_preserves_decoded_pixel_region() -> None:
+    rows = []
+    for row_index in range(6):
+        row = bytearray()
+        for column in range(8):
+            row.extend((column * 10, row_index * 20, 100 + column + row_index))
+        rows.append(bytes(row))
+    source = make_png_from_rows(8, 6, rows)
+    pixels = decode_png_pixels(source)
+
+    cropped = crop_pixels_to_png(pixels, PngRegion("unit", 2, 1, 4, 3))
+
+    metadata = read_png_metadata(cropped)
+    cropped_pixels = decode_png_pixels(cropped)
+    assert metadata is not None
+    assert metadata.width == 4
+    assert metadata.height == 3
+    assert cropped_pixels.rows == [row[2 * 3 : 6 * 3] for row in rows[1:4]]
+
+
+def test_crop_pixels_to_png_rejects_invalid_regions() -> None:
+    pixels = decode_png_pixels(make_rgb_png(8, 6, (247, 248, 250)))
+
+    invalid_regions = [
+        PngRegion("negative", -1, 0, 4, 4),
+        PngRegion("empty", 0, 0, 0, 4),
+        PngRegion("overflow", 6, 0, 3, 4),
+        PngRegion("overflow_y", 0, 5, 4, 2),
+    ]
+    for region in invalid_regions:
+        with pytest.raises(UnsupportedPngCropError):
+            crop_pixels_to_png(pixels, region)
 
 
 def test_crop_png_rejects_unsupported_color_type_after_metadata_is_readable() -> None:

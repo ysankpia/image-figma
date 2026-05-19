@@ -142,6 +142,8 @@ storage/m30_1_uploads/{taskId}/m31/m31_unit_fallback_assets/
 
 M31 failures are optional by default: they write failed stage timing and an error log, then the pipeline continues to M30. With `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
 
+M31.1.1 crops unit fallback assets from the already decoded `PngPixels`, so source PNG decode happens once per M31 run instead of once per reconstruction unit.
+
 ## M30 Materialization
 
 M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:
@@ -181,6 +183,8 @@ uv run python scripts/run_m31_reconstruction_ui_tree.py \
 ```
 
 M31.1 is a runtime diagnostic API, not a Renderer input. It deliberately does not consume M29.0.2/M29.0.3/M29.0.4/M29.0.5 or M30 DSL as structural truth. Those stages remain in the current product runtime until later M32-M34 stages replace their responsibility.
+
+M31 unit fallback crops are cut from decoded source pixels. Do not route M31 fallback asset generation through compressed PNG crop helpers.
 
 ## Storage
 

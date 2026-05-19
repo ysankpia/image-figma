@@ -60,6 +60,8 @@ icon recovery
 
 M31 reconstruction UI tree is a runtime diagnostic side path. It consumes only source PNG, OCR JSON/document, and M29 `nodes.json`/document, writes report artifacts, and does not change M30 DSL or renderer output.
 
+M31.1.1 ensures the source PNG is decoded once into `PngPixels`; unit fallback crops are sliced from decoded rows and then encoded as PNG. M31 fallback generation must not call compressed PNG crop helpers per unit.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.

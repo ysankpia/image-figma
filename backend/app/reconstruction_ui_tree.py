@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .png_tools import PngPixels, PngRegion, crop_png, decode_png_pixels, encode_rgb_png, read_png_metadata
+from .png_tools import PngPixels, PngRegion, crop_pixels_to_png, decode_png_pixels, encode_rgb_png, read_png_metadata
 from .visual_primitive_graph import (
     bbox_area,
     bbox_clamp,
@@ -129,7 +129,6 @@ def extract_m31_reconstruction_ui_tree(
     ocr_boxes = parse_ocr_boxes(ocr_document)
     primitive_refs, warnings = build_primitive_refs(m29_document, ocr_boxes, image.width, image.height)
     context = TreeBuildContext(
-        source_png=png_data,
         pixels=pixels,
         output_dir=output_dir,
         primitive_refs=primitive_refs,
@@ -161,7 +160,6 @@ def extract_m31_reconstruction_ui_tree(
 
 @dataclass
 class TreeBuildContext:
-    source_png: bytes
     pixels: PngPixels
     output_dir: Path
     primitive_refs: list[PrimitiveRef]
@@ -374,7 +372,7 @@ def add_unit(
     asset_path = Path("m31_unit_fallback_assets") / f"{unit_id}.png"
     full_asset_path = context.output_dir / asset_path
     full_asset_path.parent.mkdir(parents=True, exist_ok=True)
-    full_asset_path.write_bytes(crop_png(context.source_png, PngRegion(unit_id, clamped[0], clamped[1], clamped[2], clamped[3])))
+    full_asset_path.write_bytes(crop_pixels_to_png(context.pixels, PngRegion(unit_id, clamped[0], clamped[1], clamped[2], clamped[3])))
 
     source_refs = unit_source_refs(primitive_refs)
     unit = {

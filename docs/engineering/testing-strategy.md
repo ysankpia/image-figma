@@ -157,6 +157,7 @@ Required M31 coverage:
 - same-size/same-spacing unit candidates can form repeated groups.
 - every emitted reconstruction unit has a fallback crop asset.
 - fallback crop bbox stays inside source image bounds.
+- M31 fallback crops are generated from decoded `PngPixels`, not by calling compressed PNG crop helpers per unit.
 - review bucket reasons use generic terms.
 - business/page-specific forbidden terms are absent from M31 tree/report.
 - `createdDetectionBBoxCount = 0`.
@@ -164,6 +165,15 @@ Required M31 coverage:
 - M31 does not rewrite source M29 JSON.
 - M31 upload diagnostics do not change M30 DSL, Renderer behavior, or plugin contract.
 - production upload profile skips M31 overlay; development upload profile writes it.
+
+M31.1.1 performance regression guard:
+
+```bash
+cd backend
+uv run pytest tests/test_png_tools.py tests/test_reconstruction_ui_tree.py tests/test_m30_upload_pipeline.py -q
+```
+
+The tests must cover decoded-pixels crop correctness and assert that `reconstruction_ui_tree.py` no longer references `crop_png`.
 
 ## Static Guards
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 from pathlib import Path
 
 import pytest
 
-from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata
+import app.reconstruction_ui_tree as reconstruction_ui_tree
+from app.png_tools import PngPixels, decode_png_pixels, encode_rgb_png, read_png_metadata
 from app.reconstruction_ui_tree import extract_m31_reconstruction_ui_tree, find_m31_forbidden_terms
 
 
@@ -37,9 +39,12 @@ def test_m31_builds_root_primitive_refs_units_and_fallbacks(tmp_path: Path) -> N
         assert fallback["cropBBox"] == unit["bbox"]
         asset = next(item for item in tree["assets"] if item["id"] == fallback["assetId"])
         metadata = read_png_metadata((result.output_dir / asset["path"]).read_bytes())
+        crop_pixels = decode_png_pixels((result.output_dir / asset["path"]).read_bytes())
         assert metadata is not None
         assert metadata.width == unit["bbox"][2]
         assert metadata.height == unit["bbox"][3]
+        assert crop_pixels.width == unit["bbox"][2]
+        assert crop_pixels.height == unit["bbox"][3]
 
 
 def test_container_like_shape_owns_inner_primitives(tmp_path: Path) -> None:
@@ -138,6 +143,11 @@ def test_invalid_review_reason_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="not allowed"):
         add_review_bucket(dummy_context(tmp_path), "bad_reason", [])
+
+
+def test_m31_unit_fallback_crop_does_not_use_compressed_png_cropper() -> None:
+    module_source = inspect.getsource(reconstruction_ui_tree)
+    assert "crop_png" not in module_source
 
 
 def run_m31(tmp_path: Path, source: Path, ocr: dict, m29: dict, *, profile: str = "development"):
@@ -265,7 +275,6 @@ def dummy_context(tmp_path: Path):
 
     pixels = make_canvas(8, 8)
     return TreeBuildContext(
-        source_png=encode_rgb_png(8, 8, pixels.rows),
         pixels=pixels,
         output_dir=tmp_path,
         primitive_refs=[],

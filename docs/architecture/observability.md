@@ -31,6 +31,8 @@ forbiddenHitCount
 
 这些是结构质量指标，不是视觉相似度指标。M31 默认非阻塞失败；失败时 `stage_timings.json` 会记录 failed `m31_reconstruction`，同时写入 `error_logs`。
 
+M31.1.1 修正了 fallback crop 性能路径：unit fallback crops 从已解码 `PngPixels` 裁剪，不再对每个 unit 重新解码整张 PNG。若同类图的 `m31_reconstruction` 再次接近百秒，应优先检查是否回退到了 compressed PNG crop path。
+
 ## Logs
 
 后端任务日志至少包含：

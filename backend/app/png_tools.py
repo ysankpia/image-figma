@@ -150,6 +150,21 @@ def crop_png(data: bytes, region: PngRegion) -> bytes:
     )
 
 
+def crop_pixels_to_png(pixels: PngPixels, region: PngRegion) -> bytes:
+    if region.x < 0 or region.y < 0 or region.width <= 0 or region.height <= 0:
+        raise UnsupportedPngCropError("Crop region is invalid.")
+    if region.x + region.width > pixels.width or region.y + region.height > pixels.height:
+        raise UnsupportedPngCropError("Crop region exceeds image bounds.")
+
+    cropped_rows: list[bytes] = []
+    for row_index in range(region.y, region.y + region.height):
+        row = pixels.rows[row_index]
+        start = region.x * 3
+        end = start + region.width * 3
+        cropped_rows.append(row[start:end])
+    return encode_rgb_png(region.width, region.height, cropped_rows)
+
+
 def encode_rgb_png(width: int, height: int, rows: list[bytes]) -> bytes:
     if width <= 0 or height <= 0:
         raise UnsupportedPngCropError("PNG dimensions must be positive.")
