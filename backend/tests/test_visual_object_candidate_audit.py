@@ -417,3 +417,25 @@ def make_canvas(width: int, height: int, fill: tuple[int, int, int] = (255, 255,
 
 def pixels_to_png(canvas: PngPixels) -> bytes:
     return encode_rgb_png(canvas.width, canvas.height, canvas.rows)
+
+
+def test_isolated_text_box_is_preserved_as_rejected_text_cluster(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100)
+    m2902 = {"textBoxes": [text_box("text_isolated", [10, 10, 40, 15], "Hello")]}
+    document = extract_visual_object_candidate_audit(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2903_document={"items": []},
+        m2903_visual_evidence_json_path="/tmp/m29_0_3/visual_evidence.json",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+    )
+    assert len(document.objects) == 1
+    obj = document.objects[0]
+    assert obj.object_kind == "text_cluster"
+    assert obj.decision == "rejected"
+    assert len(obj.members) == 1
+    assert obj.members[0].source_id == "text_isolated"
+    assert obj.members[0].member_role == "text"
+

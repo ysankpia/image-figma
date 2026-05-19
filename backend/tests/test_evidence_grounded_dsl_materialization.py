@@ -328,6 +328,7 @@ def m2905_document(
     visual_assets: list[dict] | None = None,
     shape_candidates: list[dict] | None = None,
     text_risks: list[str] | None = None,
+    text_members: list[dict] | None = None,
 ) -> dict:
     visual_asset_path = write_png(root / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(18, 18))
     return {
@@ -337,7 +338,7 @@ def m2905_document(
         "objects": [],
         "visualAssets": visual_assets if visual_assets is not None else [visual_asset("visual_asset_0001", [60, 10, 18, 18], str(visual_asset_path.relative_to(root)))],
         "shapeCandidates": shape_candidates if shape_candidates is not None else [shape_candidate("shape_0001", [10, 40, 50, 20], color="#AABBCC")],
-        "textMembers": [
+        "textMembers": text_members if text_members is not None else [
             {
                 "id": "text_member_0001",
                 "sourceObjectId": "object_001",
@@ -353,6 +354,23 @@ def m2905_document(
                 "previewAssetPath": None,
             }
         ],
+    }
+
+
+def text_member(id: str, bbox: list[int], text: str, risks: list[str] | None = None) -> dict:
+    return {
+        "id": id,
+        "sourceObjectId": "object_001",
+        "source": "m2902_text_box",
+        "sourceEvidenceNodeId": "evidence_text_001",
+        "sourceTextBoxId": "ocr_001",
+        "bbox": bbox,
+        "textPreview": text,
+        "text": text,
+        "confidence": 0.96,
+        "risks": risks or [],
+        "reasons": ["text_member_from_existing_object_member"],
+        "previewAssetPath": None,
     }
 
 
@@ -444,3 +462,150 @@ def make_noisy_text_edge_canvas(width: int, height: int, bbox: list[int]) -> Png
 
 def count_children(dsl: dict, role: str) -> int:
     return sum(1 for child in dsl["root"]["children"] if child.get("role") == role)
+
+
+def test_mask_bboxes_injection_into_fallback_regions(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(10, 10))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_0001", [15, 15, 10, 10], str(visual_asset_path.relative_to(m2905_dir))),
+        ],
+        shape_candidates=[]
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    fallback_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "fallback_region")
+    assert "maskBBoxes" in fallback_node["meta"]
+    mask_bboxes = fallback_node["meta"]["maskBBoxes"]
+    
+    assert [10, 10, 40, 12] in mask_bboxes
+    assert [15, 15, 10, 10] in mask_bboxes
+
+
+def test_text_font_size_harmonization(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(300, 200))
+    m2905_dir = tmp_path / "m29_0_5"
+    
+    # We create 3 text elements:
+    # 1. "推荐" at y=50, height=22 (initial font size round(22*0.82) = 18)
+    # 2. "穿搭" at y=52, height=18 (initial font size round(18*0.82) = 15)
+    # 3. "美妆" at y=52, height=18 (initial font size round(18*0.82) = 15)
+    # These three are horizontally aligned (y_centers: 61, 61, 61) and have similar initial sizes (18, 15, 15).
+    # Since difference <= 3, they should be harmonized to their median: 15.
+    
+    # We also add another element in the same row that has a very different size:
+    # 4. "10:00" at y=55, height=10 (initial font size round(10*0.82) = 8).
+    # This element should not be harmonized (difference to 15 is 7 > 3).
+    
+    # And another element on a completely different row:
+    # 5. "列表标题" at y=120, height=20 (initial font size round(20*0.82) = 16).
+    # This should not be harmonized with the first row.
+    
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[
+            text_member("text_0001", [10, 50, 40, 22], "推荐"),
+            text_member("text_0002", [60, 52, 40, 18], "穿搭"),
+            text_member("text_0003", [110, 52, 40, 18], "美妆"),
+            text_member("text_0004", [200, 55, 30, 10], "10:00"),
+            text_member("text_0005", [10, 120, 80, 20], "列表标题"),
+        ]
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    children = result.dsl["root"]["children"]
+    text_nodes = {c["name"]: c for c in children if c.get("type") == "text" and c.get("role") == "m30_text_member"}
+    
+    # Assert harmonization worked on the first row
+    assert text_nodes["M30 Text / text_0001"]["style"]["fontSize"] == 15
+    assert text_nodes["M30 Text / text_0002"]["style"]["fontSize"] == 15
+    assert text_nodes["M30 Text / text_0003"]["style"]["fontSize"] == 15
+    
+    # Assert the small element in same row was not harmonized
+    assert text_nodes["M30 Text / text_0004"]["style"]["fontSize"] == 8
+    
+    # Assert the element in the other row was not harmonized
+    assert text_nodes["M30 Text / text_0005"]["style"]["fontSize"] == 16
+
+
+def test_text_font_size_harmonization_mode_snapping(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(1000, 300))
+    m2905_dir = tmp_path / "m29_0_5"
+    
+    # We create a horizontal tab bar row with multiple noisy sizes:
+    # 1. "推荐" (height 46 -> fs 38)
+    # 2. "穿搭" (height 36 -> fs 30)
+    # 3. "美妆" (height 36 -> fs 30)
+    # 4. "旅行" (height 36 -> fs 30)
+    # 5. "探店" (height 42 -> fs 34)
+    # 6. "家居" (height 36 -> fs 30)
+    # 7. "美食" (height 31 -> fs 25)
+    # 8. "三" (height 25 -> fs 20)
+    # Mode is 30. Adaptive threshold is max(3, min(6, round(30 * 0.18))) = 5.
+    # Snapping range is [25, 35].
+    # Expected: "穿搭", "美妆", "旅行", "探店", "家居", "美食" snap to 30.
+    # "推荐" (38) and "三" (20) remain unchanged.
+    
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[
+            text_member("text_0001", [32, 167, 78, 46], "推荐"),
+            text_member("text_0002", [152, 171, 63, 36], "穿搭"),
+            text_member("text_0003", [263, 171, 63, 36], "美妆"),
+            text_member("text_0004", [375, 173, 61, 36], "旅行"),
+            text_member("text_0005", [483, 168, 64, 42], "探店"),
+            text_member("text_0006", [594, 173, 59, 36], "家居"),
+            text_member("text_0007", [703, 175, 57, 31], "美食"),
+            text_member("text_0008", [796, 177, 25, 25], "三"),
+        ]
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    children = result.dsl["root"]["children"]
+    text_nodes = {c["name"]: c for c in children if c.get("type") == "text" and c.get("role") == "m30_text_member"}
+    
+    # Mode-snapped elements should all be 30
+    assert text_nodes["M30 Text / text_0002"]["style"]["fontSize"] == 30
+    assert text_nodes["M30 Text / text_0003"]["style"]["fontSize"] == 30
+    assert text_nodes["M30 Text / text_0004"]["style"]["fontSize"] == 30
+    assert text_nodes["M30 Text / text_0005"]["style"]["fontSize"] == 30
+    assert text_nodes["M30 Text / text_0006"]["style"]["fontSize"] == 30
+    assert text_nodes["M30 Text / text_0007"]["style"]["fontSize"] == 30
+    
+    # Non-snapped elements
+    assert text_nodes["M30 Text / text_0001"]["style"]["fontSize"] == 36 # max capped at 36
+    assert text_nodes["M30 Text / text_0008"]["style"]["fontSize"] == 20
+
+

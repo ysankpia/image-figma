@@ -690,6 +690,9 @@ def build_object_candidates(
         elif node.node_kind in {"noise", "weak_visual_text_noise"} and object_forming_visual_side(node):
             objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "uncertain_compound", "uncertain", [node], [], options))
             used_nodes.add(node.id)
+        elif node.node_kind == "text":
+            objects.append(make_object(pixels, output_dir, f"voc_{len(objects) + 1:04d}", "text_cluster", "rejected", [node], [], options))
+            used_nodes.add(node.id)
     return dedupe_objects(objects)
 
 

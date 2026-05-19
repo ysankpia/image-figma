@@ -26,9 +26,12 @@
 - 当前 M30.2 conservative text cover 计划：[plans/active/030-2-conservative-text-cover.md](plans/active/030-2-conservative-text-cover.md)
 - M30.2.1 legacy pre-M29 surface freeze 计划，已被 M30.2.2 取代：[plans/active/030-2-1-legacy-pre-m29-surface-freeze.md](plans/active/030-2-1-legacy-pre-m29-surface-freeze.md)
 - 当前 M30.2.2 remove frozen pre-M29 backend chain 计划：[plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md](plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md)
+- 当前 M30.3 text font size harmonization 计划：[plans/active/030-3-text-font-size-harmonization.md](plans/active/030-3-text-font-size-harmonization.md)
+- 当前 M30.4 preserve isolated text nodes in candidate audit 计划：[plans/active/030-4-preserve-isolated-text-nodes-in-candidate-audit.md](plans/active/030-4-preserve-isolated-text-nodes-in-candidate-audit.md)
 - 当前 M31 reconstruction UI tree 计划：[plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md](plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md)
 - 当前 M31.1 upload diagnostics 计划：[plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md](plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md)
 - 当前 M31.1.1 decoded-pixels fallback crop 计划：[plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md](plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md)
+- 当前 M32 figma boolean subtract 和 backend rgba masking 计划：[plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md](plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md)
 
 ## By Task Type
 

@@ -201,6 +201,7 @@ def materialize_evidence_grounded_dsl(
     skipped_text_cover: list[M30SkippedItem] = []
 
     append_text_nodes(existing_ids, m2905_document, image, options, pending_text_nodes, skipped)
+    harmonize_text_font_sizes(pending_text_nodes, options)
     append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
     append_text_cover_nodes(
@@ -224,6 +225,7 @@ def materialize_evidence_grounded_dsl(
 
     audit_refs = collect_audit_only_references(m2905_document)
     preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text_cover, *materialized_text]) if emit_preview_artifacts else None
+    inject_mask_bboxes_to_fallback_regions(dsl, materialized_text, materialized_image)
     update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_text_cover, materialized_shape, materialized_image, audit_refs)
 
     output_dsl_path = output_dir / "m30_materialized_dsl.json"
@@ -287,6 +289,125 @@ def build_bootstrap_dsl(source_path: Path, image: PngMetadata, output_dir: Path)
         regions=None,
         quality_flags=["m30_bootstrap_full_image_fallback"],
     )
+
+def harmonize_text_font_sizes(pending_nodes: list[M30PendingNode], options: M30Options) -> None:
+    """
+    Harmonize the font sizes of text nodes that are horizontally aligned (in the same row)
+    and have similar initial font sizes, reducing OCR measurement noise.
+    """
+    if not pending_nodes:
+        return
+
+    # Extract relevant info from text nodes
+    text_items = []
+    for p_node in pending_nodes:
+        node = p_node.node
+        layout = node.get("layout", {})
+        x = layout.get("x", 0)
+        y = layout.get("y", 0)
+        w = layout.get("width", 0)
+        h = layout.get("height", 0)
+        style = node.get("style", {})
+        fs = style.get("fontSize", 12)
+        text_items.append({
+            "pending_node": p_node,
+            "x": x,
+            "y": y,
+            "width": w,
+            "height": h,
+            "y_center": y + h / 2.0,
+            "initial_fs": fs
+        })
+
+    # Sort text items by Y-center to process them row-by-row
+    text_items.sort(key=lambda item: item["y_center"])
+
+    # Cluster horizontally aligned text items into horizontal rows
+    rows: list[list[dict[str, Any]]] = []
+    for item in text_items:
+        added = False
+        # Try to fit the item into an existing row
+        for row in rows:
+            # We check if y_center of this item is close to the average/representative y_center of the row
+            representative = row[0]
+            rep_h = representative["height"]
+            curr_h = item["height"]
+            min_h = min(rep_h, curr_h)
+            max_y_center_diff = max(8.0, min_h * 0.4)
+            if abs(item["y_center"] - representative["y_center"]) <= max_y_center_diff:
+                row.append(item)
+                added = True
+                break
+        if not added:
+            rows.append([item])
+
+    # Harmonize each row using iterative mode-based snapping
+    for row in rows:
+        if len(row) < 2:
+            continue
+            
+        remaining = list(row)
+        while len(remaining) >= 2:
+            # Count frequencies of remaining items
+            freqs = {}
+            for item in remaining:
+                fs = item["initial_fs"]
+                freqs[fs] = freqs.get(fs, 0) + 1
+            
+            # Find the mode (highest frequency, breaking ties with larger size)
+            max_freq = -1
+            mode_fs = -1
+            for fs, freq in freqs.items():
+                if freq > max_freq:
+                    max_freq = freq
+                    mode_fs = fs
+                elif freq == max_freq and fs > mode_fs:
+                    mode_fs = fs
+            
+            # If the mode only has frequency 1, fallback to legacy grouping (diff <= 3)
+            if max_freq == 1:
+                remaining.sort(key=lambda x: x["initial_fs"])
+                sub_groups = []
+                for item in remaining:
+                    grouped = False
+                    for g in sub_groups:
+                        if abs(item["initial_fs"] - g[0]["initial_fs"]) <= 3:
+                            g.append(item)
+                            grouped = True
+                            break
+                    if not grouped:
+                        sub_groups.append([item])
+                
+                for g in sub_groups:
+                    if len(g) >= 2:
+                        sizes = sorted([x["initial_fs"] for x in g])
+                        n = len(sizes)
+                        median_fs = sizes[n // 2] if n % 2 == 1 else round((sizes[n // 2 - 1] + sizes[n // 2]) / 2)
+                        for x in g:
+                            x["pending_node"].node["style"]["fontSize"] = int(median_fs)
+                break
+
+            # Snapping threshold: adaptive based on the mode size (18% of size, min 3, max 6)
+            threshold = max(3, min(6, round(mode_fs * 0.18)))
+            
+            # Identify all items that are close to the mode
+            snapped_group = []
+            next_remaining = []
+            for item in remaining:
+                if abs(item["initial_fs"] - mode_fs) <= threshold:
+                    snapped_group.append(item)
+                else:
+                    next_remaining.append(item)
+            
+            # Apply mode_fs to the snapped group
+            for item in snapped_group:
+                item["pending_node"].node["style"]["fontSize"] = int(mode_fs)
+            
+            # Safety check to avoid infinite loop
+            if len(next_remaining) == len(remaining):
+                break
+                
+            remaining = next_remaining
 
 
 def append_text_nodes(
@@ -590,6 +711,53 @@ def collect_audit_only_references(m2905_document: dict[str, Any]) -> list[dict[s
         if item.get("combinedAssetUse") == "audit_only":
             refs.append({"sourceKind": "m2905_refined_object", "id": item.get("id"), "reason": "audit_only_source"})
     return refs
+
+
+def inject_mask_bboxes_to_fallback_regions(
+    dsl: dict[str, Any],
+    materialized_text: list[M30MaterializedNode],
+    materialized_image: list[M30MaterializedNode],
+) -> None:
+    mask_bboxes = []
+    for node in materialized_text:
+        mask_bboxes.append(node.bbox)
+    for node in materialized_image:
+        mask_bboxes.append(node.bbox)
+
+    def bbox_intersects(box1: list[int], box2: list[int]) -> bool:
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+        return not (x1 + w1 <= x2 or x2 + w2 <= x1 or y1 + h1 <= y2 or y2 + h2 <= y1)
+
+    def find_and_inject(element: dict[str, Any]) -> None:
+        if not isinstance(element, dict):
+            return
+        if element.get("role") == "fallback_region":
+            meta = element.get("meta")
+            if not isinstance(meta, dict):
+                meta = {}
+                element["meta"] = meta
+            
+            layout = element.get("layout") or {}
+            rx = int(layout.get("x", 0))
+            ry = int(layout.get("y", 0))
+            rw = int(layout.get("width", 0))
+            rh = int(layout.get("height", 0))
+            region_bbox = meta.get("sourceBBox") or [rx, ry, rw, rh]
+            
+            region_mask_bboxes = []
+            for bbox in mask_bboxes:
+                if bbox_intersects(bbox, region_bbox):
+                    region_mask_bboxes.append(bbox)
+            
+            meta["maskBBoxes"] = region_mask_bboxes
+        
+        for child in element.get("children", []):
+            if isinstance(child, dict):
+                find_and_inject(child)
+
+    if "root" in dsl:
+        find_and_inject(dsl["root"])
 
 
 def update_dsl_meta(
