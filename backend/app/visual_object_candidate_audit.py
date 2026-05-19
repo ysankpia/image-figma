@@ -257,17 +257,21 @@ class EdgeAuditItem:
 
 @dataclass(frozen=True)
 class M2904DebugArtifacts:
-    visual_object_candidates: str
-    visual_object_edges: str
-    split_candidates: str
-    visual_object_sets: str
+    visual_object_candidates: str | None = None
+    visual_object_edges: str | None = None
+    split_candidates: str | None = None
+    visual_object_sets: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {
-            "visualObjectCandidates": self.visual_object_candidates,
-            "visualObjectEdges": self.visual_object_edges,
-            "splitCandidates": self.split_candidates,
-            "visualObjectSets": self.visual_object_sets,
+            key: value
+            for key, value in {
+                "visualObjectCandidates": self.visual_object_candidates,
+                "visualObjectEdges": self.visual_object_edges,
+                "splitCandidates": self.split_candidates,
+                "visualObjectSets": self.visual_object_sets,
+            }.items()
+            if value is not None
         }
 
 
@@ -322,6 +326,8 @@ def extract_visual_object_candidate_audit(
     options: M2904Options | None = None,
     m2907_ownership_document: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> M2904Document:
     options = options or M2904Options()
     source_expansion_refs = source_expansion_refs or M2904SourceExpansionRefs(m2902_media_evidence_json=m2902_audit_json_path)
@@ -333,9 +339,12 @@ def extract_visual_object_candidate_audit(
     edge_audit = [EdgeAuditItem(edge.id, edge.left_id, edge.right_id, edge.decision, edge.score, edge.reasons, edge.risks, edge.metrics) for edge in evidence_edges]
     objects = build_object_candidates(pixels, output_dir, evidence_nodes, evidence_edges, options)
     sets = build_set_candidates(objects, evidence_edges, options)
-    debug = write_debug_artifacts(pixels, output_dir, evidence_nodes, objects, sets, evidence_edges)
-    preview_path = output_dir / "preview_visual_objects.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, objects, sets, options))
+    debug = M2904DebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_artifacts(pixels, output_dir, evidence_nodes, objects, sets, evidence_edges)
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_visual_objects.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, objects, sets, options))
     document = M2904Document(
         schema_name="M2904GenericVisualObjectCandidateAuditDocument",
         schema_version="0.1",
@@ -353,7 +362,13 @@ def extract_visual_object_candidate_audit(
         warnings=[*(warnings or []), *ownership_warnings, *node_warnings],
         meta=build_meta(evidence_nodes, evidence_edges, objects, sets),
     )
-    validate_visual_object_candidate_audit_document(document, output_dir, pixels.width, pixels.height)
+    validate_visual_object_candidate_audit_document(
+        document,
+        output_dir,
+        pixels.width,
+        pixels.height,
+        require_preview_artifacts=emit_preview_artifacts,
+    )
     write_outputs(document, output_dir)
     return document
 
@@ -903,7 +918,14 @@ def build_markdown_report(document: M2904Document) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def validate_visual_object_candidate_audit_document(document: M2904Document, output_dir: Path, width: int, height: int) -> None:
+def validate_visual_object_candidate_audit_document(
+    document: M2904Document,
+    output_dir: Path,
+    width: int,
+    height: int,
+    *,
+    require_preview_artifacts: bool = True,
+) -> None:
     if document.schema_name != "M2904GenericVisualObjectCandidateAuditDocument" or document.schema_version != "0.1":
         raise ValueError("invalid M29.0.4 document schema")
     node_ids = assert_unique([node.id for node in document.evidence_nodes], "evidence node")
@@ -947,7 +969,8 @@ def validate_visual_object_candidate_audit_document(document: M2904Document, out
         metadata = assert_readable_relative_png(output_dir, path)
         if metadata.width != width or metadata.height != height:
             raise ValueError(f"M29.0.4 overlay dimensions do not match source image: {path}")
-    assert_readable_relative_png(output_dir, "preview_visual_objects.png")
+    if require_preview_artifacts:
+        assert_readable_relative_png(output_dir, "preview_visual_objects.png")
 
 
 def assert_readable_relative_png(output_dir: Path, path: str):

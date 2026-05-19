@@ -100,6 +100,8 @@ def get_task_m30_materialization(task_id: str) -> dict[str, object]:
         )
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    timings_path = report_path.parent.parent / "stage_timings.json"
+    timings = json.loads(timings_path.read_text(encoding="utf-8")) if timings_path.exists() else None
     debug = report.get("debug") if isinstance(report.get("debug"), dict) else {}
     preview = debug.get("materializationPreview") if isinstance(debug, dict) else None
     data: dict[str, object] = {
@@ -111,6 +113,7 @@ def get_task_m30_materialization(task_id: str) -> dict[str, object]:
         "skippedItems": report.get("skippedItems", []),
         "debugPreviewPath": str(report_path.parent / preview) if isinstance(preview, str) else None,
         "outputDsl": report.get("outputDsl"),
+        "stageTimings": timings,
     }
     return success_response(data)
 

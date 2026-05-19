@@ -263,19 +263,23 @@ class TextVisualSeparationAuditItem:
 
 @dataclass(frozen=True)
 class M2905DebugArtifacts:
-    visual_assets: str
-    text_members: str
-    text_visual_separation: str
-    unresolved_refinement: str
-    shape_candidates: str
+    visual_assets: str | None = None
+    text_members: str | None = None
+    text_visual_separation: str | None = None
+    unresolved_refinement: str | None = None
+    shape_candidates: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {
-            "visualAssets": self.visual_assets,
-            "textMembers": self.text_members,
-            "textVisualSeparation": self.text_visual_separation,
-            "unresolvedRefinement": self.unresolved_refinement,
-            "shapeCandidates": self.shape_candidates,
+            key: value
+            for key, value in {
+                "visualAssets": self.visual_assets,
+                "textMembers": self.text_members,
+                "textVisualSeparation": self.text_visual_separation,
+                "unresolvedRefinement": self.unresolved_refinement,
+                "shapeCandidates": self.shape_candidates,
+            }.items()
+            if value is not None
         }
 
 
@@ -335,6 +339,8 @@ def extract_text_aware_visual_object_refinement(
     source_expansion_refs: M2905SourceExpansionRefs | None = None,
     options: M2905Options | None = None,
     warnings: list[str] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> M2905Document:
     options = options or M2905Options()
     source_expansion_refs = source_expansion_refs or M2905SourceExpansionRefs()
@@ -347,9 +353,12 @@ def extract_text_aware_visual_object_refinement(
         lookups=lookups,
         options=options,
     )
-    debug = write_debug_artifacts(pixels, output_dir, objects, visual_assets, shape_candidates, text_members, unresolved_members)
-    preview_path = output_dir / "preview_text_aware_refinement.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, objects, visual_assets, shape_candidates, text_members, unresolved_members, options))
+    debug = M2905DebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_artifacts(pixels, output_dir, objects, visual_assets, shape_candidates, text_members, unresolved_members)
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_text_aware_refinement.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, objects, visual_assets, shape_candidates, text_members, unresolved_members, options))
     document = M2905Document(
         schema_name="M2905TextAwareVisualObjectRefinementDocument",
         schema_version="0.1",
@@ -369,7 +378,15 @@ def extract_text_aware_visual_object_refinement(
         warnings=warnings or [],
         meta=build_meta(objects, visual_assets, shape_candidates, text_members, unresolved_members, audit),
     )
-    validate_text_aware_visual_object_refinement_document(document, output_dir, pixels.width, pixels.height, m2904_document, m2902_document)
+    validate_text_aware_visual_object_refinement_document(
+        document,
+        output_dir,
+        pixels.width,
+        pixels.height,
+        m2904_document,
+        m2902_document,
+        require_preview_artifacts=emit_preview_artifacts,
+    )
     write_outputs(document, output_dir)
     return document
 
@@ -1135,7 +1152,16 @@ def build_markdown_report(document: M2905Document) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def validate_text_aware_visual_object_refinement_document(document: M2905Document, output_dir: Path, width: int, height: int, m2904_document: dict[str, Any], m2902_document: dict[str, Any]) -> None:
+def validate_text_aware_visual_object_refinement_document(
+    document: M2905Document,
+    output_dir: Path,
+    width: int,
+    height: int,
+    m2904_document: dict[str, Any],
+    m2902_document: dict[str, Any],
+    *,
+    require_preview_artifacts: bool = True,
+) -> None:
     if document.schema_name != "M2905TextAwareVisualObjectRefinementDocument" or document.schema_version != "0.1":
         raise ValueError("invalid M29.0.5 document schema")
     source_objects = {str(item.get("id")): item for item in m2904_document.get("objects", []) if isinstance(item, dict) and item.get("id")}
@@ -1233,7 +1259,8 @@ def validate_text_aware_visual_object_refinement_document(document: M2905Documen
         metadata = assert_readable_png(output_dir, path)
         if metadata.width != width or metadata.height != height:
             raise ValueError(f"M29.0.5 overlay dimensions do not match source image: {path}")
-    assert_readable_png(output_dir, "preview_text_aware_refinement.png")
+    if require_preview_artifacts:
+        assert_readable_png(output_dir, "preview_text_aware_refinement.png")
 
 
 def assert_png_size(output_dir: Path, path: str, bbox: list[int]) -> None:

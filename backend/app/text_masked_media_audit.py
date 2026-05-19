@@ -102,17 +102,21 @@ class MediaEvidenceItem:
 
 @dataclass(frozen=True)
 class TextMaskedDebugArtifacts:
-    text_mask: str
-    text_suppressed_analysis: str
-    media_before_after: str
-    media_evidence_map: str
+    text_mask: str | None = None
+    text_suppressed_analysis: str | None = None
+    media_before_after: str | None = None
+    media_evidence_map: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {
-            "textMask": self.text_mask,
-            "textSuppressedAnalysis": self.text_suppressed_analysis,
-            "mediaBeforeAfter": self.media_before_after,
-            "mediaEvidenceMap": self.media_evidence_map,
+            key: value
+            for key, value in {
+                "textMask": self.text_mask,
+                "textSuppressedAnalysis": self.text_suppressed_analysis,
+                "mediaBeforeAfter": self.media_before_after,
+                "mediaEvidenceMap": self.media_evidence_map,
+            }.items()
+            if value is not None
         }
 
 
@@ -168,6 +172,8 @@ def extract_text_masked_media_audit(
     regions: list[MediaAuditRegion] | None = None,
     options: TextMaskedMediaAuditOptions | None = None,
     warnings: list[str] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> TextMaskedMediaAuditDocument:
     options = options or TextMaskedMediaAuditOptions()
     pixels = decode_png_pixels(png_data)
@@ -184,6 +190,8 @@ def extract_text_masked_media_audit(
         output_dir=output_dir / "m29_original",
         options=M29VisualPrimitiveOptions(),
         text_boxes=[],
+        emit_debug_artifacts=emit_debug_artifacts,
+        emit_preview_artifacts=emit_preview_artifacts,
     ).to_dict()
     after_document = extract_m29_visual_primitive_graph(
         png_data=suppressed_png,
@@ -191,6 +199,8 @@ def extract_text_masked_media_audit(
         output_dir=output_dir / "m29_text_suppressed",
         options=M29VisualPrimitiveOptions(),
         text_boxes=text_boxes,
+        emit_debug_artifacts=emit_debug_artifacts,
+        emit_preview_artifacts=emit_preview_artifacts,
     ).to_dict()
 
     image_mask = mask_from_bboxes(
@@ -210,17 +220,20 @@ def extract_text_masked_media_audit(
         options=options,
     )
 
-    debug = write_debug_artifacts(
-        pixels=pixels,
-        output_dir=output_dir,
-        text_mask=text_mask,
-        suppressed_pixels=suppressed_pixels,
-        before_document=before_document,
-        after_document=after_document,
-        evidence=media_evidence,
-    )
-    preview_path = output_dir / "preview_text_masked_media_audit.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, suppressed_pixels, output_dir, debug, media_evidence, options))
+    debug = TextMaskedDebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_artifacts(
+            pixels=pixels,
+            output_dir=output_dir,
+            text_mask=text_mask,
+            suppressed_pixels=suppressed_pixels,
+            before_document=before_document,
+            after_document=after_document,
+            evidence=media_evidence,
+        )
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_text_masked_media_audit.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, suppressed_pixels, output_dir, debug, media_evidence, options))
 
     document = TextMaskedMediaAuditDocument(
         schema_name="M2902TextMaskedMediaAuditDocument",

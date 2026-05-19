@@ -379,6 +379,8 @@ def extract_m29_visual_primitive_graph(
     output_dir: Path,
     options: M29VisualPrimitiveOptions | None = None,
     text_boxes: list[M29TextBox] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> M29VisualPrimitiveGraphDocument:
     options = options or M29VisualPrimitiveOptions()
     image = read_png_metadata(png_data)
@@ -413,21 +415,24 @@ def extract_m29_visual_primitive_graph(
     nodes = export_node_assets(nodes, pixels, output_dir)
     relations = build_containment_relations(nodes)
     nodes = attach_relation_children(nodes, relations)
-    debug = write_debug_overlays(
-        pixels=pixels,
-        output_dir=output_dir,
-        text_mask=text_mask,
-        initial_components=initial_components,
-        shapes=shapes,
-        images=images,
-        image_mask=image_mask,
-        foreground=foreground,
-        symbols=symbols,
-        nodes=nodes,
-        blocked=blocked,
-    )
-    preview_path = output_dir / "preview_sheet.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, nodes, blocked))
+    debug = M29DebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_overlays(
+            pixels=pixels,
+            output_dir=output_dir,
+            text_mask=text_mask,
+            initial_components=initial_components,
+            shapes=shapes,
+            images=images,
+            image_mask=image_mask,
+            foreground=foreground,
+            symbols=symbols,
+            nodes=nodes,
+            blocked=blocked,
+        )
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_sheet.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, nodes, blocked))
 
     document = M29VisualPrimitiveGraphDocument(
         version="0.1",

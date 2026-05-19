@@ -267,6 +267,8 @@ def extract_m291_symbol_fragment_grouping(
     source_image: str,
     output_dir: Path,
     options: M291Options | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> M291Document:
     options = options or M291Options()
     require_m29_0_1_document(m29_document)
@@ -283,9 +285,12 @@ def extract_m291_symbol_fragment_grouping(
     groups = export_group_assets(groups, pixels, output_dir)
     edge_audit = [M291EdgeAuditItem(edge.id, edge.left_id, edge.right_id, edge.decision, edge.score, edge.reasons, edge.metrics) for edge in edges]
     asset_audit = build_asset_audit(candidates, edges, groups, options)
-    debug = write_m291_overlays(pixels, output_dir, candidates, groups, asset_audit)
-    preview_path = output_dir / "preview_sheet.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, candidates, groups))
+    debug = M291DebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_m291_overlays(pixels, output_dir, candidates, groups, asset_audit)
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_sheet.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, candidates, groups))
     meta = build_m291_meta(candidates, edges, groups, asset_audit)
     document = M291Document(
         schema_name="M291SymbolFragmentGroupingDocument",

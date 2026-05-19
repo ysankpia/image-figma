@@ -41,6 +41,23 @@ receive multipart PNG at /api/upload-m30-preview
 
 This pipeline is the plugin preview main path. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M24 visible fallback, M26-M28, Auto Layout, Figma Component/Instance, SVG/vectorization, text cover, or any 图标恢复 path.
 
+M30.1 separates artifact profiles:
+
+```text
+development: keep full M29/M30 diagnostic overlays, preview sheets, and review crops
+production: keep only OCR, structured JSON, formal M29.0.5 assets, M30 DSL/report, published renderer assets, and stage timings
+```
+
+`M30_PREVIEW_PROFILE=production` is the default for `/api/upload-m30-preview`. It reduces plugin-preview runtime artifact generation without changing OCR, M29 classification rules, M30 DSL schema, renderer behavior, or legacy `/api/upload`. M29/M30 single-stage scripts keep their development-style defaults unless they explicitly opt out of debug/preview artifacts.
+
+Each M30.1 task writes:
+
+```text
+backend/storage/m30_1_uploads/{taskId}/stage_timings.json
+```
+
+`GET /api/tasks/{taskId}/m30-materialization` returns those stage timings together with the M30 materialization summary.
+
 M28 当前上传管线：
 
 ```text

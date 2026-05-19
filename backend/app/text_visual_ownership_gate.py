@@ -85,17 +85,21 @@ class OwnershipDecision:
 
 @dataclass(frozen=True)
 class M2907DebugArtifacts:
-    text_owned: str
-    visual_owned: str
-    mixed_or_uncertain: str
-    object_forming_allowed: str
+    text_owned: str | None = None
+    visual_owned: str | None = None
+    mixed_or_uncertain: str | None = None
+    object_forming_allowed: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {
-            "textOwned": self.text_owned,
-            "visualOwned": self.visual_owned,
-            "mixedOrUncertain": self.mixed_or_uncertain,
-            "objectFormingAllowed": self.object_forming_allowed,
+            key: value
+            for key, value in {
+                "textOwned": self.text_owned,
+                "visualOwned": self.visual_owned,
+                "mixedOrUncertain": self.mixed_or_uncertain,
+                "objectFormingAllowed": self.object_forming_allowed,
+            }.items()
+            if value is not None
         }
 
 
@@ -142,6 +146,8 @@ def extract_text_visual_ownership_gate(
     output_dir: Path,
     options: M2907Options | None = None,
     warnings: list[str] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> M2907Document:
     options = options or M2907Options()
     pixels = decode_png_pixels(png_data)
@@ -149,10 +155,14 @@ def extract_text_visual_ownership_gate(
     text_boxes = valid_text_boxes(m2902_document, pixels.width, pixels.height, options)
     decisions = build_ownership_decisions(m2903_document, text_boxes, pixels.width, pixels.height, options)
     examples: list[dict[str, Any]] = []
-    export_examples(pixels, output_dir, decisions, options, examples)
-    debug = write_debug_artifacts(pixels, output_dir, decisions)
-    preview_path = output_dir / "preview_text_visual_ownership_gate.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, examples, options))
+    if emit_preview_artifacts:
+        export_examples(pixels, output_dir, decisions, options, examples)
+    debug = M2907DebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_artifacts(pixels, output_dir, decisions)
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_text_visual_ownership_gate.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, examples, options))
     document = M2907Document(
         schema_name="M2907TextVisualOwnershipGateDocument",
         schema_version="0.1",
@@ -167,7 +177,15 @@ def extract_text_visual_ownership_gate(
         warnings=warnings or [],
         meta=build_meta(decisions, examples),
     )
-    validate_text_visual_ownership_gate_document(document, output_dir, pixels.width, pixels.height, m2903_document, m2902_document)
+    validate_text_visual_ownership_gate_document(
+        document,
+        output_dir,
+        pixels.width,
+        pixels.height,
+        m2903_document,
+        m2902_document,
+        require_preview_artifacts=emit_preview_artifacts,
+    )
     write_outputs(document, output_dir)
     return document
 
@@ -661,7 +679,16 @@ def build_markdown_report(document: M2907Document) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def validate_text_visual_ownership_gate_document(document: M2907Document, output_dir: Path, width: int, height: int, m2903_document: dict[str, Any], m2902_document: dict[str, Any]) -> None:
+def validate_text_visual_ownership_gate_document(
+    document: M2907Document,
+    output_dir: Path,
+    width: int,
+    height: int,
+    m2903_document: dict[str, Any],
+    m2902_document: dict[str, Any],
+    *,
+    require_preview_artifacts: bool = True,
+) -> None:
     if document.schema_name != "M2907TextVisualOwnershipGateDocument" or document.schema_version != "0.1":
         raise ValueError("invalid M29.0.7 document schema")
     assert_unique([item.id for item in document.ownership_decisions], "ownership decision")
@@ -687,7 +714,8 @@ def validate_text_visual_ownership_gate_document(document: M2907Document, output
         metadata = assert_readable_relative_png(output_dir, path)
         if metadata.width != width or metadata.height != height:
             raise ValueError(f"M29.0.7 overlay dimensions do not match source image: {path}")
-    assert_readable_relative_png(output_dir, "preview_text_visual_ownership_gate.png")
+    if require_preview_artifacts:
+        assert_readable_relative_png(output_dir, "preview_text_visual_ownership_gate.png")
 
 
 def build_meta(decisions: list[OwnershipDecision], examples: list[dict[str, Any]]) -> dict[str, Any]:

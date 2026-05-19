@@ -113,6 +113,21 @@ M29.0.3 receives the M29.1 lineage document, so the M29.0.3.1 text-rejected line
 
 OCR failure is a task failure in M30.1. It must not create a fake completed M30 task with `textBoxes=0`.
 
+## Artifact Profile
+
+M30.1 uses `M30_PREVIEW_PROFILE` to separate development diagnostics from plugin runtime output:
+
+```text
+production   default for /api/upload-m30-preview
+development  full local diagnostics
+```
+
+`production` keeps only OCR JSON, M29/M29.1/M29.0.2/M29.0.3/M29.0.7/M29.0.4/M29.0.5 structured JSON, M29.0.5 formal visual assets used by M30 image nodes, M30 DSL/report, published M30 renderer assets, error logs, and `stage_timings.json`. It skips overlay PNGs, preview sheets, review/contact sheets, example crops, and the M30 materialization preview PNG.
+
+`development` preserves the previous full diagnostic output. M29/M30 single-stage scripts keep development-style output by default because their app-layer artifact flags default to `true`; only M30.1 production passes `false`.
+
+This profile does not change OCR provider behavior, M29 classification/ownership rules, M30 DSL schema, renderer behavior, plugin API shape, or legacy `/api/upload`.
+
 ## Asset URL Rules
 
 M30 materializer may emit local or relative asset URLs. Before saving the final DSL for plugin consumption, M30.1 must:
@@ -156,6 +171,9 @@ The sample render path stays unchanged.
 - M30 visible children do not include audit-only/mixed/future sources and never use DSL `type=icon`.
 - DSL image asset URLs are fetchable through `/files/assets/{taskId}/m30/...`.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary, warnings, skipped items, and debug preview path.
+- `GET /api/tasks/{taskId}/m30-materialization` returns `stageTimings` from `stage_timings.json`.
+- `M30_PREVIEW_PROFILE=production` skips overlay/preview artifacts while preserving OCR, required JSON, formal assets, M30 DSL, and published renderer assets.
+- `M30_PREVIEW_PROFILE=development` preserves full diagnostics for local debugging.
 - OCR provider missing-token failure marks task failed and records the provider error.
 - Legacy `POST /api/upload` tests continue to pass.
 - Plugin default upload uses M30 preview endpoint.

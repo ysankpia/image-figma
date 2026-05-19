@@ -486,6 +486,15 @@ GET /api/tasks/{taskId}/m30-materialization
 
 The M30.1 pipeline calls OCR, M29, M29.1, M29.0.2, M29.0.3 with lineage, M29.0.7, M29.0.4 with ownership routing, M29.0.5, and M30 materialization. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M26-M28, visible fallback replay, text cover, Auto Layout, Components, SVG/vectorization, or any 图标恢复 path.
 
+M30.1 has a preview artifact profile:
+
+```bash
+M30_PREVIEW_PROFILE=production   # default plugin preview runtime
+M30_PREVIEW_PROFILE=development  # full diagnostics for local debugging
+```
+
+`production` keeps OCR, structured M29/M30 JSON, M29.0.5 formal visual assets, published M30 renderer assets, and `stage_timings.json`, but skips M29 overlay PNGs, preview sheets, example/review crops, and the M30 materialization preview PNG. `development` preserves the previous full diagnostic output. Single-stage M29/M30 scripts still default to development-style output because their function defaults continue to emit debug and preview artifacts.
+
 Before the final DSL is exposed to the plugin, local M30 image asset URLs are copied and rewritten under:
 
 ```text

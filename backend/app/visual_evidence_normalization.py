@@ -102,15 +102,19 @@ class VisualEvidenceItem:
 
 @dataclass(frozen=True)
 class VisualEvidenceDebugArtifacts:
-    visual_evidence_buckets: str
-    media_candidates: str
-    text_noise: str
+    visual_evidence_buckets: str | None = None
+    media_candidates: str | None = None
+    text_noise: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {
-            "visualEvidenceBuckets": self.visual_evidence_buckets,
-            "mediaCandidates": self.media_candidates,
-            "textNoise": self.text_noise,
+            key: value
+            for key, value in {
+                "visualEvidenceBuckets": self.visual_evidence_buckets,
+                "mediaCandidates": self.media_candidates,
+                "textNoise": self.text_noise,
+            }.items()
+            if value is not None
         }
 
 
@@ -153,6 +157,8 @@ def extract_visual_evidence_normalization(
     m291_lineage_document: dict[str, Any] | None = None,
     m291_lineage_json_path: str | None = None,
     warnings: list[str] | None = None,
+    emit_debug_artifacts: bool = True,
+    emit_preview_artifacts: bool = True,
 ) -> VisualEvidenceDocument:
     options = options or VisualEvidenceOptions()
     pixels = decode_png_pixels(png_data)
@@ -170,9 +176,12 @@ def extract_visual_evidence_normalization(
         options=options,
         lineage_lookup=build_lineage_lookup(m291_lineage_document),
     )
-    debug = write_debug_artifacts(pixels, output_dir, items)
-    preview_path = output_dir / "preview_visual_evidence.png"
-    preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, items, options))
+    debug = VisualEvidenceDebugArtifacts()
+    if emit_debug_artifacts:
+        debug = write_debug_artifacts(pixels, output_dir, items)
+    if emit_preview_artifacts and debug.to_dict():
+        preview_path = output_dir / "preview_visual_evidence.png"
+        preview_path.write_bytes(build_preview_sheet(pixels, output_dir, debug, items, options))
     document = VisualEvidenceDocument(
         schema_name="M2903VisualEvidenceDocument",
         schema_version="0.1",

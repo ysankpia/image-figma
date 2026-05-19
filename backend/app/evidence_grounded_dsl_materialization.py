@@ -74,9 +74,11 @@ class M30SkippedItem:
 
 @dataclass(frozen=True)
 class M30DebugArtifacts:
-    materialization_preview: str
+    materialization_preview: str | None = None
 
     def to_dict(self) -> dict[str, str]:
+        if self.materialization_preview is None:
+            return {}
         return {"materializationPreview": self.materialization_preview}
 
 
@@ -142,6 +144,7 @@ def materialize_evidence_grounded_dsl(
     base_dsl_path: str | None = None,
     options: M30Options | None = None,
     warnings: list[str] | None = None,
+    emit_preview_artifacts: bool = True,
 ) -> M30Result:
     options = options or M30Options()
     source_path = Path(source_image_path).expanduser().resolve()
@@ -178,7 +181,7 @@ def materialize_evidence_grounded_dsl(
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, materialized_image, skipped)
 
     audit_refs = collect_audit_only_references(m2905_document)
-    preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text])
+    preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text]) if emit_preview_artifacts else None
     update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_shape, materialized_image, audit_refs)
 
     output_dsl_path = output_dir / "m30_materialized_dsl.json"
@@ -527,10 +530,11 @@ def validate_m30_result(dsl: dict[str, Any], report: M30Report, output_dir: Path
     for child in materialized_children(dsl["root"]):
         if child.get("type") == "icon":
             raise ValueError(f"M30 must not emit DSL icon nodes: {child.get('id')}")
-    preview = output_dir / report.debug.materialization_preview
-    metadata = read_png_metadata(preview.read_bytes()) if preview.exists() else None
-    if metadata is None or metadata.width != width or metadata.height != height:
-        raise ValueError("M30 preview is missing or does not match source image")
+    if report.debug.materialization_preview is not None:
+        preview = output_dir / report.debug.materialization_preview
+        metadata = read_png_metadata(preview.read_bytes()) if preview.exists() else None
+        if metadata is None or metadata.width != width or metadata.height != height:
+            raise ValueError("M30 preview is missing or does not match source image")
     if report.forbidden_term_check.get("hits"):
         raise ValueError(f"M30 output contains forbidden terms: {report.forbidden_term_check['hits']}")
 

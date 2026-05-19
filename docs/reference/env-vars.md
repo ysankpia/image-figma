@@ -109,6 +109,7 @@
 | `PERCEPTION_SAM2_MAX_MASKS` | M26 SAM2 最多读取 automatic masks 数 | `300` | 否 |
 | `PERCEPTION_UIED_ENABLED` | 是否允许 M26 UIED external command adapter 运行 | `false` | 否 |
 | `PERCEPTION_UIED_COMMAND` | M26 UIED adapter 命令；stdin 读 PNG bytes，stdout 输出 JSON candidates | 空 | 仅启用 UIED 时需要 |
+| `M30_PREVIEW_PROFILE` | M30.1 插件 preview artifact profile；`production` 只保留运行必要产物，`development` 保留全量诊断产物 | `production` | 否 |
 | `SAM_VISUAL_CANDIDATE_ENABLED` | 是否在上传链路中生成 M27 SAM visual candidate filtering 报告；默认关闭，不改变 DSL/Figma 输出 | `false` | 否 |
 | `SAM_VISUAL_CANDIDATE_MODEL_CFG` | M27 SAM2 model config 路径或包内 config 名；为空时按 checkpoint 名推断 | 空 | 否 |
 | `SAM_VISUAL_CANDIDATE_CHECKPOINT` | M27 SAM2 checkpoint 路径 | 空 | 仅启用 M27 时需要 |
@@ -139,6 +140,8 @@
 真实密钥不得写入仓库。
 
 默认 `fake` provider 不调用 OpenAI 或百度，也不需要外部密钥。
+
+`M30_PREVIEW_PROFILE=production` 是 `/api/upload-m30-preview` 的默认真实预览运行态。它保留 OCR、结构化 M29/M30 JSON、M29.0.5 formal visual assets、M30 DSL/report、published renderer assets 和 `stage_timings.json`，但不生成 M29 overlay、preview sheet、review crop 或 M30 preview overlay。`M30_PREVIEW_PROFILE=development` 保留这些诊断产物，用于本地调试和证据审计。该变量不影响 M29/M30 单阶段脚本的默认开发态输出。
 
 `BAIDU_PADDLE_OCR_TOKEN` 是 bearer token，必须只通过本地环境变量或未提交的 `.env` 提供，不能写入仓库。
 
