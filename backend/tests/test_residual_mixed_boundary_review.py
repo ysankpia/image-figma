@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata
 from app.mixed_symbol_text_conflict_audit import FORBIDDEN_CONTRACT_TERMS, find_forbidden_contract_terms
 from app.residual_mixed_boundary_review import (
     build_batch_summary,
     extract_residual_mixed_boundary_review,
 )
+from scripts.run_m29_0_3_2_residual_mixed_boundary_review import require_ocr_provider_ready
 
 
 def test_only_mixed_items_become_review_items(tmp_path: Path) -> None:
@@ -146,6 +149,22 @@ def test_forbidden_terms_are_rejected_from_output(tmp_path: Path) -> None:
     for term in FORBIDDEN_CONTRACT_TERMS:
         assert term not in find_forbidden_contract_terms(json_text)
         assert term not in find_forbidden_contract_terms(md_text)
+
+
+def test_full_batch_preflight_rejects_missing_baidu_token(monkeypatch) -> None:
+    class Args:
+        ocr_provider = "baidu_ppocrv5"
+
+    class Settings:
+        baidu_paddle_ocr_token = ""
+
+    monkeypatch.setattr(
+        "scripts.run_m29_0_3_2_residual_mixed_boundary_review.get_settings",
+        lambda: Settings(),
+    )
+
+    with pytest.raises(RuntimeError, match="BAIDU_PADDLE_OCR_TOKEN is required"):
+        require_ocr_provider_ready(Args())
 
 
 def test_batch_summary_includes_totals_and_failures(tmp_path: Path) -> None:

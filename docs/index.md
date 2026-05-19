@@ -41,6 +41,7 @@
 - 当前 M29.0.3 visual evidence normalization 计划：[plans/active/029-0-3-visual-evidence-normalization.md](plans/active/029-0-3-visual-evidence-normalization.md)
 - 当前 M29.0.3.1 text-rejected lineage feedback gate 计划：[plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md](plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md)
 - 当前 M29.0.3.2 residual mixed boundary review 计划：[plans/active/029-0-3-2-residual-mixed-boundary-review.md](plans/active/029-0-3-2-residual-mixed-boundary-review.md)
+- 当前 M29.0.3.2 80-image residual mixed batch acceptance 计划：[plans/active/029-0-3-2-extended-residual-mixed-batch-acceptance.md](plans/active/029-0-3-2-extended-residual-mixed-batch-acceptance.md)
 - 当前 M29.0.4 generic visual object candidate audit 计划：[plans/active/029-0-4-generic-visual-object-candidate-audit.md](plans/active/029-0-4-generic-visual-object-candidate-audit.md)
 - 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
 - 当前 M29.0.6 member boundary quality audit 计划：[plans/active/029-0-6-member-boundary-quality-audit.md](plans/active/029-0-6-member-boundary-quality-audit.md)

@@ -16,6 +16,7 @@ from app.text_masked_media_audit import (
     validate_text_masked_media_audit,
 )
 from app.visual_primitive_graph import M29TextBox
+from scripts.run_m29_0_2_text_masked_media_audit import require_baidu_ocr_token
 
 
 def test_ocr_document_blocks_convert_to_m29_text_boxes() -> None:
@@ -33,6 +34,14 @@ def test_ocr_document_blocks_convert_to_m29_text_boxes() -> None:
     assert boxes[0].id == "ocr_1"
     assert boxes[0].bbox == [10, 20, 30, 12]
     assert boxes[0].source == "ocr"
+
+
+def test_m2902_cli_preflight_rejects_missing_baidu_token() -> None:
+    class Settings:
+        baidu_paddle_ocr_token = ""
+
+    with pytest.raises(RuntimeError, match="BAIDU_PADDLE_OCR_TOKEN is required"):
+        require_baidu_ocr_token(Settings())
 
 
 def test_text_suppressed_analysis_changes_only_text_mask_area() -> None:

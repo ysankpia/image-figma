@@ -202,6 +202,7 @@ class FakeResponse:
 
 def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestClient:
     storage_root = tmp_path / "storage"
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")

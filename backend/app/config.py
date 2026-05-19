@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+_LOCAL_ENV_LOADED = False
+
+
 @dataclass(frozen=True)
 class Settings:
     version: str
@@ -142,6 +145,7 @@ class Settings:
 
 def get_settings() -> Settings:
     backend_root = Path(__file__).resolve().parents[1]
+    load_local_env_file(backend_root.parent / ".env.local")
     storage_root = Path(os.getenv("STORAGE_ROOT", backend_root / "storage")).resolve()
     database_path = Path(os.getenv("DATABASE_PATH", storage_root / "app.db")).resolve()
     return Settings(
@@ -283,6 +287,41 @@ def get_settings() -> Settings:
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-5.5").strip() or "gpt-5.5",
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
     )
+
+
+def load_local_env_file(path: Path) -> None:
+    global _LOCAL_ENV_LOADED
+    if _LOCAL_ENV_LOADED:
+        return
+    _LOCAL_ENV_LOADED = True
+    if os.getenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        parsed = parse_env_line(raw_line)
+        if parsed is None:
+            continue
+        key, value = parsed
+        os.environ.setdefault(key, value)
+
+
+def parse_env_line(raw_line: str) -> tuple[str, str] | None:
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith("export "):
+        line = line[len("export ") :].strip()
+    if "=" not in line:
+        return None
+    key, value = line.split("=", 1)
+    key = key.strip()
+    if not key or key[0].isdigit() or not key.replace("_", "").isalnum():
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    return key, value
 
 
 def parse_csv(value: str) -> list[str]:

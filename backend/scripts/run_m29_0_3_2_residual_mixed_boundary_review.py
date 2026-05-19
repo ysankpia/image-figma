@@ -19,6 +19,7 @@ from app.residual_mixed_boundary_review import (  # noqa: E402
     build_batch_summary,
     extract_residual_mixed_boundary_review,
 )
+from app.config import get_settings  # noqa: E402
 
 
 DEFAULT_INPUT_DIRS = [
@@ -39,6 +40,7 @@ def main() -> int:
 
 
 def run_full_batch(args: argparse.Namespace) -> int:
+    require_ocr_provider_ready(args)
     input_dirs = args.input_dirs if args.input_dirs is not None else [str(path) for path in DEFAULT_INPUT_DIRS]
     sources = collect_batch_sources([Path(value).expanduser().resolve() for value in input_dirs], max_images=args.max_images)
     batch_root = resolve_new_batch_root(args)
@@ -75,6 +77,17 @@ def run_full_batch(args: argparse.Namespace) -> int:
     print(f"Wrote {batch_root / 'm29_0_3_2_batch_summary.csv'}")
     print(f"M29.0.3.2 batch totals: {payload['totals']}")
     return 0 if not failures else 1
+
+
+def require_ocr_provider_ready(args: argparse.Namespace) -> None:
+    if args.ocr_provider != "baidu_ppocrv5":
+        return
+    settings = get_settings()
+    if not settings.baidu_paddle_ocr_token:
+        raise RuntimeError(
+            "BAIDU_PADDLE_OCR_TOKEN is required for --ocr-provider baidu_ppocrv5. "
+            "Set it in the shell environment or repo .env.local before running the M29.0.3.2 full batch."
+        )
 
 
 def run_existing_batch(args: argparse.Namespace) -> int:

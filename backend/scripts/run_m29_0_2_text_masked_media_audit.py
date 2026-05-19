@@ -115,10 +115,19 @@ def load_text_source(args: argparse.Namespace, source: Path, png_data: bytes) ->
         if metadata is None:
             raise ValueError("source PNG metadata is unreadable")
         settings = replace(get_settings(), ocr_provider=args.ocr_provider)
+        require_baidu_ocr_token(settings)
         document = extract_ocr(task_id="m29_0_2_smoke", image=metadata, settings=settings, source_path=source)
         boxes, warnings = text_boxes_from_ocr_document(document.to_dict())
         return boxes, f"ocr_provider:{document.provider}:{document.status}", warnings + [warning.code for warning in document.warnings]
     return [], "none", ["no_text_source_provided"]
+
+
+def require_baidu_ocr_token(settings) -> None:
+    if not settings.baidu_paddle_ocr_token:
+        raise RuntimeError(
+            "BAIDU_PADDLE_OCR_TOKEN is required for --ocr-provider baidu_ppocrv5. "
+            "Set it in the shell environment or repo .env.local before running M29.0.2."
+        )
 
 
 def load_text_boxes(path: Path) -> list[M29TextBox]:
