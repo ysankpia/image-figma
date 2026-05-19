@@ -15,6 +15,8 @@ Figma plugin
 
 The frozen pre-M29 upload chain has been removed from runtime source. `POST /api/upload` and the old task debug endpoints are not product contracts.
 
+M31 is a script-only diagnostic layer after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change the plugin upload path yet.
+
 ## Run
 
 ```bash
@@ -132,6 +134,30 @@ Safe visual assets are emitted as DSL `image` nodes, not `icon` nodes, because t
 
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 
+## M31 Reconstruction UI Tree
+
+M31 starts the next abstraction layer:
+
+```text
+source PNG + OCR JSON + M29 nodes.json
+-> reconstruction UI tree
+-> reconstruction units with fallback crops
+-> ownership/report/overlay
+```
+
+Run it manually:
+
+```bash
+uv run python scripts/run_m31_reconstruction_ui_tree.py \
+  --source-image storage/uploads/{taskId}/original.png \
+  --ocr-json storage/m30_1_uploads/{taskId}/ocr/ocr.json \
+  --m29-nodes-json storage/m30_1_uploads/{taskId}/m29/nodes.json \
+  --out storage/m31_runs/{taskId} \
+  --profile development
+```
+
+M31.0 is not a Renderer input and is not registered as an API. It deliberately does not consume M29.0.2/M29.0.3/M29.0.4/M29.0.5 or M30 DSL as structural truth. Those stages remain in the current product runtime until later M32-M34 stages replace their responsibility.
+
 ## Storage
 
 Runtime storage lives under `backend/storage/` by default and is not committed.
@@ -145,6 +171,7 @@ storage/dsl/
 storage/ocr/
 storage/logs/
 storage/m30_1_uploads/
+storage/m31_runs/
 ```
 
 M30 preview tasks also publish renderer-fetchable image assets to:

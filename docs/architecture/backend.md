@@ -56,6 +56,8 @@ SVG/vectorization
 icon recovery
 ```
 
+M31 reconstruction UI tree is not part of this runtime path yet. It is a script-only diagnostic consumer of source PNG, OCR JSON, and M29 `nodes.json`.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.
@@ -109,6 +111,14 @@ storage/assets/{taskId}/m30/
 
 `backend/storage/` is diagnostic/runtime data and must not be committed.
 
+M31 manual runs write outside the task runtime by default:
+
+```text
+storage/m31_runs/{taskId}/m31_reconstruction_tree.json
+storage/m31_runs/{taskId}/m31_reconstruction_tree_report.json
+storage/m31_runs/{taskId}/m31_unit_fallback_assets/
+```
+
 ## Task State
 
 Current task status values:
@@ -154,6 +164,8 @@ Background pipeline failures mark the task as failed and write `error_logs`.
 In the current M30 preview path, OCR is required evidence. A missing Baidu token, unsupported OCR provider, remote OCR failure, or OCR timeout fails the M30 preview task instead of emitting a fake completed DSL.
 
 M29/M30 stages should fail fast when their required source artifacts or contracts are invalid. The product path should not fabricate visible nodes from audit-only or missing evidence.
+
+M31 failures do not fail plugin uploads in M31.0 because M31 is not registered in the upload pipeline. Its report is used to evaluate primitive ownership and fallback coverage before later runtime integration.
 
 ## Database
 

@@ -24,6 +24,18 @@ Figma 插件主线程，负责调用 API、获取 DSL、调用 Renderer、操作
 
 将复杂或低置信度区域裁切为图片放回 Figma。Fallback 是质量策略，不是失败。
 
+## Primitive Evidence
+
+从 PNG 像素和 OCR 中提取的底层证据，例如 text、shape、image、symbol、unknown 和 blocked evidence。M29 负责产生 primitive evidence，但它不是最终设计结构。
+
+## Reconstruction UI Tree
+
+M31 引入的组织层。它把 M29 primitive evidence 重新挂到 page、group、reconstruction unit 和 review bucket 中，用来验证 ownership 和可回退重建边界。
+
+## Reconstruction Unit
+
+可作为整体回退、整体裁切和后续重合成验证的最小施工单元。每个 M31 reconstruction unit 必须有 bbox、children、source refs、reconstruction mode 和 fallback crop。
+
 ## Original Reference
 
 保留在 root Frame 内的原始 PNG 参考层，默认隐藏。

@@ -11,6 +11,8 @@ M29 trusted evidence
 
 OCR、M29 evidence、audit reports 和 storage artifacts 都不是 Renderer 输入。Renderer 只消费 DSL。
 
+M31 Reconstruction UI Tree 也不是 Renderer 输入。它是 M29 后面的诊断组织层，用来验证 primitive ownership、reconstruction unit fallback 和后续 layer recovery 的可行性。M31 不改 DSL schema。
+
 ## Top-Level Shape
 
 DSL 顶层必须包含：

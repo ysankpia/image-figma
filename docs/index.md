@@ -26,6 +26,7 @@
 - 当前 M30.2 conservative text cover 计划：[plans/active/030-2-conservative-text-cover.md](plans/active/030-2-conservative-text-cover.md)
 - M30.2.1 legacy pre-M29 surface freeze 计划，已被 M30.2.2 取代：[plans/active/030-2-1-legacy-pre-m29-surface-freeze.md](plans/active/030-2-1-legacy-pre-m29-surface-freeze.md)
 - 当前 M30.2.2 remove frozen pre-M29 backend chain 计划：[plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md](plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md)
+- 当前 M31 reconstruction UI tree 计划：[plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md](plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md)
 
 ## By Task Type
 
@@ -122,6 +123,7 @@
 - M30.2 conservative text cover 决策：[decisions/0046-use-conservative-text-cover-before-fallback-masking.md](decisions/0046-use-conservative-text-cover-before-fallback-masking.md)
 - M30.2.1 pre-M29 legacy upload surface freeze 决策，已被 0048 取代：[decisions/0047-freeze-pre-m29-legacy-upload-surface.md](decisions/0047-freeze-pre-m29-legacy-upload-surface.md)
 - M30.2.2 remove frozen pre-M29 backend chain 决策：[decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md](decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md)
+- M31 reconstruction UI tree 决策：[decisions/0049-build-reconstruction-ui-tree-from-m29-primitive-evidence.md](decisions/0049-build-reconstruction-ui-tree-from-m29-primitive-evidence.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

@@ -16,6 +16,16 @@ Figma Plugin UI
 -> Figma Canvas
 ```
 
+M31 是当前新增的诊断组织层，不改变上述 runtime：
+
+```text
+source PNG + OCR JSON + M29 nodes.json
+-> M31 Reconstruction UI Tree
+-> reconstruction units with fallback crops
+```
+
+它的作用是把 M29 的碎 primitive evidence 组织成可回退的 reconstruction units，为后续 M32/M33/M34 服务。
+
 项目分类为 `multi-end-frontend`，因为它包含：
 
 - Figma Plugin UI。
@@ -55,6 +65,7 @@ docs/
 - Renderer：把 DSL 转成 Figma 节点。
 - Backend API：上传、任务状态、DSL、M30 report、资产、健康检查。
 - Processing Pipeline：OCR、M29 evidence、M30 DSL materialization。
+- M31 Reconstruction UI Tree：script-only 诊断，把 M29 primitive refs 组织成 reconstruction units。
 - Storage：原图、M29/M30 evidence JSON、M30 DSL/report、发布给 renderer 的 image assets、错误日志。
 
 ## Module Boundaries
@@ -66,6 +77,8 @@ Renderer 只消费 DSL，不做 OCR、M29、图片裁切、质量评分、Auto L
 插件 UI 不理解 OCR、M29、M30 内部细节，只展示上传、进度、完成和失败。
 
 DSL 是 Renderer 的唯一输入合同。M29 evidence 和 OCR 是后端内部证据，不是未经 M30 materialization 的 Renderer 输入。
+
+M31 tree 也不是 Renderer 输入。它是 evidence organization 层，用来验证 primitive ownership、unit fallback coverage 和后续 layer recovery 的可行性。
 
 ## Removed Legacy Path
 

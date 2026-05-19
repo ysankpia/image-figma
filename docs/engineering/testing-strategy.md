@@ -133,6 +133,33 @@ Required evidence coverage:
 - M30 does not emit DSL `icon` type.
 - M30.2 text cover uses existing text bbox and conservative background sampling.
 
+## M31 Reconstruction UI Tree
+
+M31 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_reconstruction_ui_tree.py -q
+```
+
+Required M31 coverage:
+
+- source PNG, OCR JSON, and M29 `nodes.json` load successfully.
+- every M29 node becomes a primitive ref.
+- each primitive ref is owned by exactly one reconstruction unit or assigned to exactly one review bucket.
+- root does not contain primitive leaves.
+- container-like M29 shapes can own inner primitive refs.
+- row-aligned primitive refs can form media/text reconstruction units.
+- same-size/same-spacing unit candidates can form repeated groups.
+- every emitted reconstruction unit has a fallback crop asset.
+- fallback crop bbox stays inside source image bounds.
+- review bucket reasons use generic terms.
+- business/page-specific forbidden terms are absent from M31 tree/report.
+- `createdDetectionBBoxCount = 0`.
+- `permissionViolationCount = 0`.
+- M31 does not rewrite source M29 JSON.
+- M31 remains script-only and does not change `/api/upload-m30-preview`.
+
 ## Static Guards
 
 After M30.2.2, active backend source and tests must not reference the deleted legacy runtime surface:
