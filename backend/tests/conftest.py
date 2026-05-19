@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import struct
 import sys
 import zlib
@@ -8,6 +9,22 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+
+
+def pytest_configure() -> None:
+    os.environ["IMAGE_FIGMA_LOAD_LOCAL_ENV"] = "false"
+
+
+@pytest.fixture(autouse=True)
+def deterministic_test_environment(monkeypatch) -> Iterator[None]:
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("OCR_PROVIDER", "fake")
+    monkeypatch.setenv("VISUAL_PRIMITIVE_PROVIDER", "fake")
+    monkeypatch.setenv("DSL_PATCH_MODE", "debug")
+    monkeypatch.delenv("BAIDU_PADDLE_OCR_TOKEN", raising=False)
+    monkeypatch.delenv("BAIDU_PADDLE_OCR_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    yield
 
 
 @pytest.fixture()

@@ -442,6 +442,35 @@ uv run python scripts/run_m29_0_6_member_boundary_quality_audit.py \
 
 It reads `m29_0_5*/refined_visual_objects.json`, `m29_0_4*/visual_object_candidates.json`, `m29_0_3*/visual_evidence.json`, and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_6/member_boundary_quality_audit.json`, duplicate source/asset audits, success baseline, overlays, top-K examples, and optional batch summary JSON/CSV. It is audit-only: it does not create new bboxes, formal visual assets, repairs, deduped assets, DSL, Renderer output, or Figma output. The key output is raw/dedup attribution for unresolved members, weak text-noise dominance, source/member duplicate topology, visual asset duplicate facts/candidates, and suggested upstream layers.
 
+## M30 Evidence-Grounded DSL Materialization
+
+M30 is a script-only bridge from trusted M29.0.5 evidence into the existing DSL v0.1 contract. It does not run OCR, does not run detection, does not change M29 JSON, does not connect to the upload path, and does not consume M29.1.3 or M29.0.3.2 audit-only outputs as visible DSL children.
+
+Bootstrap mode builds a minimal DSL with a full-image fallback and appends M30 nodes:
+
+```bash
+uv run python scripts/run_m30_evidence_grounded_dsl_materialization.py \
+  --m29-output storage/.../image_001 \
+  --source-image /path/to/source.png \
+  --out storage/.../image_001/m30 \
+  --mode bootstrap-dsl-from-m29
+```
+
+Existing DSL mode preserves the input DSL and writes a new variant:
+
+```bash
+uv run python scripts/run_m30_evidence_grounded_dsl_materialization.py \
+  --m29-output storage/.../image_001 \
+  --source-image /path/to/source.png \
+  --base-dsl /path/to/base_dsl.json \
+  --out storage/.../image_001/m30 \
+  --mode augment-existing-dsl
+```
+
+The output directory contains `m30_materialized_dsl.json`, `m30_materialization_report.json`, and `m30_materialization_preview.png`. M30 only materializes M29.0.5 `textMembers`, safe `shapeCandidates`, and safe `visualAssets`; safe visual assets are emitted as DSL `image` nodes, not `icon` nodes, because the current renderer does not implement DSL `icon` rendering.
+
+M30.1 intentionally keeps fallback visible and does not do automatic text cover. It can produce editable text/shape/image nodes over fallback for bridge validation, while mixed/future/residual audit-only evidence remains in report/meta only.
+
 M29.0.7 text ownership gate is a script-only routing layer before object-forming consumption:
 
 ```bash

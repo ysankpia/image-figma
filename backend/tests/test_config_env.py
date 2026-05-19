@@ -20,6 +20,7 @@ def test_local_env_loader_sets_missing_values_without_overriding(monkeypatch, tm
         encoding="utf-8",
     )
     monkeypatch.delenv("OCR_PROVIDER", raising=False)
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "true")
     monkeypatch.setenv("BAIDU_PADDLE_OCR_TOKEN", "shell-token")
     monkeypatch.delenv("BAIDU_PADDLE_OCR_MODEL", raising=False)
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
