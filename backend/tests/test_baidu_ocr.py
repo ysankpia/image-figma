@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import importlib
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi.testclient import TestClient
-
 from app.config import Settings
+from app.ocr import extract_ocr
 from app.ocr_baidu import parse_ppocrv5_rows, polygon_to_bbox, rec_box_to_bbox
+from app.png_tools import read_png_metadata
 
 
 def test_parse_ppocrv5_rows_converts_boxes_and_filters_low_confidence() -> None:
@@ -47,38 +45,39 @@ def test_bbox_helpers_reject_invalid_shapes() -> None:
     assert polygon_to_bbox([[1, 2]]) is None
 
 
-def test_baidu_provider_without_token_does_not_break_upload(monkeypatch, tmp_path) -> None:
-    client = create_client_with_env(
-        monkeypatch,
-        tmp_path,
-        {
-            "OCR_PROVIDER": "baidu_ppocrv5",
-            "BAIDU_PADDLE_OCR_TOKEN": "",
-        },
-    )
+def test_baidu_provider_without_token_returns_failed_document(tmp_path) -> None:
     from conftest import PNG_BYTES
 
-    with client:
-        upload = client.post("/api/upload", files={"file": ("input.png", PNG_BYTES, "image/png")})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
+    source = tmp_path / "input.png"
+    source.write_bytes(PNG_BYTES)
+    image = read_png_metadata(PNG_BYTES)
+    assert image is not None
 
-        ocr_response = client.get(f"/api/tasks/{task_id}/ocr")
-        assert ocr_response.status_code == 200
-        ocr = ocr_response.json()["data"]
-        assert ocr["provider"] == "baidu_ppocrv5"
-        assert ocr["model"] == "PP-OCRv5"
-        assert ocr["status"] == "failed"
-        assert ocr["error"]["code"] == "BAIDU_PADDLE_OCR_TOKEN_MISSING"
+    document = extract_ocr(
+        task_id="task_ocr_missing_token",
+        image=image,
+        settings=Settings(
+            version="0.1.0",
+            storage_root=tmp_path,
+            database_path=tmp_path / "app.db",
+            public_base_url="http://localhost:8000",
+            max_upload_bytes=10 * 1024 * 1024,
+            cors_allow_origins=["*"],
+            ocr_provider="baidu_ppocrv5",
+            baidu_paddle_ocr_token=None,
+        ),
+        source_path=source,
+    )
 
-        dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
-        assert dsl_response.status_code == 200
-        child_ids = {child["id"] for child in dsl_response.json()["data"]["dsl"]["root"]["children"]}
-        assert "text_ocr_text_001" not in child_ids
-        assert "fallback_region_header" in child_ids
+    assert document.provider == "baidu_ppocrv5"
+    assert document.model == "PP-OCRv5"
+    assert document.status == "failed"
+    assert document.blocks == []
+    assert document.error is not None
+    assert document.error["code"] == "BAIDU_PADDLE_OCR_TOKEN_MISSING"
 
 
-def test_baidu_provider_success_builds_hidden_text_candidates(monkeypatch, tmp_path) -> None:
+def test_baidu_provider_success_builds_standard_ocr_document(monkeypatch, tmp_path) -> None:
     calls: list[tuple[str, str]] = []
 
     def fake_post(url: str, **kwargs: Any) -> FakeResponse:
@@ -120,40 +119,39 @@ def test_baidu_provider_success_builds_hidden_text_candidates(monkeypatch, tmp_p
 
     monkeypatch.setattr("app.ocr_baidu.requests.post", fake_post)
     monkeypatch.setattr("app.ocr_baidu.requests.get", fake_get)
-    client = create_client_with_env(
-        monkeypatch,
-        tmp_path,
-        {
-            "OCR_PROVIDER": "baidu_ppocrv5",
-            "BAIDU_PADDLE_OCR_TOKEN": "test-token",
-            "BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS": "0",
-        },
-    )
+    source = tmp_path / "input.png"
     from conftest import PNG_BYTES
 
-    with client:
-        upload = client.post("/api/upload", files={"file": ("input.png", PNG_BYTES, "image/png")})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
+    source.write_bytes(PNG_BYTES)
+    image = read_png_metadata(PNG_BYTES)
+    assert image is not None
+    document = extract_ocr(
+        task_id="task_ocr_success",
+        image=image,
+        settings=Settings(
+            version="0.1.0",
+            storage_root=tmp_path,
+            database_path=tmp_path / "app.db",
+            public_base_url="http://localhost:8000",
+            max_upload_bytes=10 * 1024 * 1024,
+            cors_allow_origins=["*"],
+            ocr_provider="baidu_ppocrv5",
+            baidu_paddle_ocr_token="test-token",
+            baidu_paddle_ocr_poll_interval_seconds=0,
+        ),
+        source_path=source,
+    )
 
-        ocr = client.get(f"/api/tasks/{task_id}/ocr").json()["data"]
-        assert ocr["status"] == "completed"
-        assert ocr["provider"] == "baidu_ppocrv5"
-        assert len(ocr["blocks"]) == 1
-        assert ocr["blocks"][0]["text"] == "宿舍选床"
-        assert ocr["blocks"][0]["bbox"] == [10, 20, 100, 40]
-        assert ocr["warnings"][0]["code"] == "OCR_LOW_CONFIDENCE"
-
-        dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
-        children = {child["id"]: child for child in dsl["root"]["children"]}
-        assert children["text_ocr_text_001"]["style"]["visible"] is False
-        assert children["text_ocr_text_001"]["content"]["text"] == "宿舍选床"
-        assert "fallback_region_header" in children
-
+    assert document.status == "completed"
+    assert document.provider == "baidu_ppocrv5"
+    assert len(document.blocks) == 1
+    assert document.blocks[0].text == "宿舍选床"
+    assert document.blocks[0].bbox == [10, 20, 100, 40]
+    assert document.warnings[0].code == "OCR_LOW_CONFIDENCE"
     assert ("post", "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs") in calls
 
 
-def test_baidu_provider_remote_failure_keeps_upload_completed(monkeypatch, tmp_path) -> None:
+def test_baidu_provider_remote_failure_returns_failed_document(monkeypatch, tmp_path) -> None:
     def fake_post(url: str, **kwargs: Any) -> FakeResponse:
         return FakeResponse(200, {"data": {"jobId": "job_failed"}})
 
@@ -162,30 +160,32 @@ def test_baidu_provider_remote_failure_keeps_upload_completed(monkeypatch, tmp_p
 
     monkeypatch.setattr("app.ocr_baidu.requests.post", fake_post)
     monkeypatch.setattr("app.ocr_baidu.requests.get", fake_get)
-    client = create_client_with_env(
-        monkeypatch,
-        tmp_path,
-        {
-            "OCR_PROVIDER": "baidu_ppocrv5",
-            "BAIDU_PADDLE_OCR_TOKEN": "test-token",
-            "BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS": "0",
-        },
-    )
+    source = tmp_path / "input.png"
     from conftest import PNG_BYTES
 
-    with client:
-        upload = client.post("/api/upload", files={"file": ("input.png", PNG_BYTES, "image/png")})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
+    source.write_bytes(PNG_BYTES)
+    image = read_png_metadata(PNG_BYTES)
+    assert image is not None
+    document = extract_ocr(
+        task_id="task_ocr_remote_failure",
+        image=image,
+        settings=Settings(
+            version="0.1.0",
+            storage_root=tmp_path,
+            database_path=tmp_path / "app.db",
+            public_base_url="http://localhost:8000",
+            max_upload_bytes=10 * 1024 * 1024,
+            cors_allow_origins=["*"],
+            ocr_provider="baidu_ppocrv5",
+            baidu_paddle_ocr_token="test-token",
+            baidu_paddle_ocr_poll_interval_seconds=0,
+        ),
+        source_path=source,
+    )
 
-        ocr = client.get(f"/api/tasks/{task_id}/ocr").json()["data"]
-        assert ocr["status"] == "failed"
-        assert ocr["error"]["code"] == "OCR_EXTRACTION_FAILED"
-
-        dsl = client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
-        child_ids = {child["id"] for child in dsl["root"]["children"]}
-        assert "text_ocr_text_001" not in child_ids
-        assert "fallback_region_header" in child_ids
+    assert document.status == "failed"
+    assert document.error is not None
+    assert document.error["code"] == "OCR_EXTRACTION_FAILED"
 
 
 class FakeResponse:
@@ -198,24 +198,3 @@ class FakeResponse:
         if self._payload is not None:
             return self._payload
         return json.loads(self.text)
-
-
-def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestClient:
-    storage_root = tmp_path / "storage"
-    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
-    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
-    for key, value in env.items():
-        if value:
-            monkeypatch.setenv(key, value)
-        else:
-            monkeypatch.delenv(key, raising=False)
-
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name)
-
-    main = importlib.import_module("app.main")
-    return TestClient(main.create_app())

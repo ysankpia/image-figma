@@ -1,46 +1,51 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 
-def test_asset_metadata_and_file_url(legacy_client: TestClient, png_file: tuple[str, bytes, str]) -> None:
-    upload = legacy_client.post("/api/upload", files={"file": png_file})
-    task_id = upload.json()["data"]["taskId"]
+def test_asset_metadata_and_file_url(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
+    from app.state import state
 
-    asset = legacy_client.get("/api/assets/asset_banner")
+    task_id = "task_asset_route"
+    path = state.storage.assets_dir / task_id / "m30" / "asset.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png_file[1])
+    state.database.insert_asset(
+        {
+            "asset_id": "m30_visual_asset_001",
+            "task_id": task_id,
+            "role": "m30_visual_asset",
+            "path": str(path),
+            "url": f"http://localhost:8000/files/assets/{task_id}/m30/asset.png",
+            "mime_type": "image/png",
+            "width": 317,
+            "height": 2729,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    )
+
+    asset = client.get("/api/assets/m30_visual_asset_001")
 
     assert asset.status_code == 200
     body = asset.json()
     assert body["success"] is True
     assert body["data"] == {
-        "assetId": "asset_banner",
+        "assetId": "m30_visual_asset_001",
         "taskId": task_id,
-        "role": "fallback_region",
-        "url": f"http://localhost:8000/files/assets/{task_id}/banner.png",
+        "role": "m30_visual_asset",
+        "url": f"http://localhost:8000/files/assets/{task_id}/m30/asset.png",
         "mimeType": "image/png",
     }
 
-    asset_file = legacy_client.get(f"/files/assets/{task_id}/banner.png")
+    asset_file = client.get(f"/files/assets/{task_id}/m30/asset.png")
     assert asset_file.status_code == 200
     assert asset_file.content.startswith(b"\x89PNG\r\n\x1a\n")
 
-    region_asset = legacy_client.get("/api/assets/asset_region_header")
-    assert region_asset.status_code == 200
-    assert region_asset.json()["data"] == {
-        "assetId": "asset_region_header",
-        "taskId": task_id,
-        "role": "fallback_region",
-        "url": f"http://localhost:8000/files/assets/{task_id}/header.png",
-        "mimeType": "image/png",
-    }
 
-    region_file = legacy_client.get(f"/files/assets/{task_id}/header.png")
-    assert region_file.status_code == 200
-    assert region_file.content.startswith(b"\x89PNG\r\n\x1a\n")
-
-
-def test_missing_asset_returns_asset_not_found(legacy_client: TestClient) -> None:
-    response = legacy_client.get("/api/assets/asset_missing")
+def test_missing_asset_returns_asset_not_found(client: TestClient) -> None:
+    response = client.get("/api/assets/asset_missing")
 
     assert response.status_code == 404
     body = response.json()

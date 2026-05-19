@@ -1,7 +1,11 @@
 # ADR: Freeze Pre-M29 Legacy Upload Surface
 
-- 状态：accepted
+- 状态：superseded-by-0048
 - 日期：2026-05-20
+
+## Supersession
+
+This ADR records the intermediate M30.2.1 freeze. It was superseded by [0048-remove-frozen-pre-m29-legacy-backend-chain.md](0048-remove-frozen-pre-m29-legacy-backend-chain.md), which removed the legacy recovery flag, old upload route, old debug endpoints, and frozen pre-M29 backend modules from active source.
 
 ## Context
 
@@ -24,7 +28,7 @@ Default runtime exposes the current product surface:
 /files/assets/*
 ```
 
-The legacy upload path and debug endpoints remain available when explicitly enabled for regression checks or historical diagnostics.
+At the time of M30.2.1, the legacy upload path and debug endpoints remained available when explicitly enabled for regression checks or historical diagnostics. That is no longer current runtime behavior after ADR 0048.
 
 M1-M28 active plan documents move to `docs/plans/archive/pre_m29/`. Old ADRs stay in place because they are decision history.
 
@@ -33,13 +37,13 @@ M1-M28 active plan documents move to `docs/plans/archive/pre_m29/`. Old ADRs sta
 Benefits:
 
 - The default backend surface now matches the M29/M30 plugin path.
-- Old diagnostics remain recoverable without staying in the product runtime by accident.
+- Old diagnostics became isolated before later physical source removal.
 - Physical archiving can happen later with a cleaner import and test boundary.
 
 Costs:
 
-- Legacy regression tests must use a legacy-enabled client.
-- Old `/api/upload` consumers now need to opt in through an environment flag.
+- This intermediate state was intentionally temporary.
+- After ADR 0048, legacy regression through active source is no longer supported.
 
 Hard boundaries:
 
@@ -47,4 +51,3 @@ Hard boundaries:
 - Do not delete database tables or storage helpers.
 - Do not change M29/M30 algorithms, OCR, DSL schema, renderer, or plugin behavior.
 - Do not implement fallback masking, web preview, or new recognition rules.
-

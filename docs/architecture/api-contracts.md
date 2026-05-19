@@ -1,14 +1,21 @@
 # API Contracts
 
-API v0.1 只服务单张 PNG -> DSL -> Figma 主链路。
+API v0.1 serves the current single-image preview path:
+
+```text
+PNG upload
+-> OCR + M29 + M30
+-> DSL v0.1
+-> Figma Renderer
+```
 
 ## Contract Ownership
 
-API 合同由后端和 Figma 插件共同遵守。任何接口路径、请求体、响应结构、错误码、任务状态变更，必须同步更新本文档和相关实现计划。
+The backend and Figma plugin jointly own this contract. Any path, response shape, task state, or error-code change must update this document and the relevant implementation plan.
 
 ## Base URL
 
-开发环境默认：
+Development default:
 
 ```text
 http://localhost:8000/api
@@ -16,7 +23,7 @@ http://localhost:8000/api
 
 ## Response Shape
 
-成功：
+Success:
 
 ```json
 {
@@ -25,16 +32,16 @@ http://localhost:8000/api
 }
 ```
 
-失败：
+Failure:
 
 ```json
 {
   "success": false,
   "error": {
     "code": "UPLOAD_FAILED",
-    "message": "图片上传失败，请检查网络后重试。",
+    "message": "PNG upload failed.",
     "detail": "Internal debug detail",
-    "stage": "upload",
+    "stage": "upload_m30_preview",
     "taskId": "task_001"
   }
 }
@@ -42,311 +49,165 @@ http://localhost:8000/api
 
 ## Required Endpoints
 
-`GET /api/health`
+### `GET /api/health`
 
-- 用途：确认后端服务运行。
-- 返回：`status`、`version`、`time`。
-
-`POST /api/upload-m30-preview`
-
-- 用途：插件默认 preview 上传入口，创建任务并在后台运行 OCR + M29 + M30。
-- 请求：multipart PNG file。
-- 成功立即返回现有 UploadResult shape：`taskId`、文件信息、`status`、`stage`、`progress`。
-- 初始任务状态为 `processing`，stage 为 `m30_queued`。
-- 背景任务成功后，`GET /api/tasks/{taskId}` 返回 `status=completed`、`stage=m30_completed`，`GET /api/tasks/{taskId}/dsl` 返回 M30 materialized DSL。
-- 背景任务失败后，任务返回 `status=failed`，`stage` 为失败阶段，例如 `ocr`、`m29_0_3` 或 `m30_materialization`。
-- M30.1 只运行 OCR、M29、M29.1、M29.0.2、M29.0.3 lineage-aware path、M29.0.7、M29.0.4 with ownership routing、M29.0.5 和 M30 materialization with M30.2 conservative text cover。
-- M30.1 不运行 M29.1.3、M29.0.3.2、M29.0.6、M19-M25、M24 visible fallback、M26-M28，也不做 Auto Layout、Component、SVG/vectorization 或图标恢复。
-- M30 DSL 中本地 image asset URL 会被复制并重写为 `/files/assets/{taskId}/m30/...`，供 Renderer 直接 fetch。
-
-`GET /api/tasks/{taskId}`
-
-- 用途：查询任务状态。
-- 返回：`taskId`、`status`、`stage`、`progress`、`message`。
-
-`GET /api/tasks/{taskId}/dsl`
-
-- 用途：获取任务 DSL。
-- 仅在任务 completed 后成功。
-- 未完成时返回明确错误。
-- For M30 preview tasks, this endpoint returns M30 materialized DSL from `m30/m30_materialized_dsl.json`.
-- M30 DSL preserves fallback and can contain `m30_text_member`, `m30_text_cover`, `m30_shape_candidate`, and safe `m30_visual_asset` image nodes.
-- M30 DSL must not contain mixed/future/audit-only evidence as visible children and must not emit DSL `icon` type.
-- For explicitly enabled legacy `/api/upload` tasks, this endpoint returns the legacy deterministic/enhanced DSL produced by the M8-M28 diagnostic chain.
-
-## Legacy Debug Endpoints
-
-These endpoints are not registered by default. Set `LEGACY_PRE_M29_UPLOAD_ENABLED=true` to expose them for historical diagnostics.
-
-`POST /api/upload`
-
-- 用途：legacy pre-M29 上传入口，默认不注册。
-- 请求：multipart PNG file。
-- 旧 M8-M28 diagnostic chain 的同步回归入口。
-
-`GET /api/tasks/{taskId}/primitives`
-
-- 用途：获取 M8 visual primitive candidate 结果。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- primitive result 不存在返回 `PRIMITIVE_NOT_FOUND`。
-- extraction 失败时仍返回 `success: true`，但 `data.status` 为 `failed`，并带 `error` 摘要。
-- 返回的 `bbox` 使用整图像素坐标 `[x, y, width, height]`。
-
-`GET /api/tasks/{taskId}/ocr`
-
-- 用途：获取 OCR candidate 结果。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- OCR result 不存在返回 `OCR_NOT_FOUND`。
-- OCR failed 时仍返回 `success: true`，但 `data.status` 为 `failed`，并带 `error`。
-- 返回的 `bbox` 使用整图像素坐标 `[x, y, width, height]`。
-
-`GET /api/tasks/{taskId}/dsl-patch`
-
-- 用途：获取 DSL patch 结果。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- patch result 不存在返回 `DSL_PATCH_NOT_FOUND`。
-- patch failed 时仍返回 `success: true`，但 `data.status` 为 `failed`，并带 `error`。
-- M9 patch 只允许添加 hidden `candidate_text`。
-
-`GET /api/tasks/{taskId}/text-replacements`
-
-- 用途：获取 M14 visible text replacement decisions、sampling strategy 和质量门禁结果。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- replacement result 不存在返回 `TEXT_REPLACEMENT_NOT_FOUND`。
-- replacement failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- decisions 可包含 `background`、`foreground`、`sourceOcrBlockIds`、`strategy`、`quality` 和 `application` 调试字段，用于解释彩色背景替换、OCR block 合并、UI-aware sampling、风险等级和 apply 阻断原因。
-
-`GET /api/tasks/{taskId}/text-bindings`
-
-- 用途：获取 M15 text-to-container binding 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- binding result 不存在返回 `TEXT_BINDING_NOT_FOUND`。
-- binding failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `containers`、`bindings`、`unboundTextIds`、`warnings` 和 `meta`。`containers` 可包含 `source=visual_primitive`、`source=inferred_from_text_cluster` 或 `source=fallback_region`。
-
-`GET /api/tasks/{taskId}/component-structures`
-
-- 用途：获取 M16 component structure 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- structure result 不存在或文件缺失返回 `COMPONENT_STRUCTURE_NOT_FOUND`。
-- structure failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `components`、`groups`、`unstructuredContainerIds`、`warnings` 和 `meta`。`components` 聚合 M15 container/binding facts；`groups` 描述 summary stat row、shortcut grid、preview section、bottom nav row 和 page structure 等布局候选。
-
-`GET /api/tasks/{taskId}/component-annotations`
-
-- 用途：获取 M17 DSL component annotation 和 layer naming 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- annotation result 不存在或文件缺失返回 `COMPONENT_ANNOTATION_NOT_FOUND`。
-- annotation failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `annotations`、`groupHints`、`unannotatedElementIds`、`unresolvedComponentIds`、`warnings` 和 `meta`。`annotations` 只描述已有 DSL element 与 M16 component/group 的确定性 ID join；`groupHints` 只是 future grouping hint，不会让 Renderer 创建真实 Figma group。
-
-`GET /api/tasks/{taskId}/layer-separation-candidates`
-
-- 用途：获取 M18 component-aware layer separation candidate 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `LAYER_SEPARATION_NOT_FOUND`。
-- separation failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `candidates`、`fallbackContexts`、`blockedComponentIds`、`warnings` 和 `meta`。`candidates` 只描述后续是否适合 shape + editable text、image slice with simple fill candidate、future repair、embedded text 或 no text；不会让 Renderer 切图、删除 fallback 或创建真实 Figma group/component。
-
-`GET /api/tasks/{taskId}/asset-slice-candidates`
-
-- 用途：获取 M19 local asset slice/simple fill experiment 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ASSET_SLICE_NOT_FOUND`。
-- slice failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `slices`、`blockedComponentIds`、`warnings` 和 `meta`。`slices` 可包含 original slice PNG 和 filled slice PNG URL，但这些实验资产不会写入 DSL `assets`，不会让 Renderer 替换 fallback。
-
-`GET /api/tasks/{taskId}/icon-candidates`
-
-- 用途：获取 M20 icon candidate extraction/crop 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_CANDIDATE_NOT_FOUND`。
-- icon candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `icons`、`blockedComponentIds`、`warnings` 和 `meta`。`icons` 可包含 icon PNG URL，但这些候选资产不会写入 DSL `assets`，不会让 Renderer 创建可见 icon 节点。
-
-`GET /api/tasks/{taskId}/icon-coverage-audit`
-
-- 用途：获取 M21 icon coverage audit 和 placement readiness 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_COVERAGE_AUDIT_NOT_FOUND`。
-- audit failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `placements`、`missedIconHints`、`coverageOverlay`、`blockedIconCandidateIds`、`warnings` 和 `meta`。`coverageOverlay` 可包含 debug overlay PNG URL，但 overlay 不会写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/icon-gap-candidates`
-
-- 用途：获取 M22 region-guided icon gap candidate 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_GAP_CANDIDATE_NOT_FOUND`。
-- gap candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `gapIcons`、`blockedHints`、`gapOverlay`、`warnings` 和 `meta`。`gapIcons` 可包含 gap icon PNG URL，`gapOverlay` 可包含 debug overlay PNG URL；二者都不会写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/icon-placement-plan`
-
-- 用途：获取 M23 icon placement plan 和 layering readiness 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_PLACEMENT_PLAN_NOT_FOUND`。
-- placement plan failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `placements`、`dedupedIcons`、`blockedIcons`、`placementOverlay`、`warnings` 和 `meta`。`futureDslNodeHint` 只存在于 report，不写入 DSL；`placementOverlay` 不写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/icon-visible-fallback`
-
-- 用途：获取 M24 visible icon fallback replay experiment 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_VISIBLE_FALLBACK_NOT_FOUND`。
-- visible fallback failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `visibleIcons`、`blockedPlacements`、`visibleFallbackOverlay`、`warnings` 和 `meta`。默认 `ICON_VISIBLE_FALLBACK_ENABLED=false` 时不生成 result。开启后，`visibleIcons` 对应最终 DSL 中新增的 `icon_fallback_cover` 和 `visible_icon_fallback` 节点。
-
-`GET /api/tasks/{taskId}/icon-business-candidates`
-
-- 用途：获取 M25 region-guided business icon candidate 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `ICON_BUSINESS_CANDIDATE_NOT_FOUND`。
-- business candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `businessIcons`、`blockedCandidates`、`businessOverlay`、`warnings` 和 `meta`。`businessIcons` 可包含 business icon PNG URL，`businessOverlay` 可包含 debug overlay PNG URL；二者都不会写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/perception-benchmark`
-
-- 用途：获取 M26 visual perception provider benchmark 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `PERCEPTION_BENCHMARK_NOT_FOUND`。
-- benchmark failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `providers`、`comparison`、`warnings` 和 `meta`。`providers` 可包含 `current_rules`、`opencv`、`sam2` 和 `uied` 的统一 candidates、blocked、overlay、elapsedMs 和误检代理指标。provider overlay 不写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/sam-visual-candidates`
-
-- 用途：获取 M27 SAM2-guided visual candidate filtering 报告。
-- 只读调试接口，不被插件主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- result 不存在或文件缺失返回 `SAM_VISUAL_CANDIDATE_NOT_FOUND`。
-- SAM visual candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
-- 返回 `sam`、`candidates`、`blockedCandidates`、`overlay`、`warnings` 和 `meta`。`candidates` 只是 M28 候选池输入，不写入 DSL `assets`，不会让 Renderer 创建可见节点。
-
-`GET /api/tasks/{taskId}/m30-materialization`
-
-- 用途：读取 M30.1 materialization report 的核心调试信息。
-- 只读调试接口，不被 Renderer 主流程依赖。
-- task 不存在返回 `TASK_NOT_FOUND`。
-- report 不存在返回 `M30_MATERIALIZATION_NOT_FOUND`。
-- 返回 `summary`、`warnings`、`skippedItems`、`debugPreviewPath` 和 `outputDsl`。
-
-`GET /api/assets/{assetId}`
-
-- 用途：获取资产信息或文件访问。
-- 后端返回资产元信息，不直接返回文件 bytes。
-- 开发阶段 URL 指向 `/files/uploads/...` 或 `/files/assets/...`。
-- 如果多个任务有同名 `assetId`，当前返回最新匹配资产。后续再决定是否引入 task-scoped asset API。
-
-## Static Files
-
-后端挂载：
+Returns backend liveness:
 
 ```text
-/files/uploads
-/files/assets
+status
+version
+time
 ```
 
-DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图片。
+### `POST /api/upload-m30-preview`
 
-## Error Codes
+Plugin default upload endpoint.
 
-- `INVALID_FILE_TYPE`
-- `INVALID_IMAGE_DIMENSIONS`
-- `FILE_TOO_LARGE`
-- `UPLOAD_FAILED`
-- `TASK_NOT_FOUND`
-- `DSL_NOT_READY`
-- `DSL_NOT_FOUND`
-- `ASSET_NOT_FOUND`
-- `PRIMITIVE_NOT_FOUND`
-- `PRIMITIVE_EXTRACTION_FAILED`
-- `OCR_NOT_FOUND`
-- `OCR_EXTRACTION_FAILED`
-- `DSL_PATCH_NOT_FOUND`
-- `DSL_PATCH_BUILD_FAILED`
-- `DSL_PATCH_VALIDATION_FAILED`
-- `TEXT_REPLACEMENT_NOT_FOUND`
-- `TEXT_REPLACEMENT_FAILED`
-- `TEXT_REPLACEMENT_VALIDATION_FAILED`
-- `TEXT_BINDING_NOT_FOUND`
-- `TEXT_BINDING_FAILED`
-- `TEXT_BINDING_VALIDATION_FAILED`
-- `COMPONENT_STRUCTURE_NOT_FOUND`
-- `COMPONENT_STRUCTURE_FAILED`
-- `COMPONENT_STRUCTURE_VALIDATION_FAILED`
-- `COMPONENT_ANNOTATION_NOT_FOUND`
-- `COMPONENT_ANNOTATION_FAILED`
-- `COMPONENT_ANNOTATION_VALIDATION_FAILED`
-- `LAYER_SEPARATION_NOT_FOUND`
-- `LAYER_SEPARATION_FAILED`
-- `LAYER_SEPARATION_VALIDATION_FAILED`
-- `ASSET_SLICE_NOT_FOUND`
-- `ASSET_SLICE_FAILED`
-- `ASSET_SLICE_VALIDATION_FAILED`
-- `ICON_CANDIDATE_NOT_FOUND`
-- `ICON_CANDIDATE_FAILED`
-- `ICON_CANDIDATE_VALIDATION_FAILED`
-- `ICON_COVERAGE_AUDIT_NOT_FOUND`
-- `ICON_COVERAGE_AUDIT_FAILED`
-- `ICON_COVERAGE_AUDIT_VALIDATION_FAILED`
-- `ICON_GAP_CANDIDATE_NOT_FOUND`
-- `ICON_GAP_CANDIDATE_FAILED`
-- `ICON_GAP_CANDIDATE_VALIDATION_FAILED`
-- `ICON_PLACEMENT_PLAN_NOT_FOUND`
-- `ICON_PLACEMENT_PLAN_FAILED`
-- `ICON_PLACEMENT_PLAN_VALIDATION_FAILED`
-- `ICON_VISIBLE_FALLBACK_NOT_FOUND`
-- `ICON_VISIBLE_FALLBACK_FAILED`
-- `ICON_VISIBLE_FALLBACK_VALIDATION_FAILED`
-- `ICON_BUSINESS_CANDIDATE_NOT_FOUND`
-- `ICON_BUSINESS_CANDIDATE_FAILED`
-- `ICON_BUSINESS_CANDIDATE_VALIDATION_FAILED`
-- `PERCEPTION_BENCHMARK_NOT_FOUND`
-- `PERCEPTION_BENCHMARK_FAILED`
-- `PERCEPTION_BENCHMARK_VALIDATION_FAILED`
-- `PERCEPTION_PROVIDER_UNAVAILABLE`
-- `INTERNAL_ERROR`
-
-## Current Plugin Usage
-
-Current Plugin Usage:
+Request:
 
 ```text
-POST /api/upload-m30-preview
-GET /api/tasks/{taskId}
-GET /api/tasks/{taskId}/dsl
+multipart/form-data
+file: image/png
 ```
 
-即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
+Validation:
 
-插件默认不调用 legacy `/api/upload`、OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan、icon-visible-fallback、icon-business-candidates、perception-benchmark 或 sam-visual-candidates endpoint。
+- MIME must be `image/png`.
+- PNG signature must be valid.
+- IHDR dimensions must be readable.
+- File size must be <= `MAX_UPLOAD_BYTES`.
 
-## Optional Endpoints
+Immediate success response:
 
-以下接口不进入 P0：
+```json
+{
+  "success": true,
+  "data": {
+    "taskId": "task_abc",
+    "status": "processing",
+    "stage": "m30_queued",
+    "progress": 1,
+    "file": {
+      "filename": "upload.png",
+      "mimeType": "image/png",
+      "size": 1234,
+      "width": 390,
+      "height": 844
+    }
+  }
+}
+```
 
-- `POST /api/tasks/{taskId}/retry`
-- `GET /api/tasks/{taskId}/logs`
+The endpoint creates a task and runs OCR + M29 + M30 in a background task. It does not run the removed pre-M29 upload chain.
 
-## Contract Change Rules
+### `GET /api/tasks/{taskId}`
 
-- 不兼容字段变更必须升级 DSL 或 API 版本。
-- 不允许插件依赖未文档化字段。
-- 不允许后端返回未校验 DSL。
-- 错误必须包含稳定 `code`。
-- 普通用户文案和开发 detail 要分层。
+Returns task status:
+
+```json
+{
+  "success": true,
+  "data": {
+    "taskId": "task_abc",
+    "status": "processing",
+    "stage": "m29_0_4",
+    "progress": 74,
+    "message": "Building visual object candidates."
+  }
+}
+```
+
+Status values currently used:
+
+```text
+processing
+completed
+failed
+```
+
+### `GET /api/tasks/{taskId}/dsl`
+
+Returns the generated DSL only after the task is completed.
+
+For current preview tasks, the DSL file is:
+
+```text
+storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json
+```
+
+The DSL must:
+
+- preserve fallback.
+- include M30 materialization metadata.
+- use visible `text`, `shape`, and `image` nodes only.
+- never emit visible mixed/future/audit-only evidence.
+- never emit DSL `icon` type from the M30 upload path.
+
+If the task is not completed, the endpoint returns `DSL_NOT_READY`.
+
+### `GET /api/tasks/{taskId}/m30-materialization`
+
+Returns M30 materialization diagnostics:
+
+```text
+summary
+warnings
+skippedItems
+debugPreviewPath
+outputDsl
+stageTimings
+```
+
+This endpoint is read-only and is not required by the Figma renderer.
+
+### `GET /api/assets/{assetId}`
+
+Returns the latest asset metadata for a stored asset ID:
+
+```text
+assetId
+taskId
+role
+url
+mimeType
+```
+
+### Static Files
+
+```text
+GET /files/uploads/*
+GET /files/assets/*
+```
+
+M30 image assets referenced by the renderer must be fetchable through:
+
+```text
+/files/assets/{taskId}/m30/...
+```
+
+## Removed Endpoints
+
+The following are not part of the active API contract:
+
+```text
+POST /api/upload
+GET /api/tasks/{taskId}/primitives
+GET /api/tasks/{taskId}/ocr
+GET /api/tasks/{taskId}/dsl-patch
+GET /api/tasks/{taskId}/text-replacements
+GET /api/tasks/{taskId}/text-bindings
+GET /api/tasks/{taskId}/component-structures
+GET /api/tasks/{taskId}/component-annotations
+GET /api/tasks/{taskId}/layer-separation-candidates
+GET /api/tasks/{taskId}/asset-slice-candidates
+GET /api/tasks/{taskId}/icon-candidates
+GET /api/tasks/{taskId}/icon-coverage-audit
+GET /api/tasks/{taskId}/icon-gap-candidates
+GET /api/tasks/{taskId}/icon-placement-plan
+GET /api/tasks/{taskId}/icon-visible-fallback
+GET /api/tasks/{taskId}/icon-business-candidates
+GET /api/tasks/{taskId}/perception-benchmark
+GET /api/tasks/{taskId}/sam-visual-candidates
+```
+
+They were removed in M30.2.2. Historical behavior is preserved only through git history, ADRs, and archived reference docs.

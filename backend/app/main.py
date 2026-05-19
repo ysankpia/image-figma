@@ -22,11 +22,6 @@ def create_app() -> FastAPI:
     app.include_router(upload_m30_preview.router)
     app.include_router(tasks.router)
     app.include_router(assets.router)
-    if state.settings.legacy_pre_m29_upload_enabled:
-        from .routes import legacy_tasks, upload
-
-        app.include_router(upload.router)
-        app.include_router(legacy_tasks.router)
     app.mount("/files/uploads", StaticFiles(directory=state.storage.uploads_dir), name="uploads")
     app.mount("/files/assets", StaticFiles(directory=state.storage.assets_dir), name="assets")
     return app
