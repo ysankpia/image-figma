@@ -495,6 +495,12 @@ M30_PREVIEW_PROFILE=development  # full diagnostics for local debugging
 
 `production` keeps OCR, structured M29/M30 JSON, M29.0.5 formal visual assets, published M30 renderer assets, and `stage_timings.json`, but skips M29 overlay PNGs, preview sheets, example/review crops, and the M30 materialization preview PNG. `development` preserves the previous full diagnostic output. Single-stage M29/M30 scripts still default to development-style output because their function defaults continue to emit debug and preview artifacts.
 
+M30.2.1 freezes the pre-M29 runtime surface. By default, `/api/upload` and the old M8-M28 task debug endpoints are not registered. For historical diagnostics only, start the backend with:
+
+```bash
+LEGACY_PRE_M29_UPLOAD_ENABLED=true uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
 Before the final DSL is exposed to the plugin, local M30 image asset URLs are copied and rewritten under:
 
 ```text

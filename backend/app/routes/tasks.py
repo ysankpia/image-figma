@@ -9,6 +9,7 @@ from ..errors import ApiError, success_response
 from ..state import state
 
 router = APIRouter(prefix="/api")
+legacy_router = APIRouter(prefix="/api")
 
 
 @router.get("/tasks/{task_id}")
@@ -118,7 +119,7 @@ def get_task_m30_materialization(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/primitives")
+@legacy_router.get("/tasks/{task_id}/primitives")
 def get_task_primitives(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -165,7 +166,7 @@ def get_task_primitives(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/ocr")
+@legacy_router.get("/tasks/{task_id}/ocr")
 def get_task_ocr(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -211,7 +212,7 @@ def get_task_ocr(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/dsl-patch")
+@legacy_router.get("/tasks/{task_id}/dsl-patch")
 def get_task_dsl_patch(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -256,7 +257,7 @@ def get_task_dsl_patch(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/text-replacements")
+@legacy_router.get("/tasks/{task_id}/text-replacements")
 def get_task_text_replacements(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -302,7 +303,7 @@ def get_task_text_replacements(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/text-bindings")
+@legacy_router.get("/tasks/{task_id}/text-bindings")
 def get_task_text_bindings(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -349,7 +350,7 @@ def get_task_text_bindings(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/component-structures")
+@legacy_router.get("/tasks/{task_id}/component-structures")
 def get_task_component_structures(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -396,7 +397,7 @@ def get_task_component_structures(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/component-annotations")
+@legacy_router.get("/tasks/{task_id}/component-annotations")
 def get_task_component_annotations(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -444,7 +445,7 @@ def get_task_component_annotations(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/layer-separation-candidates")
+@legacy_router.get("/tasks/{task_id}/layer-separation-candidates")
 def get_task_layer_separation_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -491,7 +492,7 @@ def get_task_layer_separation_candidates(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/asset-slice-candidates")
+@legacy_router.get("/tasks/{task_id}/asset-slice-candidates")
 def get_task_asset_slice_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -537,7 +538,7 @@ def get_task_asset_slice_candidates(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-candidates")
+@legacy_router.get("/tasks/{task_id}/icon-candidates")
 def get_task_icon_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -583,7 +584,7 @@ def get_task_icon_candidates(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-coverage-audit")
+@legacy_router.get("/tasks/{task_id}/icon-coverage-audit")
 def get_task_icon_coverage_audit(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -631,7 +632,7 @@ def get_task_icon_coverage_audit(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-gap-candidates")
+@legacy_router.get("/tasks/{task_id}/icon-gap-candidates")
 def get_task_icon_gap_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -678,7 +679,7 @@ def get_task_icon_gap_candidates(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-placement-plan")
+@legacy_router.get("/tasks/{task_id}/icon-placement-plan")
 def get_task_icon_placement_plan(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -726,7 +727,7 @@ def get_task_icon_placement_plan(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-visible-fallback")
+@legacy_router.get("/tasks/{task_id}/icon-visible-fallback")
 def get_task_icon_visible_fallback(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -773,7 +774,7 @@ def get_task_icon_visible_fallback(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/icon-business-candidates")
+@legacy_router.get("/tasks/{task_id}/icon-business-candidates")
 def get_task_icon_business_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -820,7 +821,7 @@ def get_task_icon_business_candidates(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/perception-benchmark")
+@legacy_router.get("/tasks/{task_id}/perception-benchmark")
 def get_task_perception_benchmark(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
@@ -866,7 +867,7 @@ def get_task_perception_benchmark(task_id: str) -> dict[str, object]:
     return success_response(data)
 
 
-@router.get("/tasks/{task_id}/sam-visual-candidates")
+@legacy_router.get("/tasks/{task_id}/sam-visual-candidates")
 def get_task_sam_visual_candidates(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:

@@ -81,8 +81,8 @@ def test_icon_visible_fallback_enabled_upload_appends_nodes_assets_report_and_ov
             assert all(node["source"]["assetId"] in asset_ids for node in icon_nodes)
 
 
-def test_icon_visible_fallback_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/icon-visible-fallback")
+def test_icon_visible_fallback_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/icon-visible-fallback")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -105,7 +105,7 @@ def test_icon_visible_fallback_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_icon_visible_fallback/icon-visible-fallback")
+    not_found = legacy_client.get("/api/tasks/task_without_icon_visible_fallback/icon-visible-fallback")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "ICON_VISIBLE_FALLBACK_NOT_FOUND"
 
@@ -125,7 +125,7 @@ def test_icon_visible_fallback_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_icon_visible_fallback/icon-visible-fallback")
+    missing_file = legacy_client.get("/api/tasks/task_without_icon_visible_fallback/icon-visible-fallback")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "ICON_VISIBLE_FALLBACK_NOT_FOUND"
 

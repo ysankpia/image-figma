@@ -49,3 +49,25 @@ def test_local_env_loader_can_be_disabled(monkeypatch, tmp_path: Path) -> None:
     config.load_local_env_file(env_file)
 
     assert "OCR_PROVIDER" not in config.os.environ
+
+
+def test_legacy_pre_m29_upload_setting_defaults_false(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.delenv("LEGACY_PRE_M29_UPLOAD_ENABLED", raising=False)
+    monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
+
+    settings = config.get_settings()
+
+    assert settings.legacy_pre_m29_upload_enabled is False
+
+
+def test_legacy_pre_m29_upload_setting_can_be_enabled(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
+    monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
+
+    settings = config.get_settings()
+
+    assert settings.legacy_pre_m29_upload_enabled is True

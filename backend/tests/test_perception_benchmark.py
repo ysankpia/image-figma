@@ -83,8 +83,8 @@ def test_perception_benchmark_enabled_creates_report_overlay_and_does_not_modify
         }
 
 
-def test_perception_benchmark_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/perception-benchmark")
+def test_perception_benchmark_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/perception-benchmark")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -107,7 +107,7 @@ def test_perception_benchmark_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_perception/perception-benchmark")
+    not_found = legacy_client.get("/api/tasks/task_without_perception/perception-benchmark")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "PERCEPTION_BENCHMARK_NOT_FOUND"
 
@@ -131,7 +131,7 @@ def test_perception_benchmark_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-18T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_perception/perception-benchmark")
+    missing_file = legacy_client.get("/api/tasks/task_without_perception/perception-benchmark")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "PERCEPTION_BENCHMARK_NOT_FOUND"
 

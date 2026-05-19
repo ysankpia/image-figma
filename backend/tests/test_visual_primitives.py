@@ -20,15 +20,15 @@ from conftest import PNG_HEIGHT, PNG_WIDTH
 
 
 def test_upload_creates_fake_visual_primitives_without_api_key(
-    client: TestClient,
+    legacy_client: TestClient,
     png_file: tuple[str, bytes, str],
     tmp_path,
 ) -> None:
-    upload = client.post("/api/upload", files={"file": png_file})
+    upload = legacy_client.post("/api/upload", files={"file": png_file})
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
 
-    response = client.get(f"/api/tasks/{task_id}/primitives")
+    response = legacy_client.get(f"/api/tasks/{task_id}/primitives")
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
@@ -54,7 +54,7 @@ def test_upload_creates_fake_visual_primitives_without_api_key(
     primitive_file = Path(tmp_path / "storage" / "primitives" / f"{task_id}.json")
     assert primitive_file.exists()
 
-    dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
+    dsl_response = legacy_client.get(f"/api/tasks/{task_id}/dsl")
     assert dsl_response.status_code == 200
     child_ids = {child["id"] for child in dsl_response.json()["data"]["dsl"]["root"]["children"]}
     assert "vp_region_header" not in child_ids
@@ -67,8 +67,8 @@ def test_upload_creates_fake_visual_primitives_without_api_key(
     assert {"text_ocr_text_001", "text_ocr_text_002"}.issubset(child_ids)
 
 
-def test_missing_task_primitives_returns_task_not_found(client: TestClient) -> None:
-    response = client.get("/api/tasks/task_missing/primitives")
+def test_missing_task_primitives_returns_task_not_found(legacy_client: TestClient) -> None:
+    response = legacy_client.get("/api/tasks/task_missing/primitives")
 
     assert response.status_code == 404
     body = response.json()
@@ -76,7 +76,7 @@ def test_missing_task_primitives_returns_task_not_found(client: TestClient) -> N
     assert body["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_existing_task_without_primitives_returns_primitive_not_found(client: TestClient) -> None:
+def test_existing_task_without_primitives_returns_primitive_not_found(legacy_client: TestClient) -> None:
     from app.state import state
 
     state.database.insert_task(
@@ -97,7 +97,7 @@ def test_existing_task_without_primitives_returns_primitive_not_found(client: Te
         }
     )
 
-    response = client.get("/api/tasks/task_without_primitives/primitives")
+    response = legacy_client.get("/api/tasks/task_without_primitives/primitives")
 
     assert response.status_code == 404
     body = response.json()
@@ -188,6 +188,7 @@ def test_openai_provider_without_key_does_not_break_upload(monkeypatch, tmp_path
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     monkeypatch.setenv("VISUAL_PRIMITIVE_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 

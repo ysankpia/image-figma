@@ -74,8 +74,8 @@ def test_layer_separation_disabled_has_no_result_and_keeps_m17_dsl(monkeypatch, 
         assert "layerSeparationCandidateCount" not in dsl["meta"]
 
 
-def test_layer_separation_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/layer-separation-candidates")
+def test_layer_separation_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/layer-separation-candidates")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -98,7 +98,7 @@ def test_layer_separation_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_layer_separation/layer-separation-candidates")
+    not_found = legacy_client.get("/api/tasks/task_without_layer_separation/layer-separation-candidates")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "LAYER_SEPARATION_NOT_FOUND"
 
@@ -118,7 +118,7 @@ def test_layer_separation_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_layer_separation/layer-separation-candidates")
+    missing_file = legacy_client.get("/api/tasks/task_without_layer_separation/layer-separation-candidates")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "LAYER_SEPARATION_NOT_FOUND"
 

@@ -80,8 +80,8 @@ def test_icon_business_disabled_has_no_result_and_keeps_m24_or_m23_dsl(monkeypat
         assert "iconBusinessCandidateCount" not in dsl["meta"]
 
 
-def test_icon_business_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/icon-business-candidates")
+def test_icon_business_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/icon-business-candidates")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -104,7 +104,7 @@ def test_icon_business_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_business_icons/icon-business-candidates")
+    not_found = legacy_client.get("/api/tasks/task_without_business_icons/icon-business-candidates")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "ICON_BUSINESS_CANDIDATE_NOT_FOUND"
 
@@ -124,7 +124,7 @@ def test_icon_business_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-17T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_business_icons/icon-business-candidates")
+    missing_file = legacy_client.get("/api/tasks/task_without_business_icons/icon-business-candidates")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "ICON_BUSINESS_CANDIDATE_NOT_FOUND"
 

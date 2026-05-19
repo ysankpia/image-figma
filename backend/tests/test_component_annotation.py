@@ -69,8 +69,8 @@ def test_component_annotation_disabled_has_no_result_and_keeps_m16_dsl(monkeypat
         assert "componentAnnotationCount" not in dsl["meta"]
 
 
-def test_component_annotation_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/component-annotations")
+def test_component_annotation_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/component-annotations")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -93,7 +93,7 @@ def test_component_annotation_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_annotations/component-annotations")
+    not_found = legacy_client.get("/api/tasks/task_without_annotations/component-annotations")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "COMPONENT_ANNOTATION_NOT_FOUND"
 
@@ -111,7 +111,7 @@ def test_component_annotation_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_annotations/component-annotations")
+    missing_file = legacy_client.get("/api/tasks/task_without_annotations/component-annotations")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "COMPONENT_ANNOTATION_NOT_FOUND"
 
@@ -294,6 +294,7 @@ def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestCl
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 

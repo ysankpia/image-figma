@@ -93,8 +93,8 @@ def test_icon_coverage_disabled_has_no_result_and_keeps_m20_dsl(monkeypatch, tmp
         assert "iconCoverageCandidateCount" not in dsl["meta"]
 
 
-def test_icon_coverage_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/icon-coverage-audit")
+def test_icon_coverage_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/icon-coverage-audit")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -117,7 +117,7 @@ def test_icon_coverage_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_icon_coverage/icon-coverage-audit")
+    not_found = legacy_client.get("/api/tasks/task_without_icon_coverage/icon-coverage-audit")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "ICON_COVERAGE_AUDIT_NOT_FOUND"
 
@@ -139,7 +139,7 @@ def test_icon_coverage_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_icon_coverage/icon-coverage-audit")
+    missing_file = legacy_client.get("/api/tasks/task_without_icon_coverage/icon-coverage-audit")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "ICON_COVERAGE_AUDIT_NOT_FOUND"
 

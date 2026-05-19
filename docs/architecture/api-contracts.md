@@ -47,17 +47,17 @@ http://localhost:8000/api
 - 用途：确认后端服务运行。
 - 返回：`status`、`version`、`time`。
 
-`POST /api/upload`
+`POST /api/upload-m30-preview`
 
-- 用途：上传 PNG 并创建任务。
-- 请求：multipart file。
-- M27 成功后立即返回 completed deterministic region + hidden OCR candidate 任务；默认 text replacement debug 不改变可见 DSL。
-- 成功返回：`taskId`、文件信息、状态、阶段和进度。
-- 必须拒绝非 PNG、无法读取尺寸的 PNG 和过大图片。
-- 默认大小上限：10MB。
-- 返回 DSL 时，portrait/mobile-like PNG 默认包含 `fallback_region_header`、`fallback_region_content`、`fallback_region_bottom` 三个 region fallback。
-- 如果 cropper 不支持该 PNG 格式，任务仍可 completed，DSL 退回整图 fallback 并带 `qualityFlags`。
-- 上传链路会生成 visual primitives、OCR、DSL patch、text replacement、text binding、component structure、component annotation、layer separation candidate、asset slice candidate、icon candidate、icon coverage audit、icon gap candidate、icon placement plan 和 business icon candidate 调试结果。默认 `DSL_PATCH_MODE=debug` 会在 DSL 中加入 hidden text candidates；默认 `TEXT_REPLACEMENT_MODE=debug` 只保存 replacement decisions，不改变 Figma 可见输出。显式设置 `TEXT_REPLACEMENT_MODE=apply` 后应用 accepted 且通过 quality gate 的文字替换；M14 会在 quality gate 前记录 UI-aware sampling strategy。M15 默认生成 text binding 报告，把 OCR/replacement text 绑定到 visual primitives 或 inferred UI containers；M16 默认生成 component structure 报告，把 M15 containers/bindings 聚合成 component candidates 和 layout groups；M17 默认生成 component annotation 报告，并只把 M16 结构挂到已有 DSL element 的 `name`/`meta`；M18 默认生成 layer separation candidate 报告，并只追加 DSL 顶层 meta；M19 默认生成本地 asset slice candidate 报告和实验 PNG，并只追加 DSL 顶层 meta；M20 默认生成 icon candidate 报告和 icon PNG，并只追加 DSL 顶层 meta；M21 默认生成 icon coverage audit 报告和 debug overlay，并只追加 DSL 顶层 meta；M22 默认生成 region-guided icon gap candidate 报告、gap icon PNG 和 debug overlay，并只追加 DSL 顶层 meta；M23 默认生成 icon placement plan 报告和 debug overlay，并只追加 DSL 顶层 meta。M15-M23 都不改变 Figma 可见输出。M24 默认关闭；显式设置 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后才会追加 `icon_fallback_cover` 和 `visible_icon_fallback` 可见节点，并追加实际使用的 icon asset 到 DSL `assets`。M25 默认生成 region-guided business icon candidate 报告、业务 icon PNG 和 debug overlay，但只追加 DSL 顶层 meta，不新增可见节点，也不修改 DSL `assets`。M26 默认关闭；显式设置 `PERCEPTION_BENCHMARK_ENABLED=true` 后生成 perception benchmark 报告和 provider overlays，但不修改 DSL、不追加 DSL meta、不裁新 asset、不改变 Figma 可见输出。M27 默认关闭；显式设置 `SAM_VISUAL_CANDIDATE_ENABLED=true` 后生成 SAM visual candidate 报告和 overlay，但不修改 DSL、不追加 DSL meta、不裁新 asset、不改变 Figma 可见输出。
+- 用途：插件默认 preview 上传入口，创建任务并在后台运行 OCR + M29 + M30。
+- 请求：multipart PNG file。
+- 成功立即返回现有 UploadResult shape：`taskId`、文件信息、`status`、`stage`、`progress`。
+- 初始任务状态为 `processing`，stage 为 `m30_queued`。
+- 背景任务成功后，`GET /api/tasks/{taskId}` 返回 `status=completed`、`stage=m30_completed`，`GET /api/tasks/{taskId}/dsl` 返回 M30 materialized DSL。
+- 背景任务失败后，任务返回 `status=failed`，`stage` 为失败阶段，例如 `ocr`、`m29_0_3` 或 `m30_materialization`。
+- M30.1 只运行 OCR、M29、M29.1、M29.0.2、M29.0.3 lineage-aware path、M29.0.7、M29.0.4 with ownership routing、M29.0.5 和 M30 materialization with M30.2 conservative text cover。
+- M30.1 不运行 M29.1.3、M29.0.3.2、M29.0.6、M19-M25、M24 visible fallback、M26-M28，也不做 Auto Layout、Component、SVG/vectorization 或图标恢复。
+- M30 DSL 中本地 image asset URL 会被复制并重写为 `/files/assets/{taskId}/m30/...`，供 Renderer 直接 fetch。
 
 `GET /api/tasks/{taskId}`
 
@@ -69,35 +69,20 @@ http://localhost:8000/api
 - 用途：获取任务 DSL。
 - 仅在任务 completed 后成功。
 - 未完成时返回明确错误。
-- 默认 `DSL_PATCH_MODE=debug` 时返回 enhanced DSL，包含 hidden `candidate_text`。
-- `DSL_PATCH_MODE=off` 时返回 M7 base DSL。
-- patch build 或 validation 失败时返回 base DSL。
-- `TEXT_REPLACEMENT_MODE=apply` 时可额外包含 `text_replacement_cover` 和 `visible_text_replacement`；只有通过 M13/M14 decision 和 quality gate 的 replacement 会进入 DSL，replacement 失败时回退 M10/M9 输出。
-- M15 只更新 DSL `meta`：`qualityFlags` 可追加 `m15_text_primitive_binding`，并写入 `textPrimitiveBindingCount`、`textPrimitiveContainerCount`、`textPrimitiveUnboundCount`。M15 不新增可见 DSL 节点。
-- M16 只更新 DSL `meta`：`qualityFlags` 可追加 `m16_component_structure_harness`，并写入 `componentStructureCount`、`componentStructureGroupCount`、`componentStructureUnstructuredCount`。M16 不新增可见 DSL 节点。
-- M17 只更新已有 DSL element 的 `name`/`meta` 和 DSL 顶层 `meta`：`qualityFlags` 可追加 `m17_component_annotation`，并写入 `componentAnnotationCount`、`componentAnnotatedElementCount`、`componentUnannotatedElementCount`、`componentGroupHintCount`。M17 不新增可见 DSL 节点，不改 layout/style/content/source/imageFill/visible。
-- M18 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m18_layer_separation_candidates`，并写入 `layerSeparationCandidateCount`、`layerSeparationFillCandidateCount`、`layerSeparationRepairRequiredCount`、`layerSeparationEmbeddedTextCount`、`layerSeparationBlockedCount`。M18 不新增可见 DSL 节点，不改任何已有 element 的 name/meta/layout/style/content/source/imageFill/visible/children。
-- M19 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m19_local_asset_slice_candidates`，并写入 `assetSliceCandidateCount`、`assetSliceFilledCandidateCount`、`assetSliceBlockedCount`、`assetSliceFailedCount`。M19 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M20 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m20_icon_candidate_extraction`，并写入 `iconCandidateCount`、`iconCroppedAssetCount`、`iconBlockedCount`、`iconFailedCropCount`。M20 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M21 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m21_icon_coverage_audit`，并写入 `iconCoverageCandidateCount`、`iconCoveragePlacementCount`、`iconCoverageMissedHintCount`、`iconPlacementReadyCount`、`iconPlacementNeedsFallbackCoordinationCount`、`iconPlacementNeedsSliceCoordinationCount`、`iconPlacementBlockedCount`。M21 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M22 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m22_icon_gap_candidates`，并写入 `iconGapCandidateCount`、`iconGapCroppedAssetCount`、`iconGapBlockedCount`、`iconGapFailedCropCount`。M22 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M23 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m23_icon_placement_plan`，并写入 `iconPlacementPlanCount`、`iconPlacementReadyCount`、`iconPlacementNeedsFallbackMaskCount`、`iconPlacementNeedsSliceCoordinationCount`、`iconPlacementNeedsFallbackCoordinationCount`、`iconPlacementReviewRequiredCount`、`iconPlacementBlockedCount`、`iconPlacementDedupedCount`。M23 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M24 默认不生成 result、不修改 DSL。开启 `ICON_VISIBLE_FALLBACK_ENABLED=true` 后，DSL 顶层 `meta` 可追加 `m24_visible_icon_fallback_replay`，并写入 `visibleIconFallbackSelectedCount`、`visibleIconFallbackAppliedCount`、`visibleIconFallbackBlockedCount`、`visibleIconFallbackSkippedCount`。M24 只能 append 实际使用的 icon asset、`icon_fallback_cover` shape 和 `visible_icon_fallback` image node，不能修改任何已有 element 或已有 asset。
-- M25 只更新 DSL 顶层 `meta`：`qualityFlags` 可追加 `m25_icon_business_candidates`，并写入 `iconBusinessCandidateCount`、`iconBusinessCroppedAssetCount`、`iconBusinessBlockedCount`、`iconBusinessFailedCropCount`。M25 不新增可见 DSL 节点，不改任何已有 element，也不修改 DSL `assets` 数组。
-- M26 不更新 DSL。即使 `PERCEPTION_BENCHMARK_ENABLED=true`，`/dsl` 也不包含 M26 quality flag，不追加可见节点，不修改任何已有 element，也不修改 DSL `assets` 数组。
-- M27 不更新 DSL。即使 `SAM_VISUAL_CANDIDATE_ENABLED=true`，`/dsl` 也不包含 M27 quality flag，不追加可见节点，不修改任何已有 element，也不修改 DSL `assets` 数组。
+- For M30 preview tasks, this endpoint returns M30 materialized DSL from `m30/m30_materialized_dsl.json`.
+- M30 DSL preserves fallback and can contain `m30_text_member`, `m30_text_cover`, `m30_shape_candidate`, and safe `m30_visual_asset` image nodes.
+- M30 DSL must not contain mixed/future/audit-only evidence as visible children and must not emit DSL `icon` type.
+- For explicitly enabled legacy `/api/upload` tasks, this endpoint returns the legacy deterministic/enhanced DSL produced by the M8-M28 diagnostic chain.
 
-`POST /api/upload-m30-preview`
+## Legacy Debug Endpoints
 
-- 用途：插件默认 preview 上传入口，创建任务并在后台运行 OCR + M29 + M30。
+These endpoints are not registered by default. Set `LEGACY_PRE_M29_UPLOAD_ENABLED=true` to expose them for historical diagnostics.
+
+`POST /api/upload`
+
+- 用途：legacy pre-M29 上传入口，默认不注册。
 - 请求：multipart PNG file。
-- 成功立即返回现有 UploadResult shape：`taskId`、文件信息、`status`、`stage`、`progress`。
-- 初始任务状态为 `processing`，stage 为 `m30_queued`。
-- 背景任务成功后，`GET /api/tasks/{taskId}` 返回 `status=completed`、`stage=m30_completed`，`GET /api/tasks/{taskId}/dsl` 返回 M30 materialized DSL。
-- 背景任务失败后，任务返回 `status=failed`，`stage` 为失败阶段，例如 `ocr`、`m29_0_3` 或 `m30_materialization`。
-- M30.1 只运行 OCR、M29、M29.1、M29.0.2、M29.0.3 lineage-aware path、M29.0.7、M29.0.4 with ownership routing、M29.0.5 和 M30 materialization。
-- M30.1 不运行 M29.1.3、M29.0.3.2、M29.0.6、M19-M25、M24 visible fallback、M26-M28，也不做 text cover、Auto Layout、Component、SVG/vectorization 或图标恢复。
-- M30 DSL 中本地 image asset URL 会被复制并重写为 `/files/assets/{taskId}/m30/...`，供 Renderer 直接 fetch。
+- 旧 M8-M28 diagnostic chain 的同步回归入口。
 
 `GET /api/tasks/{taskId}/primitives`
 
@@ -337,19 +322,19 @@ DSL 中的 asset URL 指向这些路径，方便 Figma Renderer 直接 fetch 图
 - `PERCEPTION_PROVIDER_UNAVAILABLE`
 - `INTERNAL_ERROR`
 
-## Plugin M5 Usage
+## Current Plugin Usage
 
-M5 插件使用：
+Current Plugin Usage:
 
 ```text
-POST /api/upload
+POST /api/upload-m30-preview
 GET /api/tasks/{taskId}
 GET /api/tasks/{taskId}/dsl
 ```
 
 即使后端当前立即返回 `completed`，插件仍按 task 查询流程实现，避免后续接真实异步处理时重写主链路。
 
-M27 仍不改插件调用路径。插件不调用 OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan、icon-visible-fallback、icon-business-candidates、perception-benchmark 或 sam-visual-candidates endpoint。
+插件默认不调用 legacy `/api/upload`、OCR、primitives、dsl-patch、text-replacements、text-bindings、component-structures、component-annotations、layer-separation-candidates、asset-slice-candidates、icon-candidates、icon-coverage-audit、icon-gap-candidates、icon-placement-plan、icon-visible-fallback、icon-business-candidates、perception-benchmark 或 sam-visual-candidates endpoint。
 
 ## Optional Endpoints
 

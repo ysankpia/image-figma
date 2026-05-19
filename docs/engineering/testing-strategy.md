@@ -66,7 +66,9 @@ Figma Plugin：
 Backend API：
 
 - `GET /api/health` 成功。
-- `POST /api/upload` 接受 PNG。
+- 默认 `POST /api/upload` 返回 404，因为 pre-M29 legacy upload surface 已冻结。
+- `POST /api/upload-m30-preview` 接受 PNG 并进入 OCR + M29 + M30 当前主线。
+- `LEGACY_PRE_M29_UPLOAD_ENABLED=true` 时，legacy `POST /api/upload` 仍可用于历史回归。
 - 非 PNG 拒绝。
 - PNG 尺寸不可读时拒绝。
 - 过大图片拒绝。
@@ -130,7 +132,8 @@ Backend API：
 - M29.0.7 text ownership gate 必须覆盖 text_noise + high OCR overlap 变成 text_owned 且禁止 visual side、`text_owned_rejected_lineage` text_noise 保持 text-owned routing 并透传 sourceLineage 审计字段、low-confidence/missing OCR text_noise 只作 audit/mixed routing、icon/media/image evidence 不因 OCR overlap 直接 suppress、M29.0.2 textBox 生成 text-owned routing、routing views 只引用既有 source id/bbox、不生成 formal visual asset、overlay/preview 可读、M29.0.4 未传 ownership JSON 时 baseline 不变、传入后 weak text-noise 不能作为 visual side 形成 visual_text_pair/compound_visual/standalone uncertain_compound，但允许按 routing 作为 text side 保留关系证据。
 - M30 evidence-grounded DSL materialization 必须覆盖 `augment-existing-dsl` 保留 base DSL 并追加节点、`bootstrap-dsl-from-m29` 生成最小 full-image fallback DSL、M29.0.5 textMembers 生成带 source trace 的 DSL text、safe shapeCandidates 生成 DSL shape、不可靠 shape skip、safe visualAssets 生成 DSL image/assets entries、不得输出 DSL `icon`、mixed/future/audit-only 只能进入 report/meta 不得进入 visible children、fallback 保留、M29 JSON 不被改写、不新增 bbox、不从 raw pixels 新切 child、skip reason 使用通用词、forbidden terms 不出现在 JSON/report/reasons/risks。
 - M30.2 conservative text cover 必须覆盖稳定背景 text member 生成 `m30_text_cover` shape、cover fill 来自 source PNG 保守采样、cover 在 fallback 之后且 text 之前、高风险/复杂背景/visual overlap text 跳过、report 统计 cover candidate/materialized/skipped、`createdNewBBoxCount` 仍为 0、fallback 不隐藏、不改 DSL schema、不改 Renderer。
-- M30.1 plugin preview upload 必须覆盖 `POST /api/upload-m30-preview` 创建 processing task、后台完成后 stage=`m30_completed`、`/api/tasks/{taskId}/dsl` 返回 M30 DSL、DSL 保留 fallback 且包含 M30 text node、visible children 不包含 audit-only/mixed/future 来源、不输出 DSL `icon`、本地 M30 asset URL 被发布到 `/files/assets/{taskId}/m30/...` 且可 fetch、`/api/tasks/{taskId}/m30-materialization` 返回 report summary 和 `stageTimings`、默认 `M30_PREVIEW_PROFILE=production` 不生成 overlay/preview 诊断产物、`M30_PREVIEW_PROFILE=development` 保留诊断产物、OCR provider 失败时 task failed 且不会生成假 completed DSL、legacy `/api/upload` 回归不破、插件默认上传使用 M30 preview endpoint。
+- M30.1 plugin preview upload 必须覆盖 `POST /api/upload-m30-preview` 创建 processing task、后台完成后 stage=`m30_completed`、`/api/tasks/{taskId}/dsl` 返回 M30 DSL、DSL 保留 fallback 且包含 M30 text node、visible children 不包含 audit-only/mixed/future 来源、不输出 DSL `icon`、本地 M30 asset URL 被发布到 `/files/assets/{taskId}/m30/...` 且可 fetch、`/api/tasks/{taskId}/m30-materialization` 返回 report summary 和 `stageTimings`、默认 `M30_PREVIEW_PROFILE=production` 不生成 overlay/preview 诊断产物、`M30_PREVIEW_PROFILE=development` 保留诊断产物、OCR provider 失败时 task failed 且不会生成假 completed DSL、legacy `/api/upload` 默认 404、`LEGACY_PRE_M29_UPLOAD_ENABLED=true` 时 legacy upload 回归不破、插件默认上传使用 M30 preview endpoint。
+- M30.2.1 legacy surface freeze 必须覆盖默认 `/api/upload` 和旧 task debug endpoints 返回 404，显式 legacy flag 下旧 `/api/upload` 与旧 debug endpoints 仍可回归。
 - M23 icon placement plan 必须覆盖默认生成报告、`ICON_PLACEMENT_PLAN_ENABLED=false` 不生成报告、`/icon-placement-plan` API、DSL meta、只改顶层 meta、不新增可见节点、不改任何已有 element、不改 DSL assets。
 - M23 回归必须保护 M20/M22 icon 去重、fallback 内 icon 标记 `needs_fallback_mask`、M19 slice 内 icon 标记 `needs_slice_coordination`、text/cover/candidate_text 冲突 blocked、ready icon 的 futureDslNodeHint 只存在于 report，以及 overlay PNG 可读。
 - M24 visible icon fallback 必须覆盖 `ICON_VISIBLE_FALLBACK_ENABLED=false` 默认不生成 result 且 DSL 保持 M23 输出、`ICON_VISIBLE_FALLBACK_ENABLED=true` 时生成 `/icon-visible-fallback` 报告并 append DSL nodes/assets、endpoint not found、validation failed 回退 M23 输出。

@@ -127,6 +127,7 @@ class Settings:
     perception_uied_enabled: bool = False
     perception_uied_command: str = ""
     m30_preview_profile: str = "production"
+    legacy_pre_m29_upload_enabled: bool = False
     sam_visual_candidate_enabled: bool = False
     sam_visual_candidate_model_cfg: str = ""
     sam_visual_candidate_checkpoint: str = ""
@@ -270,6 +271,7 @@ def get_settings() -> Settings:
         perception_uied_enabled=parse_bool(os.getenv("PERCEPTION_UIED_ENABLED", "false")),
         perception_uied_command=os.getenv("PERCEPTION_UIED_COMMAND", "").strip(),
         m30_preview_profile=parse_m30_preview_profile(os.getenv("M30_PREVIEW_PROFILE", "production")),
+        legacy_pre_m29_upload_enabled=parse_bool(os.getenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "false")),
         sam_visual_candidate_enabled=parse_bool(os.getenv("SAM_VISUAL_CANDIDATE_ENABLED", "false")),
         sam_visual_candidate_model_cfg=os.getenv("SAM_VISUAL_CANDIDATE_MODEL_CFG", "").strip(),
         sam_visual_candidate_checkpoint=os.getenv("SAM_VISUAL_CANDIDATE_CHECKPOINT", "").strip(),

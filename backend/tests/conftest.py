@@ -18,6 +18,7 @@ def pytest_configure() -> None:
 @pytest.fixture(autouse=True)
 def deterministic_test_environment(monkeypatch) -> Iterator[None]:
     monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "false")
     monkeypatch.setenv("OCR_PROVIDER", "fake")
     monkeypatch.setenv("VISUAL_PRIMITIVE_PROVIDER", "fake")
     monkeypatch.setenv("DSL_PATCH_MODE", "debug")
@@ -33,6 +34,23 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as test_client:
+        yield test_client
+
+
+@pytest.fixture()
+def legacy_client(tmp_path, monkeypatch) -> Iterator[TestClient]:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
 
     for module_name in list(sys.modules):
         if module_name == "app" or module_name.startswith("app."):

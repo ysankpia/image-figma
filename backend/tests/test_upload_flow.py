@@ -9,8 +9,21 @@ BOTTOM_HEIGHT = 220
 CONTENT_HEIGHT = PNG_HEIGHT - HEADER_HEIGHT - BOTTOM_HEIGHT
 
 
-def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
+def test_legacy_upload_surface_is_disabled_by_default(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
     upload = client.post("/api/upload", files={"file": png_file})
+    primitives = client.get("/api/tasks/task_missing/primitives")
+    patch = client.get("/api/tasks/task_missing/dsl-patch")
+
+    assert upload.status_code == 404
+    assert primitives.status_code == 404
+    assert patch.status_code == 404
+
+
+def test_legacy_upload_png_creates_completed_task_and_dsl(
+    legacy_client: TestClient,
+    png_file: tuple[str, bytes, str],
+) -> None:
+    upload = legacy_client.post("/api/upload", files={"file": png_file})
 
     assert upload.status_code == 200
     upload_body = upload.json()
@@ -21,7 +34,7 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
     assert upload_body["data"]["stage"] == "completed"
     assert upload_body["data"]["progress"] == 100
 
-    task = client.get(f"/api/tasks/{task_id}")
+    task = legacy_client.get(f"/api/tasks/{task_id}")
     assert task.status_code == 200
     assert task.json()["data"] == {
         "taskId": task_id,
@@ -31,7 +44,7 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         "message": "Deterministic DSL is ready.",
     }
 
-    dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
+    dsl_response = legacy_client.get(f"/api/tasks/{task_id}/dsl")
     assert dsl_response.status_code == 200
     dsl = dsl_response.json()["data"]["dsl"]
     assert dsl["version"] == "0.1"
@@ -191,29 +204,29 @@ def test_upload_png_creates_completed_task_and_dsl(client: TestClient, png_file:
         assert child["meta"]["candidate"] is True
         assert child["meta"]["source"] == "ocr"
 
-    original_file = client.get(f"/files/uploads/{task_id}/original.png")
+    original_file = legacy_client.get(f"/files/uploads/{task_id}/original.png")
     assert original_file.status_code == 200
     assert original_file.content.startswith(b"\x89PNG\r\n\x1a\n")
 
     for region_name in ("header", "content", "bottom"):
-        region_file = client.get(f"/files/assets/{task_id}/{region_name}.png")
+        region_file = legacy_client.get(f"/files/assets/{task_id}/{region_name}.png")
         assert region_file.status_code == 200
         assert region_file.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_upload_falls_back_to_full_image_when_crop_format_is_unsupported(
-    client: TestClient,
+    legacy_client: TestClient,
     png_file: tuple[str, bytes, str],
 ) -> None:
     filename, png_bytes, mime_type = png_file
     unsupported_png = bytearray(png_bytes)
     unsupported_png[25] = 3
 
-    upload = client.post("/api/upload", files={"file": (filename, bytes(unsupported_png), mime_type)})
+    upload = legacy_client.post("/api/upload", files={"file": (filename, bytes(unsupported_png), mime_type)})
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
 
-    dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
+    dsl_response = legacy_client.get(f"/api/tasks/{task_id}/dsl")
     assert dsl_response.status_code == 200
     dsl = dsl_response.json()["data"]["dsl"]
 
@@ -235,8 +248,8 @@ def test_upload_falls_back_to_full_image_when_crop_format_is_unsupported(
     }
 
 
-def test_upload_rejects_non_png(client: TestClient) -> None:
-    response = client.post("/api/upload", files={"file": ("input.txt", b"not png", "text/plain")})
+def test_legacy_upload_rejects_non_png(legacy_client: TestClient) -> None:
+    response = legacy_client.post("/api/upload", files={"file": ("input.txt", b"not png", "text/plain")})
 
     assert response.status_code == 400
     body = response.json()
@@ -245,8 +258,8 @@ def test_upload_rejects_non_png(client: TestClient) -> None:
     assert body["error"]["stage"] == "upload"
 
 
-def test_upload_rejects_png_without_dimensions(client: TestClient) -> None:
-    response = client.post("/api/upload", files={"file": ("broken.png", b"\x89PNG\r\n\x1a\n", "image/png")})
+def test_legacy_upload_rejects_png_without_dimensions(legacy_client: TestClient) -> None:
+    response = legacy_client.post("/api/upload", files={"file": ("broken.png", b"\x89PNG\r\n\x1a\n", "image/png")})
 
     assert response.status_code == 400
     body = response.json()
@@ -255,8 +268,8 @@ def test_upload_rejects_png_without_dimensions(client: TestClient) -> None:
     assert body["error"]["stage"] == "upload"
 
 
-def test_upload_rejects_large_png(client: TestClient) -> None:
-    response = client.post(
+def test_legacy_upload_rejects_large_png(legacy_client: TestClient) -> None:
+    response = legacy_client.post(
         "/api/upload",
         files={"file": ("large.png", b"\x89PNG\r\n\x1a\n" + b"0" * (10 * 1024 * 1024), "image/png")},
     )
@@ -279,7 +292,7 @@ def test_missing_task_returns_task_not_found(client: TestClient) -> None:
 
 def test_figma_origin_cors_preflight_is_allowed(client: TestClient) -> None:
     response = client.options(
-        "/api/upload",
+        "/api/upload-m30-preview",
         headers={
             "Origin": "https://www.figma.com",
             "Access-Control-Request-Method": "POST",
@@ -307,7 +320,7 @@ def test_cors_allow_origins_can_be_restricted(tmp_path, monkeypatch) -> None:
     main = importlib.import_module("app.main")
     with TestClient(main.create_app()) as restricted_client:
         response = restricted_client.options(
-            "/api/upload",
+            "/api/upload-m30-preview",
             headers={
                 "Origin": "https://www.figma.com",
                 "Access-Control-Request-Method": "POST",

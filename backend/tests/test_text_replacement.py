@@ -128,13 +128,13 @@ def test_text_replacement_mode_off_has_no_result(monkeypatch, tmp_path) -> None:
         assert "visible_text_replacement" not in roles
 
 
-def test_missing_task_text_replacements_returns_task_not_found(client: TestClient) -> None:
-    response = client.get("/api/tasks/task_missing/text-replacements")
+def test_missing_task_text_replacements_returns_task_not_found(legacy_client: TestClient) -> None:
+    response = legacy_client.get("/api/tasks/task_missing/text-replacements")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_existing_task_without_text_replacements_returns_not_found(client: TestClient) -> None:
+def test_existing_task_without_text_replacements_returns_not_found(legacy_client: TestClient) -> None:
     from app.state import state
 
     state.database.insert_task(
@@ -155,7 +155,7 @@ def test_existing_task_without_text_replacements_returns_not_found(client: TestC
         }
     )
 
-    response = client.get("/api/tasks/task_without_replacements/text-replacements")
+    response = legacy_client.get("/api/tasks/task_without_replacements/text-replacements")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "TEXT_REPLACEMENT_NOT_FOUND"
 
@@ -938,6 +938,7 @@ def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestCl
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     for key, value in env.items():
         if value:
             monkeypatch.setenv(key, value)

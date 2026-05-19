@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# Legacy pre-M29 upload route. It is not registered unless
+# LEGACY_PRE_M29_UPLOAD_ENABLED=true and is a physical archive candidate.
+
 import json
 import secrets
 from datetime import UTC, datetime

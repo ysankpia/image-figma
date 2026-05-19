@@ -85,8 +85,8 @@ def test_icon_gap_disabled_has_no_result_and_keeps_m21_dsl(monkeypatch, tmp_path
         assert "iconGapCandidateCount" not in dsl["meta"]
 
 
-def test_icon_gap_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/icon-gap-candidates")
+def test_icon_gap_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/icon-gap-candidates")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -109,7 +109,7 @@ def test_icon_gap_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_icon_gap/icon-gap-candidates")
+    not_found = legacy_client.get("/api/tasks/task_without_icon_gap/icon-gap-candidates")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "ICON_GAP_CANDIDATE_NOT_FOUND"
 
@@ -129,7 +129,7 @@ def test_icon_gap_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_icon_gap/icon-gap-candidates")
+    missing_file = legacy_client.get("/api/tasks/task_without_icon_gap/icon-gap-candidates")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "ICON_GAP_CANDIDATE_NOT_FOUND"
 

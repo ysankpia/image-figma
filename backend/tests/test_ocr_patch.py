@@ -21,15 +21,15 @@ from conftest import PNG_HEIGHT, PNG_WIDTH
 
 
 def test_upload_creates_ocr_patch_and_hidden_text_candidates(
-    client: TestClient,
+    legacy_client: TestClient,
     png_file: tuple[str, bytes, str],
     tmp_path,
 ) -> None:
-    upload = client.post("/api/upload", files={"file": png_file})
+    upload = legacy_client.post("/api/upload", files={"file": png_file})
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
 
-    ocr_response = client.get(f"/api/tasks/{task_id}/ocr")
+    ocr_response = legacy_client.get(f"/api/tasks/{task_id}/ocr")
     assert ocr_response.status_code == 200
     ocr_data = ocr_response.json()["data"]
     assert ocr_data["taskId"] == task_id
@@ -37,7 +37,7 @@ def test_upload_creates_ocr_patch_and_hidden_text_candidates(
     assert ocr_data["provider"] == "fake"
     assert len(ocr_data["blocks"]) == 2
 
-    patch_response = client.get(f"/api/tasks/{task_id}/dsl-patch")
+    patch_response = legacy_client.get(f"/api/tasks/{task_id}/dsl-patch")
     assert patch_response.status_code == 200
     patch_data = patch_response.json()["data"]
     assert patch_data["taskId"] == task_id
@@ -50,7 +50,7 @@ def test_upload_creates_ocr_patch_and_hidden_text_candidates(
     assert ocr_file.exists()
     assert patch_file.exists()
 
-    dsl_response = client.get(f"/api/tasks/{task_id}/dsl")
+    dsl_response = legacy_client.get(f"/api/tasks/{task_id}/dsl")
     assert dsl_response.status_code == 200
     dsl = dsl_response.json()["data"]["dsl"]
     children = {child["id"]: child for child in dsl["root"]["children"]}
@@ -83,6 +83,7 @@ def test_dsl_patch_mode_off_returns_base_dsl(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     monkeypatch.setenv("DSL_PATCH_MODE", "off")
 
     for module_name in list(sys.modules):
@@ -116,13 +117,13 @@ def test_dsl_patch_mode_off_returns_base_dsl(monkeypatch, tmp_path) -> None:
         assert dsl["meta"]["notes"] == "deterministic_region_dsl"
 
 
-def test_missing_task_ocr_returns_task_not_found(client: TestClient) -> None:
-    response = client.get("/api/tasks/task_missing/ocr")
+def test_missing_task_ocr_returns_task_not_found(legacy_client: TestClient) -> None:
+    response = legacy_client.get("/api/tasks/task_missing/ocr")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_existing_task_without_ocr_returns_ocr_not_found(client: TestClient) -> None:
+def test_existing_task_without_ocr_returns_ocr_not_found(legacy_client: TestClient) -> None:
     from app.state import state
 
     state.database.insert_task(
@@ -143,13 +144,13 @@ def test_existing_task_without_ocr_returns_ocr_not_found(client: TestClient) -> 
         }
     )
 
-    response = client.get("/api/tasks/task_without_ocr/ocr")
+    response = legacy_client.get("/api/tasks/task_without_ocr/ocr")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "OCR_NOT_FOUND"
     assert response.json()["error"]["stage"] == "ocr_lookup"
 
 
-def test_existing_task_without_patch_returns_patch_not_found(client: TestClient) -> None:
+def test_existing_task_without_patch_returns_patch_not_found(legacy_client: TestClient) -> None:
     from app.state import state
 
     state.database.insert_task(
@@ -170,7 +171,7 @@ def test_existing_task_without_patch_returns_patch_not_found(client: TestClient)
         }
     )
 
-    response = client.get("/api/tasks/task_without_patch/dsl-patch")
+    response = legacy_client.get("/api/tasks/task_without_patch/dsl-patch")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "DSL_PATCH_NOT_FOUND"
     assert response.json()["error"]["stage"] == "dsl_patch_lookup"

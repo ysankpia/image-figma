@@ -74,8 +74,8 @@ def test_asset_slice_disabled_has_no_result_and_keeps_m18_dsl(monkeypatch, tmp_p
         assert "assetSliceCandidateCount" not in dsl["meta"]
 
 
-def test_asset_slice_endpoint_errors(client: TestClient) -> None:
-    missing = client.get("/api/tasks/task_missing/asset-slice-candidates")
+def test_asset_slice_endpoint_errors(legacy_client: TestClient) -> None:
+    missing = legacy_client.get("/api/tasks/task_missing/asset-slice-candidates")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
@@ -98,7 +98,7 @@ def test_asset_slice_endpoint_errors(client: TestClient) -> None:
             "failed_at": None,
         }
     )
-    not_found = client.get("/api/tasks/task_without_asset_slice/asset-slice-candidates")
+    not_found = legacy_client.get("/api/tasks/task_without_asset_slice/asset-slice-candidates")
     assert not_found.status_code == 404
     assert not_found.json()["error"]["code"] == "ASSET_SLICE_NOT_FOUND"
 
@@ -117,7 +117,7 @@ def test_asset_slice_endpoint_errors(client: TestClient) -> None:
             "created_at": "2026-05-16T00:00:00+00:00",
         }
     )
-    missing_file = client.get("/api/tasks/task_without_asset_slice/asset-slice-candidates")
+    missing_file = legacy_client.get("/api/tasks/task_without_asset_slice/asset-slice-candidates")
     assert missing_file.status_code == 404
     assert missing_file.json()["error"]["code"] == "ASSET_SLICE_NOT_FOUND"
 

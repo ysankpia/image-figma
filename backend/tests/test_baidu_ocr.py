@@ -206,6 +206,7 @@ def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestCl
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     for key, value in env.items():
         if value:
             monkeypatch.setenv(key, value)

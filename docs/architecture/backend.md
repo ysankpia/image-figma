@@ -48,7 +48,21 @@ development: keep full M29/M30 diagnostic overlays, preview sheets, and review c
 production: keep only OCR, structured JSON, formal M29.0.5 assets, M30 DSL/report, published renderer assets, and stage timings
 ```
 
-`M30_PREVIEW_PROFILE=production` is the default for `/api/upload-m30-preview`. It reduces plugin-preview runtime artifact generation without changing OCR, M29 classification rules, M30 DSL schema, renderer behavior, or legacy `/api/upload`. M29/M30 single-stage scripts keep their development-style defaults unless they explicitly opt out of debug/preview artifacts.
+`M30_PREVIEW_PROFILE=production` is the default for `/api/upload-m30-preview`. It reduces plugin-preview runtime artifact generation without changing OCR, M29 classification rules, M30 DSL schema, renderer behavior, or the frozen legacy implementation. M29/M30 single-stage scripts keep their development-style defaults unless they explicitly opt out of debug/preview artifacts.
+
+M30.2.1 freezes the pre-M29 runtime surface. By default, the backend does not register legacy `/api/upload` or the old task debug endpoints. They are available only when `LEGACY_PRE_M29_UPLOAD_ENABLED=true` for historical diagnostics and regression checks.
+
+Default runtime surface:
+
+```text
+/api/upload-m30-preview
+/api/tasks/{taskId}
+/api/tasks/{taskId}/dsl
+/api/tasks/{taskId}/m30-materialization
+/api/assets/{assetId}
+/files/uploads/*
+/files/assets/*
+```
 
 Each M30.1 task writes:
 
@@ -58,7 +72,7 @@ backend/storage/m30_1_uploads/{taskId}/stage_timings.json
 
 `GET /api/tasks/{taskId}/m30-materialization` returns those stage timings together with the M30 materialization summary.
 
-M28 当前上传管线：
+Pre-M29 legacy upload chain, disabled by default:
 
 ```text
 receive multipart PNG
@@ -172,7 +186,7 @@ M30.1 preview tasks can be asynchronous. The task table can write:
 - `completed`
 - `failed`
 
-Legacy `/api/upload` still completes synchronously.各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`，例如 M25 在 PNG pixel decode unsupported 时保存 skipped document。
+When `LEGACY_PRE_M29_UPLOAD_ENABLED=true`, legacy `/api/upload` still completes synchronously.各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`，例如 M25 在 PNG pixel decode unsupported 时保存 skipped document。
 
 后续完整任务状态：
 

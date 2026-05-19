@@ -75,13 +75,13 @@ def test_text_binding_disabled_has_no_result_and_keeps_m14_dsl(monkeypatch, tmp_
         assert "textPrimitiveBindingCount" not in dsl["meta"]
 
 
-def test_missing_task_text_bindings_returns_task_not_found(client: TestClient) -> None:
-    response = client.get("/api/tasks/task_missing/text-bindings")
+def test_missing_task_text_bindings_returns_task_not_found(legacy_client: TestClient) -> None:
+    response = legacy_client.get("/api/tasks/task_missing/text-bindings")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_existing_task_without_text_bindings_returns_not_found(client: TestClient) -> None:
+def test_existing_task_without_text_bindings_returns_not_found(legacy_client: TestClient) -> None:
     from app.state import state
 
     state.database.insert_task(
@@ -102,7 +102,7 @@ def test_existing_task_without_text_bindings_returns_not_found(client: TestClien
         }
     )
 
-    response = client.get("/api/tasks/task_without_bindings/text-bindings")
+    response = legacy_client.get("/api/tasks/task_without_bindings/text-bindings")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "TEXT_BINDING_NOT_FOUND"
 
@@ -365,6 +365,7 @@ def create_client_with_env(monkeypatch, tmp_path, env: dict[str, str]) -> TestCl
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("LEGACY_PRE_M29_UPLOAD_ENABLED", "true")
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
