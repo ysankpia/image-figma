@@ -79,9 +79,10 @@ class M291FragmentCandidate:
     interactive_shape_id: str | None
     layer_hint: str
     risk_reasons: list[str]
+    source_lineage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "id": self.id,
             "sourceNodeId": self.source_node_id,
             "sourceKind": self.source_kind,
@@ -93,6 +94,9 @@ class M291FragmentCandidate:
             "layerHint": self.layer_hint,
             "riskReasons": self.risk_reasons,
         }
+        if self.source_lineage is not None:
+            data["sourceLineage"] = self.source_lineage
+        return data
 
 
 @dataclass(frozen=True)
@@ -138,6 +142,8 @@ class M291SymbolGroup:
     confidence: float
     reasons: list[str]
     asset_path: str | None = None
+    source_lineage: dict[str, Any] | None = None
+    rejected_lineage_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -152,6 +158,10 @@ class M291SymbolGroup:
         }
         if self.asset_path is not None:
             data["assetPath"] = self.asset_path
+        if self.source_lineage is not None:
+            data["sourceLineage"] = self.source_lineage
+        if self.rejected_lineage_reason is not None:
+            data["rejectedLineageReason"] = self.rejected_lineage_reason
         return data
 
 
@@ -364,7 +374,76 @@ def candidate_from_record(
         interactive_shape_id=find_interactive_shape_id(bbox, nodes),
         layer_hint=str(record.get("layerHint") or "unknown"),
         risk_reasons=[str(reason) for reason in record.get("reasons", [])],
+        source_lineage=build_candidate_lineage(id, source_kind, str(record.get("id")), [str(reason) for reason in record.get("reasons", [])]),
     )
+
+
+def build_candidate_lineage(candidate_id: str, source_kind: M291SourceKind, source_node_id: str, reasons: list[str]) -> dict[str, Any]:
+    lineage_source = "m29_symbol" if source_kind == "symbol" else "eligible_blocked"
+    lineage_strength = "medium" if source_kind == "symbol" else "weak"
+    lineage_reasons = ["m29_symbol_candidate"] if source_kind == "symbol" else ["eligible_blocked_symbol_metrics"]
+    risks = [reason for reason in reasons if reason in {"weak_symbol_metrics", "symbol_color_too_high", "symbol_texture_too_high", "symbol_edge_too_high", "symbol_area_too_small"}]
+    return {
+        "preOcrSymbolCandidate": True,
+        "lineageStrength": lineage_strength,
+        "lineageSource": lineage_source,
+        "m29NodeIds": [source_node_id] if source_kind == "symbol" else [],
+        "m29BlockedIds": [source_node_id] if source_kind == "blocked" else [],
+        "m291CandidateIds": [candidate_id],
+        "m291GroupId": None,
+        "ownershipHint": "visual_or_mixed",
+        "risks": sorted(set(risks)),
+        "reasons": lineage_reasons,
+    }
+
+
+def build_group_lineage(
+    group_id: str,
+    decision: Literal["accepted", "uncertain", "rejected"],
+    candidates: list[M291FragmentCandidate],
+    reasons: list[str],
+) -> dict[str, Any] | None:
+    if decision == "rejected":
+        return None
+    if "text_like_sequence" in reasons or "image_like_merged_result" in reasons:
+        return None
+    strength = "strong" if decision == "accepted" and any(candidate.source_kind == "symbol" for candidate in candidates) else "medium"
+    if decision == "uncertain":
+        strength = "medium" if any(candidate.source_kind == "symbol" for candidate in candidates) else "weak"
+    risks: list[str] = []
+    if decision == "uncertain":
+        risks.append("lineage_conflict")
+    if "too_many_members" in reasons:
+        risks.append("anchorless_fragment")
+    if any(candidate.source_kind == "blocked" for candidate in candidates):
+        risks.append("eligible_blocked_member")
+    return {
+        "preOcrSymbolCandidate": True,
+        "lineageStrength": strength,
+        "lineageSource": "m291_group",
+        "m29NodeIds": [candidate.source_node_id for candidate in candidates if candidate.source_kind == "symbol"],
+        "m29BlockedIds": [candidate.source_node_id for candidate in candidates if candidate.source_kind == "blocked"],
+        "m291CandidateIds": [candidate.id for candidate in candidates],
+        "m291GroupId": group_id,
+        "ownershipHint": "visual_or_mixed",
+        "risks": sorted(set(risks)),
+        "reasons": ["symbol_group_lineage_preserved", *[reason for reason in reasons if reason]],
+    }
+
+
+def build_interactive_shape_lineage(group_id: str, foreground_candidate_id: str, foreground_source_id: str) -> dict[str, Any]:
+    return {
+        "preOcrSymbolCandidate": True,
+        "lineageStrength": "strong",
+        "lineageSource": "m291_group",
+        "m29NodeIds": [foreground_source_id],
+        "m29BlockedIds": [],
+        "m291CandidateIds": [foreground_candidate_id],
+        "m291GroupId": group_id,
+        "ownershipHint": "visual_or_mixed",
+        "risks": [],
+        "reasons": ["symbol_group_lineage_preserved", "interactive_shape_contains_symbol"],
+    }
 
 
 def is_eligible_blocked(
@@ -596,6 +675,10 @@ def score_symbol_group(
         M291GroupMember(candidate.id, candidate.source_node_id, "foreground_symbol" if candidate.source_kind == "symbol" else "symbol_fragment")
         for candidate in candidates
     ]
+    lineage = build_group_lineage(id, decision, candidates, reasons)
+    rejected_lineage_reason = None
+    if lineage is None and ("text_like_sequence" in reasons or "image_like_merged_result" in reasons):
+        rejected_lineage_reason = "text_like_glyph_sequence" if "text_like_sequence" in reasons else "image_like_merged_result"
     return M291SymbolGroup(
         id=id,
         group_type=group_type,
@@ -605,6 +688,8 @@ def score_symbol_group(
         bbox=bbox,
         confidence=round(confidence, 4),
         reasons=reasons,
+        source_lineage=lineage,
+        rejected_lineage_reason=rejected_lineage_reason,
     )
 
 
@@ -665,6 +750,7 @@ def make_icon_button_group(
         bbox=bbox,
         confidence=confidence,
         reasons=["interactive_shape_contains_symbol", "icon_button_group_relation"],
+        source_lineage=build_interactive_shape_lineage(id, foreground_candidate_id, foreground_source_id),
     )
 
 

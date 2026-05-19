@@ -43,6 +43,9 @@
 - 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
 - 当前 M29.0.6 member boundary quality audit 计划：[plans/active/029-0-6-member-boundary-quality-audit.md](plans/active/029-0-6-member-boundary-quality-audit.md)
 - 当前 M29.0.7 text ownership gate 计划：[plans/active/029-0-7-text-ownership-gate.md](plans/active/029-0-7-text-ownership-gate.md)
+- 当前 M29.1.1 pre-OCR symbol lineage audit 计划：[plans/active/029-1-1-pre-ocr-symbol-lineage-audit.md](plans/active/029-1-1-pre-ocr-symbol-lineage-audit.md)
+- 当前 M29.1.2 symbol lineage survival contract 计划：[plans/active/029-1-2-symbol-lineage-survival-contract.md](plans/active/029-1-2-symbol-lineage-survival-contract.md)
+- 当前 M29.1.3 mixed symbol/text conflict classification audit 计划：[plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md](plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md)
 
 ## By Task Type
 
@@ -129,6 +132,8 @@
 - M29.0.5 text-aware visual object refinement 决策：[decisions/0037-refine-visual-objects-into-text-and-visual-members.md](decisions/0037-refine-visual-objects-into-text-and-visual-members.md)
 - M29.0.6 member boundary quality audit 决策：[decisions/0038-audit-member-boundary-quality-after-text-aware-refinement.md](decisions/0038-audit-member-boundary-quality-after-text-aware-refinement.md)
 - M29.0.7 text ownership gate 决策：[decisions/0039-route-text-owned-evidence-before-object-graph.md](decisions/0039-route-text-owned-evidence-before-object-graph.md)
+- M29 pre-OCR symbol lineage 决策：[decisions/0040-preserve-pre-ocr-symbol-lineage-through-text-overlap.md](decisions/0040-preserve-pre-ocr-symbol-lineage-through-text-overlap.md)
+- M29.1.3 mixed conflict classification 决策：[decisions/0041-classify-mixed-symbol-text-conflicts-before-promotion.md](decisions/0041-classify-mixed-symbol-text-conflicts-before-promotion.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

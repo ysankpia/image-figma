@@ -112,6 +112,103 @@ def test_text_noise_is_retained_and_sorted_after_candidates(tmp_path: Path) -> N
     assert document.groups["byVisualKind"]["text_noise"] == 1
 
 
+def test_high_overlap_without_lineage_stays_text_noise(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("noise", "m29_symbol", "image_like_symbol", [10, 70, 30, 12], "likely_text_noise", 0.9),
+        ]
+    }
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+    )
+
+    assert document.items[0].visual_kind == "text_noise"
+    assert document.items[0].decision == "noise"
+
+
+def test_high_overlap_with_pre_ocr_lineage_becomes_mixed_symbol_text_candidate(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("candidate", "m291_group", "symbol_group", [10, 70, 30, 12], "likely_text_noise", 0.9),
+        ]
+    }
+    lineage = m291_lineage_document(
+        groups=[
+            {
+                "id": "group_001",
+                "decision": "uncertain",
+                "bbox": [10, 70, 30, 12],
+                "sourceLineage": {
+                    "preOcrSymbolCandidate": True,
+                    "lineageStrength": "weak",
+                    "lineageSource": "m291_group",
+                    "m291GroupId": "group_001",
+                    "ownershipHint": "visual_or_mixed",
+                },
+            }
+        ]
+    )
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        m291_lineage_document=lineage,
+        m291_lineage_json_path="/tmp/m29_1/group_nodes.json",
+        output_dir=tmp_path,
+    )
+
+    item = document.items[0]
+    assert item.visual_kind == "mixed_symbol_text_candidate"
+    assert item.decision == "uncertain"
+    assert item.source_lineage is not None
+    assert "pre_ocr_symbol_lineage_preserved" in item.reasons
+    assert item.asset_path.startswith("assets/mixed_symbol_text_candidates/")
+
+
+def test_rejected_text_like_lineage_stays_text_noise(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("candidate", "m291_group", "symbol_group", [10, 70, 30, 12], "likely_text_noise", 0.9),
+        ]
+    }
+    lineage = m291_lineage_document(
+        groups=[
+            {
+                "id": "group_001",
+                "decision": "rejected",
+                "bbox": [10, 70, 30, 12],
+                "rejectedLineageReason": "text_like_glyph_sequence",
+                "reasons": ["text_like_sequence"],
+            }
+        ]
+    )
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        m291_lineage_document=lineage,
+        output_dir=tmp_path,
+    )
+
+    assert document.items[0].visual_kind == "text_noise"
+    assert "rejected_pre_ocr_lineage_text_like" in document.items[0].reasons
+
+
 def test_small_symbol_group_prefers_icon_over_media_candidate(tmp_path: Path) -> None:
     canvas = make_canvas(90, 90, (255, 255, 255))
     draw_noise_patch(canvas, 20, 20, 48, 48)
@@ -227,6 +324,24 @@ def evidence(
         "metrics": metrics_to_dict(metrics()),
         "reasons": ["test"],
         "suggestedNextAction": action,
+    }
+
+
+def m291_lineage_document(groups: list[dict] | None = None, candidates: list[dict] | None = None) -> dict:
+    return {
+        "schemaName": "M291SymbolFragmentGroupingDocument",
+        "schemaVersion": "0.1",
+        "sourceM29NodesJson": "/tmp/m29/nodes.json",
+        "sourceImage": "synthetic.png",
+        "options": {},
+        "candidates": candidates or [],
+        "edges": [],
+        "groups": groups or [],
+        "assetAudit": [],
+        "edgeAudit": [],
+        "debug": {},
+        "warnings": [],
+        "meta": {},
     }
 
 

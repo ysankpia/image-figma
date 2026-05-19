@@ -52,6 +52,10 @@ def test_search_circle_and_handle_group(tmp_path: Path) -> None:
 
     assert any(group.decision == "accepted" and group.group_type == "grouped_symbol" for group in result.groups)
     assert any((tmp_path / (group.asset_path or "")).exists() for group in result.groups if group.decision == "accepted")
+    accepted = next(group for group in result.groups if group.decision == "accepted" and group.group_type == "grouped_symbol")
+    assert accepted.source_lineage is not None
+    assert accepted.source_lineage["preOcrSymbolCandidate"] is True
+    assert accepted.source_lineage["lineageStrength"] in {"medium", "strong"}
 
 
 def test_cart_body_and_wheels_group(tmp_path: Path) -> None:
@@ -103,6 +107,8 @@ def test_icon_button_group_preserves_member_roles(tmp_path: Path) -> None:
     assert groups
     roles = {member.role for member in groups[0].members}
     assert {"button_background", "foreground_symbol"} <= roles
+    assert groups[0].source_lineage is not None
+    assert groups[0].source_lineage["lineageStrength"] == "strong"
 
 
 def test_neighbor_tab_icons_do_not_merge(tmp_path: Path) -> None:
@@ -135,6 +141,47 @@ def test_text_like_sequence_rejected(tmp_path: Path) -> None:
     result = run_grouping(document, tmp_path, canvas, M291Options(neighbor_search_radius=18))
 
     assert any("text_like_sequence" in group.reasons and group.decision == "rejected" for group in result.groups)
+    rejected = next(group for group in result.groups if "text_like_sequence" in group.reasons)
+    assert rejected.source_lineage is None
+    assert rejected.rejected_lineage_reason == "text_like_glyph_sequence"
+
+
+def test_uncertain_group_emits_weak_or_medium_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(160, 80, (255, 255, 255))
+    document = make_m29_document(
+        [
+            symbol("symbol_a", [10, 20, 8, 8]),
+            symbol("symbol_b", [20, 20, 8, 8]),
+            symbol("symbol_c", [30, 20, 8, 8]),
+            symbol("symbol_d", [10, 30, 8, 8]),
+            symbol("symbol_e", [20, 30, 8, 8]),
+            symbol("symbol_f", [30, 30, 8, 8]),
+        ]
+    )
+
+    result = run_grouping(document, tmp_path, canvas, M291Options(neighbor_search_radius=12))
+
+    uncertain = [group for group in result.groups if group.decision == "uncertain"]
+    assert uncertain
+    assert uncertain[0].source_lineage is not None
+    assert uncertain[0].source_lineage["preOcrSymbolCandidate"] is True
+    assert uncertain[0].source_lineage["lineageStrength"] in {"weak", "medium"}
+
+
+def test_eligible_blocked_candidate_emits_weak_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(80, 80, (255, 255, 255))
+    document = make_m29_document(
+        [symbol("symbol_001", [20, 20, 8, 8])],
+        blocked=[blocked("blocked_001", [31, 20, 5, 5], ["weak_symbol_metrics"])],
+    )
+
+    result = run_grouping(document, tmp_path, canvas)
+
+    candidate = next(item for item in result.candidates if item.source_node_id == "blocked_001")
+    assert candidate.source_lineage is not None
+    assert candidate.source_lineage["lineageSource"] == "eligible_blocked"
+    assert candidate.source_lineage["lineageStrength"] == "weak"
+    assert candidate.source_lineage["preOcrSymbolCandidate"] is True
 
 
 def test_image_internal_texture_does_not_enter_graph(tmp_path: Path) -> None:

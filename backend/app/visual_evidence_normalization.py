@@ -24,8 +24,15 @@ VisualEvidenceSource = Literal[
     "m291_group",
     "after_text_mask_candidate",
 ]
-VisualEvidenceKind = Literal["accepted_image", "media_candidate", "icon_candidate", "text_noise", "other_candidate"]
-VisualEvidenceDecision = Literal["accepted", "candidate", "noise", "rejected"]
+VisualEvidenceKind = Literal[
+    "accepted_image",
+    "media_candidate",
+    "icon_candidate",
+    "mixed_symbol_text_candidate",
+    "text_noise",
+    "other_candidate",
+]
+VisualEvidenceDecision = Literal["accepted", "candidate", "uncertain", "noise", "rejected"]
 
 
 @dataclass(frozen=True)
@@ -64,9 +71,10 @@ class VisualEvidenceItem:
     reasons: list[str]
     source_decision: str
     suggested_next_action: str
+    source_lineage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "id": self.id,
             "sourceEvidenceId": self.source_evidence_id,
             "source": self.source,
@@ -83,6 +91,9 @@ class VisualEvidenceItem:
             "sourceDecision": self.source_decision,
             "suggestedNextAction": self.suggested_next_action,
         }
+        if self.source_lineage is not None:
+            data["sourceLineage"] = self.source_lineage
+        return data
 
 
 @dataclass(frozen=True)
@@ -135,6 +146,8 @@ def extract_visual_evidence_normalization(
     m2902_audit_json_path: str,
     output_dir: Path,
     options: VisualEvidenceOptions | None = None,
+    m291_lineage_document: dict[str, Any] | None = None,
+    m291_lineage_json_path: str | None = None,
     warnings: list[str] | None = None,
 ) -> VisualEvidenceDocument:
     options = options or VisualEvidenceOptions()
@@ -149,6 +162,7 @@ def extract_visual_evidence_normalization(
         output_dir=output_dir,
         media_evidence=media_evidence,
         options=options,
+        lineage_lookup=build_lineage_lookup(m291_lineage_document),
     )
     debug = write_debug_artifacts(pixels, output_dir, items)
     preview_path = output_dir / "preview_visual_evidence.png"
@@ -163,7 +177,7 @@ def extract_visual_evidence_normalization(
         groups=build_groups(items),
         debug=debug,
         warnings=warnings or [],
-        meta=build_meta(m2902_audit_json_path, media_evidence, items),
+        meta=build_meta(m2902_audit_json_path, media_evidence, items, m291_lineage_json_path),
     )
     validate_visual_evidence_document(document, output_dir, pixels.width, pixels.height, expected_count=len(media_evidence))
     write_outputs(document, output_dir)
@@ -176,6 +190,7 @@ def normalize_evidence_items(
     output_dir: Path,
     media_evidence: list[Any],
     options: VisualEvidenceOptions,
+    lineage_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> list[VisualEvidenceItem]:
     items: list[VisualEvidenceItem] = []
     counters: dict[str, int] = {}
@@ -188,7 +203,8 @@ def normalize_evidence_items(
         if not source_evidence_id or source is None or bbox is None or not bbox_in_bounds(bbox, pixels.width, pixels.height):
             raise ValueError(f"M29.0.3 invalid mediaEvidence item: {source_evidence_id or '<missing id>'}")
         metrics = parse_metrics(raw.get("metrics"))
-        visual_kind, decision, confidence, classification_reasons = classify_evidence(raw, bbox, metrics, options)
+        source_lineage = lookup_source_lineage(raw, bbox, lineage_lookup)
+        visual_kind, decision, confidence, classification_reasons = classify_evidence(raw, bbox, metrics, options, source_lineage)
         id = next_item_id(visual_kind, counters)
         asset_path = export_visual_evidence_asset(pixels, output_dir, visual_kind, id, bbox)
         items.append(
@@ -208,6 +224,7 @@ def normalize_evidence_items(
                 reasons=[*classification_reasons, *[str(reason) for reason in raw.get("reasons", [])]],
                 source_decision=str(raw.get("decision") or ""),
                 suggested_next_action=str(raw.get("suggestedNextAction") or ""),
+                source_lineage=source_lineage,
             )
         )
     return sorted(items, key=item_sort_key)
@@ -218,6 +235,7 @@ def classify_evidence(
     bbox: list[int],
     metrics: M29PrimitiveMetrics,
     options: VisualEvidenceOptions,
+    source_lineage: dict[str, Any] | None = None,
 ) -> tuple[VisualEvidenceKind, VisualEvidenceDecision, float, list[str]]:
     source = str(raw.get("source"))
     source_decision = str(raw.get("decision") or "")
@@ -228,6 +246,15 @@ def classify_evidence(
     max_edge = max(width, height)
     aspect = width / max(1, height)
     if text_overlap >= options.text_noise_overlap_threshold or suggested == "likely_text_noise":
+        if lineage_is_rejected_text_like(source_lineage):
+            return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted", "rejected_pre_ocr_lineage_text_like"]
+        if lineage_survives_as_conflict(source_lineage):
+            return (
+                "mixed_symbol_text_candidate",
+                "uncertain",
+                max(0.55, min(0.72, confidence_from_overlap(text_overlap) - 0.12)),
+                ["symbol_text_ownership_conflict", "pre_ocr_symbol_lineage_preserved"],
+            )
         return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted"]
     if source == "m29_image" and suggested == "keep_accepted_image":
         return "accepted_image", "accepted", 0.92, ["accepted_m29_image"]
@@ -248,6 +275,95 @@ def classify_evidence(
     ):
         return "icon_candidate", "candidate", 0.68, ["icon_candidate_promoted", f"from_{source_decision or source}"]
     return "other_candidate", "candidate", 0.45, ["other_candidate_retained", f"from_{source_decision or source}"]
+
+
+def lineage_survives_as_conflict(source_lineage: dict[str, Any] | None) -> bool:
+    if not isinstance(source_lineage, dict):
+        return False
+    if source_lineage.get("rejectedLineageReason"):
+        return False
+    return bool(source_lineage.get("preOcrSymbolCandidate"))
+
+
+def lineage_is_rejected_text_like(source_lineage: dict[str, Any] | None) -> bool:
+    if not isinstance(source_lineage, dict):
+        return False
+    reason = str(source_lineage.get("rejectedLineageReason") or "")
+    return reason in {"text_like_glyph_sequence", "image_like_merged_result"}
+
+
+def build_lineage_lookup(document: dict[str, Any] | None) -> dict[str, dict[str, Any]] | None:
+    if document is None:
+        return None
+    if document.get("schemaName") != "M291SymbolFragmentGroupingDocument" or document.get("schemaVersion") != "0.1":
+        raise ValueError("M29.0.3 lineage input must be M291SymbolFragmentGroupingDocument v0.1")
+    lookup: dict[str, dict[str, Any]] = {}
+    for candidate in document.get("candidates", []):
+        if not isinstance(candidate, dict):
+            continue
+        lineage = normalized_lineage(candidate.get("sourceLineage"), candidate)
+        if lineage is None:
+            continue
+        bbox = parse_bbox(candidate.get("bbox"))
+        source_node_id = str(candidate.get("sourceNodeId") or "")
+        source_kind = str(candidate.get("sourceKind") or "")
+        if source_node_id:
+            if source_kind == "symbol":
+                lookup[f"source_node:m29_symbol:{source_node_id}"] = lineage
+            elif source_kind == "blocked":
+                lookup[f"source_node:m29_blocked:{source_node_id}"] = lineage
+        if bbox is not None:
+            lookup.setdefault(bbox_key(bbox), lineage)
+    for group in document.get("groups", []):
+        if not isinstance(group, dict):
+            continue
+        lineage = normalized_lineage(group.get("sourceLineage"), group)
+        if lineage is None and group.get("rejectedLineageReason"):
+            lineage = {
+                "preOcrSymbolCandidate": False,
+                "lineageStrength": "weak",
+                "lineageSource": "m291_group",
+                "m291GroupId": str(group.get("id") or ""),
+                "ownershipHint": "text_owned",
+                "rejectedLineageReason": str(group.get("rejectedLineageReason") or ""),
+                "risks": ["text_like_sequence_risk"],
+                "reasons": [str(reason) for reason in group.get("reasons", [])],
+            }
+        if lineage is None:
+            continue
+        bbox = parse_bbox(group.get("bbox"))
+        group_id = str(group.get("id") or "")
+        if group_id:
+            lookup[f"source_node:m291_group:{group_id}"] = lineage
+        if bbox is not None:
+            lookup[bbox_key(bbox)] = lineage
+    return lookup
+
+
+def normalized_lineage(value: object, owner: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    lineage = dict(value)
+    owner_id = str(owner.get("id") or "")
+    if owner_id and not lineage.get("sourceOwnerId"):
+        lineage["sourceOwnerId"] = owner_id
+    return lineage
+
+
+def lookup_source_lineage(raw: dict[str, Any], bbox: list[int], lineage_lookup: dict[str, dict[str, Any]] | None) -> dict[str, Any] | None:
+    if not lineage_lookup:
+        return None
+    source = str(raw.get("source") or "")
+    source_id = str(raw.get("sourceId") or raw.get("sourceNodeId") or raw.get("sourceGroupId") or "")
+    if source_id:
+        found = lineage_lookup.get(f"source_node:{source}:{source_id}")
+        if found is not None:
+            return found
+    return lineage_lookup.get(bbox_key(bbox))
+
+
+def bbox_key(bbox: list[int]) -> str:
+    return "bbox:" + ",".join(str(int(item)) for item in bbox)
 
 
 def confidence_from_overlap(text_overlap: float) -> float:
@@ -272,6 +388,7 @@ def export_visual_evidence_asset(
         "accepted_image": "accepted_images",
         "media_candidate": "media_candidates",
         "icon_candidate": "icon_candidates",
+        "mixed_symbol_text_candidate": "mixed_symbol_text_candidates",
         "text_noise": "text_noise",
         "other_candidate": "other_candidates",
     }[visual_kind]
@@ -309,7 +426,7 @@ def write_debug_artifacts(pixels: PngPixels, output_dir: Path, items: list[Visua
     buckets_path = overlay_dir / "13_visual_evidence_buckets.png"
     media_path = overlay_dir / "14_media_candidates.png"
     noise_path = overlay_dir / "15_text_noise.png"
-    buckets_path.write_bytes(overlay_items(pixels, items, {"accepted_image", "media_candidate", "icon_candidate", "other_candidate", "text_noise"}))
+    buckets_path.write_bytes(overlay_items(pixels, items, {"accepted_image", "media_candidate", "icon_candidate", "mixed_symbol_text_candidate", "other_candidate", "text_noise"}))
     media_path.write_bytes(overlay_items(pixels, items, {"accepted_image", "media_candidate"}))
     noise_path.write_bytes(overlay_items(pixels, items, {"text_noise"}))
     return VisualEvidenceDebugArtifacts(
@@ -435,7 +552,8 @@ def item_sort_key(item: VisualEvidenceItem) -> tuple[int, int, int, int, str]:
         "media_candidate": 1,
         "icon_candidate": 2,
         "other_candidate": 3,
-        "text_noise": 4,
+        "mixed_symbol_text_candidate": 4,
+        "text_noise": 5,
     }.get(item.visual_kind, 9)
     return (kind_rank, -bbox_area(item.bbox), item.bbox[1], item.bbox[0], item.id)
 
@@ -445,6 +563,7 @@ def item_color(item: VisualEvidenceItem) -> tuple[int, int, int]:
         "accepted_image": (0, 180, 210),
         "media_candidate": (235, 64, 52),
         "icon_candidate": (0, 200, 90),
+        "mixed_symbol_text_candidate": (238, 140, 40),
         "other_candidate": (238, 190, 40),
         "text_noise": (170, 170, 170),
     }[item.visual_kind]
@@ -515,13 +634,15 @@ def assert_readable_relative_png(output_dir: Path, path: str) -> None:
         raise ValueError(f"M29.0.3 PNG output missing or unreadable: {path}")
 
 
-def build_meta(m2902_audit_json_path: str, media_evidence: list[Any], items: list[VisualEvidenceItem]) -> dict[str, Any]:
+def build_meta(m2902_audit_json_path: str, media_evidence: list[Any], items: list[VisualEvidenceItem], m291_lineage_json_path: str | None = None) -> dict[str, Any]:
     return {
         "notes": "m29_0_3_visual_evidence_normalization",
         "sourceM2902AuditJson": m2902_audit_json_path,
+        "sourceM291LineageJson": m291_lineage_json_path,
         "sourceEvidenceCount": len(media_evidence),
         "itemCount": len(items),
         "bucketCounts": build_groups(items)["byVisualKind"],
+        "lineageAwareItemCount": sum(1 for item in items if item.source_lineage is not None),
     }
 
 

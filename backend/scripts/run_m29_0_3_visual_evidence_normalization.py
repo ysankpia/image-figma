@@ -26,6 +26,9 @@ def main() -> int:
     m2902_json = m2902_output / "text_masked_media_audit.json"
     if not m2902_json.exists():
         raise FileNotFoundError(f"M29.0.2 audit JSON not found: {m2902_json}")
+    m291_lineage_json = Path(args.m291_lineage_json).expanduser().resolve() if args.m291_lineage_json else None
+    if m291_lineage_json is not None and not m291_lineage_json.exists():
+        raise FileNotFoundError(f"M29.1 lineage JSON not found: {m291_lineage_json}")
     output_dir = resolve_output_dir(m29_output / "m29_0_3", overwrite=args.overwrite)
     document = extract_visual_evidence_normalization(
         png_data=source.read_bytes(),
@@ -33,6 +36,8 @@ def main() -> int:
         m2902_document=json.loads(m2902_json.read_text(encoding="utf-8")),
         m2902_audit_json_path=str(m2902_json),
         output_dir=output_dir,
+        m291_lineage_document=json.loads(m291_lineage_json.read_text(encoding="utf-8")) if m291_lineage_json else None,
+        m291_lineage_json_path=str(m291_lineage_json) if m291_lineage_json else None,
         options=VisualEvidenceOptions(
             text_noise_overlap_threshold=args.text_noise_overlap_threshold,
             media_candidate_text_overlap_max=args.media_candidate_text_overlap_max,
@@ -53,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", default=str(DEFAULT_SOURCE_IMAGE))
     parser.add_argument("--m29-output", default="storage/m29_visual_primitive_graph")
     parser.add_argument("--m2902-output", default="")
+    parser.add_argument("--m291-lineage-json", default="")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--text-noise-overlap-threshold", type=float, default=VisualEvidenceOptions.text_noise_overlap_threshold)
     parser.add_argument("--media-candidate-text-overlap-max", type=float, default=VisualEvidenceOptions.media_candidate_text_overlap_max)

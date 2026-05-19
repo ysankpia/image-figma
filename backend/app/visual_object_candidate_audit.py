@@ -504,6 +504,8 @@ def classify_m2903_node(
         return "wide_visual_source", risks, [*reasons, "wide_visual_source"]
     if visual_kind in {"accepted_image", "media_candidate", "icon_candidate", "other_candidate"}:
         return "visual", risks, reasons
+    if visual_kind == "mixed_symbol_text_candidate":
+        return "noise", ["symbol_text_ownership_conflict"], [*reasons, "mixed_symbol_text_candidate_audit_only"]
     if visual_kind == "text_noise":
         if is_icon_like_text_noise(bbox, metrics):
             return "weak_visual_text_noise", ["text_overlap", "icon_like_text_noise"], [*reasons, "icon_like_text_noise"]

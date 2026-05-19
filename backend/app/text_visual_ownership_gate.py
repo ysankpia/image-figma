@@ -252,6 +252,26 @@ def decide_visual_item(id: str, raw: dict[str, Any], bbox: list[int], text_boxes
     has_good_ocr = confidence is not None and confidence >= options.ocr_confidence_min
     has_text_ownership_overlap = ocr_overlap >= options.text_owned_overlap_min and text_covered >= options.text_owned_text_covered_min
 
+    if visual_kind == "mixed_symbol_text_candidate":
+        return make_visual_decision(
+            id,
+            raw,
+            bbox,
+            ownership="mixed_or_uncertain",
+            decision="uncertain",
+            reason_kind="symbol_text_ownership_conflict",
+            matched_ids=matched_ids,
+            raw_text_overlap=raw_text_overlap,
+            ocr_overlap=ocr_overlap,
+            text_preview=text_preview,
+            ocr_confidence=confidence,
+            suppressed=False,
+            allow_visual=False,
+            allow_text=False,
+            risks=["pre_ocr_symbol_lineage_conflict"],
+            reasons=["mixed_symbol_text_candidate_audit_only", "pre_ocr_symbol_lineage_preserved"],
+        )
+
     if visual_kind == "text_noise":
         if has_good_ocr and has_text_ownership_overlap:
             return make_visual_decision(

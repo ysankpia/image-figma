@@ -85,6 +85,25 @@ def test_media_internal_text_records_overlay_without_suppression(tmp_path: Path)
     assert "text_overlay_on_visual" in decision.risks
 
 
+def test_mixed_symbol_text_candidate_is_audit_only(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 90)
+    document = run_extract(
+        tmp_path,
+        canvas,
+        m2903={"items": [visual_item("mixed_1", "mixed_symbol_text_candidate", [10, 10, 30, 30], text_overlap=0.8)]},
+        m2902={"textBoxes": [text_box("text_1", [10, 10, 30, 30], "X")]},
+    )
+
+    decision = next(item for item in document.ownership_decisions if item.source_visual_evidence_item_id == "mixed_1")
+    assert decision.ownership == "mixed_or_uncertain"
+    assert decision.decision == "uncertain"
+    assert decision.ownership_reason_kind == "symbol_text_ownership_conflict"
+    assert decision.suppressed_as_visual is False
+    assert decision.allowed_for_object_forming_visual_side is False
+    assert decision.allowed_for_text_side is False
+    assert "pre_ocr_symbol_lineage_conflict" in decision.risks
+
+
 def test_text_box_produces_text_owned_routing_and_outputs(tmp_path: Path) -> None:
     canvas = make_canvas(100, 80)
     document = run_extract(
