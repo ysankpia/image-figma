@@ -135,6 +135,9 @@ class Storage:
     def icon_business_candidate_image_path(self, task_id: str, filename: str) -> Path:
         return self.assets_dir / task_id / "icons_business" / filename
 
+    def m30_asset_path(self, task_id: str, filename: str) -> Path:
+        return self.assets_dir / task_id / "m30" / filename
+
     def original_url(self, task_id: str) -> str:
         return f"{self.public_base_url}/files/uploads/{task_id}/original.png"
 
@@ -155,6 +158,9 @@ class Storage:
 
     def icon_business_candidate_image_url(self, task_id: str, filename: str) -> str:
         return f"{self.public_base_url}/files/assets/{task_id}/icons_business/{filename}"
+
+    def m30_asset_url(self, task_id: str, filename: str) -> str:
+        return f"{self.public_base_url}/files/assets/{task_id}/m30/{filename}"
 
     def save_upload(self, task_id: str, data: bytes) -> Path:
         path = self.upload_path(task_id)

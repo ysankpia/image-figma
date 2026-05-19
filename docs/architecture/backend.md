@@ -17,6 +17,30 @@
 
 ## Processing Pipeline
 
+M30.1 plugin preview upload pipeline:
+
+```text
+receive multipart PNG at /api/upload-m30-preview
+-> validate MIME, PNG signature, and IHDR metadata
+-> save uploads/{taskId}/original.png
+-> create task status=processing stage=m30_queued
+-> run background OCR + M29 + M30 pipeline
+-> OCR
+-> M29 visual primitive graph
+-> M29.1 symbol fragment grouping
+-> M29.0.2 text-masked media audit
+-> M29.0.3 visual evidence normalization with M29.1 lineage
+-> M29.0.7 text/visual ownership gate
+-> M29.0.4 visual object candidate audit with ownership routing
+-> M29.0.5 text-aware visual object refinement
+-> M30 evidence-grounded DSL materialization
+-> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
+-> save dsl_results path to m30/m30_materialized_dsl.json
+-> mark task completed
+```
+
+This pipeline is the plugin preview main path. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M24 visible fallback, M26-M28, Auto Layout, Figma Component/Instance, SVG/vectorization, text cover, or any 图标恢复 path.
+
 M28 当前上传管线：
 
 ```text
@@ -93,6 +117,7 @@ load original image
 backend/storage/
   uploads/
   assets/
+  m30_1_uploads/
   dsl/
   primitives/
   ocr/
@@ -116,6 +141,7 @@ backend/storage/
   assets/{taskId}/icons_gap/
   assets/{taskId}/icons_business/
   assets/{taskId}/debug/
+  assets/{taskId}/m30/
   logs/
 ```
 
@@ -123,12 +149,13 @@ backend/storage/
 
 ## Task State
 
-M27 当前任务主链路仍同步完成，任务表实际写入：
+M30.1 preview tasks can be asynchronous. The task table can write:
 
+- `processing`
 - `completed`
 - `failed`
 
-各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`，例如 M25 在 PNG pixel decode unsupported 时保存 skipped document。后续接真实处理管线再补任务级 `pending`、`uploaded`、`processing`。
+Legacy `/api/upload` still completes synchronously.各阶段旁路结果表可以写入 `completed`、`failed` 或 `skipped`，例如 M25 在 PNG pixel decode unsupported 时保存 skipped document。
 
 后续完整任务状态：
 

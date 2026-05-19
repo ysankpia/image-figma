@@ -76,7 +76,7 @@ UI clicks Generate sample design
 
 ```text
 UI selects PNG
--> Main uploads PNG
+-> Main uploads PNG to /api/upload-m30-preview
 -> Main polls task
 -> Main fetches DSL
 -> Main calls Renderer
@@ -92,6 +92,8 @@ UI clicks Sample
 ```
 
 M9 没有改插件协议。插件不调用 `/api/tasks/{taskId}/primitives`、`/ocr` 或 `/dsl-patch`，也不展示 AI/OCR/primitive/patch 内部结果。默认 enhanced DSL 里的 OCR text candidates 是 hidden，不改变用户可见生成结果。
+
+M30.1 changes the default upload endpoint, not the renderer contract. `render-uploaded-png` calls `/api/upload-m30-preview`, waits for the task to finish, then fetches `/api/tasks/{taskId}/dsl`. The returned DSL is `m30_materialized_dsl.json`; legacy `/api/upload` remains backend-only comparison and is no longer the plugin default path.
 
 ## User Language
 

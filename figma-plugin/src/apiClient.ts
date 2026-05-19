@@ -36,9 +36,17 @@ export class BackendApiError extends Error {
 }
 
 export async function uploadPng(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
+  return uploadPngTo("/upload", fileName, bytes);
+}
+
+export async function uploadPngM30Preview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
+  return uploadPngTo("/upload-m30-preview", fileName, bytes);
+}
+
+async function uploadPngTo(endpoint: string, fileName: string, bytes: Uint8Array): Promise<UploadResult> {
   const boundary = `image-figma-${Date.now().toString(16)}`;
   const body = createMultipartBody(boundary, fileName, bytes);
-  const response = await apiFetch(`${API_BASE_URL}/upload`, {
+  const response = await apiFetch(`${API_BASE_URL}${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": `multipart/form-data; boundary=${boundary}`

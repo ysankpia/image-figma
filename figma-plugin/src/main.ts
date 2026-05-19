@@ -7,7 +7,7 @@ import {
   type RenderWarning
 } from "@image-figma/image-to-figma-renderer";
 import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json";
-import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPng } from "./apiClient";
+import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPngM30Preview } from "./apiClient";
 import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
 
 declare const __html__: string;
@@ -79,15 +79,15 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
   postToUI({ type: "render-started", source: "upload" });
   postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
 
-  const upload = await uploadPng(fileName, bytes);
-  postToUI({ type: "status", message: "Processing uploaded PNG.", tone: "normal" });
+  const upload = await uploadPngM30Preview(fileName, bytes);
+  postToUI({ type: "status", message: "Running OCR + M29 evidence pipeline.", tone: "normal" });
 
   const task = await waitForCompletedTask(upload.taskId);
   if (task.status === "failed") {
     throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
   }
 
-  postToUI({ type: "status", message: "Fetching generated design.", tone: "normal" });
+  postToUI({ type: "status", message: "Fetching M30 materialized design.", tone: "normal" });
   const dsl = await getTaskDsl(upload.taskId);
 
   postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });
@@ -100,12 +100,12 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
 }
 
 async function waitForCompletedTask(taskId: string) {
-  for (let index = 0; index < 10; index += 1) {
+  for (let index = 0; index < 180; index += 1) {
     const task = await getTask(taskId);
     if (task.status === "completed" || task.status === "failed") {
       return task;
     }
-    await delay(500);
+    await delay(1000);
   }
   throw new BackendApiError("BACKEND_TASK_TIMEOUT", "Backend task timed out.", "task_poll", taskId);
 }

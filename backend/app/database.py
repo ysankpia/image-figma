@@ -359,6 +359,42 @@ class Database:
                 task,
             )
 
+    def update_task(
+        self,
+        task_id: str,
+        *,
+        status: str | None = None,
+        stage: str | None = None,
+        progress: int | None = None,
+        message: str | None = None,
+        updated_at: str | None = None,
+        completed_at: str | None = None,
+        failed_at: str | None = None,
+    ) -> None:
+        assignments: list[str] = []
+        values: list[Any] = []
+        fields = {
+            "status": status,
+            "stage": stage,
+            "progress": progress,
+            "message": message,
+            "updated_at": updated_at,
+            "completed_at": completed_at,
+            "failed_at": failed_at,
+        }
+        for field, value in fields.items():
+            if value is not None:
+                assignments.append(f"{field} = ?")
+                values.append(value)
+        if not assignments:
+            return
+        values.append(task_id)
+        with self.connect() as connection:
+            connection.execute(
+                f"UPDATE tasks SET {', '.join(assignments)} WHERE id = ?",
+                values,
+            )
+
     def get_task(self, task_id: str) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()

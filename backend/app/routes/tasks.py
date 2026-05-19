@@ -77,6 +77,44 @@ def get_task_dsl(task_id: str) -> dict[str, object]:
     return success_response({"dsl": json.loads(dsl_path.read_text(encoding="utf-8"))})
 
 
+@router.get("/tasks/{task_id}/m30-materialization")
+def get_task_m30_materialization(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    report_path = state.settings.storage_root / "m30_1_uploads" / task_id / "m30" / "m30_materialization_report.json"
+    if not report_path.exists():
+        raise ApiError(
+            "M30_MATERIALIZATION_NOT_FOUND",
+            "M30 materialization report not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="m30_materialization_lookup",
+            task_id=task_id,
+        )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    debug = report.get("debug") if isinstance(report.get("debug"), dict) else {}
+    preview = debug.get("materializationPreview") if isinstance(debug, dict) else None
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": task["status"],
+        "stage": task["stage"],
+        "summary": report.get("summary", {}),
+        "warnings": report.get("warnings", []),
+        "skippedItems": report.get("skippedItems", []),
+        "debugPreviewPath": str(report_path.parent / preview) if isinstance(preview, str) else None,
+        "outputDsl": report.get("outputDsl"),
+    }
+    return success_response(data)
+
+
 @router.get("/tasks/{task_id}/primitives")
 def get_task_primitives(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)

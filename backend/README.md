@@ -471,6 +471,30 @@ The output directory contains `m30_materialized_dsl.json`, `m30_materialization_
 
 M30.1 intentionally keeps fallback visible and does not do automatic text cover. It can produce editable text/shape/image nodes over fallback for bridge validation, while mixed/future/residual audit-only evidence remains in report/meta only.
 
+## M30.1 Plugin M29-to-M30 Upload Preview
+
+The plugin preview upload path uses a separate endpoint instead of the legacy `/api/upload` chain:
+
+```bash
+POST /api/upload-m30-preview
+GET /api/tasks/{taskId}
+GET /api/tasks/{taskId}/dsl
+GET /api/tasks/{taskId}/m30-materialization
+```
+
+`/api/upload-m30-preview` saves the uploaded PNG, creates a `processing` task, and runs the OCR + M29 + M30 pipeline in a FastAPI background task. The stage root is `storage/m30_1_uploads/{taskId}/`. On success, `dsl_results.dsl_path` points to `storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json`, so the existing `/api/tasks/{taskId}/dsl` contract stays unchanged.
+
+The M30.1 pipeline calls OCR, M29, M29.1, M29.0.2, M29.0.3 with lineage, M29.0.7, M29.0.4 with ownership routing, M29.0.5, and M30 materialization. It does not run M29.1.3, M29.0.3.2, M29.0.6, M19-M25, M26-M28, visible fallback replay, text cover, Auto Layout, Components, SVG/vectorization, or any 图标恢复 path.
+
+Before the final DSL is exposed to the plugin, local M30 image asset URLs are copied and rewritten under:
+
+```text
+storage/assets/{taskId}/m30/
+http://localhost:8000/files/assets/{taskId}/m30/...
+```
+
+This is only asset publishing for renderer access. It does not create new child crops or formal visual assets outside the M29/M30 contracts.
+
 M29.0.7 text ownership gate is a script-only routing layer before object-forming consumption:
 
 ```bash

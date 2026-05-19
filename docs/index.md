@@ -50,6 +50,7 @@
 - 当前 M29.1.2 symbol lineage survival contract 计划：[plans/active/029-1-2-symbol-lineage-survival-contract.md](plans/active/029-1-2-symbol-lineage-survival-contract.md)
 - 当前 M29.1.3 mixed symbol/text conflict classification audit 计划：[plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md](plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md)
 - 当前 M30 evidence-grounded DSL materialization 计划：[plans/active/030-evidence-grounded-dsl-materialization.md](plans/active/030-evidence-grounded-dsl-materialization.md)
+- 当前 M30.1 plugin M29-to-M30 upload preview 计划：[plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md](plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md)
 
 ## By Task Type
 
@@ -141,6 +142,7 @@
 - M29.0.3.1 text-like lineage rejection 决策：[decisions/0042-reject-text-like-lineage-before-mixed-conflict.md](decisions/0042-reject-text-like-lineage-before-mixed-conflict.md)
 - M29.0.3.2 residual mixed boundary review 决策：[decisions/0043-review-residual-mixed-before-promotion.md](decisions/0043-review-residual-mixed-before-promotion.md)
 - M30 evidence-grounded DSL materialization 决策：[decisions/0044-materialize-trusted-m29-evidence-into-existing-dsl.md](decisions/0044-materialize-trusted-m29-evidence-into-existing-dsl.md)
+- M30.1 plugin M29-to-M30 upload preview 决策：[decisions/0045-route-plugin-upload-through-m29-m30-preview-pipeline.md](decisions/0045-route-plugin-upload-through-m29-m30-preview-pipeline.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

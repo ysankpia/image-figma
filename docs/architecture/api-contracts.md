@@ -87,6 +87,18 @@ http://localhost:8000/api
 - M26 不更新 DSL。即使 `PERCEPTION_BENCHMARK_ENABLED=true`，`/dsl` 也不包含 M26 quality flag，不追加可见节点，不修改任何已有 element，也不修改 DSL `assets` 数组。
 - M27 不更新 DSL。即使 `SAM_VISUAL_CANDIDATE_ENABLED=true`，`/dsl` 也不包含 M27 quality flag，不追加可见节点，不修改任何已有 element，也不修改 DSL `assets` 数组。
 
+`POST /api/upload-m30-preview`
+
+- 用途：插件默认 preview 上传入口，创建任务并在后台运行 OCR + M29 + M30。
+- 请求：multipart PNG file。
+- 成功立即返回现有 UploadResult shape：`taskId`、文件信息、`status`、`stage`、`progress`。
+- 初始任务状态为 `processing`，stage 为 `m30_queued`。
+- 背景任务成功后，`GET /api/tasks/{taskId}` 返回 `status=completed`、`stage=m30_completed`，`GET /api/tasks/{taskId}/dsl` 返回 M30 materialized DSL。
+- 背景任务失败后，任务返回 `status=failed`，`stage` 为失败阶段，例如 `ocr`、`m29_0_3` 或 `m30_materialization`。
+- M30.1 只运行 OCR、M29、M29.1、M29.0.2、M29.0.3 lineage-aware path、M29.0.7、M29.0.4 with ownership routing、M29.0.5 和 M30 materialization。
+- M30.1 不运行 M29.1.3、M29.0.3.2、M29.0.6、M19-M25、M24 visible fallback、M26-M28，也不做 text cover、Auto Layout、Component、SVG/vectorization 或图标恢复。
+- M30 DSL 中本地 image asset URL 会被复制并重写为 `/files/assets/{taskId}/m30/...`，供 Renderer 直接 fetch。
+
 `GET /api/tasks/{taskId}/primitives`
 
 - 用途：获取 M8 visual primitive candidate 结果。
@@ -239,6 +251,14 @@ http://localhost:8000/api
 - result 不存在或文件缺失返回 `SAM_VISUAL_CANDIDATE_NOT_FOUND`。
 - SAM visual candidate failed/skipped 时仍返回 `success: true`，但 `data.status` 为 `failed`/`skipped`，并带 `error`。
 - 返回 `sam`、`candidates`、`blockedCandidates`、`overlay`、`warnings` 和 `meta`。`candidates` 只是 M28 候选池输入，不写入 DSL `assets`，不会让 Renderer 创建可见节点。
+
+`GET /api/tasks/{taskId}/m30-materialization`
+
+- 用途：读取 M30.1 materialization report 的核心调试信息。
+- 只读调试接口，不被 Renderer 主流程依赖。
+- task 不存在返回 `TASK_NOT_FOUND`。
+- report 不存在返回 `M30_MATERIALIZATION_NOT_FOUND`。
+- 返回 `summary`、`warnings`、`skippedItems`、`debugPreviewPath` 和 `outputDsl`。
 
 `GET /api/assets/{assetId}`
 
