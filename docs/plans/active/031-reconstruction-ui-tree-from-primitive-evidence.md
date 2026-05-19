@@ -1,8 +1,8 @@
 # M31 Reconstruction UI Tree From Primitive Evidence
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-20
-- 负责人：未指定
+- 负责人：Antigravity
 
 ## Goal
 

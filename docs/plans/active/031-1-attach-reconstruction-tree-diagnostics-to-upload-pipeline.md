@@ -1,8 +1,8 @@
 # M31.1 Attach Reconstruction Diagnostics To Upload Pipeline
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-20
-- 负责人：未指定
+- 负责人：Antigravity
 
 ## Goal
 
