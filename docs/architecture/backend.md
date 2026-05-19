@@ -281,6 +281,8 @@ M29.0.2 之后的 M29+ 证据链是当前重建分析主线。M20-M28 保留为 
 
 M29.0.3.1 在 M29.0.3 的 lineage-aware path 前移 `text_owned_rejected_lineage` gate。未传 M29.1 lineage JSON 时 M29.0.3 baseline 不变；传入 lineage 时，high OCR overlap + surviving lineage 会先检查 full OCR coverage、single text-like token、text-like aspect、M29.1 candidate baseline glyph risk、weak eligible-blocked high overlap 等文字反证。强文字反证成立时仍输出 `text_noise`，但保留 `sourceLineage` 并标记 `conflictClass=text_owned_rejected_lineage`、`survivingPreOcrSymbolCandidate=false`。M29.0.7 只透传该审计信息，不为它打开 visual side。
 
+M29.0.3.2 增加 residual mixed boundary review。它只读取 M29.0.3.1 收紧后仍残留的 `mixed_symbol_text_candidate`，结合 M29.1.3、M29.0.7、M29.0.2、M29.1、M29.1.1 和 source PNG existing bbox crop 信息，输出 `m2903_tightening_candidate`、`m2913_classification_adjustment_candidate`、`keep_residual_mixed_conflict`、`candidate_for_future_uncertain_review`、`insufficient_evidence` 五类 review conclusion。M29.0.3.2 是 actionable audit，不是 routing contract；M29.0.4/M29.0.5/M29.0.7 不消费它，所有 promotion/visual-side/formal-asset permission flags 恒为 false。
+
 ## Backend Non-Goals
 
 M29 不做：

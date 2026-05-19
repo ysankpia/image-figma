@@ -40,6 +40,7 @@
 - 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)
 - 当前 M29.0.3 visual evidence normalization 计划：[plans/active/029-0-3-visual-evidence-normalization.md](plans/active/029-0-3-visual-evidence-normalization.md)
 - 当前 M29.0.3.1 text-rejected lineage feedback gate 计划：[plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md](plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md)
+- 当前 M29.0.3.2 residual mixed boundary review 计划：[plans/active/029-0-3-2-residual-mixed-boundary-review.md](plans/active/029-0-3-2-residual-mixed-boundary-review.md)
 - 当前 M29.0.4 generic visual object candidate audit 计划：[plans/active/029-0-4-generic-visual-object-candidate-audit.md](plans/active/029-0-4-generic-visual-object-candidate-audit.md)
 - 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
 - 当前 M29.0.6 member boundary quality audit 计划：[plans/active/029-0-6-member-boundary-quality-audit.md](plans/active/029-0-6-member-boundary-quality-audit.md)
@@ -136,6 +137,7 @@
 - M29 pre-OCR symbol lineage 决策：[decisions/0040-preserve-pre-ocr-symbol-lineage-through-text-overlap.md](decisions/0040-preserve-pre-ocr-symbol-lineage-through-text-overlap.md)
 - M29.1.3 mixed conflict classification 决策：[decisions/0041-classify-mixed-symbol-text-conflicts-before-promotion.md](decisions/0041-classify-mixed-symbol-text-conflicts-before-promotion.md)
 - M29.0.3.1 text-like lineage rejection 决策：[decisions/0042-reject-text-like-lineage-before-mixed-conflict.md](decisions/0042-reject-text-like-lineage-before-mixed-conflict.md)
+- M29.0.3.2 residual mixed boundary review 决策：[decisions/0043-review-residual-mixed-before-promotion.md](decisions/0043-review-residual-mixed-before-promotion.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

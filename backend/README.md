@@ -377,6 +377,26 @@ high OCR overlap + surviving lineage + strong text counter-evidence
 
 The gate uses only existing M29.0.2 text boxes, M29.1 sourceLineage/group/candidate metadata, existing M29.0.3 mediaEvidence bboxes, and simple geometry/overlap metrics. It does not call OCR, detect new bboxes, create child crops, generate formal visual assets, or change the no-lineage baseline. The counter-evidence includes full OCR coverage, single text-like OCR tokens, text-like aspect, glyph sequence risk from M29.1 candidate alignment, and weak eligible-blocked lineage with high OCR overlap.
 
+M29.0.3.2 residual mixed boundary review explains the remaining mixed bucket after M29.0.3.1:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_3_2_residual_mixed_boundary_review.py \
+  --input "/path/to/source.png" \
+  --m29-output storage/m29_0_3_1_text_rejected_gate_batch_YYYYMMDD_HHMMSS/image_001
+```
+
+It reads only M29.0.3 `mixed_symbol_text_candidate` items as its primary universe, with M29.1.3, M29.0.7, M29.0.2, M29.1, and M29.1.1 as lookup refs. It writes `m29_0_3_2/residual_mixed_boundary_review.json`, Markdown, a source-sized review sheet, and evidence crops under `assets/future_promotable_review/`, `assets/keep_mixed_review/`, `assets/text_rejected_review/`, `assets/tightening_candidates/`, and `assets/insufficient_evidence/`. Those crops are audit evidence only, not formal visual assets. Every review item keeps `allowedForPromotionNow=false`, `allowedForVisualSideNow=false`, and `allowedForFormalAssetNow=false`, so M29.0.3.2 does not change routing, object formation, DSL, Renderer, Figma output, or M29.0.3/M29.0.7/M29.0.4/M29.0.5 outputs.
+
+For the selected 80-image review batch, run a new timestamped full lineage-aware batch:
+
+```bash
+cd backend
+uv run python scripts/run_m29_0_3_2_residual_mixed_boundary_review.py --full-batch
+```
+
+By default this reads `/Users/luhui/Downloads/测试/images` and `/Users/luhui/Downloads/测试/images 2`, sorts PNGs by path, writes `image_001` through `image_080` under `backend/storage/m29_0_3_2_residual_mixed_boundary_review_batch_YYYYMMDD_HHMMSS`, and continues after per-image failures. Root-level `m29_0_3_2_batch_summary.json` and `.csv` contain residual mixed counts, review conclusions, M29.0.7 bad routing reference count, M29.0.5 visual/text member reference counts, M29.0.6 weak text-noise reference ratio, and any failed stage/error.
+
 M29.0.4 generic visual object candidate audit builds an auditable object-candidate graph over normalized M29+ evidence:
 
 ```bash
