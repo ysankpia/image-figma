@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .database import json_dumps
-from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl
+from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -238,6 +238,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         m2905_json_path=str(m2905_json),
         output_dir=paths.m30,
         mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_cover_enabled=False),
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
 

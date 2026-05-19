@@ -21,6 +21,12 @@ export async function renderText(context: RenderContext, element: DSLElement): P
   }
 
   context.figma.setTextStyle(node, element.style ?? {});
+
+  const fontSize = element.style?.fontSize ?? 14;
+  const isSingleLine = !element.content?.text?.includes("\n") && element.layout.height < 2.0 * fontSize;
+  const autoResize = isSingleLine ? "WIDTH_AND_HEIGHT" : "HEIGHT";
+  context.figma.setTextAutoResize(node, autoResize);
+
   context.figma.setText(node, element.content?.text ?? "");
   if (element.style?.color) {
     context.figma.setFills(node, [solidPaint(element.style.color)]);

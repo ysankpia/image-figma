@@ -13,7 +13,7 @@ export async function renderChildren(
   }
 
   for (const [index, child] of children.entries()) {
-    const node = await renderElement(context, child, `${path}.children[${index}]`);
+    const node = await renderElement(context, child, `${path}.children[${index}]`, parent);
     if (node) {
       context.figma.appendChild(parent, node);
     }

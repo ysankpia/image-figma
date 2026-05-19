@@ -38,7 +38,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization with conservative text cover
+-> M30/M32 evidence-grounded DSL materialization with fallback region masking (meta/maskBBoxes)
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
@@ -51,7 +51,6 @@ M29.1.3 mixed conflict audit
 M29.0.3.2 residual mixed review
 M29.0.6 member boundary quality audit
 removed pre-M29 upload chain
-fallback masking
 Auto Layout
 Figma Component/Instance
 SVG/vectorization

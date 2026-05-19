@@ -32,7 +32,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "m30_evidence_grounded_materialization" in dsl["meta"]["qualityFlags"]
     assert has_role(dsl, "fallback_region")
     assert has_role(dsl, "m30_text_member")
-    assert has_role(dsl, "m30_text_cover")
+    assert not has_role(dsl, "m30_text_cover")
     assert not any(child.get("type") == "icon" for child in dsl["root"]["children"])
     assert visible_audit_only_children(dsl) == 0
 

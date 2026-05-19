@@ -349,3 +349,41 @@ def draw_noise_patch(canvas: PngPixels, x: int, y: int, width: int, height: int)
 
 def pixels_to_png(canvas: PngPixels) -> bytes:
     return encode_rgb_png(canvas.width, canvas.height, canvas.rows)
+
+
+def test_symbol_export_as_rgba_when_mask_data_present(tmp_path: Path) -> None:
+    from app.visual_primitive_graph import export_node_assets
+    from app.png_tools import decode_png_pixels
+
+    # 4x4 canvas filled with RGB color (100, 150, 200)
+    canvas = make_canvas(4, 4, (100, 150, 200))
+
+    # Define a 2x2 local mask_data (4 bytes) where first pixel is foreground (255) and rest are background (0)
+    mask_data = bytes([255, 0, 0, 0])
+
+    node = M29PrimitiveNode(
+        id="symbol_001",
+        type="symbol",
+        subtype="icon_candidate",
+        bbox=[1, 1, 2, 2],
+        confidence=1.0,
+        source="test",
+        source_order=0,
+        layer_hint="content",
+        reasons=[],
+        metrics=M29PrimitiveMetrics(1, 0.0, 0.0, 1.0, 1.0, 20, (20, 20, 20)),
+        mask_data=mask_data,
+    )
+
+    exported = export_node_assets([node], canvas, tmp_path)
+
+    assert len(exported) == 1
+    asset_path = tmp_path / exported[0].asset_path
+    assert asset_path.exists()
+
+    # Decode the PNG asset and verify metadata / pixels
+    metadata = read_png_metadata(asset_path.read_bytes())
+    assert metadata is not None
+    assert metadata.color_type == 6  # Color Type 6 is RGBA
+    assert metadata.width == 2
+    assert metadata.height == 2

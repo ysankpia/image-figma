@@ -216,6 +216,22 @@ M29.0.3.2 review output
 
 This rule is the main safety gate between evidence/audit world and Renderer-visible DSL.
 
+## M32 Boolean Subtract Masking
+
+To support clean, high-fidelity editable UI reconstruction without text ghosting (double rendering), the system supports Figma-side Boolean Subtraction.
+
+- **DSL Meta Extension**: For image/fallback elements (e.g., `fallback_region_*`), the backend collects the absolute bounding boxes of all successfully materialized/editable text or icon layers and registers them in the `meta` object under the `maskBBoxes` key.
+- **Format**:
+  ```json
+  "meta": {
+    "maskBBoxes": [
+      [10, 10, 40, 12],
+      ...
+    ]
+  }
+  ```
+- **Coordinate Space**: The bounding box coordinates are stored in absolute page coordinates. This allows the Figma Renderer to construct mask nodes directly without having to compute relative offsets or coordinate space transformations.
+
 ## Removed Legacy DSL Paths
 
 M30.2.2 removed the old pre-M29 upload chain. DSL patch, visible text replacement, component annotation, slice candidate, icon fallback replay, perception, and SAM harness outputs are historical and no longer part of the active upload DSL path.

@@ -165,6 +165,46 @@ def crop_pixels_to_png(pixels: PngPixels, region: PngRegion) -> bytes:
     return encode_rgb_png(region.width, region.height, cropped_rows)
 
 
+def crop_mask_pixels_to_rgba_png(
+    pixels: PngPixels,
+    mask_data: bytes,
+    region: PngRegion,
+) -> bytes:
+    if region.x < 0 or region.y < 0 or region.width <= 0 or region.height <= 0:
+        raise UnsupportedPngCropError("Crop region is invalid.")
+    if region.x + region.width > pixels.width or region.y + region.height > pixels.height:
+        raise UnsupportedPngCropError("Crop region exceeds image bounds.")
+
+    is_full_size = len(mask_data) == pixels.width * pixels.height
+    is_region_size = len(mask_data) == region.width * region.height
+
+    if not (is_full_size or is_region_size):
+        raise UnsupportedPngCropError("Mask data size does not match pixels or region size.")
+
+    cropped_rows: list[bytes] = []
+    for r in range(region.height):
+        row_index = region.y + r
+        pixel_row = pixels.rows[row_index]
+
+        row_bytes = bytearray()
+        for col in range(region.width):
+            px_offset = (region.x + col) * 3
+            r_val = pixel_row[px_offset]
+            g_val = pixel_row[px_offset + 1]
+            b_val = pixel_row[px_offset + 2]
+
+            if is_full_size:
+                mask_index = row_index * pixels.width + (region.x + col)
+            else:
+                mask_index = r * region.width + col
+
+            a_val = mask_data[mask_index]
+            row_bytes.extend([r_val, g_val, b_val, a_val])
+        cropped_rows.append(bytes(row_bytes))
+
+    return encode_rgba_png(region.width, region.height, cropped_rows)
+
+
 def encode_rgb_png(width: int, height: int, rows: list[bytes]) -> bytes:
     if width <= 0 or height <= 0:
         raise UnsupportedPngCropError("PNG dimensions must be positive.")
@@ -176,6 +216,28 @@ def encode_rgb_png(width: int, height: int, rows: list[bytes]) -> bytes:
             raise UnsupportedPngCropError("PNG row length does not match width.")
 
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    compressed = zlib.compress(b"".join(b"\x00" + row for row in rows))
+    return b"".join(
+        [
+            PNG_SIGNATURE,
+            png_chunk(b"IHDR", ihdr),
+            png_chunk(b"IDAT", compressed),
+            png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def encode_rgba_png(width: int, height: int, rows: list[bytes]) -> bytes:
+    if width <= 0 or height <= 0:
+        raise UnsupportedPngCropError("PNG dimensions must be positive.")
+    if len(rows) != height:
+        raise UnsupportedPngCropError("PNG row count does not match height.")
+    stride = width * 4
+    for row in rows:
+        if len(row) != stride:
+            raise UnsupportedPngCropError("PNG row length does not match width.")
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     compressed = zlib.compress(b"".join(b"\x00" + row for row in rows))
     return b"".join(
         [

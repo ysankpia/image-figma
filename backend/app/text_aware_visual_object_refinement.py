@@ -897,7 +897,8 @@ def classify_visual_kind(node: dict[str, Any], bbox: list[int], metrics: M29Prim
     area = bbox_area(bbox)
     max_edge = max(bbox[2], bbox[3])
     if metrics is not None and metrics.fill_ratio >= 0.70 and metrics.texture_score <= 0.16 and metrics.edge_score <= 0.20:
-        return "shape_like"
+        if source_kind not in {"icon_candidate", "accepted_image", "media_candidate"}:
+            return "shape_like"
     if source_kind == "icon_candidate" or (area <= options.max_icon_asset_area and max_edge <= options.max_icon_asset_edge and source_kind in {"other_candidate", "accepted_image", "media_candidate"}):
         return "icon_like"
     if source_kind in {"accepted_image", "media_candidate"}:

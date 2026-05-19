@@ -74,6 +74,7 @@ class M29PrimitiveNode:
     mask_path: str | None = None
     parent_id: str | None = None
     child_ids: list[str] = field(default_factory=list)
+    mask_data: bytes | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = {
@@ -175,6 +176,7 @@ class M29ConnectedComponent:
     fill_ratio: float
     metrics: M29PrimitiveMetrics
     source: str
+    mask_data: bytes | None = None
 
 
 @dataclass(frozen=True)
@@ -527,9 +529,11 @@ def connected_components(mask: M29BinaryMask, pixels: PngPixels, *, min_area: in
         min_y = mask.height
         max_x = 0
         max_y = 0
+        pts = []
         while stack:
             current = stack.pop()
             y, x = divmod(current, mask.width)
+            pts.append((x, y))
             area += 1
             x_sum += x
             y_sum += y
@@ -546,6 +550,10 @@ def connected_components(mask: M29BinaryMask, pixels: PngPixels, *, min_area: in
         if area < min_area or area > max_area:
             continue
         bbox = [min_x, min_y, max_x - min_x + 1, max_y - min_y + 1]
+        x_start, y_start, w, h = bbox
+        local_mask = bytearray(w * h)
+        for px, py in pts:
+            local_mask[(py - y_start) * w + (px - x_start)] = 255
         metrics = measure_region(pixels, bbox, fill_ratio=area / max(1, bbox_area(bbox)))
         components.append(
             M29ConnectedComponent(
@@ -556,6 +564,7 @@ def connected_components(mask: M29BinaryMask, pixels: PngPixels, *, min_area: in
                 fill_ratio=round(area / max(1, bbox_area(bbox)), 4),
                 metrics=metrics,
                 source="connected_component",
+                mask_data=bytes(local_mask),
             )
         )
     return components
@@ -756,6 +765,7 @@ def detect_symbols(
                     layer_hint="overlay" if is_overlay_sized(component.bbox) else "content",
                     reasons=["small_visual", "non_text", "non_image"],
                     metrics=component.metrics,
+                    mask_data=component.mask_data,
                 )
             )
         else:
@@ -892,7 +902,16 @@ def export_node_assets(nodes: list[M29PrimitiveNode], pixels: PngPixels, output_
         elif node.type == "symbol":
             symbol_count += 1
             path = symbol_dir / f"symbol_{symbol_count:03d}.png"
-            path.write_bytes(crop_pixels(pixels, node.bbox))
+            if node.mask_data is not None:
+                from .png_tools import crop_mask_pixels_to_rgba_png, PngRegion
+                x, y, w, h = node.bbox
+                region = PngRegion("symbol", x, y, w, h)
+                try:
+                    path.write_bytes(crop_mask_pixels_to_rgba_png(pixels, node.mask_data, region))
+                except Exception:
+                    path.write_bytes(crop_pixels(pixels, node.bbox))
+            else:
+                path.write_bytes(crop_pixels(pixels, node.bbox))
             exported.append(replace(node, asset_path=str(path.relative_to(output_dir))))
         else:
             exported.append(node)

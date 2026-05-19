@@ -180,6 +180,26 @@ def test_shape_like_member_becomes_shape_candidate_even_with_text_overlay(tmp_pa
     assert not document.shape_candidates[0].preview_asset_path.startswith("assets/visual_assets/")
 
 
+def test_icon_candidate_with_shape_like_metrics_remains_icon_asset(tmp_path: Path) -> None:
+    canvas = make_canvas(160, 100)
+    shape_metrics = metrics(color_count=8, texture_score=0.04, edge_score=0.05, fill_ratio=0.92)
+    m2904, m2903, m2902 = fixture_docs(
+        objects=[object_candidate("voc_001", "visual_text_pair", [10, 10, 88, 26], [member("evidence_0001", [10, 10, 24, 24], "visual"), member("evidence_0002", [58, 14, 40, 12], "text")])],
+        evidence=[
+            evidence_node("evidence_0001", "m2903_visual_evidence", "visual_1", [10, 10, 24, 24], "visual", "icon_candidate", metrics_value=shape_metrics),
+            evidence_node("evidence_0002", "m2902_text_box", "text_1", [58, 14, 40, 12], "text", None, text="Go"),
+        ],
+        m2903_items=[visual_item("visual_1", "icon_candidate", [10, 10, 24, 24], metrics_value=shape_metrics)],
+        text_boxes=[text_box("text_1", [58, 14, 40, 12], "Go")],
+    )
+
+    document = run_extract(tmp_path, canvas, m2904, m2903, m2902)
+
+    assert len(document.visual_assets) == 1
+    assert document.visual_assets[0].asset_use == "icon_asset"
+    assert document.shape_candidates == []
+
+
 def test_text_cluster_becomes_text_only_without_visual_asset(tmp_path: Path) -> None:
     canvas = make_canvas(160, 80)
     m2904, m2903, m2902 = fixture_docs(

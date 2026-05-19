@@ -19,6 +19,7 @@ describe("renderDesign", () => {
     expect(adapter.findNodeByName("Original PNG Reference")?.visible).toBe(false);
     expect(adapter.findNodeByName("Text / title")?.characters).toBe("首页");
     expect(adapter.findNodeByName("Text / title")?.fontName).toEqual({ family: "Inter", style: "Bold" });
+    expect(adapter.findNodeByName("Text / title")?.textAutoResize).toBe("WIDTH_AND_HEIGHT");
     expect(adapter.findNodeByName("Shape / search_card")).toBeDefined();
     expect(adapter.findNodeByName("Image / banner")?.fills?.[0]?.type).toBe("IMAGE");
     expect(adapter.findNodeByName("Line / divider")).toBeDefined();
@@ -113,5 +114,109 @@ describe("renderDesign", () => {
     expect(adapter.findNodeByName("Visible Icon Fallback / 001")?.fills?.[0]).toEqual(
       expect.objectContaining({ type: "IMAGE", scaleMode: "FIT" })
     );
+  });
+
+  it("renders fallback region with boolean subtraction when maskBBoxes are present", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = structuredClone(mobileHome as DesignDSL);
+
+    const fallbackNode = {
+      id: "fallback_region_1",
+      type: "image" as const,
+      role: "fallback_region",
+      name: "Fallback Region / Page 1",
+      layout: { x: 0, y: 0, width: 375, height: 812 },
+      source: { assetId: "asset_banner" },
+      style: { visible: true, opacity: 1 },
+      meta: {
+        maskBBoxes: [
+          [10, 10, 40, 12],
+          [15, 15, 10, 10]
+        ]
+      }
+    };
+    dsl.root.children!.push(fallbackNode);
+
+    const result = await renderDesign(dsl, { figma: adapter, validate: false });
+
+    expect(result.success).toBe(true);
+
+    const subtractNode = adapter.nodes.find(n => n.type === "BOOLEAN_OPERATION") as any;
+    expect(subtractNode).toBeDefined();
+    expect(subtractNode?.name).toBe("Fallback Region / Page 1");
+    expect(subtractNode?.fills).toBeDefined();
+    expect(subtractNode?.fills?.[0]?.type).toBe("IMAGE");
+    expect(subtractNode?.fills?.[0]?.imageHash).toBe("hash:http://localhost:8000/files/assets/task_mobile_home/banner.png");
+    expect(subtractNode?.visible).toBe(true);
+    expect(subtractNode?.opacity).toBe(1);
+
+    const children = subtractNode?.children ?? [];
+    expect(children.length).toBe(3);
+
+    expect(children[0]).toBeDefined();
+    expect(children[1]).toBeDefined();
+    expect(children[2]).toBeDefined();
+
+    if (children[0] && children[1] && children[2]) {
+      expect(children[0].type).toBe("RECTANGLE");
+      expect(children[0].name).toBe("Image / fallback_region_1");
+
+      expect(children[1].type).toBe("RECTANGLE");
+      expect(children[1].name).toBe("Mask Rectangle / 0");
+      expect(children[1].layout).toEqual({ x: 10, y: 10, width: 40, height: 12 });
+
+      expect(children[2].type).toBe("RECTANGLE");
+      expect(children[2].name).toBe("Mask Rectangle / 1");
+      expect(children[2].layout).toEqual({ x: 15, y: 15, width: 10, height: 10 });
+    }
+
+    const rootNode = adapter.findNodeByName("mobile_home");
+    expect(rootNode).toBeDefined();
+    if (rootNode && children[0] && children[1] && children[2]) {
+      const rootChildrenIds = rootNode.children.map(c => c.id);
+      expect(rootChildrenIds).not.toContain(children[0].id);
+      expect(rootChildrenIds).not.toContain(children[1].id);
+      expect(rootChildrenIds).not.toContain(children[2].id);
+      expect(rootChildrenIds).toContain(subtractNode?.id);
+    }
+  });
+
+  it("applies WIDTH_AND_HEIGHT to single-line text and HEIGHT to multi-line/paragraph text", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = structuredClone(mobileHome as DesignDSL);
+
+    // Add a multiline text block
+    dsl.root.children!.push({
+      id: "paragraph_text",
+      type: "text",
+      role: "body",
+      name: "Text / paragraph",
+      layout: { x: 16, y: 400, width: 358, height: 60 },
+      style: { fontSize: 14, fontWeight: 400 },
+      content: { text: "This is a long multiline description or paragraph that should wrap appropriately." }
+    });
+
+    // Add a text block that physically has a newline character
+    dsl.root.children!.push({
+      id: "newline_text",
+      type: "text",
+      role: "body",
+      name: "Text / newline",
+      layout: { x: 16, y: 500, width: 358, height: 20 },
+      style: { fontSize: 14, fontWeight: 400 },
+      content: { text: "Line 1\nLine 2" }
+    });
+
+    const result = await renderDesign(dsl, { figma: adapter, validate: false });
+    expect(result.success).toBe(true);
+
+    const singleLineNode = adapter.findNodeByName("Text / title");
+    expect(singleLineNode?.textAutoResize).toBe("WIDTH_AND_HEIGHT");
+
+    const paragraphNode = adapter.findNodeByName("Text / paragraph");
+    expect(paragraphNode?.textAutoResize).toBe("HEIGHT");
+
+    const newlineNode = adapter.findNodeByName("Text / newline");
+    expect(newlineNode?.textAutoResize).toBe("HEIGHT");
   });
 });

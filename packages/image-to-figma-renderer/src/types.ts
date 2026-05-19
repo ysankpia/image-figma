@@ -56,9 +56,11 @@ export interface FigmaAdapter {
   setCornerRadius(node: FigmaNode, radius: number): void;
   setText(node: FigmaNode, text: string): void;
   setTextStyle(node: FigmaNode, style: DSLStyle): void;
+  setTextAutoResize(node: FigmaNode, autoResize: "NONE" | "WIDTH_AND_HEIGHT" | "HEIGHT"): void;
   loadFont(style: DSLStyle): Promise<FigmaFontName>;
   createImagePaint(source: ResolvedImageSource, mode: "fill" | "fit"): Promise<FigmaPaint>;
   getNodeId(node: FigmaNode): string;
+  createBooleanSubtract(nodes: FigmaNode[], parent: FigmaNode): FigmaNode;
 }
 
 export interface FigmaNode {

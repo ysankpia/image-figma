@@ -11,7 +11,8 @@ import type { FigmaNode, RenderContext } from "./types";
 export async function renderElement(
   context: RenderContext,
   element: DSLElement,
-  path: string
+  path: string,
+  parent?: FigmaNode
 ): Promise<FigmaNode | undefined> {
   try {
     switch (element.type) {
@@ -24,7 +25,7 @@ export async function renderElement(
       case "shape":
         return renderShape(context, element);
       case "image":
-        return await renderImage(context, element);
+        return await renderImage(context, element, parent);
       case "line":
         return renderLine(context, element);
       case "icon":

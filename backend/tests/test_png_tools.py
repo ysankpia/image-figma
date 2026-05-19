@@ -252,3 +252,47 @@ def make_png_from_rows(width: int, height: int, rows: list[bytes]) -> bytes:
             png_chunk(b"IEND", b""),
         ]
     )
+
+
+def test_encode_rgba_png_writes_readable_rgba_png() -> None:
+    from app.png_tools import encode_rgba_png, decode_png_pixels
+    rows = [bytes((12, 34, 56, 128)) * 5 for _ in range(4)]
+
+    png = encode_rgba_png(5, 4, rows)
+
+    metadata = read_png_metadata(png)
+    pixels = decode_png_pixels(png)
+    assert metadata == PngMetadata(5, 4, 8, 6, 0, 0, 0)
+    # 12 * 128/255 + 255 * (1 - 128/255) = 6 + 127 = 133
+    # 34 * 128/255 + 255 * (1 - 128/255) = 17 + 127 = 144
+    # 56 * 128/255 + 255 * (1 - 128/255) = 28 + 127 = 155
+    expected_row = bytes((133, 144, 155)) * 5
+    assert pixels.rows == [expected_row] * 4
+
+
+def test_crop_mask_pixels_to_rgba_png_correctly_masks_region() -> None:
+    from app.png_tools import crop_mask_pixels_to_rgba_png, decode_png_pixels
+    # Create 4x4 RGB pixels
+    rows = [bytes((100, 150, 200)) * 4 for _ in range(4)]
+    png = make_png_from_rows(4, 4, rows)
+    pixels = decode_png_pixels(png)
+
+    # Define a 4x4 mask, where center 2x2 are 255 (opaque) and outer are 0 (transparent)
+    mask = bytes([
+        0,   0,   0, 0,
+        0, 255, 255, 0,
+        0, 255, 255, 0,
+        0,   0,   0, 0,
+    ])
+
+    # Crop to region [1, 1, 2, 2]
+    region = PngRegion("icon", 1, 1, 2, 2)
+    rgba_png = crop_mask_pixels_to_rgba_png(pixels, mask, region)
+
+    metadata = read_png_metadata(rgba_png)
+    assert metadata == PngMetadata(2, 2, 8, 6, 0, 0, 0)
+
+    # Let's decode it back. Since the mask at (1,1)-(2,2) was 255, alpha is 255.
+    # Blended on white should just be the original RGB (100, 150, 200).
+    pixels_out = decode_png_pixels(rgba_png)
+    assert pixels_out.rows == [bytes((100, 150, 200)) * 2] * 2

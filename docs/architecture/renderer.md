@@ -120,6 +120,19 @@ Renderer 返回结果应包含：
 - fallback 区域作为 image 渲染。
 - children 按 DSL 顺序渲染，保持图层顺序可预测。
 
+## Boolean Subtraction for Fallback Nodes
+
+为了防止在已 Materialize 激活的文本/图标与假底图（fallback region）之间发生双重渲染（ghosting/双层显示），Renderer 实现了 Figma 原生 Boolean Subtraction：
+
+- **Figma API 集成**：在 `FigmaAdapter` 接口中扩展了 `createBooleanSubtract(nodes: FigmaNode[], parent?: FigmaNode): FigmaNode` 方法，该方法在真实插件运行时委托给 Figma 原生的 subtraction group API。
+- **触发条件**：在渲染 `image` 元素时，如果其 `meta` 属性包含 `maskBBoxes` 数组（绝对坐标），Renderer 不会将其渲染为普通的 `RECTANGLE` 节点，而是自动进行布尔差集组合。
+- **构建工作流**：
+  1. 创建 base image 矩形节点（带图片填充和对应尺寸）。
+  2. 根据 `maskBBoxes` 的坐标，为每个 mask region 生成一个 dummy 矩形节点。
+  3. 调用 `createBooleanSubtract([baseNode, ...maskNodes], parent)` 构建一个 Boolean Subtract 分组。
+  4. 最终生成的 subtraction 组合节点接收该 image 元素的 user-visible `name`，而内部的 base node 则会被命名为 `Image / <id>`，保证 Figma 图层结构的美观与可读。
+  5. 差集计算时，原 base node 和 dummy 矩形节点会被自动从父级 Frame 的 flat children 列表中移除，转而归属于 subtraction 组中。
+
 ## Dev Harness
 
 当前 `figma-plugin/` 只提供开发烟测插件：

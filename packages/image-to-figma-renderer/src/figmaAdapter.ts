@@ -17,6 +17,7 @@ export interface FigmaPluginApiLike {
   currentPage: {
     appendChild(child: FigmaNodeLike): void;
   };
+  subtract(nodes: readonly FigmaNodeLike[], parent: FigmaNodeLike): FigmaNodeLike;
 }
 
 export interface FigmaNodeLike {
@@ -42,6 +43,7 @@ export interface FigmaTextNodeLike extends FigmaNodeLike {
   fontWeight?: number;
   lineHeight: FigmaLineHeight | typeof figmaMixed;
   textAlignHorizontal: "LEFT" | "CENTER" | "RIGHT" | "JUSTIFIED";
+  textAutoResize?: "NONE" | "WIDTH_AND_HEIGHT" | "HEIGHT" | "TRUNCATE";
 }
 
 export interface FigmaPaintLike {
@@ -110,6 +112,9 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
         textNode.lineHeight = { unit: "PIXELS", value: style.lineHeight };
       }
     },
+    setTextAutoResize(node, autoResize) {
+      toTextNode(node).textAutoResize = autoResize;
+    },
     async loadFont(style) {
       const fontName = toFontName(style);
       await figmaApi.loadFontAsync(fontName);
@@ -126,6 +131,9 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
     },
     getNodeId(node) {
       return node.id;
+    },
+    createBooleanSubtract(nodes, parent) {
+      return figmaApi.subtract(nodes.map(toFigmaNode), toFigmaNode(parent)) as FigmaNode;
     }
   };
 }
