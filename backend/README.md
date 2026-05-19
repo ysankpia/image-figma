@@ -351,7 +351,7 @@ uv run python scripts/run_m29_0_3_visual_evidence_normalization.py \
   --m29-output storage/m29_visual_primitive_graph
 ```
 
-It reads `m29_0_2*/text_masked_media_audit.json`, preserves every media evidence item exactly once, exports original-source crops, and writes `m29_0_3/visual_evidence.json`, `visual_evidence.md`, `preview_visual_evidence.png`, bucket overlays, and bucketed assets. The key contract is that `source` is only provenance; `visualKind` and `decision` determine accepted image, media candidate, icon candidate, text noise, or other candidate. M29.0.3 does not change M29/M29.1 outputs, upload APIs, DSL, Renderer, or Figma output. M20-M28 remain legacy experiments; M29+ visual evidence is the source for subsequent reconstruction work.
+It reads `m29_0_2*/text_masked_media_audit.json`, preserves every media evidence item exactly once, exports original-source crops, and writes `m29_0_3/visual_evidence.json`, `visual_evidence.md`, `preview_visual_evidence.png`, bucket overlays, and bucketed assets. The key contract is that `source` is only provenance; `visualKind` and `decision` determine accepted image, media candidate, icon candidate, text noise, or other candidate. M29.0.3 does not change M29/M29.1 outputs, upload APIs, DSL, Renderer, or Figma output. M20-M28 remain legacy experiments and diagnostic references; OCR + M29+ visual evidence is the source for subsequent reconstruction work.
 
 M29.0.3 can optionally consume M29.1 lineage:
 
@@ -363,7 +363,19 @@ uv run python scripts/run_m29_0_3_visual_evidence_normalization.py \
   --m291-lineage-json storage/m29_visual_primitive_graph/m29_1/group_nodes.json
 ```
 
-Without `--m291-lineage-json`, baseline classification is unchanged. With it, high text-overlap evidence without pre-OCR symbol lineage remains `text_noise`; surviving lineage becomes `mixed_symbol_text_candidate`; rejected text-like lineage still remains `text_noise`.
+Without `--m291-lineage-json`, baseline classification is unchanged. With it, high text-overlap evidence without pre-OCR symbol lineage remains `text_noise`; surviving lineage with no strong text counter-evidence becomes `mixed_symbol_text_candidate`; rejected text-like lineage still remains `text_noise`.
+
+M29.0.3.1 tightens the lineage-aware path with text counter-evidence:
+
+```text
+high OCR overlap + surviving lineage + strong text counter-evidence
+=> text_noise
+=> sourceLineage.rejectedLineageReason=text_owned_rejected_lineage
+=> sourceLineage.conflictClass=text_owned_rejected_lineage
+=> sourceLineage.survivingPreOcrSymbolCandidate=false
+```
+
+The gate uses only existing M29.0.2 text boxes, M29.1 sourceLineage/group/candidate metadata, existing M29.0.3 mediaEvidence bboxes, and simple geometry/overlap metrics. It does not call OCR, detect new bboxes, create child crops, generate formal visual assets, or change the no-lineage baseline. The counter-evidence includes full OCR coverage, single text-like OCR tokens, text-like aspect, glyph sequence risk from M29.1 candidate alignment, and weak eligible-blocked lineage with high OCR overlap.
 
 M29.0.4 generic visual object candidate audit builds an auditable object-candidate graph over normalized M29+ evidence:
 
@@ -419,4 +431,4 @@ uv run python scripts/run_m29_0_7_text_visual_ownership_gate.py \
   --m29-output storage/m29_visual_primitive_graph
 ```
 
-It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_7/text_visual_ownership_gate.json`, routing views, audit JSON, overlays, top-K examples, and a preview sheet. M29.0.7 decides whether existing evidence is `text_owned`, `visual_owned`, `shape_owned`, `mixed_or_uncertain`, or `audit_only`. `mixed_symbol_text_candidate` is routed as `mixed_or_uncertain` audit-only: not suppressed as visual, but not allowed for object-forming visual side or text side. M29.0.7 does not call OCR, discover new bboxes, generate formal visual assets, create text-removed images, rewrite prior M29 JSON, or emit DSL/Figma output.
+It reads `m29_0_3*/visual_evidence.json` and `m29_0_2*/text_masked_media_audit.json`, then writes `m29_0_7/text_visual_ownership_gate.json`, routing views, audit JSON, overlays, top-K examples, and a preview sheet. M29.0.7 decides whether existing evidence is `text_owned`, `visual_owned`, `shape_owned`, `mixed_or_uncertain`, or `audit_only`. `mixed_symbol_text_candidate` is routed as `mixed_or_uncertain` audit-only: not suppressed as visual, but not allowed for object-forming visual side or text side. M29.0.3.1 `text_owned_rejected_lineage` remains ordinary `text_noise` for routing; M29.0.7 only copies `sourceLineage` and records `text_owned_rejected_lineage` as audit metadata when OCR overlap/confidence accepts text ownership. M29.0.7 does not call OCR, discover new bboxes, generate formal visual assets, create text-removed images, rewrite prior M29 JSON, or emit DSL/Figma output.

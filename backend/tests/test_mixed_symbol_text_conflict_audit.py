@@ -20,6 +20,17 @@ def test_only_mixed_items_become_conflicts(tmp_path: Path) -> None:
             "items": [
                 mixed_item("mixed_001", [10, 10, 24, 24]),
                 {"id": "icon_001", "sourceEvidenceId": "icon_source", "visualKind": "icon_candidate", "bbox": [50, 10, 24, 24]},
+                {
+                    "id": "noise_001",
+                    "sourceEvidenceId": "noise_source",
+                    "visualKind": "text_noise",
+                    "bbox": [80, 10, 24, 16],
+                    "sourceLineage": {
+                        "preOcrSymbolCandidate": True,
+                        "rejectedLineageReason": "text_owned_rejected_lineage",
+                        "conflictClass": "text_owned_rejected_lineage",
+                    },
+                },
             ]
         },
     )

@@ -133,12 +133,37 @@ def test_high_overlap_without_lineage_stays_text_noise(tmp_path: Path) -> None:
     assert document.items[0].decision == "noise"
 
 
-def test_high_overlap_with_pre_ocr_lineage_becomes_mixed_symbol_text_candidate(tmp_path: Path) -> None:
+def test_baseline_without_lineage_ignores_text_rejected_gate_even_with_text_boxes(tmp_path: Path) -> None:
     canvas = make_canvas(100, 100, (255, 255, 255))
     draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
     m2902 = {
+        "textBoxes": [text_box("ocr_001", [10, 70, 30, 12], "1")],
         "mediaEvidence": [
-            evidence("candidate", "m291_group", "symbol_group", [10, 70, 30, 12], "likely_text_noise", 0.9),
+            evidence("noise", "m29_symbol", "image_like_symbol", [10, 70, 30, 12], "likely_text_noise", 0.95),
+        ],
+    }
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+    )
+
+    item = document.items[0]
+    assert item.visual_kind == "text_noise"
+    assert item.source_lineage is None
+    assert "text_owned_rejected_lineage" not in item.reasons
+    assert "sourceLineage" not in item.to_dict()
+
+
+def test_partial_overlap_with_pre_ocr_lineage_remains_mixed_symbol_text_candidate(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 60, 30, 30, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("candidate", "m291_group", "symbol_group", [10, 60, 30, 30], "likely_text_noise", 0.5),
         ]
     }
     lineage = m291_lineage_document(
@@ -146,10 +171,10 @@ def test_high_overlap_with_pre_ocr_lineage_becomes_mixed_symbol_text_candidate(t
             {
                 "id": "group_001",
                 "decision": "uncertain",
-                "bbox": [10, 70, 30, 12],
+                "bbox": [10, 60, 30, 30],
                 "sourceLineage": {
                     "preOcrSymbolCandidate": True,
-                    "lineageStrength": "weak",
+                    "lineageStrength": "medium",
                     "lineageSource": "m291_group",
                     "m291GroupId": "group_001",
                     "ownershipHint": "visual_or_mixed",
@@ -174,6 +199,54 @@ def test_high_overlap_with_pre_ocr_lineage_becomes_mixed_symbol_text_candidate(t
     assert item.source_lineage is not None
     assert "pre_ocr_symbol_lineage_preserved" in item.reasons
     assert item.asset_path.startswith("assets/mixed_symbol_text_candidates/")
+
+
+def test_full_ocr_overlap_with_pre_ocr_lineage_becomes_text_rejected_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
+    m2902 = {
+        "textBoxes": [text_box("ocr_001", [10, 70, 30, 12], "1")],
+        "mediaEvidence": [
+            evidence("candidate", "m291_group", "symbol_group", [10, 70, 30, 12], "likely_text_noise", 0.9),
+        ],
+    }
+    lineage = m291_lineage_document(
+        groups=[
+            {
+                "id": "group_001",
+                "decision": "uncertain",
+                "bbox": [10, 70, 30, 12],
+                "sourceLineage": {
+                    "preOcrSymbolCandidate": True,
+                    "lineageStrength": "medium",
+                    "lineageSource": "m291_group",
+                    "m291GroupId": "group_001",
+                    "ownershipHint": "visual_or_mixed",
+                },
+            }
+        ]
+    )
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        m291_lineage_document=lineage,
+        output_dir=tmp_path,
+    )
+
+    item = document.items[0]
+    assert item.visual_kind == "text_noise"
+    assert item.decision == "noise"
+    assert "text_owned_rejected_lineage" in item.reasons
+    assert item.source_lineage is not None
+    assert item.source_lineage["rejectedLineageReason"] == "text_owned_rejected_lineage"
+    assert item.source_lineage["conflictClass"] == "text_owned_rejected_lineage"
+    assert item.source_lineage["preOcrSymbolCandidate"] is True
+    assert item.source_lineage["survivingPreOcrSymbolCandidate"] is False
+    assert "full_ocr_coverage" in item.source_lineage["counterEvidence"]
+    assert "single_text_like_token" in item.source_lineage["counterEvidence"]
 
 
 def test_rejected_text_like_lineage_stays_text_noise(tmp_path: Path) -> None:
@@ -207,6 +280,100 @@ def test_rejected_text_like_lineage_stays_text_noise(tmp_path: Path) -> None:
 
     assert document.items[0].visual_kind == "text_noise"
     assert "rejected_pre_ocr_lineage_text_like" in document.items[0].reasons
+    assert document.items[0].source_lineage is not None
+    assert document.items[0].source_lineage["conflictClass"] == "text_owned_rejected_lineage"
+    assert document.items[0].source_lineage["survivingPreOcrSymbolCandidate"] is False
+
+
+def test_weak_eligible_blocked_lineage_with_high_overlap_becomes_text_rejected_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(100, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 24, 24, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("candidate", "m29_blocked", "image_like_blocked", [10, 70, 24, 24], "likely_text_noise", 0.5),
+        ],
+    }
+    lineage = m291_lineage_document(
+        candidates=[
+            {
+                "id": "fragment_001",
+                "sourceNodeId": "blocked_001",
+                "sourceKind": "blocked",
+                "bbox": [10, 70, 24, 24],
+                "sourceLineage": {
+                    "preOcrSymbolCandidate": True,
+                    "lineageStrength": "weak",
+                    "lineageSource": "eligible_blocked",
+                    "m29BlockedIds": ["blocked_001"],
+                    "m291CandidateIds": ["fragment_001"],
+                    "ownershipHint": "visual_or_mixed",
+                },
+            }
+        ]
+    )
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        m291_lineage_document=lineage,
+        output_dir=tmp_path,
+    )
+
+    item = document.items[0]
+    assert item.visual_kind == "text_noise"
+    assert "text_owned_rejected_lineage" in item.reasons
+    assert item.source_lineage is not None
+    assert "weak_eligible_blocked_high_ocr_overlap" in item.source_lineage["counterEvidence"]
+
+
+def test_glyph_sequence_candidate_baseline_becomes_text_rejected_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(140, 100, (255, 255, 255))
+    draw_rect(canvas, 10, 70, 16, 12, (20, 20, 20))
+    draw_rect(canvas, 30, 70, 16, 12, (20, 20, 20))
+    draw_rect(canvas, 50, 70, 16, 12, (20, 20, 20))
+    m2902 = {
+        "mediaEvidence": [
+            evidence("candidate", "m291_group", "symbol_group", [10, 68, 56, 16], "likely_text_noise", 0.5),
+        ],
+    }
+    lineage = m291_lineage_document(
+        candidates=[
+            {"id": "fragment_001", "sourceNodeId": "symbol_001", "sourceKind": "symbol", "bbox": [10, 70, 16, 12], "sourceLineage": {"preOcrSymbolCandidate": True, "lineageStrength": "medium", "lineageSource": "m29_symbol", "m291CandidateIds": ["fragment_001"], "ownershipHint": "visual_or_mixed"}},
+            {"id": "fragment_002", "sourceNodeId": "symbol_002", "sourceKind": "symbol", "bbox": [30, 70, 16, 12], "sourceLineage": {"preOcrSymbolCandidate": True, "lineageStrength": "medium", "lineageSource": "m29_symbol", "m291CandidateIds": ["fragment_002"], "ownershipHint": "visual_or_mixed"}},
+            {"id": "fragment_003", "sourceNodeId": "symbol_003", "sourceKind": "symbol", "bbox": [50, 70, 16, 12], "sourceLineage": {"preOcrSymbolCandidate": True, "lineageStrength": "medium", "lineageSource": "m29_symbol", "m291CandidateIds": ["fragment_003"], "ownershipHint": "visual_or_mixed"}},
+        ],
+        groups=[
+            {
+                "id": "group_001",
+                "decision": "uncertain",
+                "bbox": [10, 68, 56, 16],
+                "sourceLineage": {
+                    "preOcrSymbolCandidate": True,
+                    "lineageStrength": "medium",
+                    "lineageSource": "m291_group",
+                    "m291GroupId": "group_001",
+                    "m291CandidateIds": ["fragment_001", "fragment_002", "fragment_003"],
+                    "ownershipHint": "visual_or_mixed",
+                },
+            }
+        ],
+    )
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        m291_lineage_document=lineage,
+        output_dir=tmp_path,
+    )
+
+    item = document.items[0]
+    assert item.visual_kind == "text_noise"
+    assert item.source_lineage is not None
+    assert "glyph_sequence_risk" in item.source_lineage["counterEvidence"]
 
 
 def test_small_symbol_group_prefers_icon_over_media_candidate(tmp_path: Path) -> None:
@@ -343,6 +510,10 @@ def m291_lineage_document(groups: list[dict] | None = None, candidates: list[dic
         "warnings": [],
         "meta": {},
     }
+
+
+def text_box(id: str, bbox: list[int], text: str, confidence: float = 0.98) -> dict:
+    return {"id": id, "bbox": bbox, "text": text, "confidence": confidence, "source": "ocr", "kind": "line"}
 
 
 def metrics() -> M29PrimitiveMetrics:

@@ -35,6 +35,39 @@ def test_text_noise_high_ocr_overlap_becomes_text_owned(tmp_path: Path) -> None:
     assert read_png_metadata((tmp_path / "preview_text_visual_ownership_gate.png").read_bytes()) is not None
 
 
+def test_text_rejected_lineage_text_noise_keeps_lineage_audit_and_text_owned_routing(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 90)
+    source_lineage = {
+        "preOcrSymbolCandidate": True,
+        "lineageStrength": "medium",
+        "lineageSource": "m291_group",
+        "rejectedLineageReason": "text_owned_rejected_lineage",
+        "conflictClass": "text_owned_rejected_lineage",
+        "survivingPreOcrSymbolCandidate": False,
+        "counterEvidence": ["full_ocr_coverage"],
+        "risks": ["text_contamination_possible"],
+    }
+    document = run_extract(
+        tmp_path,
+        canvas,
+        m2903={"items": [visual_item("noise_1", "text_noise", [10, 10, 40, 12], text_overlap=0.95, source_lineage=source_lineage)]},
+        m2902={"textBoxes": [text_box("text_1", [10, 10, 40, 12], "1", confidence=0.92)]},
+    )
+
+    decision = next(item for item in document.ownership_decisions if item.source_visual_evidence_item_id == "noise_1")
+    assert decision.ownership == "text_owned"
+    assert decision.decision == "accepted"
+    assert decision.allowed_for_object_forming_visual_side is False
+    assert decision.allowed_for_text_side is True
+    assert "text_owned_rejected_lineage" in decision.reasons
+    assert "text_contamination_possible" in decision.risks
+    assert decision.source_lineage == source_lineage
+    payload = decision.to_dict()
+    assert payload["sourceLineage"]["conflictClass"] == "text_owned_rejected_lineage"
+    routed = document.routing_views["bySourceVisualEvidenceItemId"]["noise_1"]
+    assert routed["sourceLineage"]["rejectedLineageReason"] == "text_owned_rejected_lineage"
+
+
 def test_text_noise_low_ocr_confidence_is_not_visual_side(tmp_path: Path) -> None:
     canvas = make_canvas(120, 90)
     document = run_extract(
@@ -152,6 +185,7 @@ def test_validation_rejects_bad_refs_and_text_owned_visual_side(tmp_path: Path) 
         allowed_for_audit_only=original.allowed_for_audit_only,
         risks=original.risks,
         reasons=original.reasons,
+        source_lineage=original.source_lineage,
     )
     broken = document.__class__(
         schema_name=document.schema_name,
@@ -221,8 +255,8 @@ def run_extract(tmp_path: Path, canvas: PngPixels, *, m2903: dict, m2902: dict):
     )
 
 
-def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: float = 0.0) -> dict:
-    return {
+def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: float = 0.0, source_lineage: dict | None = None) -> dict:
+    item = {
         "id": id,
         "sourceEvidenceId": id,
         "source": "m29_symbol",
@@ -239,6 +273,9 @@ def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: flo
         "sourceDecision": "test",
         "suggestedNextAction": "review",
     }
+    if source_lineage is not None:
+        item["sourceLineage"] = source_lineage
+    return item
 
 
 def text_box(id: str, bbox: list[int], text: str, *, confidence: float = 0.98) -> dict:

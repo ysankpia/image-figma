@@ -52,9 +52,10 @@ class OwnershipDecision:
     allowed_for_audit_only: bool
     risks: list[str]
     reasons: list[str]
+    source_lineage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "id": self.id,
             "source": self.source,
             "sourceEvidenceId": self.source_evidence_id,
@@ -77,6 +78,9 @@ class OwnershipDecision:
             "risks": self.risks,
             "reasons": self.reasons,
         }
+        if self.source_lineage is not None:
+            data["sourceLineage"] = self.source_lineage
+        return data
 
 
 @dataclass(frozen=True)
@@ -241,6 +245,7 @@ def decide_text_box(id: str, text_box: dict[str, Any], options: M2907Options) ->
 
 def decide_visual_item(id: str, raw: dict[str, Any], bbox: list[int], text_boxes: list[dict[str, Any]], options: M2907Options) -> OwnershipDecision:
     visual_kind = str(raw.get("visualKind") or "")
+    source_lineage = raw.get("sourceLineage") if isinstance(raw.get("sourceLineage"), dict) else None
     matched = overlapping_text_boxes(bbox, text_boxes)
     matched_ids = [str(item["id"]) for item in matched]
     ocr_overlap = overlap_with_text_union(bbox, matched, denominator="bbox")
@@ -273,6 +278,11 @@ def decide_visual_item(id: str, raw: dict[str, Any], bbox: list[int], text_boxes
         )
 
     if visual_kind == "text_noise":
+        text_noise_risks: list[str] = []
+        text_noise_reasons = ["text_noise_owned_by_ocr", "high_ocr_overlap"]
+        if lineage_is_text_owned_rejected(source_lineage):
+            text_noise_risks.append("text_contamination_possible")
+            text_noise_reasons.append("text_owned_rejected_lineage")
         if has_good_ocr and has_text_ownership_overlap:
             return make_visual_decision(
                 id,
@@ -289,8 +299,8 @@ def decide_visual_item(id: str, raw: dict[str, Any], bbox: list[int], text_boxes
                 suppressed=True,
                 allow_visual=False,
                 allow_text=True,
-                risks=[],
-                reasons=["text_noise_owned_by_ocr", "high_ocr_overlap"],
+                risks=text_noise_risks,
+                reasons=text_noise_reasons,
             )
         return make_visual_decision(
             id,
@@ -425,6 +435,7 @@ def make_visual_decision(
     risks: list[str],
     reasons: list[str],
 ) -> OwnershipDecision:
+    source_lineage = raw.get("sourceLineage") if isinstance(raw.get("sourceLineage"), dict) else None
     return OwnershipDecision(
         id=id,
         source="m2903_visual_evidence",
@@ -447,6 +458,7 @@ def make_visual_decision(
         allowed_for_audit_only=True,
         risks=dedupe_strings(risks),
         reasons=dedupe_strings([*reasons, f"source_visual_kind_{str(raw.get('visualKind') or 'unknown')}"]),
+        source_lineage=dict(source_lineage) if source_lineage is not None else None,
     )
 
 
@@ -491,6 +503,7 @@ def build_routing_views(decisions: list[OwnershipDecision]) -> dict[str, Any]:
                 "ownershipReasonKind": item.ownership_reason_kind,
                 "matchedTextBoxIds": item.matched_text_box_ids,
                 "textPreview": item.text_preview,
+                **({"sourceLineage": item.source_lineage} if item.source_lineage is not None else {}),
             }
             for item in decisions
             if item.source_visual_evidence_item_id
@@ -527,6 +540,7 @@ def build_audit(decisions: list[OwnershipDecision]) -> list[dict[str, Any]]:
             "allowedForTextSide": item.allowed_for_text_side,
             "risks": item.risks,
             "reasons": item.reasons,
+            **({"sourceLineage": item.source_lineage} if item.source_lineage is not None else {}),
         }
         for index, item in enumerate(decisions)
     ]
@@ -729,6 +743,15 @@ def dedupe_strings(items: list[str]) -> list[str]:
         if item and item not in result:
             result.append(item)
     return result
+
+
+def lineage_is_text_owned_rejected(source_lineage: dict[str, Any] | None) -> bool:
+    if not isinstance(source_lineage, dict):
+        return False
+    return (
+        source_lineage.get("conflictClass") == "text_owned_rejected_lineage"
+        or source_lineage.get("rejectedLineageReason") == "text_owned_rejected_lineage"
+    )
 
 
 def grid_height(previews: list[tuple[str, PngPixels, int, int]], sheet_width: int, margin: int, gap: int) -> int:

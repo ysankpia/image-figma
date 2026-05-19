@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import string
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -33,6 +34,9 @@ VisualEvidenceKind = Literal[
     "other_candidate",
 ]
 VisualEvidenceDecision = Literal["accepted", "candidate", "uncertain", "noise", "rejected"]
+
+TEXT_REJECTED_LINEAGE_FULL_OCR_COVERAGE_MIN = 0.72
+TEXT_REJECTED_LINEAGE_ASPECT_MIN = 3.5
 
 
 @dataclass(frozen=True)
@@ -156,11 +160,13 @@ def extract_visual_evidence_normalization(
     media_evidence = m2902_document.get("mediaEvidence")
     if not isinstance(media_evidence, list):
         raise ValueError("M29.0.3 requires M29.0.2 mediaEvidence list")
+    text_boxes = collect_text_boxes(m2902_document, pixels.width, pixels.height) if m291_lineage_document is not None else []
 
     items = normalize_evidence_items(
         pixels=pixels,
         output_dir=output_dir,
         media_evidence=media_evidence,
+        text_boxes=text_boxes,
         options=options,
         lineage_lookup=build_lineage_lookup(m291_lineage_document),
     )
@@ -189,6 +195,7 @@ def normalize_evidence_items(
     pixels: PngPixels,
     output_dir: Path,
     media_evidence: list[Any],
+    text_boxes: list[dict[str, Any]],
     options: VisualEvidenceOptions,
     lineage_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> list[VisualEvidenceItem]:
@@ -204,7 +211,8 @@ def normalize_evidence_items(
             raise ValueError(f"M29.0.3 invalid mediaEvidence item: {source_evidence_id or '<missing id>'}")
         metrics = parse_metrics(raw.get("metrics"))
         source_lineage = lookup_source_lineage(raw, bbox, lineage_lookup)
-        visual_kind, decision, confidence, classification_reasons = classify_evidence(raw, bbox, metrics, options, source_lineage)
+        matched_text_boxes = overlapping_text_boxes(bbox, text_boxes)
+        visual_kind, decision, confidence, classification_reasons, source_lineage = classify_evidence(raw, bbox, metrics, options, source_lineage, matched_text_boxes)
         id = next_item_id(visual_kind, counters)
         asset_path = export_visual_evidence_asset(pixels, output_dir, visual_kind, id, bbox)
         items.append(
@@ -236,7 +244,8 @@ def classify_evidence(
     metrics: M29PrimitiveMetrics,
     options: VisualEvidenceOptions,
     source_lineage: dict[str, Any] | None = None,
-) -> tuple[VisualEvidenceKind, VisualEvidenceDecision, float, list[str]]:
+    matched_text_boxes: list[dict[str, Any]] | None = None,
+) -> tuple[VisualEvidenceKind, VisualEvidenceDecision, float, list[str], dict[str, Any] | None]:
     source = str(raw.get("source"))
     source_decision = str(raw.get("decision") or "")
     suggested = str(raw.get("suggestedNextAction") or "")
@@ -247,17 +256,30 @@ def classify_evidence(
     aspect = width / max(1, height)
     if text_overlap >= options.text_noise_overlap_threshold or suggested == "likely_text_noise":
         if lineage_is_rejected_text_like(source_lineage):
-            return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted", "rejected_pre_ocr_lineage_text_like"]
+            rejected = rejected_lineage(source_lineage, "text_like_glyph_sequence")
+            return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted", "rejected_pre_ocr_lineage_text_like", "text_owned_rejected_lineage"], rejected
         if lineage_survives_as_conflict(source_lineage):
+            counter_evidence = text_lineage_counter_evidence(
+                bbox=bbox,
+                metrics=metrics,
+                source_lineage=source_lineage,
+                text_overlap=text_overlap,
+                matched_text_boxes=matched_text_boxes or [],
+                options=options,
+            )
+            if counter_evidence:
+                rejected = rejected_lineage(source_lineage, "text_owned_rejected_lineage", counter_evidence)
+                return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted", "text_owned_rejected_lineage", *counter_evidence], rejected
             return (
                 "mixed_symbol_text_candidate",
                 "uncertain",
                 max(0.55, min(0.72, confidence_from_overlap(text_overlap) - 0.12)),
                 ["symbol_text_ownership_conflict", "pre_ocr_symbol_lineage_preserved"],
+                source_lineage,
             )
-        return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted"]
+        return "text_noise", "noise", confidence_from_overlap(text_overlap), ["text_noise_demoted"], source_lineage
     if source == "m29_image" and suggested == "keep_accepted_image":
-        return "accepted_image", "accepted", 0.92, ["accepted_m29_image"]
+        return "accepted_image", "accepted", 0.92, ["accepted_m29_image"], source_lineage
     if (
         source in {"m29_unknown", "m29_symbol", "m29_blocked", "m291_group", "after_text_mask_candidate"}
         and text_overlap <= options.media_candidate_text_overlap_max
@@ -266,15 +288,66 @@ def classify_evidence(
         and (source not in {"m29_symbol", "m291_group", "after_text_mask_candidate"} or max_edge >= options.media_candidate_symbol_min_edge)
         and (metrics.color_count >= options.media_candidate_min_color_count or metrics.texture_score >= options.media_candidate_min_texture_score)
     ):
-        return "media_candidate", "candidate", media_candidate_confidence(metrics, area, options), ["media_candidate_promoted", f"from_{source_decision or source}"]
+        return "media_candidate", "candidate", media_candidate_confidence(metrics, area, options), ["media_candidate_promoted", f"from_{source_decision or source}"], source_lineage
     if (
         source in {"m29_symbol", "m29_blocked", "m291_group", "after_text_mask_candidate"}
         and text_overlap <= options.icon_candidate_text_overlap_max
         and options.icon_candidate_min_area <= area <= options.icon_candidate_max_area
         and max_edge <= options.icon_candidate_max_edge
     ):
-        return "icon_candidate", "candidate", 0.68, ["icon_candidate_promoted", f"from_{source_decision or source}"]
-    return "other_candidate", "candidate", 0.45, ["other_candidate_retained", f"from_{source_decision or source}"]
+        return "icon_candidate", "candidate", 0.68, ["icon_candidate_promoted", f"from_{source_decision or source}"], source_lineage
+    return "other_candidate", "candidate", 0.45, ["other_candidate_retained", f"from_{source_decision or source}"], source_lineage
+
+
+def text_lineage_counter_evidence(
+    *,
+    bbox: list[int],
+    metrics: M29PrimitiveMetrics,
+    source_lineage: dict[str, Any],
+    text_overlap: float,
+    matched_text_boxes: list[dict[str, Any]],
+    options: VisualEvidenceOptions,
+) -> list[str]:
+    reasons: list[str] = []
+    if text_overlap >= TEXT_REJECTED_LINEAGE_FULL_OCR_COVERAGE_MIN:
+        reasons.append("full_ocr_coverage")
+    if bbox[2] / max(1, bbox[3]) >= TEXT_REJECTED_LINEAGE_ASPECT_MIN or metrics.aspect_ratio >= TEXT_REJECTED_LINEAGE_ASPECT_MIN:
+        reasons.append("text_like_aspect")
+    text_preview = "".join(str(item.get("text") or "") for item in matched_text_boxes).strip()
+    if is_single_text_like_token(text_preview):
+        reasons.append("single_text_like_token")
+    if has_glyph_sequence_risk(source_lineage, bbox):
+        reasons.append("glyph_sequence_risk")
+    if source_lineage.get("lineageStrength") == "weak" and source_lineage.get("lineageSource") == "eligible_blocked" and text_overlap >= options.text_noise_overlap_threshold:
+        reasons.append("weak_eligible_blocked_high_ocr_overlap")
+    return dedupe_strings(reasons)
+
+
+def has_glyph_sequence_risk(source_lineage: dict[str, Any], bbox: list[int]) -> bool:
+    risks = {str(item) for item in source_lineage.get("risks", [])}
+    reasons = {str(item) for item in source_lineage.get("reasons", [])}
+    if "text_like_sequence_risk" in risks or "text_like_sequence" in reasons:
+        return True
+    candidate_bboxes = [parse_bbox(value) for value in source_lineage.get("m291CandidateBboxes", []) if isinstance(value, list)]
+    candidate_bboxes = [value for value in candidate_bboxes if value is not None]
+    if len(candidate_bboxes) < 3:
+        return False
+    centers = [value[1] + value[3] / 2 for value in candidate_bboxes]
+    return max(centers) - min(centers) <= max(3, bbox[3] * 0.35) and bbox[2] / max(1, bbox[3]) >= 2.8
+
+
+def rejected_lineage(source_lineage: dict[str, Any] | None, reason: str, counter_evidence: list[str] | None = None) -> dict[str, Any] | None:
+    if not isinstance(source_lineage, dict):
+        return source_lineage
+    rejected = dict(source_lineage)
+    rejected["rejectedLineageReason"] = reason
+    rejected["conflictClass"] = "text_owned_rejected_lineage"
+    rejected["ownershipHint"] = "text_owned"
+    rejected["survivingPreOcrSymbolCandidate"] = False
+    rejected["counterEvidence"] = dedupe_strings([*rejected.get("counterEvidence", []), *(counter_evidence or [])])
+    rejected["risks"] = dedupe_strings([*rejected.get("risks", []), "text_contamination_possible"])
+    rejected["reasons"] = dedupe_strings([*rejected.get("reasons", []), reason])
+    return rejected
 
 
 def lineage_survives_as_conflict(source_lineage: dict[str, Any] | None) -> bool:
@@ -292,18 +365,73 @@ def lineage_is_rejected_text_like(source_lineage: dict[str, Any] | None) -> bool
     return reason in {"text_like_glyph_sequence", "image_like_merged_result"}
 
 
+def collect_text_boxes(m2902_document: dict[str, Any], width: int, height: int) -> list[dict[str, Any]]:
+    boxes: list[dict[str, Any]] = []
+    for raw in m2902_document.get("textBoxes", []):
+        if not isinstance(raw, dict):
+            continue
+        bbox = parse_bbox(raw.get("bbox"))
+        if bbox is None or not bbox_in_bounds(bbox, width, height):
+            continue
+        boxes.append(
+            {
+                "id": str(raw.get("id") or ""),
+                "bbox": bbox,
+                "text": str(raw.get("text") or ""),
+                "confidence": float(raw.get("confidence", 1.0)),
+            }
+        )
+    return boxes
+
+
+def overlapping_text_boxes(bbox: list[int], text_boxes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in text_boxes if intersection_area(bbox, item["bbox"]) > 0]
+
+
+def intersection_area(left: list[int], right: list[int]) -> int:
+    x1 = max(left[0], right[0])
+    y1 = max(left[1], right[1])
+    x2 = min(left[0] + left[2], right[0] + right[2])
+    y2 = min(left[1] + left[3], right[1] + right[3])
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def is_single_text_like_token(text: str) -> bool:
+    value = text.strip()
+    if not value:
+        return False
+    compact = "".join(value.split())
+    if len(compact) <= 1:
+        return True
+    return all(char.isdigit() or char in string.punctuation or char in "￥¥$%元人课分秒时天月年" for char in compact)
+
+
+def dedupe_strings(items: list[str]) -> list[str]:
+    output: list[str] = []
+    for item in items:
+        if item and item not in output:
+            output.append(item)
+    return output
+
+
 def build_lineage_lookup(document: dict[str, Any] | None) -> dict[str, dict[str, Any]] | None:
     if document is None:
         return None
     if document.get("schemaName") != "M291SymbolFragmentGroupingDocument" or document.get("schemaVersion") != "0.1":
         raise ValueError("M29.0.3 lineage input must be M291SymbolFragmentGroupingDocument v0.1")
     lookup: dict[str, dict[str, Any]] = {}
+    candidate_bboxes_by_id = {
+        str(candidate.get("id")): bbox
+        for candidate in document.get("candidates", [])
+        if isinstance(candidate, dict) and candidate.get("id") and (bbox := parse_bbox(candidate.get("bbox"))) is not None
+    }
     for candidate in document.get("candidates", []):
         if not isinstance(candidate, dict):
             continue
         lineage = normalized_lineage(candidate.get("sourceLineage"), candidate)
         if lineage is None:
             continue
+        lineage = attach_candidate_bboxes(lineage, candidate_bboxes_by_id)
         bbox = parse_bbox(candidate.get("bbox"))
         source_node_id = str(candidate.get("sourceNodeId") or "")
         source_kind = str(candidate.get("sourceKind") or "")
@@ -331,6 +459,7 @@ def build_lineage_lookup(document: dict[str, Any] | None) -> dict[str, dict[str,
             }
         if lineage is None:
             continue
+        lineage = attach_candidate_bboxes(lineage, candidate_bboxes_by_id)
         bbox = parse_bbox(group.get("bbox"))
         group_id = str(group.get("id") or "")
         if group_id:
@@ -348,6 +477,16 @@ def normalized_lineage(value: object, owner: dict[str, Any]) -> dict[str, Any] |
     if owner_id and not lineage.get("sourceOwnerId"):
         lineage["sourceOwnerId"] = owner_id
     return lineage
+
+
+def attach_candidate_bboxes(lineage: dict[str, Any], candidate_bboxes_by_id: dict[str, list[int]]) -> dict[str, Any]:
+    candidate_ids = [str(value) for value in lineage.get("m291CandidateIds", []) if value]
+    bboxes = [candidate_bboxes_by_id[candidate_id] for candidate_id in candidate_ids if candidate_id in candidate_bboxes_by_id]
+    if not bboxes or lineage.get("m291CandidateBboxes"):
+        return lineage
+    output = dict(lineage)
+    output["m291CandidateBboxes"] = bboxes
+    return output
 
 
 def lookup_source_lineage(raw: dict[str, Any], bbox: list[int], lineage_lookup: dict[str, dict[str, Any]] | None) -> dict[str, Any] | None:
