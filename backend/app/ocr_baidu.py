@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -235,11 +236,21 @@ def parse_ocr_result(
         bbox = None
         if index < len(boxes):
             bbox = rec_box_to_bbox(boxes[index])
-        if bbox is None and index < len(polys):
-            bbox = polygon_to_bbox(polys[index])
+        poly_raw = polys[index] if index < len(polys) else None
+        if bbox is None and poly_raw is not None:
+            bbox = polygon_to_bbox(poly_raw)
         if bbox is None:
             warnings.append(OCRWarning(code="INVALID_OCR_BBOX", message="OCR bbox is missing.", blockId=block_id))
             continue
+
+        block_meta: dict[str, Any] = {}
+        if poly_raw is not None:
+            angle = estimate_polygon_rotation(poly_raw)
+            if angle is not None:
+                block_meta["angle"] = round(angle, 3)
+            parsed_poly = parse_polygon_points(poly_raw)
+            if parsed_poly is not None:
+                block_meta["polygon"] = [[round(p[0], 1), round(p[1], 1)] for p in parsed_poly]
 
         blocks.append(
             OCRBlock(
@@ -250,6 +261,7 @@ def parse_ocr_result(
                 lineId=f"line_{block_number:03d}",
                 blockId=f"block_{block_number:03d}",
                 source=PROVIDER,
+                meta=block_meta,
             )
         )
 
@@ -295,3 +307,53 @@ def polygon_to_bbox(value: Any) -> list[int] | None:
     if width <= 1 or height <= 1:
         return None
     return [round(min(xs)), round(min(ys)), round(width), round(height)]
+
+
+def parse_polygon_points(value: Any) -> list[tuple[float, float]] | None:
+    """Parse a polygon value into a list of (x, y) points. Returns None on invalid input."""
+    if not isinstance(value, list) or len(value) < 3:
+        return None
+    points: list[tuple[float, float]] = []
+    for point in value:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return None
+        try:
+            points.append((float(point[0]), float(point[1])))
+        except (TypeError, ValueError):
+            return None
+    return points
+
+
+def estimate_polygon_rotation(value: Any) -> float | None:
+    """Estimate the rotation angle (in degrees) of a text polygon relative to
+    horizontal/vertical alignment.
+
+    For a 4-point polygon (typical OCR quad), we compute the angle of each
+    consecutive edge, snap it to the nearest 90-degree grid line, and return
+    the mean absolute deviation from that grid.  This gives ~0 for perfectly
+    horizontal text and a larger value for rotated / artistic text.
+
+    Returns None if the polygon is too small or cannot be parsed.
+    """
+    points = parse_polygon_points(value)
+    if points is None or len(points) < 3:
+        return None
+
+    deviations: list[float] = []
+    n = len(points)
+    for i in range(n):
+        x1, y1 = points[i]
+        x2, y2 = points[(i + 1) % n]
+        dx = x2 - x1
+        dy = y2 - y1
+        if abs(dx) < 0.5 and abs(dy) < 0.5:
+            continue  # degenerate edge
+        angle_deg = math.degrees(math.atan2(dy, dx))
+        # Snap to nearest 90-degree axis (0, 90, 180, 270)
+        remainder = angle_deg % 90
+        deviation = min(abs(remainder), abs(remainder - 90))
+        deviations.append(deviation)
+
+    if not deviations:
+        return None
+    return sum(deviations) / len(deviations)

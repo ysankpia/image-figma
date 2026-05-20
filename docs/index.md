@@ -32,6 +32,8 @@
 - 当前 M31.1 upload diagnostics 计划：[plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md](plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md)
 - 当前 M31.1.1 decoded-pixels fallback crop 计划：[plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md](plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md)
 - 当前 M32 figma boolean subtract 和 backend rgba masking 计划：[plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md](plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md)
+- 当前 M33 pixel-level background text erasure 计划：[plans/active/033-pixel-level-background-text-erasure.md](plans/active/033-pixel-level-background-text-erasure.md)
+- 当前 M34 OCR artistic and rotated text filtering 计划：[plans/active/034-ocr-artistic-and-rotated-text-filtering.md](plans/active/034-ocr-artistic-and-rotated-text-filtering.md)
 
 ## By Task Type
 

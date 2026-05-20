@@ -271,6 +271,8 @@ def text_boxes_from_ocr_document(payload: dict[str, Any]) -> tuple[list[M29TextB
         if bbox is None:
             warnings.append(f"ocr_block_{item.get('id', index + 1)}_invalid_bbox")
             continue
+        raw_meta = item.get("meta")
+        block_meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
         boxes.append(
             M29TextBox(
                 id=str(item.get("id") or f"ocr_text_{index + 1:03d}"),
@@ -279,6 +281,7 @@ def text_boxes_from_ocr_document(payload: dict[str, Any]) -> tuple[list[M29TextB
                 confidence=float(item.get("confidence", 1.0)),
                 source="ocr",
                 kind="line",
+                meta=block_meta,
             )
         )
     return boxes, warnings

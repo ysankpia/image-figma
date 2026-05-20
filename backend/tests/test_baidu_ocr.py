@@ -198,3 +198,211 @@ class FakeResponse:
         if self._payload is not None:
             return self._payload
         return json.loads(self.text)
+
+
+# ---------------------------------------------------------------------------
+# M34: estimate_polygon_rotation tests
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_polygon_rotation_horizontal_rect_returns_near_zero() -> None:
+    from app.ocr_baidu import estimate_polygon_rotation
+
+    # Perfectly horizontal rectangle (top-left, top-right, bottom-right, bottom-left)
+    poly = [[10, 20], [110, 20], [110, 50], [10, 50]]
+    angle = estimate_polygon_rotation(poly)
+    assert angle is not None
+    assert angle < 0.5, f"Expected near-zero for horizontal rect, got {angle}"
+
+
+def test_estimate_polygon_rotation_tilted_returns_high_angle() -> None:
+    from app.ocr_baidu import estimate_polygon_rotation
+    import math
+
+    # 15-degree tilted rectangle
+    cx, cy = 100, 100
+    w, h = 200, 40
+    rad = math.radians(15)
+    cos_a = math.cos(rad)
+    sin_a = math.sin(rad)
+    corners = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+    poly = [[cx + x * cos_a - y * sin_a, cy + x * sin_a + y * cos_a] for x, y in corners]
+    angle = estimate_polygon_rotation(poly)
+    assert angle is not None
+    assert angle > 10.0, f"Expected high angle for 15° tilt, got {angle}"
+
+
+def test_estimate_polygon_rotation_slightly_skewed() -> None:
+    from app.ocr_baidu import estimate_polygon_rotation
+
+    # Slightly skewed parallelogram (about 5 degrees)
+    poly = [[10, 20], [110, 29], [110, 59], [10, 50]]
+    angle = estimate_polygon_rotation(poly)
+    assert angle is not None
+    assert angle > 2.0, f"Expected > 2° for skewed quad, got {angle}"
+
+
+def test_estimate_polygon_rotation_invalid_inputs() -> None:
+    from app.ocr_baidu import estimate_polygon_rotation
+
+    assert estimate_polygon_rotation(None) is None
+    assert estimate_polygon_rotation([]) is None
+    assert estimate_polygon_rotation([[1, 2]]) is None
+    assert estimate_polygon_rotation("not a list") is None
+
+
+def test_parse_ppocrv5_rows_populates_meta_with_angle_and_polygon() -> None:
+    """When rec_polys is present, meta should contain angle and polygon."""
+    rows = [
+        {
+            "result": {
+                "ocrResults": [
+                    {
+                        "prunedResult": {
+                            "rec_texts": ["Hello"],
+                            "rec_scores": [0.95],
+                            "rec_boxes": [[10, 20, 110, 50]],
+                            "rec_polys": [[[10, 20], [110, 20], [110, 50], [10, 50]]],
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+    blocks, warnings = parse_ppocrv5_rows(rows, min_confidence=0.7)
+    assert len(blocks) == 1
+    assert "angle" in blocks[0].meta
+    assert blocks[0].meta["angle"] < 1.0  # horizontal -> near zero
+    assert "polygon" in blocks[0].meta
+    assert len(blocks[0].meta["polygon"]) == 4
+
+
+def test_parse_ppocrv5_rows_tilted_polygon_has_high_angle() -> None:
+    """A tilted polygon should produce a high angle in meta."""
+    import math
+
+    cx, cy = 100, 100
+    w, h = 200, 40
+    rad = math.radians(20)
+    cos_a = math.cos(rad)
+    sin_a = math.sin(rad)
+    corners = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+    poly = [[cx + x * cos_a - y * sin_a, cy + x * sin_a + y * cos_a] for x, y in corners]
+    rows = [
+        {
+            "result": {
+                "ocrResults": [
+                    {
+                        "prunedResult": {
+                            "rec_texts": ["Art Text"],
+                            "rec_scores": [0.95],
+                            "rec_boxes": [],
+                            "rec_polys": [poly],
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+    blocks, warnings = parse_ppocrv5_rows(rows, min_confidence=0.7)
+    assert len(blocks) == 1
+    assert blocks[0].meta.get("angle", 0) > 10.0
+
+
+# ---------------------------------------------------------------------------
+# M34: filter_artistic_text tests
+# ---------------------------------------------------------------------------
+
+
+def test_filter_artistic_text_drops_rotated_text() -> None:
+    from app.m30_upload_pipeline import filter_artistic_text
+    from app.visual_primitive_graph import M29TextBox
+    from conftest import PNG_BYTES
+    from app.png_tools import decode_png_pixels
+
+    pixels = decode_png_pixels(PNG_BYTES)
+
+    # Box with high rotation angle
+    rotated_box = M29TextBox(
+        id="ocr_text_001",
+        bbox=[10, 10, 40, 20],
+        text="ArtText",
+        confidence=0.95,
+        source="ocr",
+        kind="line",
+        meta={"angle": 15.0},
+    )
+    # Box with normal (horizontal) angle
+    normal_box = M29TextBox(
+        id="ocr_text_002",
+        bbox=[10, 40, 40, 20],
+        text="Normal",
+        confidence=0.95,
+        source="ocr",
+        kind="line",
+        meta={"angle": 0.5},
+    )
+
+    class FakeSettings:
+        ocr_artistic_text_filter_enabled = True
+        ocr_max_rotation_angle = 3.0
+        ocr_max_background_texture = 0.45
+        ocr_max_background_color_count = 32
+
+    kept, warnings = filter_artistic_text([rotated_box, normal_box], pixels, FakeSettings())
+    assert len(kept) == 1
+    assert kept[0].id == "ocr_text_002"
+    assert len(warnings) == 1
+    assert "OCR_ARTISTIC_TEXT_FILTERED" in warnings[0]
+    assert "rotation" in warnings[0]
+
+
+def test_filter_artistic_text_disabled_keeps_all() -> None:
+    from app.m30_upload_pipeline import filter_artistic_text
+    from app.visual_primitive_graph import M29TextBox
+    from conftest import PNG_BYTES
+    from app.png_tools import decode_png_pixels
+
+    pixels = decode_png_pixels(PNG_BYTES)
+
+    rotated_box = M29TextBox(
+        id="ocr_text_001",
+        bbox=[10, 10, 40, 20],
+        text="ArtText",
+        confidence=0.95,
+        meta={"angle": 15.0},
+    )
+
+    class FakeSettings:
+        ocr_artistic_text_filter_enabled = False
+
+    kept, warnings = filter_artistic_text([rotated_box], pixels, FakeSettings())
+    assert len(kept) == 1
+    assert len(warnings) == 0
+
+
+def test_filter_artistic_text_no_meta_angle_keeps_box() -> None:
+    from app.m30_upload_pipeline import filter_artistic_text
+    from app.visual_primitive_graph import M29TextBox
+    from conftest import PNG_BYTES
+    from app.png_tools import decode_png_pixels
+
+    pixels = decode_png_pixels(PNG_BYTES)
+
+    box = M29TextBox(
+        id="ocr_text_001",
+        bbox=[10, 10, 40, 20],
+        text="No Angle",
+        confidence=0.95,
+        meta={},
+    )
+
+    class FakeSettings:
+        ocr_artistic_text_filter_enabled = True
+        ocr_max_rotation_angle = 3.0
+        ocr_max_background_texture = 0.99
+        ocr_max_background_color_count = 999
+
+    kept, warnings = filter_artistic_text([box], pixels, FakeSettings())
+    assert len(kept) == 1
+    assert len(warnings) == 0

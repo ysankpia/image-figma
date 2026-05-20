@@ -20,6 +20,7 @@ class OCRBlock:
     lineId: str
     blockId: str
     source: str = "fake"
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

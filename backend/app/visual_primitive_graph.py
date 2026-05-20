@@ -36,6 +36,7 @@ class M29TextBox:
     confidence: float = 1.0
     source: M29TextSource = "ocr"
     kind: M29TextKind = "unknown"
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
