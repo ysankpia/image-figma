@@ -36,6 +36,7 @@
 - 当前 M34 OCR artistic and rotated text filtering 计划：[plans/active/034-ocr-artistic-and-rotated-text-filtering.md](plans/active/034-ocr-artistic-and-rotated-text-filtering.md)
 - 当前 M34.1 graphic text evidence preservation 计划：[plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md](plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md)
 - 当前 M34.2 context-aware UI text editability 计划：[plans/active/034-2-context-aware-ui-text-editability.md](plans/active/034-2-context-aware-ui-text-editability.md)
+- 当前 M35 shapes and images pixel-level background erasure 计划：[plans/active/035-shapes-and-images-pixel-level-background-erasure.md](plans/active/035-shapes-and-images-pixel-level-background-erasure.md)
 
 ## By Task Type
 

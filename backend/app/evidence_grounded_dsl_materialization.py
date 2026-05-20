@@ -41,6 +41,8 @@ class M30Options:
     max_editable_background_texture: float = 0.45
     max_editable_background_color_count: int = 32
     unstable_background_sample_preserve: bool = True
+    shape_erasure_enabled: bool = True
+    image_erasure_enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -283,6 +285,15 @@ def materialize_evidence_grounded_dsl(
     audit_refs = collect_audit_only_references(m2905_document)
     preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text_cover, *materialized_text]) if emit_preview_artifacts else None
     erase_text_from_fallback_images(dsl, output_dir, materialized_text)
+    
+    preserved_text_bboxes = []
+    if options.shape_erasure_enabled or options.image_erasure_enabled:
+        preserved_text_bboxes = collect_preserved_text_bboxes(text_decisions, m2905_document)
+
+    if options.shape_erasure_enabled:
+        erase_shapes_from_fallback_images(dsl, output_dir, materialized_shape, preserved_text_bboxes=preserved_text_bboxes)
+    if options.image_erasure_enabled:
+        erase_images_from_fallback_images(dsl, output_dir, materialized_image, preserved_text_bboxes=preserved_text_bboxes)
     update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_text_cover, materialized_shape, materialized_image, audit_refs)
 
     output_dsl_path = output_dir / "m30_materialized_dsl.json"
@@ -1115,12 +1126,35 @@ def collect_audit_only_references(m2905_document: dict[str, Any]) -> list[dict[s
     return refs
 
 
-def erase_text_from_fallback_images(
+def collect_preserved_text_bboxes(
+    text_decisions: list[M30TextEditabilityDecision],
+    m2905_document: dict[str, Any],
+) -> list[list[int]]:
+    preserved_ids = {
+        d.source_text_member_id
+        for d in text_decisions
+        if d.decision == "graphic_text_preserve_in_fallback"
+    }
+    if not preserved_ids:
+        return []
+
+    bboxes = []
+    for item in list_dicts(m2905_document.get("textMembers")):
+        if str(item.get("id")) in preserved_ids:
+            bbox = parse_bbox(item.get("bbox"))
+            if bbox:
+                bboxes.append(bbox)
+    return bboxes
+
+
+def _erase_bboxes_from_fallback_images(
     dsl: dict[str, Any],
     output_dir: Path,
-    materialized_text: list[M30MaterializedNode],
+    nodes: list[M30MaterializedNode],
+    *,
+    preserved_text_bboxes: list[list[int]] | None = None,
 ) -> None:
-    if not materialized_text:
+    if not nodes:
         return
 
     fallback_assets = []
@@ -1165,7 +1199,7 @@ def erase_text_from_fallback_images(
         mutable_rows = [bytearray(row) for row in pixels.rows]
         modified = False
 
-        for node in materialized_text:
+        for node in nodes:
             tx, ty, tw, th = node.bbox
             local_x = tx - rx
             local_y = ty - ry
@@ -1193,7 +1227,20 @@ def erase_text_from_fallback_images(
 
                 for row_idx in range(overlap_y1, overlap_y2):
                     row = mutable_rows[row_idx]
+                    global_y = ry + row_idx
                     for col_idx in range(overlap_x1, overlap_x2):
+                        global_x = rx + col_idx
+                        # Check if global pixel overlaps any preserved text bbox
+                        is_inside_preserved = False
+                        if preserved_text_bboxes:
+                            for p_box in preserved_text_bboxes:
+                                px, py, pw, ph = p_box
+                                if px <= global_x < px + pw and py <= global_y < py + ph:
+                                    is_inside_preserved = True
+                                    break
+                        if is_inside_preserved:
+                            continue
+
                         offset_idx = col_idx * 3
                         row[offset_idx] = fill_color[0]
                         row[offset_idx + 1] = fill_color[1]
@@ -1206,6 +1253,34 @@ def erase_text_from_fallback_images(
                 image_path.write_bytes(encoded_png)
             except Exception:
                 pass
+
+
+def erase_text_from_fallback_images(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    materialized_text: list[M30MaterializedNode],
+) -> None:
+    _erase_bboxes_from_fallback_images(dsl, output_dir, materialized_text)
+
+
+def erase_shapes_from_fallback_images(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    materialized_shape: list[M30MaterializedNode],
+    *,
+    preserved_text_bboxes: list[list[int]] | None = None,
+) -> None:
+    _erase_bboxes_from_fallback_images(dsl, output_dir, materialized_shape, preserved_text_bboxes=preserved_text_bboxes)
+
+
+def erase_images_from_fallback_images(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    materialized_image: list[M30MaterializedNode],
+    *,
+    preserved_text_bboxes: list[list[int]] | None = None,
+) -> None:
+    _erase_bboxes_from_fallback_images(dsl, output_dir, materialized_image, preserved_text_bboxes=preserved_text_bboxes)
 
 
 def update_dsl_meta(

@@ -766,6 +766,115 @@ def test_mask_bboxes_injection_into_fallback_regions(tmp_path: Path) -> None:
             assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
 
 
+def test_shape_erasure_from_fallback_images(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 100, fill=(240, 240, 240))
+    # Write some black pixels where the shape is located [10, 40, 50, 20]
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(41, 46):
+        for c in range(12, 22):
+            rows[r][c * 3 : c * 3 + 3] = b"\x00\x00\x00"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=100, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[
+            shape_candidate("shape_0001", [10, 40, 50, 20], color="#000000"),
+        ]
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    # 1. Test shape erasure enabled
+    result_enabled = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30_enabled",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(shape_erasure_enabled=True),
+    )
+    fallback_asset_enabled = next(asset for asset in result_enabled.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path_enabled = tmp_path / "m30_enabled" / fallback_asset_enabled["url"]
+    fallback_pixels_enabled = decode_png_pixels(fallback_path_enabled.read_bytes())
+    for r in range(41, 46):
+        for c in range(12, 22):
+            offset = c * 3
+            assert list(fallback_pixels_enabled.rows[r][offset : offset + 3]) == [240, 240, 240]
+
+    # 2. Test shape erasure disabled
+    result_disabled = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30_disabled",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(shape_erasure_enabled=False),
+    )
+    fallback_asset_disabled = next(asset for asset in result_disabled.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path_disabled = tmp_path / "m30_disabled" / fallback_asset_disabled["url"]
+    fallback_pixels_disabled = decode_png_pixels(fallback_path_disabled.read_bytes())
+    for r in range(41, 46):
+        for c in range(12, 22):
+            offset = c * 3
+            assert list(fallback_pixels_disabled.rows[r][offset : offset + 3]) == [0, 0, 0]
+
+
+def test_image_erasure_from_fallback_images(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 100, fill=(240, 240, 240))
+    # Write some black pixels where the visual asset (image) is located [60, 10, 18, 18]
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(11, 16):
+        for c in range(62, 72):
+            rows[r][c * 3 : c * 3 + 3] = b"\x00\x00\x00"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=100, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(18, 18))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_0001", [60, 10, 18, 18], str(visual_asset_path.relative_to(m2905_dir))),
+        ],
+        shape_candidates=[]
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    # 1. Test image erasure enabled
+    result_enabled = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30_enabled",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(image_erasure_enabled=True),
+    )
+    fallback_asset_enabled = next(asset for asset in result_enabled.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path_enabled = tmp_path / "m30_enabled" / fallback_asset_enabled["url"]
+    fallback_pixels_enabled = decode_png_pixels(fallback_path_enabled.read_bytes())
+    for r in range(11, 16):
+        for c in range(62, 72):
+            offset = c * 3
+            assert list(fallback_pixels_enabled.rows[r][offset : offset + 3]) == [240, 240, 240]
+
+    # 2. Test image erasure disabled
+    result_disabled = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30_disabled",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(image_erasure_enabled=False),
+    )
+    fallback_asset_disabled = next(asset for asset in result_disabled.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path_disabled = tmp_path / "m30_disabled" / fallback_asset_disabled["url"]
+    fallback_pixels_disabled = decode_png_pixels(fallback_path_disabled.read_bytes())
+    for r in range(11, 16):
+        for c in range(62, 72):
+            offset = c * 3
+            assert list(fallback_pixels_disabled.rows[r][offset : offset + 3]) == [0, 0, 0]
+
+
 def test_text_font_size_harmonization(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(300, 200))
     m2905_dir = tmp_path / "m29_0_5"

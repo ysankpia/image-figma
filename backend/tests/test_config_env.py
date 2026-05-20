@@ -60,6 +60,8 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "true")
     monkeypatch.setenv("OCR_TEXT_EDITABILITY_ENABLED", "false")
     monkeypatch.setenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", "false")
+    monkeypatch.setenv("M30_SHAPE_ERASURE_ENABLED", "false")
+    monkeypatch.setenv("M30_IMAGE_ERASURE_ENABLED", "false")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
 
     settings = config.get_settings()
@@ -70,6 +72,8 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.m31_upload_diagnostics_strict is True
     assert settings.ocr_text_editability_enabled is False
     assert settings.ocr_graphic_text_preserve_enabled is False
+    assert settings.m30_shape_erasure_enabled is False
+    assert settings.m30_image_erasure_enabled is False
 
 
 def test_parse_bool_supports_common_env_values() -> None:
