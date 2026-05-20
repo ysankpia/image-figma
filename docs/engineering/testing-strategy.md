@@ -208,6 +208,8 @@ Required M29.2 coverage:
 - candidates covered by existing OCR are marked `covered_by_existing_ocr`.
 - texture-like long lines and center photo noise do not become valid proposals.
 - candidate count is capped and emits a warning when truncated.
+- per-image fair selection prevents later accepted images from being starved by earlier noisy images.
+- tiny overlay baseline spread is reported as `baseline_spread_penalty` instead of rejected geometry.
 - nearest-neighbor upscale preserves pixel colors and rejects invalid factors.
 - optional local re-probe can record recognized counters, rejected non-counter text, and provider failures.
 - `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.

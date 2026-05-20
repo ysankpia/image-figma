@@ -196,6 +196,8 @@ storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
 
 `M30_PREVIEW_PROFILE=production` skips M29.2 overlay/crop PNGs. `M30_PREVIEW_PROFILE=development` writes the overlay and crop debug assets. M29.2 failures are optional by default; strict mode fails the task at `stage=m29_2_small_overlay_text_audit`.
 
+M29.2 ranks candidates per accepted image before applying the global report cap. This keeps later image cards from being starved by earlier noisy image regions. Tiny overlay candidates with vertical component spread can remain proposals and record `baseline_spread_penalty`; this is still audit-only and does not materialize text.
+
 ## M30 Materialization
 
 M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:

@@ -22,6 +22,7 @@
 - 当前 M29.1.2 symbol lineage survival contract 计划：[plans/active/029-1-2-symbol-lineage-survival-contract.md](plans/active/029-1-2-symbol-lineage-survival-contract.md)
 - 当前 M29.1.3 mixed symbol/text conflict classification audit 计划：[plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md](plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md)
 - 当前 M29.2 small overlay text proposal audit 计划：[plans/active/029-2-small-overlay-text-proposal-and-local-reprobe-audit.md](plans/active/029-2-small-overlay-text-proposal-and-local-reprobe-audit.md)
+- 当前 M29.2.1 fair small overlay candidate ranking 计划：[plans/active/029-2-1-fair-small-overlay-candidate-ranking.md](plans/active/029-2-1-fair-small-overlay-candidate-ranking.md)
 - 当前 M30 evidence-grounded DSL materialization 计划：[plans/active/030-evidence-grounded-dsl-materialization.md](plans/active/030-evidence-grounded-dsl-materialization.md)
 - 当前 M30.1 plugin M29-to-M30 upload preview 计划：[plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md](plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md)
 - 当前 M30.2 conservative text cover 计划：[plans/active/030-2-conservative-text-cover.md](plans/active/030-2-conservative-text-cover.md)
