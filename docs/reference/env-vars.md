@@ -25,6 +25,7 @@
 | `M31_UPLOAD_DIAGNOSTICS_STRICT` | M31 diagnostics 失败是否阻断 task completed | `false` | 否 |
 | `OCR_TEXT_EDITABILITY_ENABLED` | 是否在 M30 materialization 前执行 text editability decision | `true` | 否 |
 | `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` | 是否把旋转、媒体区、复杂背景等高风险文字保留在 fallback 而不是物化成普通 text layer | `true` | 否 |
+| `OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED` | 是否在 M30 物化前清理高置信 leading text-symbol leakage | `true` | 否 |
 | `OCR_MAX_ROTATION_ANGLE` | 允许物化为普通 text layer 的最大 OCR polygon 偏转角度 | `3.0` | 否 |
 | `OCR_MAX_BACKGROUND_TEXTURE` | 图形文字 preserve 判定使用的背景纹理阈值 | `0.45` | 否 |
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
@@ -93,6 +94,7 @@ M31_UPLOAD_DIAGNOSTICS_STRICT=true
 ```bash
 OCR_TEXT_EDITABILITY_ENABLED=true
 OCR_GRAPHIC_TEXT_PRESERVE_ENABLED=true
+OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED=true
 ```
 
 默认启用 M34.1 文本可编辑性决策。OCR text boxes 不会在 M29 前被删除；M30 根据现有 OCR/M29.0.2/M29.0.5 证据决定：
@@ -113,6 +115,8 @@ metrics.editableCounterSignals
 ```
 
 这些 counter signal 只来自相对几何和局部像素，例如 aligned text row、compact overlay badge、metadata cluster 和 stable local background；不会使用业务词或固定屏幕坐标。
+
+M34.3 默认启用 text-symbol leakage cleanup。它只在 M30 物化 editable text 前运行，第一版自动清理高置信 leading uppercase `Q` 泄漏，并且必须有源像素投影间隙证据。OCR JSON、M29 nodes、M31 tree 和 Renderer 合同都不改变。
 
 M36 text foreground color sampling 是 M30 materialization 的默认行为，没有单独环境变量。它只影响已物化的 editable `m30_text_member`，不会重画 preserved graphic text。
 

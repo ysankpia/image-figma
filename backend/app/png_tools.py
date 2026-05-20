@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 import zlib
 from dataclasses import dataclass
+from typing import Any
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -371,6 +372,129 @@ def sample_rect_edges_dominant_background(
 
 def sample_text_foreground_rgb(pixels: PngPixels, bbox: list[int], bg_rgb: tuple[int, int, int] | list[int]) -> tuple[int, int, int]:
     return sample_text_foreground_rgb_with_source(pixels, bbox, bg_rgb)[0]
+
+
+def find_leading_symbol_gap(
+    pixels: PngPixels,
+    bbox: list[int],
+    bg_rgb: tuple[int, int, int] | list[int],
+) -> dict[str, Any] | None:
+    if len(bbox) != 4:
+        return None
+    if len(bg_rgb) != 3:
+        return None
+
+    x, y, width, height = [round(value) for value in bbox]
+    if width <= 0 or height <= 0:
+        return None
+
+    max_search_width = round(min(width * 0.28, height * 1.4))
+    if max_search_width < 12 or width <= max_search_width:
+        return None
+
+    x1 = clamp_int(x, 0, pixels.width)
+    y1 = clamp_int(y + 1, 0, pixels.height)
+    x2 = clamp_int(x + max_search_width, 0, pixels.width)
+    y2 = clamp_int(y + height - 1, 0, pixels.height)
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    bg = tuple(clamp_int(round(channel), 0, 255) for channel in bg_rgb)
+    bg_r, bg_g, bg_b = bg
+    column_height = y2 - y1
+    ink_densities: list[float] = []
+    for column in range(x1, x2):
+        ink_count = 0
+        for row_index in range(y1, y2):
+            row = pixels.rows[row_index]
+            offset = column * 3
+            red = row[offset]
+            green = row[offset + 1]
+            blue = row[offset + 2]
+            if abs(red - bg_r) + abs(green - bg_g) + abs(blue - bg_b) > 64:
+                ink_count += 1
+        ink_densities.append(ink_count / column_height)
+
+    def count_ink_columns(start_x: int, end_x: int, min_density: float) -> int:
+        probe_x1 = clamp_int(start_x, 0, pixels.width)
+        probe_x2 = clamp_int(end_x, 0, pixels.width)
+        if probe_x2 <= probe_x1:
+            return 0
+        count = 0
+        for column in range(probe_x1, probe_x2):
+            ink_count = 0
+            for row_index in range(y1, y2):
+                row = pixels.rows[row_index]
+                offset = column * 3
+                red = row[offset]
+                green = row[offset + 1]
+                blue = row[offset + 2]
+                if abs(red - bg_r) + abs(green - bg_g) + abs(blue - bg_b) > 64:
+                    ink_count += 1
+            if ink_count / column_height >= min_density:
+                count += 1
+        return count
+
+    low_ink_threshold = 0.10
+    min_gap_width = max(2, round(height * 0.08))
+    min_ink_density = 0.12
+    min_ink_columns = 2
+    candidate_count = len(ink_densities)
+    best: dict[str, Any] | None = None
+
+    run_start: int | None = None
+    for index, density in enumerate([*ink_densities, 1.0]):
+        if index < candidate_count and density <= low_ink_threshold:
+            if run_start is None:
+                run_start = index
+            continue
+
+        if run_start is not None:
+            run_end = index
+            gap_width = run_end - run_start
+            if gap_width >= min_gap_width:
+                left_columns = ink_densities[:run_start]
+                left_ink_columns = sum(1 for item in left_columns if item >= min_ink_density)
+                gap_end_x = x1 + run_end
+                right_probe_end = min(x + width, gap_end_x + max_search_width)
+                right_ink_columns = count_ink_columns(gap_end_x, right_probe_end, min_ink_density)
+                if left_ink_columns >= min_ink_columns and right_ink_columns >= min_ink_columns:
+                    gap_density = sum(ink_densities[run_start:run_end]) / gap_width
+                    score = gap_width - gap_density
+                    if best is None or score > best["score"]:
+                        best = {
+                            "start": run_start,
+                            "width": gap_width,
+                            "density": gap_density,
+                            "leftInkColumnCount": left_ink_columns,
+                            "rightInkColumnCount": right_ink_columns,
+                            "score": score,
+                        }
+            run_start = None
+
+    if best is None:
+        return None
+
+    gap_x = x1 + int(best["start"])
+    gap_width = int(best["width"])
+    cleaned_x = gap_x + gap_width
+    cleaned_width = x + width - cleaned_x
+    protected_width = gap_x - x
+    if protected_width <= 0 or cleaned_width <= 0:
+        return None
+
+    return {
+        "protectedSymbolBBox": [x, y, protected_width, height],
+        "gapBBox": [gap_x, y, gap_width, height],
+        "cleanedBBox": [cleaned_x, y, cleaned_width, height],
+        "metrics": {
+            "maxSearchWidth": max_search_width,
+            "minGapWidth": min_gap_width,
+            "gapInkDensity": round(float(best["density"]), 4),
+            "leftInkColumnCount": int(best["leftInkColumnCount"]),
+            "rightInkColumnCount": int(best["rightInkColumnCount"]),
+        },
+    }
 
 
 def _relative_brightness(rgb: tuple[int, int, int]) -> float:

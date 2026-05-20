@@ -82,6 +82,8 @@ progress = 100
 
 The M30 report also exposes `textEditabilityDecisions`, `preservedGraphicTextItems`, and `reviewTextItems`. These fields explain why a text evidence item became an editable `m30_text_member` or stayed in fallback.
 
+M34.3 adds `textSymbolLeakageDecisions` and summary counts for high-confidence leading OCR symbol leakage cleanup. It keeps OCR/M29/M31 evidence unchanged and only changes emitted M30 text content/bbox when source pixels show a projection gap.
+
 M30 text nodes also report `textForegroundColorSource` in node meta. The M30 report summary counts sampled foreground colors, contrast fallbacks, and hard fallback-to-default cases.
 
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.

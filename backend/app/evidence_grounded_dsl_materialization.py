@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from .dsl_factory import build_deterministic_dsl
 from .mixed_symbol_text_conflict_audit import find_forbidden_contract_terms
-from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, rgb_to_hex, sample_rect_edges_dominant_background, sample_text_foreground_rgb_with_source
+from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, find_leading_symbol_gap, read_png_metadata, rgb_to_hex, sample_rect_edges_dominant_background, sample_text_foreground_rgb_with_source
 from .visual_evidence_normalization import parse_bbox
 from .visual_primitive_graph import bbox_in_bounds, draw_rect, measure_region
 
@@ -41,6 +41,7 @@ class M30Options:
     max_editable_background_texture: float = 0.45
     max_editable_background_color_count: int = 32
     unstable_background_sample_preserve: bool = True
+    text_symbol_leakage_cleanup_enabled: bool = True
     shape_erasure_enabled: bool = True
     image_erasure_enabled: bool = True
 
@@ -127,6 +128,43 @@ class M30TextEditabilityDecision:
 
 
 @dataclass(frozen=True)
+class M30TextSymbolLeakageDecision:
+    source_text_member_id: str
+    source_text_box_id: str | None
+    decision: Literal["trimmed_leading_symbol", "review_symbol_like_prefix"]
+    original_text: str
+    cleaned_text: str
+    original_bbox: list[int]
+    cleaned_bbox: list[int]
+    protected_symbol_bbox: list[int] | None
+    gap_bbox: list[int] | None
+    reasons: list[str]
+    metrics: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sourceTextMemberId": self.source_text_member_id,
+            "sourceTextBoxId": self.source_text_box_id,
+            "decision": self.decision,
+            "originalText": self.original_text,
+            "cleanedText": self.cleaned_text,
+            "originalBBox": self.original_bbox,
+            "cleanedBBox": self.cleaned_bbox,
+            "protectedSymbolBBox": self.protected_symbol_bbox,
+            "gapBBox": self.gap_bbox,
+            "reasons": self.reasons,
+            "metrics": self.metrics,
+        }
+
+
+@dataclass(frozen=True)
+class TextSymbolCleanupResult:
+    cleaned_text: str
+    cleaned_bbox: list[int]
+    decision: M30TextSymbolLeakageDecision | None
+
+
+@dataclass(frozen=True)
 class TextEditabilityItem:
     id: str
     source_text_box_id: str | None
@@ -168,6 +206,7 @@ class M30Report:
     skipped_items: list[M30SkippedItem]
     skipped_text_cover_items: list[M30SkippedItem]
     text_editability_decisions: list[M30TextEditabilityDecision]
+    text_symbol_leakage_decisions: list[M30TextSymbolLeakageDecision]
     audit_only_references: list[dict[str, Any]]
     warnings: list[str]
     debug: M30DebugArtifacts
@@ -192,6 +231,7 @@ class M30Report:
             "skippedItems": [item.to_dict() for item in self.skipped_items],
             "skippedTextCoverItems": [item.to_dict() for item in self.skipped_text_cover_items],
             "textEditabilityDecisions": [item.to_dict() for item in self.text_editability_decisions],
+            "textSymbolLeakageDecisions": [item.to_dict() for item in self.text_symbol_leakage_decisions],
             "preservedGraphicTextItems": [item.to_dict() for item in self.text_editability_decisions if item.decision == "graphic_text_preserve_in_fallback"],
             "reviewTextItems": [item.to_dict() for item in self.text_editability_decisions if item.decision == "review_text"],
             "auditOnlyReferences": self.audit_only_references,
@@ -258,6 +298,7 @@ def materialize_evidence_grounded_dsl(
     pending_image_nodes: list[M30PendingNode] = []
     skipped: list[M30SkippedItem] = []
     skipped_text_cover: list[M30SkippedItem] = []
+    text_symbol_decisions: list[M30TextSymbolLeakageDecision] = []
 
     text_decisions = classify_text_editability(
         pixels=pixels,
@@ -266,7 +307,7 @@ def materialize_evidence_grounded_dsl(
         m2902_document=m2902_document or {},
         options=options,
     )
-    append_text_nodes(existing_ids, m2905_document, pixels, image, options, text_decisions, pending_text_nodes, skipped)
+    append_text_nodes(existing_ids, m2905_document, pixels, image, options, text_decisions, pending_text_nodes, skipped, text_symbol_decisions)
     harmonize_text_font_sizes(pending_text_nodes, options)
     append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
@@ -316,6 +357,7 @@ def materialize_evidence_grounded_dsl(
         skipped=skipped,
         skipped_text_cover=skipped_text_cover,
         text_decisions=text_decisions,
+        text_symbol_decisions=text_symbol_decisions,
         text_foreground_counts=text_foreground_source_counts(pending_text_nodes),
         audit_refs=audit_refs,
     )
@@ -336,6 +378,7 @@ def materialize_evidence_grounded_dsl(
         skipped_items=skipped,
         skipped_text_cover_items=skipped_text_cover,
         text_editability_decisions=text_decisions,
+        text_symbol_leakage_decisions=text_symbol_decisions,
         audit_only_references=audit_refs,
         warnings=warnings or [],
         debug=M30DebugArtifacts(materialization_preview=preview_path),
@@ -832,6 +875,7 @@ def append_text_nodes(
     text_decisions: list[M30TextEditabilityDecision],
     materialized: list[M30PendingNode],
     skipped: list[M30SkippedItem],
+    text_symbol_decisions: list[M30TextSymbolLeakageDecision],
 ) -> None:
     decisions_by_member_id = {item.source_text_member_id: item for item in text_decisions}
     for item in list_dicts(m2905_document.get("textMembers")):
@@ -848,42 +892,135 @@ def append_text_nodes(
         if decision is not None and decision.decision != "editable_text":
             skipped.append(M30SkippedItem(source_id, "m2905_text_member", decision.decision, bbox, decision.reasons))
             continue
-        foreground = sample_text_foreground_for_node(pixels, bbox, options)
+        cleanup = classify_text_symbol_leakage(
+            pixels=pixels,
+            source_id=source_id,
+            source_text_box_id=str(item.get("sourceTextBoxId") or "") or None,
+            text=text,
+            bbox=bbox,
+            image=image,
+            options=options,
+        )
+        if cleanup.decision is not None:
+            text_symbol_decisions.append(cleanup.decision)
+        node_text = cleanup.cleaned_text
+        node_bbox = cleanup.cleaned_bbox
+        foreground = sample_text_foreground_for_node(pixels, node_bbox, options)
         node_id = next_unique_id(existing_ids, f"m30_text_{len(materialized) + 1:04d}")
+        meta = {
+            "m30Materialized": True,
+            "sourceKind": "m2905_text_member",
+            "sourceTextMemberId": source_id,
+            "sourceTextBoxId": item.get("sourceTextBoxId"),
+            "sourceEvidenceNodeId": item.get("sourceEvidenceNodeId"),
+            "sourceObjectId": item.get("sourceObjectId"),
+            "sourceBBox": bbox,
+            "ocrConfidence": item.get("confidence"),
+            "materializationConfidence": "medium",
+            "riskFlags": list_strings(item.get("risks")),
+            "textEditabilityDecision": decision.decision if decision is not None else "editable_text",
+            "textEditabilityReasons": decision.reasons if decision is not None else ["source_evidence_trace"],
+            "textForegroundColorSource": foreground.source,
+            "textForegroundBackgroundColor": foreground.background_color,
+        }
+        if cleanup.decision is not None:
+            cleanup_item = cleanup.decision
+            meta.update(
+                {
+                    "textSymbolLeakageDecision": cleanup_item.decision,
+                    "textSymbolLeakageReasons": cleanup_item.reasons,
+                    "originalText": cleanup_item.original_text,
+                    "cleanedText": cleanup_item.cleaned_text,
+                    "originalBBox": cleanup_item.original_bbox,
+                    "cleanedBBox": cleanup_item.cleaned_bbox,
+                    "protectedSymbolBBox": cleanup_item.protected_symbol_bbox,
+                    "gapBBox": cleanup_item.gap_bbox,
+                }
+            )
         node = {
             "id": node_id,
             "type": "text",
             "role": "m30_text_member",
             "name": f"M30 Text / {source_id}",
-            "layout": layout_from_bbox(bbox),
+            "layout": layout_from_bbox(node_bbox),
             "style": {
                 "visible": True,
                 "opacity": 1,
                 "color": foreground.color,
-                "fontSize": estimate_font_size(bbox, options),
+                "fontSize": estimate_font_size(node_bbox, options),
                 "fontFamily": "Inter",
                 "fontWeight": 400,
                 "textAlign": "left",
             },
-            "content": {"text": text},
-            "meta": {
-                "m30Materialized": True,
-                "sourceKind": "m2905_text_member",
-                "sourceTextMemberId": source_id,
-                "sourceTextBoxId": item.get("sourceTextBoxId"),
-                "sourceEvidenceNodeId": item.get("sourceEvidenceNodeId"),
-                "sourceObjectId": item.get("sourceObjectId"),
-                "sourceBBox": bbox,
-                "ocrConfidence": item.get("confidence"),
-                "materializationConfidence": "medium",
-                "riskFlags": list_strings(item.get("risks")),
-                "textEditabilityDecision": decision.decision if decision is not None else "editable_text",
-                "textEditabilityReasons": decision.reasons if decision is not None else ["source_evidence_trace"],
-                "textForegroundColorSource": foreground.source,
-                "textForegroundBackgroundColor": foreground.background_color,
-            },
+            "content": {"text": node_text},
+            "meta": meta,
         }
-        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "text", source_id, bbox, "medium", ["source_evidence_trace"])))
+        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "text", source_id, node_bbox, "medium", ["source_evidence_trace"])))
+
+
+def classify_text_symbol_leakage(
+    *,
+    pixels: Any,
+    source_id: str,
+    source_text_box_id: str | None,
+    text: str,
+    bbox: list[int],
+    image: PngMetadata,
+    options: M30Options,
+) -> TextSymbolCleanupResult:
+    if not options.text_symbol_leakage_cleanup_enabled:
+        return TextSymbolCleanupResult(text, bbox, None)
+    if not text.startswith("Q") or len(text) < 3:
+        return TextSymbolCleanupResult(text, bbox, None)
+
+    cleaned_text = text[1:].strip()
+    if not cleaned_text:
+        return TextSymbolCleanupResult(text, bbox, None)
+
+    try:
+        sample = sample_rect_edges_dominant_background(
+            pixels,
+            bbox,
+            sides={"top", "bottom", "left", "right"},
+            inset=0,
+            thickness=1,
+            tolerance=24,
+            min_fraction=0.5,
+        )
+        gap_result = find_leading_symbol_gap(pixels, bbox, sample.mean_rgb)
+    except Exception:
+        gap_result = None
+
+    if not gap_result:
+        return TextSymbolCleanupResult(text, bbox, None)
+
+    cleaned_bbox = gap_result["cleanedBBox"]
+    if not bbox_in_bounds(cleaned_bbox, image.width, image.height):
+        return TextSymbolCleanupResult(text, bbox, None)
+    if cleaned_bbox[2] < max(12, round(bbox[3] * 0.8)):
+        return TextSymbolCleanupResult(text, bbox, None)
+
+    reasons = [
+        "leading_symbol_like_glyph",
+        "projection_gap_after_symbol",
+        "left_symbol_ink_group",
+        "right_text_ink_group",
+        "remaining_text_evidence",
+    ]
+    decision = M30TextSymbolLeakageDecision(
+        source_text_member_id=source_id,
+        source_text_box_id=source_text_box_id,
+        decision="trimmed_leading_symbol",
+        original_text=text,
+        cleaned_text=cleaned_text,
+        original_bbox=bbox,
+        cleaned_bbox=cleaned_bbox,
+        protected_symbol_bbox=gap_result["protectedSymbolBBox"],
+        gap_bbox=gap_result["gapBBox"],
+        reasons=reasons,
+        metrics=gap_result.get("metrics", {}),
+    )
+    return TextSymbolCleanupResult(cleaned_text, cleaned_bbox, decision)
 
 
 def sample_text_foreground_for_node(pixels: Any, bbox: list[int], options: M30Options) -> TextForegroundSample:
@@ -1360,6 +1497,7 @@ def build_summary(
     skipped: list[M30SkippedItem],
     skipped_text_cover: list[M30SkippedItem],
     text_decisions: list[M30TextEditabilityDecision],
+    text_symbol_decisions: list[M30TextSymbolLeakageDecision],
     text_foreground_counts: dict[str, int],
     audit_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1377,6 +1515,9 @@ def build_summary(
         "preservedGraphicTextCount": len(preserved_text),
         "reviewTextCount": len(review_text),
         "textEditabilityReasonCounts": text_editability_reason_counts(text_decisions),
+        "trimmedTextSymbolLeakageCount": len([item for item in text_symbol_decisions if item.decision == "trimmed_leading_symbol"]),
+        "reviewTextSymbolLeakageCount": len([item for item in text_symbol_decisions if item.decision == "review_symbol_like_prefix"]),
+        "textSymbolLeakageReasonCounts": text_symbol_leakage_reason_counts(text_symbol_decisions),
         "sampledTextForegroundCount": text_foreground_counts.get("sampled_foreground", 0),
         "defaultContrastTextForegroundCount": text_foreground_counts.get("default_contrast", 0),
         "defaultTextColorFallbackCount": text_foreground_counts.get("default_text_color_fallback", 0),
@@ -1398,6 +1539,14 @@ def build_summary(
         "visibleAuditOnlyChildCount": count_visible_audit_only_children(dsl["root"]),
         "dslElementCount": count_elements(dsl["root"]),
     }
+
+
+def text_symbol_leakage_reason_counts(decisions: list[M30TextSymbolLeakageDecision]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for decision in decisions:
+        for reason in decision.reasons:
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
 
 
 def text_foreground_source_counts(text_nodes: list[M30PendingNode]) -> dict[str, int]:
@@ -1499,7 +1648,7 @@ def report_without_forbidden_check(report: M30Report) -> dict[str, Any]:
 def strip_user_text_for_forbidden_check(value: Any) -> None:
     if isinstance(value, dict):
         for key in list(value.keys()):
-            if key in {"text", "content"}:
+            if key in {"text", "content", "originalText", "cleanedText"}:
                 value[key] = ""
             else:
                 strip_user_text_for_forbidden_check(value[key])
@@ -1531,6 +1680,7 @@ def replace_forbidden_check(report: M30Report, hits: list[str]) -> M30Report:
         forbidden_term_check={"hits": hits, "checkedScope": "m30_report_and_materialized_nodes"},
         meta=report.meta,
         text_editability_decisions=report.text_editability_decisions,
+        text_symbol_leakage_decisions=report.text_symbol_leakage_decisions,
     )
 
 

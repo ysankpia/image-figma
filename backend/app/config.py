@@ -31,6 +31,7 @@ class Settings:
     ocr_max_rotation_angle: float = 3.0
     ocr_max_background_texture: float = 0.45
     ocr_max_background_color_count: int = 32
+    ocr_text_symbol_leakage_cleanup_enabled: bool = True
     m30_shape_erasure_enabled: bool = True
     m30_image_erasure_enabled: bool = True
 
@@ -68,6 +69,7 @@ def get_settings() -> Settings:
         ocr_max_rotation_angle=float(os.getenv("OCR_MAX_ROTATION_ANGLE", "3.0")),
         ocr_max_background_texture=float(os.getenv("OCR_MAX_BACKGROUND_TEXTURE", "0.45")),
         ocr_max_background_color_count=int(os.getenv("OCR_MAX_BACKGROUND_COLOR_COUNT", "32")),
+        ocr_text_symbol_leakage_cleanup_enabled=parse_bool(os.getenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "true"), default=True),
         m30_shape_erasure_enabled=parse_bool(os.getenv("M30_SHAPE_ERASURE_ENABLED", "true"), default=True),
         m30_image_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ERASURE_ENABLED", "true"), default=True),
     )

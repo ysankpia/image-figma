@@ -248,6 +248,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             max_editable_text_rotation_angle=state.settings.ocr_max_rotation_angle,
             max_editable_background_texture=state.settings.ocr_max_background_texture,
             max_editable_background_color_count=state.settings.ocr_max_background_color_count,
+            text_symbol_leakage_cleanup_enabled=state.settings.ocr_text_symbol_leakage_cleanup_enabled,
             shape_erasure_enabled=state.settings.m30_shape_erasure_enabled,
             image_erasure_enabled=state.settings.m30_image_erasure_enabled,
         ),

@@ -85,6 +85,8 @@ These signals can override weak preserve signals such as light OCR angle noise o
 
 M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
 
+M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
+
 M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and the final M30 DSL/report, then writes `m37_hierarchy_readiness_report.json`. It does not modify DSL, create visible frames, or change Renderer coordinate semantics.
 
 ## Artifact Profiles

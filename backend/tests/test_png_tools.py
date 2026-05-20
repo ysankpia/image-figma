@@ -20,6 +20,7 @@ from app.png_tools import (
     sample_rect_edges,
     sample_region_background,
     sample_text_foreground_rgb,
+    find_leading_symbol_gap,
 )
 from conftest import make_png, png_chunk
 
@@ -175,6 +176,58 @@ def test_sample_text_foreground_rgb_clamps_bbox_to_bounds() -> None:
     foreground = sample_text_foreground_rgb(pixels, [-2, -2, 6, 6], [255, 255, 255])
 
     assert foreground == (17, 24, 39)
+
+
+def test_find_leading_symbol_gap_detects_projection_gap() -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 96) for _ in range(32)]
+    for row_index in range(12, 24):
+        for column in range(10, 22):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    for row_index in range(12, 24):
+        for column in range(30, 70):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    pixels = decode_png_pixels(make_png_from_rows(96, 32, [bytes(row) for row in rows]))
+
+    result = find_leading_symbol_gap(pixels, [8, 8, 80, 20], [255, 255, 255])
+
+    assert result is not None
+    assert result["protectedSymbolBBox"] == [8, 8, 14, 20]
+    assert result["gapBBox"] == [22, 8, 8, 20]
+    assert result["cleanedBBox"] == [30, 8, 58, 20]
+    assert result["metrics"]["leftInkColumnCount"] >= 2
+    assert result["metrics"]["rightInkColumnCount"] >= 2
+
+
+def test_find_leading_symbol_gap_rejects_left_padding_without_symbol_ink() -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 96) for _ in range(32)]
+    for row_index in range(12, 24):
+        for column in range(30, 70):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    pixels = decode_png_pixels(make_png_from_rows(96, 32, [bytes(row) for row in rows]))
+
+    result = find_leading_symbol_gap(pixels, [8, 8, 80, 20], [255, 255, 255])
+
+    assert result is None
+
+
+def test_find_leading_symbol_gap_rejects_touching_text_without_gap() -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 96) for _ in range(32)]
+    for row_index in range(12, 24):
+        for column in range(10, 70):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    pixels = decode_png_pixels(make_png_from_rows(96, 32, [bytes(row) for row in rows]))
+
+    result = find_leading_symbol_gap(pixels, [8, 8, 80, 20], [255, 255, 255])
+
+    assert result is None
+
+
+def test_find_leading_symbol_gap_rejects_small_candidate_span() -> None:
+    pixels = decode_png_pixels(make_rgb_png(30, 12, (255, 255, 255)))
+
+    result = find_leading_symbol_gap(pixels, [1, 1, 24, 8], [255, 255, 255])
+
+    assert result is None
 
 
 def test_crop_png_rejects_unsupported_color_type_after_metadata_is_readable() -> None:

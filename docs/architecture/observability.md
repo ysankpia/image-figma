@@ -56,6 +56,17 @@ metrics.editableCounterSignals
 
 `preserveSignals` records the negative evidence that made the text risky. `editableCounterSignals` records generic UI geometry that made the text safe enough to materialize despite weak preserve signals.
 
+M34.3 adds M30 text-symbol leakage diagnostics:
+
+```text
+textSymbolLeakageDecisions
+summary.trimmedTextSymbolLeakageCount
+summary.reviewTextSymbolLeakageCount
+summary.textSymbolLeakageReasonCounts
+```
+
+These fields explain when emitted editable text was cleaned because source pixels showed a leading symbol-like glyph separated from real text by a projection gap.
+
 M36 records text foreground sampling diagnostics for emitted editable text:
 
 ```text

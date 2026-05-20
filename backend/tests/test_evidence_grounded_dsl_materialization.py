@@ -485,6 +485,148 @@ def test_text_foreground_sampling_falls_back_to_contrast_color(tmp_path: Path) -
     assert result.report.summary["defaultContrastTextForegroundCount"] == 1
 
 
+def test_text_symbol_leakage_cleanup_trims_leading_q_and_uses_cleaned_bbox(tmp_path: Path) -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 120) for _ in range(48)]
+    for row_index in range(16, 28):
+        for column in range(12, 24):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    for row_index in range(16, 28):
+        for column in range(32, 84):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x11\x18\x27"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=48, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [10, 12, 90, 20], "Q春日穿搭灵感")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["content"]["text"] == "春日穿搭灵感"
+    assert text_node["layout"] == {"x": 32, "y": 12, "width": 68, "height": 20}
+    assert text_node["style"]["color"] == "#111827"
+    assert text_node["meta"]["textSymbolLeakageDecision"] == "trimmed_leading_symbol"
+    assert text_node["meta"]["originalText"] == "Q春日穿搭灵感"
+    assert text_node["meta"]["cleanedText"] == "春日穿搭灵感"
+    assert text_node["meta"]["originalBBox"] == [10, 12, 90, 20]
+    assert text_node["meta"]["cleanedBBox"] == [32, 12, 68, 20]
+    assert text_node["meta"]["protectedSymbolBBox"] == [10, 12, 14, 20]
+    assert text_node["meta"]["gapBBox"] == [24, 12, 8, 20]
+    assert result.report.materialized_text_nodes[0].bbox == [32, 12, 68, 20]
+    assert result.report.summary["trimmedTextSymbolLeakageCount"] == 1
+    assert result.report.summary["textSymbolLeakageReasonCounts"]["projection_gap_after_symbol"] == 1
+    decisions = result.report.to_dict()["textSymbolLeakageDecisions"]
+    assert decisions[0]["decision"] == "trimmed_leading_symbol"
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_pixels = decode_png_pixels((tmp_path / "m30" / fallback_asset["url"]).read_bytes())
+    for row_index in range(16, 28):
+        for column in range(12, 24):
+            offset = column * 3
+            assert fallback_pixels.rows[row_index][offset : offset + 3] == b"\x00\x00\x00"
+    for row_index in range(16, 28):
+        for column in range(32, 84):
+            offset = column * 3
+            assert fallback_pixels.rows[row_index][offset : offset + 3] == b"\xff\xff\xff"
+
+
+def test_text_symbol_leakage_cleanup_does_not_trim_q_without_projection_gap(tmp_path: Path) -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 120) for _ in range(48)]
+    for row_index in range(16, 28):
+        for column in range(12, 84):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x11\x18\x27"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=48, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [10, 12, 90, 20], "Q版穿搭")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["content"]["text"] == "Q版穿搭"
+    assert text_node["layout"] == {"x": 10, "y": 12, "width": 90, "height": 20}
+    assert "textSymbolLeakageDecision" not in text_node["meta"]
+    assert result.report.summary["trimmedTextSymbolLeakageCount"] == 0
+    assert result.report.to_dict()["textSymbolLeakageDecisions"] == []
+
+
+def test_text_symbol_leakage_cleanup_does_not_trim_single_q(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(80, 40, fill=(255, 255, 255)))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [10, 10, 20, 16], "Q")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["content"]["text"] == "Q"
+    assert "textSymbolLeakageDecision" not in text_node["meta"]
+
+
+def test_text_symbol_leakage_cleanup_can_be_disabled(tmp_path: Path) -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 120) for _ in range(48)]
+    for row_index in range(16, 28):
+        for column in range(12, 24):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    for row_index in range(16, 28):
+        for column in range(32, 84):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x11\x18\x27"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=48, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [10, 12, 90, 20], "Q春日穿搭灵感")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_symbol_leakage_cleanup_enabled=False),
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["content"]["text"] == "Q春日穿搭灵感"
+    assert text_node["layout"] == {"x": 10, "y": 12, "width": 90, "height": 20}
+
+
 def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(120, 100))
     m2905_dir = tmp_path / "m29_0_5"

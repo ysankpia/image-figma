@@ -205,6 +205,16 @@ Required M36 coverage:
 - M30 report summary records sampled/default foreground counts.
 - preserved graphic text still does not create `m30_text_member`.
 
+## M34.3 Text-Symbol Leakage Cleanup
+
+Required M34.3 coverage:
+
+- leading uppercase `Q` with left ink, projection gap, and right text ink is trimmed before M30 emits text.
+- legitimate `Q` text without projection gap is not trimmed.
+- cleaned bbox drives text layout, foreground sampling, and `M30MaterializedNode.bbox`.
+- fallback erasure remains unchanged and naturally preserves protected symbol pixels outside cleaned bbox.
+- M31/M37 outputs are not modified by M34.3.
+
 ## M37 Hierarchy Readiness
 
 M37 focused command:
