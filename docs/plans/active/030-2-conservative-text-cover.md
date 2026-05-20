@@ -1,6 +1,6 @@
 # M30.2 Conservative Text Cover
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-20
 - 负责人：Codex
 

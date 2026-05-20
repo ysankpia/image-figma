@@ -1,6 +1,6 @@
 # M30.1 Plugin M29-to-M30 Upload Pipeline Preview
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-19
 - 负责人：Codex
 

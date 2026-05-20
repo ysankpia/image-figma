@@ -1,6 +1,6 @@
 # M29.0.3.2 80-Image Residual Mixed Boundary Acceptance
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-19
 - 负责人：Codex
 

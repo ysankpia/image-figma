@@ -1,6 +1,6 @@
 # M30 Evidence-Grounded DSL Materialization
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-19
 - 负责人：Codex
 
