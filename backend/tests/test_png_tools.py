@@ -120,6 +120,43 @@ def test_sample_text_foreground_rgb_isolates_high_contrast_stroke_color() -> Non
     assert foreground == (255, 255, 255)
 
 
+def test_sample_text_foreground_rgb_prefers_high_contrast_over_high_count() -> None:
+    rows = [bytearray(bytes((76, 60, 35)) * 12) for _ in range(12)]
+    for row_index in range(2, 10):
+        for column in range(2, 10):
+            rows[row_index][column * 3 : column * 3 + 3] = bytes((105, 83, 52))
+    rows[5][5 * 3 : 7 * 3] = b"\xff\xff\xff\xff\xff\xff"
+    pixels = decode_png_pixels(make_png_from_rows(12, 12, [bytes(row) for row in rows]))
+
+    foreground = sample_text_foreground_rgb(pixels, [1, 1, 10, 10], [76, 60, 35])
+
+    assert foreground == (255, 255, 255)
+
+
+def test_sample_text_foreground_rgb_preserves_dark_text_on_light_background() -> None:
+    rows = [bytearray(bytes((248, 248, 246)) * 8) for _ in range(8)]
+    for row_index in range(3, 5):
+        for column in range(3, 5):
+            rows[row_index][column * 3 : column * 3 + 3] = bytes((24, 31, 42))
+    pixels = decode_png_pixels(make_png_from_rows(8, 8, [bytes(row) for row in rows]))
+
+    foreground = sample_text_foreground_rgb(pixels, [2, 2, 4, 4], [248, 248, 246])
+
+    assert foreground == (24, 31, 42)
+
+
+def test_sample_text_foreground_rgb_preserves_chromatic_text() -> None:
+    rows = [bytearray(bytes((255, 238, 238)) * 8) for _ in range(8)]
+    for row_index in range(3, 5):
+        for column in range(3, 5):
+            rows[row_index][column * 3 : column * 3 + 3] = bytes((226, 24, 56))
+    pixels = decode_png_pixels(make_png_from_rows(8, 8, [bytes(row) for row in rows]))
+
+    foreground = sample_text_foreground_rgb(pixels, [2, 2, 4, 4], [255, 238, 238])
+
+    assert foreground == (226, 24, 56)
+
+
 def test_sample_text_foreground_rgb_returns_default_contrast_when_no_foreground_pixels() -> None:
     pixels = decode_png_pixels(make_rgb_png(8, 8, (18, 28, 46)))
 

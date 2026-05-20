@@ -67,6 +67,8 @@ summary.defaultTextColorFallbackCount
 
 These fields explain whether `style.color` came from source-pixel foreground sampling, contrast fallback, or hard default fallback.
 
+M36.1 keeps these fields stable but changes the internal foreground bucket selection from largest bucket to contrast-weighted scoring. If small white badge text is rendered dark, inspect source-pixel candidates before changing OCR or text editability.
+
 M37 adds `m37_hierarchy_readiness` to `stage_timings.json` when M31 and M30 artifacts are available. It writes:
 
 ```text

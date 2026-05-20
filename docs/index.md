@@ -38,6 +38,7 @@
 - 当前 M34.2 context-aware UI text editability 计划：[plans/active/034-2-context-aware-ui-text-editability.md](plans/active/034-2-context-aware-ui-text-editability.md)
 - 当前 M35 shapes and images pixel-level background erasure 计划：[plans/active/035-shapes-and-images-pixel-level-background-erasure.md](plans/active/035-shapes-and-images-pixel-level-background-erasure.md)
 - 当前 M36 text foreground color sampling 计划：[plans/active/036-context-aware-text-foreground-color-sampling.md](plans/active/036-context-aware-text-foreground-color-sampling.md)
+- 当前 M36.1 contrast-weighted foreground sampling 计划：[plans/active/036-1-contrast-weighted-text-foreground-sampling.md](plans/active/036-1-contrast-weighted-text-foreground-sampling.md)
 - 当前 M37 hierarchy readiness 计划：[plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md](plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md)
 
 ## By Task Type
@@ -142,6 +143,7 @@
 - M34.2 context-aware UI text editability 决策：[decisions/0053-context-aware-ui-text-editability-with-generic-geometry.md](decisions/0053-context-aware-ui-text-editability-with-generic-geometry.md)
 - M36 text foreground color sampling 决策：[decisions/0054-sample-text-foreground-color-from-source-pixels.md](decisions/0054-sample-text-foreground-color-from-source-pixels.md)
 - M37 hierarchy readiness 决策：[decisions/0055-audit-hierarchy-readiness-before-nested-dsl-output.md](decisions/0055-audit-hierarchy-readiness-before-nested-dsl-output.md)
+- M36.1 contrast-weighted foreground sampling 决策：[decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md](decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

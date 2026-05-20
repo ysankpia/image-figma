@@ -20,9 +20,11 @@ clamp bbox to image bounds
 shrink by 1px
 filter pixels with RGB distance <= 64 from local background
 bucket remaining pixels by RGB // 16
-use dominant bucket average as text color
+use contrast-weighted bucket average as text color
 fallback to black/white contrast color when no foreground pixels are available
 ```
+
+M36.1 corrected the bucket target function: bucket size is only a capped square-root anti-noise signal, while RGB contrast, luminance polarity, and luminance delta drive the foreground choice.
 
 Record the source in node meta and M30 report summary:
 

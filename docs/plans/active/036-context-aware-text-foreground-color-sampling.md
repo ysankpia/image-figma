@@ -21,7 +21,8 @@ source PNG decoded pixels
 
 - Add `sample_text_foreground_rgb(...)` and `default_contrast_rgb(...)` in `png_tools.py`.
 - Use existing dominant edge background sampling around each editable text bbox.
-- Filter bbox interior pixels by RGB distance from background, bucket remaining pixels by RGB `// 16`, and use the dominant bucket average as foreground.
+- Filter bbox interior pixels by RGB distance from background, bucket remaining pixels by RGB `// 16`, and use the contrast-weighted bucket average as foreground.
+- M36.1 keeps the same source pixels and API, but prevents high-count texture buckets from beating smaller high-contrast text strokes.
 - If the bbox is too small, out of usable bounds, or has no high-contrast foreground pixels, use black or white from background brightness.
 - In M30 materialization, sample foreground only for text that is actually emitted as `m30_text_member`.
 - Record `textForegroundColorSource` in text node meta and summary counters in the M30 report.

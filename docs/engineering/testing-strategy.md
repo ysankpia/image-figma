@@ -197,7 +197,9 @@ uv run pytest tests/test_png_tools.py tests/test_evidence_grounded_dsl_materiali
 Required M36 coverage:
 
 - white strokes on colored background sample as white foreground.
+- small high-contrast strokes beat larger low-contrast texture buckets.
 - dark strokes on light background sample as dark foreground.
+- chromatic strokes on readable backgrounds keep chromatic foreground.
 - tiny or no-foreground bboxes fall back to contrast color.
 - emitted `m30_text_member` nodes record `textForegroundColorSource`.
 - M30 report summary records sampled/default foreground counts.

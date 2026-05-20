@@ -373,6 +373,10 @@ def sample_text_foreground_rgb(pixels: PngPixels, bbox: list[int], bg_rgb: tuple
     return sample_text_foreground_rgb_with_source(pixels, bbox, bg_rgb)[0]
 
 
+def _relative_brightness(rgb: tuple[int, int, int]) -> float:
+    return (rgb[0] * 0.299) + (rgb[1] * 0.587) + (rgb[2] * 0.114)
+
+
 def sample_text_foreground_rgb_with_source(
     pixels: PngPixels,
     bbox: list[int],
@@ -393,6 +397,7 @@ def sample_text_foreground_rgb_with_source(
         return default_contrast_rgb(bg), "default_contrast"
 
     bg_r, bg_g, bg_b = bg
+    bg_luma = _relative_brightness(bg)
     foreground_pixels: list[tuple[int, int, int]] = []
     for row_index in range(y1, y2):
         row = pixels.rows[row_index]
@@ -412,12 +417,38 @@ def sample_text_foreground_rgb_with_source(
         key = (red // 16, green // 16, blue // 16)
         buckets.setdefault(key, []).append((red, green, blue))
 
-    dominant = max(buckets.values(), key=len)
+    best_bucket: list[tuple[int, int, int]] | None = None
+    best_score = -1.0
+    for pixel_list in buckets.values():
+        count = len(pixel_list)
+        avg_red = round(sum(pixel[0] for pixel in pixel_list) / count)
+        avg_green = round(sum(pixel[1] for pixel in pixel_list) / count)
+        avg_blue = round(sum(pixel[2] for pixel in pixel_list) / count)
+        avg_rgb = (avg_red, avg_green, avg_blue)
+
+        contrast = abs(avg_red - bg_r) + abs(avg_green - bg_g) + abs(avg_blue - bg_b)
+        contrast_factor = contrast / 765.0
+        foreground_luma = _relative_brightness(avg_rgb)
+        if bg_luma < 128:
+            polarity_factor = foreground_luma / 255.0
+        else:
+            polarity_factor = (255.0 - foreground_luma) / 255.0
+        luma_delta_factor = abs(foreground_luma - bg_luma) / 255.0
+        count_factor = min(count**0.5, 6.0)
+        score = count_factor * contrast_factor * polarity_factor * luma_delta_factor
+
+        if score > best_score:
+            best_score = score
+            best_bucket = pixel_list
+
+    if best_bucket is None:
+        return default_contrast_rgb(bg), "default_contrast"
+
     return (
         (
-            round(sum(pixel[0] for pixel in dominant) / len(dominant)),
-            round(sum(pixel[1] for pixel in dominant) / len(dominant)),
-            round(sum(pixel[2] for pixel in dominant) / len(dominant)),
+            round(sum(pixel[0] for pixel in best_bucket) / len(best_bucket)),
+            round(sum(pixel[1] for pixel in best_bucket) / len(best_bucket)),
+            round(sum(pixel[2] for pixel in best_bucket) / len(best_bucket)),
         ),
         "sampled_foreground",
     )
@@ -427,7 +458,7 @@ def default_contrast_rgb(bg_rgb: tuple[int, int, int] | list[int]) -> tuple[int,
     bg = tuple(clamp_int(round(channel), 0, 255) for channel in bg_rgb)
     if len(bg) != 3:
         raise UnsupportedPngCropError("Default contrast background color must be RGB.")
-    brightness = (bg[0] * 0.299) + (bg[1] * 0.587) + (bg[2] * 0.114)
+    brightness = _relative_brightness(bg)
     return (255, 255, 255) if brightness < 128 else (17, 24, 39)
 
 
