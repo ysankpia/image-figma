@@ -88,6 +88,8 @@ M29.2 audits tiny overlay text that global OCR missed inside accepted image medi
 
 M29.3 audits image-internal overlay ownership. It consumes source pixels, existing OCR boxes, M29 `nodes.json`, and M29.0.2 accepted image evidence, then writes `m29_3/image_internal_overlays.json`. M29.3 binds each overlay to the accepted image parent and original M29 image node when available. It does not recognize text, patch OCR, rewrite M29 nodes, feed M30 materialization, change fallback erasure, or change Figma output.
 
+M29.4 audits image-internal overlay text recognition. It consumes source pixels, M29.2 candidates, and M29.3 parent-bound overlays, then writes `m29_4/image_internal_overlay_text_recognition.json`. Local OCR re-probe is disabled by default; when explicitly enabled, M29.4 accepts only narrow counter text such as `1/6`. M29.4 does not mutate OCR JSON, M29/M29.2/M29.3 artifacts, M30 DSL, parent image assets, fallback erasure, M31, M37, or Figma output.
+
 M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
 
 M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
@@ -179,6 +181,8 @@ m31_reconstruction
 m29_1
 m29_0_2
 m29_2_small_overlay_text_audit
+m29_3_image_internal_overlay_audit
+m29_4_image_internal_overlay_text_recognition
 m29_0_3
 m29_0_7
 m29_0_4
@@ -211,6 +215,8 @@ M29/M30 stages should fail fast when their required source artifacts or contract
 M31 diagnostics are optional by default. If `M31_UPLOAD_DIAGNOSTICS_STRICT=false`, M31 failure writes a failed `m31_reconstruction` timing and an `error_logs` row, then the pipeline continues to M30 DSL. If `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
 
 M29.2 small overlay text audit is also optional by default. If `M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT=false`, M29.2 failure writes a failed `m29_2_small_overlay_text_audit` timing and an `error_logs` row, then the pipeline continues. If strict mode is true, M29.2 failure marks the task failed at `stage=m29_2_small_overlay_text_audit`.
+
+M29.3 and M29.4 are optional diagnostics by default. M29.4 runs only when M29.2 and M29.3 are enabled, because it consumes their reports. If `M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_STRICT=false`, M29.4 failure writes a failed `m29_4_image_internal_overlay_text_recognition` timing and an `error_logs` row, then the pipeline continues. If strict mode is true, M29.4 failure marks the task failed at that stage.
 
 ## Database
 

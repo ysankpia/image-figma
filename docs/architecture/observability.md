@@ -98,6 +98,29 @@ summary.dslChanged = false
 
 Overlay records include `sourceImageNodeId`, `sourceM29NodeId`, `anchor`, `overlayKind`, decision, OCR de-duplication, and metrics. Production profile skips M29.3 overlay/crop PNGs; development profile writes them for local inspection.
 
+M29.4 writes image internal overlay text recognition diagnostics:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.json
+storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.md
+```
+
+The report observes:
+
+```text
+summary.sourceOverlayCount
+summary.recognitionAttemptCount
+summary.promotionReadyCount
+summary.patternRejectedCount
+summary.ocrCoveredOverlayCount
+summary.recognitionFailedCount
+summary.materializedTextCount = 0
+summary.createdNewBBoxCount = 0
+summary.dslChanged = false
+```
+
+Item decisions include `promotion_ready`, `covered_by_existing_ocr`, `pattern_rejected`, `ocr_unrecognized`, `ocr_failed`, and `not_attempted`. Production profile skips M29.4 overlay/crop PNGs; development profile writes them for local inspection.
+
 M34.3 adds M30 text-symbol leakage diagnostics:
 
 ```text

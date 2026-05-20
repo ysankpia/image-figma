@@ -69,6 +69,11 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_AUDIT_ENABLED", "false")
     monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_AUDIT_STRICT", "true")
     monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_MAX_OVERLAYS", "5")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_ENABLED", "false")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_STRICT", "true")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_REPROBE_ENABLED", "true")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_MAX_ITEMS", "6")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_UPSCALE_FACTOR", "4")
     monkeypatch.setenv("M30_SHAPE_ERASURE_ENABLED", "false")
     monkeypatch.setenv("M30_IMAGE_ERASURE_ENABLED", "false")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
@@ -90,6 +95,11 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.m29_image_internal_overlay_audit_enabled is False
     assert settings.m29_image_internal_overlay_audit_strict is True
     assert settings.m29_image_internal_overlay_max_overlays == 5
+    assert settings.m29_image_internal_overlay_text_recognition_enabled is False
+    assert settings.m29_image_internal_overlay_text_recognition_strict is True
+    assert settings.m29_image_internal_overlay_text_reprobe_enabled is True
+    assert settings.m29_image_internal_overlay_text_max_items == 6
+    assert settings.m29_image_internal_overlay_text_upscale_factor == 4
     assert settings.m30_shape_erasure_enabled is False
     assert settings.m30_image_erasure_enabled is False
 

@@ -233,6 +233,23 @@ Required M29.3 coverage:
 - `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
 - production upload profile writes JSON/MD only; development profile writes overlay/crop debug assets.
 
+## M29.4 Image Internal Overlay Text Recognition
+
+M29.4 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_image_internal_overlay_text_recognition.py tests/test_image_internal_overlay.py tests/test_small_overlay_text_proposal.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+Required M29.4 coverage:
+
+- promotion-ready counter recognition with a fake local reprobe.
+- pattern rejection, empty OCR, OCR failure, OCR-covered overlays, and missing M29.2 match.
+- re-probe disabled stays `not_attempted`.
+- `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
+- production upload profile writes JSON/MD only; development profile writes overlay/crop debug assets.
+
 ## M36 Text Foreground Color
 
 M36 focused command:
