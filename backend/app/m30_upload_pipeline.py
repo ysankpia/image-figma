@@ -12,6 +12,7 @@ from typing import Any, Literal
 from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
+from .image_internal_overlay import M293Options, extract_image_internal_overlays
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -49,6 +50,7 @@ class M30PipelinePaths:
     m291: Path
     m2902: Path
     m292: Path
+    m293: Path
     m2903: Path
     m2907: Path
     m2904: Path
@@ -170,6 +172,23 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     if state.settings.m29_small_overlay_text_audit_enabled:
         update_task(task_id, "m29_2_small_overlay_text_audit", 48, "Auditing small overlay text misses.")
         run_m292_small_overlay_text_stage(
+            task_id=task_id,
+            paths=paths,
+            timings=timings,
+            png_data=png_data,
+            source_image=source_image,
+            ocr_document=ocr_document.to_dict(),
+            ocr_json=paths.ocr / "ocr.json",
+            m29_document=m29_document.to_dict(),
+            m29_json=m29_json,
+            m2902_document=m2902_document.to_dict(),
+            m2902_json=m2902_json,
+            policy=policy,
+        )
+
+    if state.settings.m29_image_internal_overlay_audit_enabled:
+        update_task(task_id, "m29_3_image_internal_overlay_audit", 50, "Auditing image internal overlay ownership.")
+        run_m293_image_internal_overlay_stage(
             task_id=task_id,
             paths=paths,
             timings=timings,
@@ -428,6 +447,46 @@ def run_m292_small_overlay_text_stage(
     run_optional_stage(paths, timings, "m29_2_small_overlay_text_audit", action, task_id=task_id)
 
 
+def run_m293_image_internal_overlay_stage(
+    *,
+    task_id: str,
+    paths: M30PipelinePaths,
+    timings: list[StageTiming],
+    png_data: bytes,
+    source_image: str,
+    ocr_document: dict[str, Any],
+    ocr_json: Path,
+    m29_document: dict[str, Any],
+    m29_json: Path,
+    m2902_document: dict[str, Any],
+    m2902_json: Path,
+    policy: M30ArtifactPolicy,
+) -> None:
+    options = M293Options(max_overlays=state.settings.m29_image_internal_overlay_max_overlays)
+    action = lambda: extract_image_internal_overlays(
+        png_data=png_data,
+        source_image=source_image,
+        output_dir=paths.m293,
+        ocr_document=ocr_document,
+        ocr_json_path=str(ocr_json),
+        m29_document=m29_document,
+        m29_nodes_json_path=str(m29_json),
+        m2902_document=m2902_document,
+        m2902_audit_json_path=str(m2902_json),
+        options=options,
+        emit_debug_artifacts=policy.emit_debug_artifacts,
+    )
+    if state.settings.m29_image_internal_overlay_audit_strict:
+        try:
+            run_stage(paths, timings, "m29_3_image_internal_overlay_audit", action)
+        except M30UploadPipelineError:
+            raise
+        except Exception as error:
+            raise M30UploadPipelineError("m29_3_image_internal_overlay_audit", error.__class__.__name__, str(error)) from error
+        return
+    run_optional_stage(paths, timings, "m29_3_image_internal_overlay_audit", action, task_id=task_id)
+
+
 def run_local_ocr_reprobe(crop_png_data: bytes, _source_bbox: list[int]) -> dict[str, Any]:
     image = read_png_metadata(crop_png_data)
     if image is None:
@@ -601,6 +660,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m291=root / "m29_1",
         m2902=root / "m29_0_2",
         m292=root / "m29_2",
+        m293=root / "m29_3",
         m2903=root / "m29_0_3",
         m2907=root / "m29_0_7",
         m2904=root / "m29_0_4",

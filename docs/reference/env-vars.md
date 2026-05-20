@@ -31,6 +31,9 @@
 | `M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED` | 是否对 M29.2 候选执行局部 crop OCR re-probe | `false` | 否 |
 | `M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES` | 单任务 M29.2 candidate 上限 | `12` | 否 |
 | `M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR` | M29.2 re-probe crop 最近邻放大倍率 | `3` | 否 |
+| `M29_IMAGE_INTERNAL_OVERLAY_AUDIT_ENABLED` | 是否在上传链路中生成 M29.3 image-internal overlay ownership audit | `true` | 否 |
+| `M29_IMAGE_INTERNAL_OVERLAY_AUDIT_STRICT` | M29.3 audit 失败是否阻断 task completed | `false` | 否 |
+| `M29_IMAGE_INTERNAL_OVERLAY_MAX_OVERLAYS` | 单任务 M29.3 overlay 上限 | `12` | 否 |
 | `OCR_MAX_ROTATION_ANGLE` | 允许物化为普通 text layer 的最大 OCR polygon 偏转角度 | `3.0` | 否 |
 | `OCR_MAX_BACKGROUND_TEXTURE` | 图形文字 preserve 判定使用的背景纹理阈值 | `0.45` | 否 |
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
@@ -151,6 +154,25 @@ It does not rewrite `ocr/ocr.json`, does not rewrite M29 `nodes.json`, does not 
 `M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES` is a global report cap. M29.2 first keeps a small per-image budget and then uses fair round-robin selection, so earlier accepted images cannot consume the full global cap before later image cards are scanned.
 
 `M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=true` enables diagnostic local crop OCR re-probe. The crop is upscaled by `M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR`; recognized text remains report-only and keeps `materializationEligible=false`.
+
+## M29.3 Image Internal Overlay Ownership
+
+```bash
+M29_IMAGE_INTERNAL_OVERLAY_AUDIT_ENABLED=true
+M29_IMAGE_INTERNAL_OVERLAY_AUDIT_STRICT=false
+M29_IMAGE_INTERNAL_OVERLAY_MAX_OVERLAYS=12
+```
+
+M29.3 audits parent-bound overlay evidence inside M29.0.2 accepted images. It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.json
+storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.md
+```
+
+It does not rewrite `ocr/ocr.json`, does not rewrite M29 `nodes.json`, does not feed M30 materialization, and does not change Figma visible output.
+
+`M29_IMAGE_INTERNAL_OVERLAY_MAX_OVERLAYS` is a global report cap. M29.3 keeps a small per-image budget first and then uses fair round-robin selection, so earlier accepted images cannot consume the full global cap before later image cards are scanned.
 
 ## Removed Variables
 

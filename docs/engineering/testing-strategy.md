@@ -215,6 +215,24 @@ Required M29.2 coverage:
 - `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
 - production upload profile writes JSON/MD only; development profile writes overlay/crop debug assets.
 
+## M29.3 Image Internal Overlay Ownership
+
+M29.3 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_image_internal_overlay.py tests/test_small_overlay_text_proposal.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+Required M29.3 coverage:
+
+- image-internal overlay candidates bind to `sourceImageNodeId` and `sourceM29NodeId`.
+- OCR-covered overlays are marked `covered_by_existing_ocr`.
+- center photo noise and texture-like line groups are rejected or absent.
+- fair selection prevents later accepted images from being starved.
+- `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
+- production upload profile writes JSON/MD only; development profile writes overlay/crop debug assets.
+
 ## M36 Text Foreground Color
 
 M36 focused command:

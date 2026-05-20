@@ -58,6 +58,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m29",
         "m31_reconstruction",
         "m29_2_small_overlay_text_audit",
+        "m29_3_image_internal_overlay_audit",
         "m29_0_5",
         "m30_materialization",
         "m37_hierarchy_readiness",
@@ -103,6 +104,12 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert m292_report["summary"]["materializedTextCount"] == 0
     assert m292_report["summary"]["createdNewBBoxCount"] == 0
     assert m292_report["summary"]["dslChanged"] is False
+    assert (task_root / "m29_3" / "image_internal_overlays.json").exists()
+    assert (task_root / "m29_3" / "image_internal_overlays.md").exists()
+    m293_report = json.loads((task_root / "m29_3" / "image_internal_overlays.json").read_text(encoding="utf-8"))
+    assert m293_report["summary"]["materializedTextCount"] == 0
+    assert m293_report["summary"]["createdNewBBoxCount"] == 0
+    assert m293_report["summary"]["dslChanged"] is False
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
     m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
     assert m37_report["summary"]["createdVisibleFrameCount"] == 0
@@ -112,6 +119,7 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert not (task_root / "m30" / "m30_materialization_preview.png").exists()
     assert not (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
     assert not (task_root / "m29_2" / "assets").exists()
+    assert not (task_root / "m29_3" / "assets").exists()
     assert (task_root / "ocr" / "ocr.json").exists()
     assert (task_root / "m29" / "nodes.json").exists()
     assert (task_root / "m29_0_5" / "refined_visual_objects.json").exists()
@@ -139,6 +147,7 @@ def test_upload_m30_preview_development_profile_keeps_diagnostics(tmp_path: Path
     task_root = Path(report["outputDsl"]).parent.parent
     assert (task_root / "m29" / "overlays").exists()
     assert (task_root / "m29_2" / "overlays" / "small_overlay_text_candidates.png").exists()
+    assert (task_root / "m29_3" / "overlays" / "image_internal_overlays.png").exists()
     assert (task_root / "m29" / "preview_sheet.png").exists()
     assert (task_root / "m30" / "m30_materialization_preview.png").exists()
     assert (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
@@ -169,6 +178,33 @@ def test_m29_2_small_overlay_text_audit_can_be_disabled(
     task_root = Path(report["outputDsl"]).parent.parent
     assert not (task_root / "m29_2").exists()
     assert "m29_2_small_overlay_text_audit" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+
+
+def test_m29_3_image_internal_overlay_audit_can_be_disabled(
+    tmp_path: Path,
+    monkeypatch,
+    png_file: tuple[str, bytes, str],
+) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_AUDIT_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert not (task_root / "m29_3").exists()
+    assert "m29_3_image_internal_overlay_audit" not in {item["stage"] for item in report["stageTimings"]["stages"]}
 
 
 def test_m29_2_optional_failure_does_not_block_m30_output(
@@ -205,6 +241,42 @@ def test_m29_2_optional_failure_does_not_block_m30_output(
     m292_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m29_2_small_overlay_text_audit")
     assert m292_timing["status"] == "failed"
     assert m292_timing["errorCode"] == "RuntimeError"
+
+
+def test_m29_3_optional_failure_does_not_block_m30_output(
+    tmp_path: Path,
+    monkeypatch,
+    png_file: tuple[str, bytes, str],
+) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "extract_image_internal_overlays", fail_m293)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        assert task.json()["data"]["status"] == "completed"
+
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
+        assert dsl.status_code == 200
+
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+
+    m293_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m29_3_image_internal_overlay_audit")
+    assert m293_timing["status"] == "failed"
+    assert m293_timing["errorCode"] == "RuntimeError"
 
 
 def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -369,3 +441,7 @@ def fail_m31(**_kwargs: Any) -> None:
 
 def fail_m292(**_kwargs: Any) -> None:
     raise RuntimeError("forced m29.2 failure")
+
+
+def fail_m293(**_kwargs: Any) -> None:
+    raise RuntimeError("forced m29.3 failure")
