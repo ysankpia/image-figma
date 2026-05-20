@@ -34,7 +34,6 @@ receive multipart PNG at /api/upload-m30-preview
 -> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
--> M29.2 small overlay text proposal audit
 -> M29.0.3 visual evidence normalization with M29.1 lineage
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
@@ -84,8 +83,6 @@ stable_local_background
 
 These signals can override weak preserve signals such as light OCR angle noise or image containment. They do not use business words, fixed coordinates, or fixed-resolution pixel constants.
 
-M29.2 audits tiny overlay text that global OCR missed inside accepted image media. It consumes source pixels, existing OCR boxes, M29 `nodes.json`, and M29.0.2 accepted image evidence, then writes `m29_2/small_overlay_text_candidates.json`. M29.2 does not modify OCR JSON, M29 nodes, M30 DSL, fallback erasure, M31, or M37. Optional local crop OCR re-probe is diagnostic only and remains disabled by default.
-
 M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
 
 M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
@@ -101,7 +98,6 @@ production:
   keep OCR JSON
   keep structured M29/M30 JSON
   keep M29.0.5 formal assets needed by M30
-  keep M29.2 small overlay text proposal JSON/MD
   keep M30 DSL/report
   keep published renderer assets
   keep stage_timings.json
@@ -136,7 +132,6 @@ storage/m30_1_uploads/{taskId}/m29/
 storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
 storage/m30_1_uploads/{taskId}/m29_0_2/
-storage/m30_1_uploads/{taskId}/m29_2/
 storage/m30_1_uploads/{taskId}/m29_0_3/
 storage/m30_1_uploads/{taskId}/m29_0_7/
 storage/m30_1_uploads/{taskId}/m29_0_4/
@@ -176,7 +171,6 @@ m29
 m31_reconstruction
 m29_1
 m29_0_2
-m29_2_small_overlay_text_audit
 m29_0_3
 m29_0_7
 m29_0_4
@@ -207,8 +201,6 @@ In the current M30 preview path, OCR is required evidence. A missing Baidu token
 M29/M30 stages should fail fast when their required source artifacts or contracts are invalid. The product path should not fabricate visible nodes from audit-only or missing evidence.
 
 M31 diagnostics are optional by default. If `M31_UPLOAD_DIAGNOSTICS_STRICT=false`, M31 failure writes a failed `m31_reconstruction` timing and an `error_logs` row, then the pipeline continues to M30 DSL. If `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
-
-M29.2 small overlay text audit is also optional by default. If `M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT=false`, M29.2 failure writes a failed `m29_2_small_overlay_text_audit` timing and an `error_logs` row, then the pipeline continues. If strict mode is true, M29.2 failure marks the task failed at `stage=m29_2_small_overlay_text_audit`.
 
 ## Database
 

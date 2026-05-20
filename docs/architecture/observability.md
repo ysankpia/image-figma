@@ -56,28 +56,6 @@ metrics.editableCounterSignals
 
 `preserveSignals` records the negative evidence that made the text risky. `editableCounterSignals` records generic UI geometry that made the text safe enough to materialize despite weak preserve signals.
 
-M29.2 adds an OCR-miss audit for small overlay text inside accepted image regions:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.json
-storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
-```
-
-The report observes:
-
-```text
-summary.acceptedImageCount
-summary.candidateCount
-summary.ocrCoveredCandidateCount
-summary.reprobeAttemptCount
-summary.reprobeRecognizedCount
-summary.materializedTextCount = 0
-summary.createdNewBBoxCount = 0
-summary.dslChanged = false
-```
-
-Candidate decisions include `proposal_only`, `covered_by_existing_ocr`, `reprobe_recognized`, `reprobe_unrecognized`, and `reprobe_failed`. Production profile skips M29.2 overlay/crop PNGs; development profile writes them for local inspection.
-
 M34.3 adds M30 text-symbol leakage diagnostics:
 
 ```text

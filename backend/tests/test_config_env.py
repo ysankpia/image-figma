@@ -61,11 +61,6 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("OCR_TEXT_EDITABILITY_ENABLED", "false")
     monkeypatch.setenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", "false")
     monkeypatch.setenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "false")
-    monkeypatch.setenv("M29_SMALL_OVERLAY_TEXT_AUDIT_ENABLED", "false")
-    monkeypatch.setenv("M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT", "true")
-    monkeypatch.setenv("M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED", "true")
-    monkeypatch.setenv("M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES", "7")
-    monkeypatch.setenv("M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR", "4")
     monkeypatch.setenv("M30_SHAPE_ERASURE_ENABLED", "false")
     monkeypatch.setenv("M30_IMAGE_ERASURE_ENABLED", "false")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
@@ -79,11 +74,6 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.ocr_text_editability_enabled is False
     assert settings.ocr_graphic_text_preserve_enabled is False
     assert settings.ocr_text_symbol_leakage_cleanup_enabled is False
-    assert settings.m29_small_overlay_text_audit_enabled is False
-    assert settings.m29_small_overlay_text_audit_strict is True
-    assert settings.m29_small_overlay_text_reprobe_enabled is True
-    assert settings.m29_small_overlay_text_max_candidates == 7
-    assert settings.m29_small_overlay_text_upscale_factor == 4
     assert settings.m30_shape_erasure_enabled is False
     assert settings.m30_image_erasure_enabled is False
 

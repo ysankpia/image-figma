@@ -32,11 +32,6 @@ class Settings:
     ocr_max_background_texture: float = 0.45
     ocr_max_background_color_count: int = 32
     ocr_text_symbol_leakage_cleanup_enabled: bool = True
-    m29_small_overlay_text_audit_enabled: bool = True
-    m29_small_overlay_text_audit_strict: bool = False
-    m29_small_overlay_text_reprobe_enabled: bool = False
-    m29_small_overlay_text_max_candidates: int = 12
-    m29_small_overlay_text_upscale_factor: int = 3
     m30_shape_erasure_enabled: bool = True
     m30_image_erasure_enabled: bool = True
 
@@ -75,11 +70,6 @@ def get_settings() -> Settings:
         ocr_max_background_texture=float(os.getenv("OCR_MAX_BACKGROUND_TEXTURE", "0.45")),
         ocr_max_background_color_count=int(os.getenv("OCR_MAX_BACKGROUND_COLOR_COUNT", "32")),
         ocr_text_symbol_leakage_cleanup_enabled=parse_bool(os.getenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "true"), default=True),
-        m29_small_overlay_text_audit_enabled=parse_bool(os.getenv("M29_SMALL_OVERLAY_TEXT_AUDIT_ENABLED", "true"), default=True),
-        m29_small_overlay_text_audit_strict=parse_bool(os.getenv("M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT", "false"), default=False),
-        m29_small_overlay_text_reprobe_enabled=parse_bool(os.getenv("M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED", "false"), default=False),
-        m29_small_overlay_text_max_candidates=int(os.getenv("M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES", "12")),
-        m29_small_overlay_text_upscale_factor=int(os.getenv("M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR", "3")),
         m30_shape_erasure_enabled=parse_bool(os.getenv("M30_SHAPE_ERASURE_ENABLED", "true"), default=True),
         m30_image_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ERASURE_ENABLED", "true"), default=True),
     )

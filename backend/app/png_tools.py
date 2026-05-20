@@ -166,27 +166,6 @@ def crop_pixels_to_png(pixels: PngPixels, region: PngRegion) -> bytes:
     return encode_rgb_png(region.width, region.height, cropped_rows)
 
 
-def upscale_pixels_nearest(pixels: PngPixels, factor: int) -> PngPixels:
-    if factor < 1:
-        raise UnsupportedPngCropError("Upscale factor must be positive.")
-    if factor == 1:
-        return PngPixels(width=pixels.width, height=pixels.height, rows=list(pixels.rows))
-
-    new_width = pixels.width * factor
-    new_rows: list[bytes] = []
-    for row in pixels.rows:
-        expanded = bytearray(new_width * 3)
-        for column in range(new_width):
-            source_column = column // factor
-            source_offset = source_column * 3
-            target_offset = column * 3
-            expanded[target_offset : target_offset + 3] = row[source_offset : source_offset + 3]
-        row_bytes = bytes(expanded)
-        for _ in range(factor):
-            new_rows.append(row_bytes)
-    return PngPixels(width=new_width, height=pixels.height * factor, rows=new_rows)
-
-
 def crop_mask_pixels_to_rgba_png(
     pixels: PngPixels,
     mask_data: bytes,

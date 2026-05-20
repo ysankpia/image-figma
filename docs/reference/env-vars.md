@@ -26,11 +26,6 @@
 | `OCR_TEXT_EDITABILITY_ENABLED` | 是否在 M30 materialization 前执行 text editability decision | `true` | 否 |
 | `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` | 是否把旋转、媒体区、复杂背景等高风险文字保留在 fallback 而不是物化成普通 text layer | `true` | 否 |
 | `OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED` | 是否在 M30 物化前清理高置信 leading text-symbol leakage | `true` | 否 |
-| `M29_SMALL_OVERLAY_TEXT_AUDIT_ENABLED` | 是否在上传链路中生成 M29.2 small overlay text miss audit | `true` | 否 |
-| `M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT` | M29.2 audit 失败是否阻断 task completed | `false` | 否 |
-| `M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED` | 是否对 M29.2 候选执行局部 crop OCR re-probe | `false` | 否 |
-| `M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES` | 单任务 M29.2 candidate 上限 | `12` | 否 |
-| `M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR` | M29.2 re-probe crop 最近邻放大倍率 | `3` | 否 |
 | `OCR_MAX_ROTATION_ANGLE` | 允许物化为普通 text layer 的最大 OCR polygon 偏转角度 | `3.0` | 否 |
 | `OCR_MAX_BACKGROUND_TEXTURE` | 图形文字 preserve 判定使用的背景纹理阈值 | `0.45` | 否 |
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
@@ -128,27 +123,6 @@ M36 text foreground color sampling 是 M30 materialization 的默认行为，没
 M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不改变 `/api/tasks/{taskId}/dsl`。
 
 `OCR_ARTISTIC_TEXT_FILTER_ENABLED` 是兼容旧 M34 配置的 alias：当未显式设置 `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` 时，它会影响 preserve 开关。它不再表示删除 OCR text boxes。
-
-## M29.2 Small Overlay Text Audit
-
-```bash
-M29_SMALL_OVERLAY_TEXT_AUDIT_ENABLED=true
-M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT=false
-M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=false
-M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES=12
-M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR=3
-```
-
-M29.2 audits tiny high-contrast overlay text proposals inside M29.0.2 accepted image evidence. It writes:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.json
-storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
-```
-
-It does not rewrite `ocr/ocr.json`, does not rewrite M29 `nodes.json`, does not feed M30 materialization, and does not change Figma visible output.
-
-`M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=true` enables diagnostic local crop OCR re-probe. The crop is upscaled by `M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR`; recognized text remains report-only and keeps `materializationEligible=false`.
 
 ## Removed Variables
 
