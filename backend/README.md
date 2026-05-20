@@ -198,23 +198,6 @@ storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
 
 M29.2 ranks candidates per accepted image before applying the global report cap. This keeps later image cards from being starved by earlier noisy image regions. Tiny overlay candidates with vertical component spread can remain proposals and record `baseline_spread_penalty`; this is still audit-only and does not materialize text.
 
-## M29.3 Image Internal Overlay Ownership
-
-```bash
-M29_IMAGE_INTERNAL_OVERLAY_AUDIT_ENABLED=true
-M29_IMAGE_INTERNAL_OVERLAY_AUDIT_STRICT=false
-M29_IMAGE_INTERNAL_OVERLAY_MAX_OVERLAYS=12
-```
-
-M29.3 records parent-bound overlay evidence inside M29.0.2 accepted images. It writes:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.json
-storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.md
-```
-
-The stage binds each overlay to its accepted image parent, for example `sourceImageNodeId=m29_image_003` and `sourceM29NodeId=image_003`. It does not recognize text, does not rewrite OCR or M29 artifacts, and does not feed M30 materialization. Production skips overlay/crop PNGs; development writes them for inspection.
-
 ## M30 Materialization
 
 M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:

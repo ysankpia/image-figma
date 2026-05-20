@@ -86,8 +86,6 @@ These signals can override weak preserve signals such as light OCR angle noise o
 
 M29.2 audits tiny overlay text that global OCR missed inside accepted image media. It consumes source pixels, existing OCR boxes, M29 `nodes.json`, and M29.0.2 accepted image evidence, then writes `m29_2/small_overlay_text_candidates.json`. M29.2 does not modify OCR JSON, M29 nodes, M30 DSL, fallback erasure, M31, or M37. Optional local crop OCR re-probe is diagnostic only and remains disabled by default.
 
-M29.3 audits image-internal overlay ownership. It consumes source pixels, existing OCR boxes, M29 `nodes.json`, and M29.0.2 accepted image evidence, then writes `m29_3/image_internal_overlays.json`. M29.3 binds each overlay to the accepted image parent and original M29 image node when available. It does not recognize text, patch OCR, rewrite M29 nodes, feed M30 materialization, change fallback erasure, or change Figma output.
-
 M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
 
 M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.

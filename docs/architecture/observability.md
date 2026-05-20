@@ -78,26 +78,6 @@ summary.dslChanged = false
 
 Candidate decisions include `proposal_only`, `covered_by_existing_ocr`, `reprobe_recognized`, `reprobe_unrecognized`, and `reprobe_failed`. M29.2 ranks candidates per accepted image, then merges them with fair round-robin selection so earlier noisy images cannot starve later image cards. Candidate metrics include `cornerDistance`, `imageLocalRank`, `selectionRound`, and `baselinePenaltyApplied`. Production profile skips M29.2 overlay/crop PNGs; development profile writes them for local inspection.
 
-M29.3 writes image internal overlay ownership diagnostics:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.json
-storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.md
-```
-
-The report observes:
-
-```text
-summary.acceptedImageCount
-summary.overlayCount
-summary.ocrCoveredOverlayCount
-summary.materializedTextCount = 0
-summary.createdNewBBoxCount = 0
-summary.dslChanged = false
-```
-
-Overlay records include `sourceImageNodeId`, `sourceM29NodeId`, `anchor`, `overlayKind`, decision, OCR de-duplication, and metrics. Production profile skips M29.3 overlay/crop PNGs; development profile writes them for local inspection.
-
 M34.3 adds M30 text-symbol leakage diagnostics:
 
 ```text
