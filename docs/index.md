@@ -35,6 +35,7 @@
 - 当前 M33 pixel-level background text erasure 计划：[plans/active/033-pixel-level-background-text-erasure.md](plans/active/033-pixel-level-background-text-erasure.md)
 - 当前 M34 OCR artistic and rotated text filtering 计划：[plans/active/034-ocr-artistic-and-rotated-text-filtering.md](plans/active/034-ocr-artistic-and-rotated-text-filtering.md)
 - 当前 M34.1 graphic text evidence preservation 计划：[plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md](plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md)
+- 当前 M34.2 context-aware UI text editability 计划：[plans/active/034-2-context-aware-ui-text-editability.md](plans/active/034-2-context-aware-ui-text-editability.md)
 
 ## By Task Type
 
@@ -135,6 +136,7 @@
 - M31.1 upload diagnostics 决策：[decisions/0050-attach-m31-diagnostics-to-upload-pipeline-before-layer-recovery.md](decisions/0050-attach-m31-diagnostics-to-upload-pipeline-before-layer-recovery.md)
 - M31.1.1 decoded-pixels fallback crop 决策：[decisions/0051-crop-m31-fallbacks-from-decoded-pixels.md](decisions/0051-crop-m31-fallbacks-from-decoded-pixels.md)
 - M34.1 OCR text evidence preservation 决策：[decisions/0052-preserve-ocr-text-evidence-before-materialization-decision.md](decisions/0052-preserve-ocr-text-evidence-before-materialization-decision.md)
+- M34.2 context-aware UI text editability 决策：[decisions/0053-context-aware-ui-text-editability-with-generic-geometry.md](decisions/0053-context-aware-ui-text-editability-with-generic-geometry.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

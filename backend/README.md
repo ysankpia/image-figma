@@ -20,6 +20,8 @@ M31 is attached as a diagnostic side path after M29. It builds a reconstruction 
 
 OCR text evidence is preserved through M29/M31. M30 decides whether each text member is editable text or graphic text that must remain in fallback; graphic text is not erased and not redrawn with a generic Figma text layer.
 
+M34.2 makes that M30 decision context-aware. Light OCR angle noise and broad image overlap can be overridden by generic geometry signals such as aligned text rows, compact overlay badges, metadata text clusters, and stable local background. The policy does not inspect business words or fixed screen coordinates.
+
 ## Run
 
 ```bash
@@ -180,6 +182,8 @@ review_text
 ```
 
 Only `editable_text` creates a visible `m30_text_member`. `graphic_text_preserve_in_fallback` and `review_text` stay in fallback and are reported; they are not included in fallback pixel erasure. This prevents stylized media text from being erased and redrawn as plain UI text while keeping OCR/M29/M31 evidence intact.
+
+Each text editability decision also reports `metrics.preserveSignals` and `metrics.editableCounterSignals`. M34.2 uses those fields to show when a weak preserve signal, such as mild OCR rotation or image containment, was overridden by generic UI geometry.
 
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 

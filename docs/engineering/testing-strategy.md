@@ -136,6 +136,9 @@ Required evidence coverage:
 - OCR text evidence is not dropped before M29; graphic text is preserved by M30 editability decision instead.
 - `graphic_text_preserve_in_fallback` does not generate `m30_text_member` and does not enter fallback erasure.
 - plain horizontal UI text still generates `m30_text_member`.
+- light OCR angle noise can be overridden by `aligned_text_row` or `metadata_text_cluster`.
+- image-contained compact overlay text can be overridden by `compact_overlay_badge`.
+- large media graphic text still remains `graphic_text_preserve_in_fallback`.
 - M30 does not create new bboxes.
 - M30 does not rewrite M29 JSON.
 - M30 does not emit DSL `icon` type.

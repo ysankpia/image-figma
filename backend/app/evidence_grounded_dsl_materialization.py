@@ -118,6 +118,20 @@ class M30TextEditabilityDecision:
 
 
 @dataclass(frozen=True)
+class TextEditabilityItem:
+    id: str
+    source_text_box_id: str | None
+    bbox: list[int]
+    text: str
+    source_meta: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class VisualEditabilityItem:
+    bbox: list[int]
+
+
+@dataclass(frozen=True)
 class M30DebugArtifacts:
     materialization_preview: str | None = None
 
@@ -350,12 +364,9 @@ def classify_text_editability(
         for item in list_dicts(m2902_document.get("textBoxes"))
         if item.get("id") is not None
     }
-    visual_bboxes = [
-        bbox
-        for bbox in (parse_bbox(item.get("bbox")) for item in list_dicts(m2905_document.get("visualAssets")))
-        if bbox is not None
-    ]
     image_area = max(1, image.width * image.height)
+    text_items: list[TextEditabilityItem] = []
+    visual_items: list[VisualEditabilityItem] = []
 
     for item in list_dicts(m2905_document.get("textMembers")):
         source_id = str(item.get("id") or "")
@@ -367,9 +378,28 @@ def classify_text_editability(
         source_text_box_id = str(item.get("sourceTextBoxId") or "") or None
         source_text_box = text_boxes_by_id.get(source_text_box_id or "")
         source_meta = source_text_box.get("meta") if isinstance(source_text_box, dict) and isinstance(source_text_box.get("meta"), dict) else {}
+        text_items.append(
+            TextEditabilityItem(
+                id=source_id,
+                source_text_box_id=source_text_box_id,
+                bbox=bbox,
+                text=text,
+                source_meta=source_meta,
+            )
+        )
+
+    for item in list_dicts(m2905_document.get("visualAssets")):
+        source_id = str(item.get("id") or "")
+        bbox = parse_bbox(item.get("bbox"))
+        if source_id and bbox is not None and bbox_in_bounds(bbox, image.width, image.height):
+            visual_items.append(VisualEditabilityItem(bbox=bbox))
+
+    visual_bboxes = [item.bbox for item in visual_items]
+
+    for item in text_items:
         reasons: list[str] = ["source_evidence_trace"]
         decision: TextEditabilityDecisionKind = "editable_text"
-        metrics = build_text_editability_metrics(pixels, bbox, source_meta, visual_bboxes, image_area)
+        metrics = build_text_editability_metrics(pixels, item.bbox, item.source_meta, visual_bboxes, image_area)
 
         if options.text_editability_enabled:
             preserve_reasons: list[str] = []
@@ -379,9 +409,9 @@ def classify_text_editability(
                     preserve_reasons.append("rotated_or_skewed_text")
                 if metrics["visualOverlapRatio"] >= 0.35:
                     preserve_reasons.append("image_embedded_text")
-                if is_media_region_text(bbox, image):
+                if is_media_region_text(item.bbox, image):
                     preserve_reasons.append("media_region_text")
-                if is_high_visual_style_loss(text, bbox, image, metrics):
+                if is_high_visual_style_loss(item.text, item.bbox, image, metrics):
                     preserve_reasons.append("high_visual_style_loss")
                 if (
                     options.unstable_background_sample_preserve
@@ -390,17 +420,41 @@ def classify_text_editability(
                 ):
                     preserve_reasons.append("unstable_background_sample")
 
-            if preserve_reasons:
+            preserve_reasons = unique_strings(preserve_reasons)
+            counter_reasons = text_editability_counter_signals(
+                item=item,
+                text_items=text_items,
+                visual_items=visual_items,
+                image=image,
+                image_area=image_area,
+                metrics=metrics,
+                preserve_reasons=preserve_reasons,
+                options=options,
+            )
+            metrics["preserveSignals"] = preserve_reasons
+            metrics["editableCounterSignals"] = counter_reasons
+
+            if preserve_reasons and should_preserve_text(
+                metrics=metrics,
+                preserve_reasons=preserve_reasons,
+                counter_reasons=counter_reasons,
+                options=options,
+            ):
                 decision = "graphic_text_preserve_in_fallback"
                 reasons = unique_strings([*preserve_reasons, "source_evidence_trace"])
+            elif preserve_reasons and counter_reasons:
+                reasons = unique_strings([*counter_reasons, "source_evidence_trace"])
+        else:
+            metrics["preserveSignals"] = []
+            metrics["editableCounterSignals"] = []
 
         decisions.append(
             M30TextEditabilityDecision(
-                source_text_member_id=source_id,
-                source_text_box_id=source_text_box_id,
+                source_text_member_id=item.id,
+                source_text_box_id=item.source_text_box_id,
                 decision=decision,
-                bbox=bbox,
-                text=text,
+                bbox=item.bbox,
+                text=item.text,
                 reasons=reasons,
                 metrics=metrics,
             )
@@ -427,6 +481,172 @@ def build_text_editability_metrics(
         "bboxAreaRatio": round(bbox_area(bbox) / image_area, 6),
         "visualOverlapRatio": round(max_visual_overlap, 4),
     }
+
+
+def text_editability_counter_signals(
+    *,
+    item: TextEditabilityItem,
+    text_items: list[TextEditabilityItem],
+    visual_items: list[VisualEditabilityItem],
+    image: PngMetadata,
+    image_area: int,
+    metrics: dict[str, Any],
+    preserve_reasons: list[str],
+    options: M30Options,
+) -> list[str]:
+    signals: list[str] = []
+    if find_aligned_text_row_signal(item, text_items, image):
+        signals.append("aligned_text_row")
+    if "image_embedded_text" in preserve_reasons and find_compact_overlay_badge_signal(item.bbox, visual_items, metrics):
+        signals.append("compact_overlay_badge")
+    if find_metadata_text_cluster_signal(item, text_items, visual_items, image_area):
+        signals.append("metadata_text_cluster")
+    if is_stable_local_background(metrics, options):
+        signals.append("stable_local_background")
+    return unique_strings(signals)
+
+
+def should_preserve_text(
+    *,
+    metrics: dict[str, Any],
+    preserve_reasons: list[str],
+    counter_reasons: list[str],
+    options: M30Options,
+) -> bool:
+    if not preserve_reasons:
+        return False
+    if not counter_reasons:
+        return True
+
+    strong_preserve = False
+    if "media_region_text" in preserve_reasons and "high_visual_style_loss" in preserve_reasons:
+        strong_preserve = True
+    if "high_visual_style_loss" in preserve_reasons and metrics["bboxAreaRatio"] >= 0.004:
+        strong_preserve = True
+
+    angle = metrics.get("angle")
+    has_structural_counter = any(reason in counter_reasons for reason in ("aligned_text_row", "compact_overlay_badge", "metadata_text_cluster"))
+    if (
+        isinstance(angle, (int, float))
+        and angle >= options.max_editable_text_rotation_angle * 3
+        and not has_structural_counter
+    ):
+        strong_preserve = True
+
+    if strong_preserve:
+        return True
+
+    weak_preserve = set(preserve_reasons).issubset(
+        {
+            "rotated_or_skewed_text",
+            "image_embedded_text",
+            "unstable_background_sample",
+        }
+    )
+    if weak_preserve and has_structural_counter:
+        return False
+    if weak_preserve and counter_reasons == ["stable_local_background"]:
+        return False
+    return True
+
+
+def find_aligned_text_row_signal(target: TextEditabilityItem, text_items: list[TextEditabilityItem], image: PngMetadata) -> bool:
+    target_cy = bbox_center_y(target.bbox)
+    target_area = bbox_area(target.bbox)
+    siblings: list[TextEditabilityItem] = []
+    for other in text_items:
+        if other.id == target.id:
+            continue
+        other_area = bbox_area(other.bbox)
+        if target_area <= 0 or other_area <= 0:
+            continue
+        min_height = max(1, min(target.bbox[3], other.bbox[3]))
+        height_ratio = target.bbox[3] / max(1, other.bbox[3])
+        if abs(target_cy - bbox_center_y(other.bbox)) > min_height * 0.35:
+            continue
+        if height_ratio < 0.70 or height_ratio > 1.45:
+            continue
+        overlap = bbox_intersection_area(target.bbox, other.bbox)
+        if overlap / max(1, min(target_area, other_area)) > 0.30:
+            continue
+        siblings.append(other)
+
+    if len(siblings) >= 2:
+        return True
+    if len(siblings) < 1:
+        return False
+    row_boxes = [target.bbox, *[item.bbox for item in siblings]]
+    span_left = min(bbox[0] for bbox in row_boxes)
+    span_right = max(bbox[0] + bbox[2] for bbox in row_boxes)
+    return (span_right - span_left) >= image.width * 0.18
+
+
+def find_compact_overlay_badge_signal(bbox: list[int], visual_items: list[VisualEditabilityItem], metrics: dict[str, Any]) -> bool:
+    text_area = bbox_area(bbox)
+    if text_area <= 0:
+        return False
+    for visual in visual_items:
+        visual_area = bbox_area(visual.bbox)
+        if visual_area <= text_area:
+            continue
+        if bbox_overlap_ratio(bbox, visual.bbox) < 0.95:
+            continue
+        if text_area / visual_area > 0.035:
+            continue
+        if bbox[3] / max(1, visual.bbox[3]) > 0.16:
+            continue
+        cx = bbox_center_x(bbox)
+        cy = bbox_center_y(bbox)
+        x_ratio = (cx - visual.bbox[0]) / max(1, visual.bbox[2])
+        y_ratio = (cy - visual.bbox[1]) / max(1, visual.bbox[3])
+        edge_band = x_ratio <= 0.22 or x_ratio >= 0.78 or y_ratio <= 0.22 or y_ratio >= 0.78
+        local_stable_enough = metrics["textureScore"] <= 0.50 or (metrics["colorCount"] / max(1, text_area)) <= 0.12
+        if edge_band and local_stable_enough:
+            return True
+    return False
+
+
+def find_metadata_text_cluster_signal(
+    target: TextEditabilityItem,
+    text_items: list[TextEditabilityItem],
+    visual_items: list[VisualEditabilityItem],
+    image_area: int,
+) -> bool:
+    target_area = bbox_area(target.bbox)
+    if target_area <= 0 or target_area / image_area > 0.003:
+        return False
+    neighbors: list[list[int]] = []
+    for other in text_items:
+        if other.id != target.id and is_compact_neighbor(target.bbox, other.bbox, image_area):
+            neighbors.append(other.bbox)
+    for visual in visual_items:
+        if is_compact_neighbor(target.bbox, visual.bbox, image_area):
+            neighbors.append(visual.bbox)
+
+    for neighbor in neighbors:
+        union = bbox_union(target.bbox, neighbor)
+        if union[3] <= target.bbox[3] * 1.8:
+            return True
+    return False
+
+
+def is_compact_neighbor(target: list[int], neighbor: list[int], image_area: int) -> bool:
+    neighbor_area = bbox_area(neighbor)
+    if neighbor_area <= 0 or neighbor_area / image_area > 0.003:
+        return False
+    max_height = max(1, target[3], neighbor[3])
+    if abs(bbox_center_y(target) - bbox_center_y(neighbor)) > max_height * 0.75:
+        return False
+    return bbox_axis_gap(target, neighbor) <= max(max_height, neighbor[2]) * 1.2
+
+
+def is_stable_local_background(metrics: dict[str, Any], options: M30Options) -> bool:
+    return (
+        metrics["bboxAreaRatio"] <= 0.003
+        and metrics["textureScore"] <= options.max_editable_background_texture * 0.75
+        and metrics["colorCount"] <= options.max_editable_background_color_count * 2
+        and 0.12 <= metrics["fillRatio"] <= 0.90
+    )
 
 
 def is_media_region_text(bbox: list[int], image: PngMetadata) -> bool:
@@ -1268,6 +1488,32 @@ def bbox_overlap_ratio(left: list[int], right: list[int]) -> float:
     if area <= 0:
         return 0.0
     return bbox_intersection_area(left, right) / area
+
+
+def bbox_center_x(bbox: list[int]) -> float:
+    return bbox[0] + (bbox[2] / 2)
+
+
+def bbox_center_y(bbox: list[int]) -> float:
+    return bbox[1] + (bbox[3] / 2)
+
+
+def bbox_axis_gap(left: list[int], right: list[int]) -> float:
+    left_x2 = left[0] + left[2]
+    right_x2 = right[0] + right[2]
+    if left_x2 < right[0]:
+        return right[0] - left_x2
+    if right_x2 < left[0]:
+        return left[0] - right_x2
+    return 0.0
+
+
+def bbox_union(left: list[int], right: list[int]) -> list[int]:
+    x1 = min(left[0], right[0])
+    y1 = min(left[1], right[1])
+    x2 = max(left[0] + left[2], right[0] + right[2])
+    y2 = max(left[1] + left[3], right[1] + right[3])
+    return [x1, y1, x2 - x1, y2 - y1]
 
 
 def reason_counts(items: list[M30SkippedItem]) -> dict[str, int]:

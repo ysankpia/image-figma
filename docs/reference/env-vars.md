@@ -103,6 +103,15 @@ review_text
 
 只有 `editable_text` 会生成 `m30_text_member` 并参与 fallback erasure。`graphic_text_preserve_in_fallback` 保留在 fallback 图像里，并出现在 M30 report 的 `preservedGraphicTextItems` 中。
 
+M34.2 后，M30 会把弱 preserve signal 和通用几何 counter signal 一起记录到 report：
+
+```text
+metrics.preserveSignals
+metrics.editableCounterSignals
+```
+
+这些 counter signal 只来自相对几何和局部像素，例如 aligned text row、compact overlay badge、metadata cluster 和 stable local background；不会使用业务词或固定屏幕坐标。
+
 `OCR_ARTISTIC_TEXT_FILTER_ENABLED` 是兼容旧 M34 配置的 alias：当未显式设置 `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` 时，它会影响 preserve 开关。它不再表示删除 OCR text boxes。
 
 ## Removed Variables

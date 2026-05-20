@@ -71,6 +71,17 @@ review_text
 
 Only `editable_text` becomes visible `m30_text_member` and participates in fallback pixel erasure. Preserved graphic text remains inside the fallback image and appears in the M30 report for audit.
 
+M34.2 adds context-aware counter signals to reduce false-positive preservation of ordinary UI text. The policy uses relative bbox geometry and local pixel metrics:
+
+```text
+aligned_text_row
+compact_overlay_badge
+metadata_text_cluster
+stable_local_background
+```
+
+These signals can override weak preserve signals such as light OCR angle noise or image containment. They do not use business words, fixed coordinates, or fixed-resolution pixel constants.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.

@@ -47,6 +47,15 @@ summary.textEditabilityReasonCounts
 
 这些字段回答的是“这段 OCR/M29 文字证据为什么没有被物化为普通 Figma text layer”。它们不是 OCR 过滤日志，因为 OCR 证据不会在 M29 前被删除。
 
+M34.2 extends each `textEditabilityDecisions[]` item with:
+
+```text
+metrics.preserveSignals
+metrics.editableCounterSignals
+```
+
+`preserveSignals` records the negative evidence that made the text risky. `editableCounterSignals` records generic UI geometry that made the text safe enough to materialize despite weak preserve signals.
+
 ## Logs
 
 后端任务日志至少包含：

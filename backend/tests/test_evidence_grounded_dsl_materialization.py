@@ -279,6 +279,138 @@ def test_rotated_ocr_text_is_preserved_as_evidence_but_not_materialized_text(tmp
     assert "rotated_or_skewed_text" in preserved["reasons"]
 
 
+def test_aligned_text_row_overrides_light_ocr_angle_noise(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(360, 160))
+    m2905_dir = tmp_path / "m29_0_5"
+    members = [
+        text_member("text_member_0001", [24, 42, 54, 24], "Alpha", source_text_box_id="ocr_001"),
+        text_member("text_member_0002", [132, 41, 56, 25], "Beta", source_text_box_id="ocr_002"),
+        text_member("text_member_0003", [244, 42, 58, 24], "Gamma", source_text_box_id="ocr_003"),
+    ]
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[], text_members=members)
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+    m2902 = m2902_document_with_text_boxes(
+        [
+            {"id": "ocr_001", "bbox": [24, 42, 54, 24], "text": "Alpha", "meta": {"angle": 0.0}},
+            {"id": "ocr_002", "bbox": [132, 41, 56, 25], "text": "Beta", "meta": {"angle": 4.8}},
+            {"id": "ocr_003", "bbox": [244, 42, 58, 24], "text": "Gamma", "meta": {"angle": 0.0}},
+        ]
+    )
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902,
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 3
+    decisions = {item["sourceTextBoxId"]: item for item in result.report.to_dict()["textEditabilityDecisions"]}
+    assert decisions["ocr_002"]["decision"] == "editable_text"
+    assert "aligned_text_row" in decisions["ocr_002"]["reasons"]
+    assert "rotated_or_skewed_text" in decisions["ocr_002"]["metrics"]["preserveSignals"]
+    assert "aligned_text_row" in decisions["ocr_002"]["metrics"]["editableCounterSignals"]
+
+
+def test_compact_overlay_badge_overrides_image_embedded_text(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(420, 320, fill=(245, 245, 245)))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0002.png", make_canvas(280, 190))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[visual_asset("visual_asset_0002", [40, 70, 280, 190], str(visual_asset_path.relative_to(m2905_dir)))],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [54, 84, 58, 24], "Label", source_text_box_id="ocr_001")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document_with_text_box("ocr_001", [54, 84, 58, 24], "Label", meta={"angle": 0.0}),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 1
+    decision = result.report.to_dict()["textEditabilityDecisions"][0]
+    assert decision["decision"] == "editable_text"
+    assert "compact_overlay_badge" in decision["reasons"]
+    assert "image_embedded_text" in decision["metrics"]["preserveSignals"]
+    assert "compact_overlay_badge" in decision["metrics"]["editableCounterSignals"]
+
+
+def test_large_center_media_text_remains_preserved(tmp_path: Path) -> None:
+    canvas = make_canvas(420, 320, fill=(245, 245, 245))
+    rows = [bytearray(row) for row in canvas.rows]
+    for row_index in range(110, 150):
+        for column in range(115, 305):
+            rows[row_index][column * 3 : column * 3 + 3] = bytes(((column * 7) % 255, (row_index * 5) % 255, 80))
+    source = write_png(tmp_path / "source.png", PngPixels(width=420, height=320, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0002.png", make_canvas(320, 210))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[visual_asset("visual_asset_0002", [50, 70, 320, 210], str(visual_asset_path.relative_to(m2905_dir)))],
+        shape_candidates=[],
+        text_members=[text_member("text_member_0001", [115, 110, 190, 40], "Poster", source_text_box_id="ocr_001")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document_with_text_box("ocr_001", [115, 110, 190, 40], "Poster", meta={"angle": 0.0}),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 0
+    decision = result.report.to_dict()["preservedGraphicTextItems"][0]
+    assert decision["decision"] == "graphic_text_preserve_in_fallback"
+    assert "image_embedded_text" in decision["reasons"]
+    assert "compact_overlay_badge" not in decision["metrics"]["editableCounterSignals"]
+
+
+def test_metadata_text_cluster_overrides_light_ocr_angle_noise(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(900, 520))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0002.png", make_canvas(20, 20))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[visual_asset("visual_asset_0002", [222, 102, 20, 20], str(visual_asset_path.relative_to(m2905_dir)))],
+        shape_candidates=[],
+        text_members=[
+            text_member("text_member_0001", [246, 100, 58, 24], "Place", source_text_box_id="ocr_001"),
+        ],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+    m2902 = m2902_document_with_text_boxes(
+        [
+            {"id": "ocr_001", "bbox": [246, 100, 58, 24], "text": "Place", "meta": {"angle": 4.4}},
+        ]
+    )
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902,
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    decisions = {item["sourceTextBoxId"]: item for item in result.report.to_dict()["textEditabilityDecisions"]}
+    assert decisions["ocr_001"]["decision"] == "editable_text"
+    assert "metadata_text_cluster" in decisions["ocr_001"]["reasons"]
+    assert "rotated_or_skewed_text" in decisions["ocr_001"]["metrics"]["preserveSignals"]
+    assert "metadata_text_cluster" in decisions["ocr_001"]["metrics"]["editableCounterSignals"]
+
+
 def test_plain_ocr_text_remains_editable_text_candidate(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(120, 100))
     m2905_dir = tmp_path / "m29_0_5"
@@ -460,13 +592,13 @@ def m2905_document(
     }
 
 
-def text_member(id: str, bbox: list[int], text: str, risks: list[str] | None = None) -> dict:
+def text_member(id: str, bbox: list[int], text: str, risks: list[str] | None = None, source_text_box_id: str = "ocr_001") -> dict:
     return {
         "id": id,
         "sourceObjectId": "object_001",
         "source": "m2902_text_box",
         "sourceEvidenceNodeId": "evidence_text_001",
-        "sourceTextBoxId": "ocr_001",
+        "sourceTextBoxId": source_text_box_id,
         "bbox": bbox,
         "textPreview": text,
         "text": text,
@@ -495,20 +627,27 @@ def visual_asset(id: str, bbox: list[int], asset_path: str, *, text_overlap: flo
 
 
 def m2902_document_with_text_box(id: str, bbox: list[int], text: str, meta: dict | None = None) -> dict:
-    item = {
-        "id": id,
-        "bbox": bbox,
-        "text": text,
-        "confidence": 0.96,
-        "source": "ocr",
-        "kind": "line",
-    }
-    if meta is not None:
-        item["meta"] = meta
+    return m2902_document_with_text_boxes([{"id": id, "bbox": bbox, "text": text, "meta": meta}])
+
+
+def m2902_document_with_text_boxes(items: list[dict]) -> dict:
+    text_boxes = []
+    for raw in items:
+        item = {
+            "id": raw["id"],
+            "bbox": raw["bbox"],
+            "text": raw["text"],
+            "confidence": raw.get("confidence", 0.96),
+            "source": "ocr",
+            "kind": "line",
+        }
+        if raw.get("meta") is not None:
+            item["meta"] = raw["meta"]
+        text_boxes.append(item)
     return {
         "schemaName": "M2902TextMaskedMediaAuditDocument",
         "schemaVersion": "0.1",
-        "textBoxes": [item],
+        "textBoxes": text_boxes,
     }
 
 
@@ -632,9 +771,9 @@ def test_text_font_size_harmonization(tmp_path: Path) -> None:
     m2905_dir = tmp_path / "m29_0_5"
     
     # We create 3 text elements:
-    # 1. "推荐" at y=50, height=22 (initial font size round(22*0.82) = 18)
-    # 2. "穿搭" at y=52, height=18 (initial font size round(18*0.82) = 15)
-    # 3. "美妆" at y=52, height=18 (initial font size round(18*0.82) = 15)
+    # 1. "Alpha" at y=50, height=22 (initial font size round(22*0.82) = 18)
+    # 2. "Beta" at y=52, height=18 (initial font size round(18*0.82) = 15)
+    # 3. "Gamma" at y=52, height=18 (initial font size round(18*0.82) = 15)
     # These three are horizontally aligned (y_centers: 61, 61, 61) and have similar initial sizes (18, 15, 15).
     # Since difference <= 3, they should be harmonized to their median: 15.
     
@@ -643,7 +782,7 @@ def test_text_font_size_harmonization(tmp_path: Path) -> None:
     # This element should not be harmonized (difference to 15 is 7 > 3).
     
     # And another element on a completely different row:
-    # 5. "列表标题" at y=120, height=20 (initial font size round(20*0.82) = 16).
+    # 5. "Section" at y=120, height=20 (initial font size round(20*0.82) = 16).
     # This should not be harmonized with the first row.
     
     m2905 = m2905_document(
@@ -651,11 +790,11 @@ def test_text_font_size_harmonization(tmp_path: Path) -> None:
         visual_assets=[],
         shape_candidates=[],
         text_members=[
-            text_member("text_0001", [10, 50, 40, 22], "推荐"),
-            text_member("text_0002", [60, 52, 40, 18], "穿搭"),
-            text_member("text_0003", [110, 52, 40, 18], "美妆"),
+            text_member("text_0001", [10, 50, 40, 22], "Alpha"),
+            text_member("text_0002", [60, 52, 40, 18], "Beta"),
+            text_member("text_0003", [110, 52, 40, 18], "Gamma"),
             text_member("text_0004", [200, 55, 30, 10], "10:00"),
-            text_member("text_0005", [10, 120, 80, 20], "列表标题"),
+            text_member("text_0005", [10, 120, 80, 20], "Section"),
         ]
     )
     m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
@@ -688,32 +827,32 @@ def test_text_font_size_harmonization_mode_snapping(tmp_path: Path) -> None:
     m2905_dir = tmp_path / "m29_0_5"
     
     # We create a horizontal tab bar row with multiple noisy sizes:
-    # 1. "推荐" (height 46 -> fs 38)
-    # 2. "穿搭" (height 36 -> fs 30)
-    # 3. "美妆" (height 36 -> fs 30)
-    # 4. "旅行" (height 36 -> fs 30)
-    # 5. "探店" (height 42 -> fs 34)
-    # 6. "家居" (height 36 -> fs 30)
-    # 7. "美食" (height 31 -> fs 25)
-    # 8. "三" (height 25 -> fs 20)
+    # 1. "Primary" (height 46 -> fs 38)
+    # 2. "Alpha" (height 36 -> fs 30)
+    # 3. "Beta" (height 36 -> fs 30)
+    # 4. "Gamma" (height 36 -> fs 30)
+    # 5. "Delta" (height 42 -> fs 34)
+    # 6. "Epsilon" (height 36 -> fs 30)
+    # 7. "Zeta" (height 31 -> fs 25)
+    # 8. "More" (height 25 -> fs 20)
     # Mode is 30. Adaptive threshold is max(3, min(6, round(30 * 0.18))) = 5.
     # Snapping range is [25, 35].
-    # Expected: "穿搭", "美妆", "旅行", "探店", "家居", "美食" snap to 30.
-    # "推荐" (38) and "三" (20) remain unchanged.
+    # Expected: "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta" snap to 30.
+    # "Primary" (38) and "More" (20) remain unchanged.
     
     m2905 = m2905_document(
         m2905_dir,
         visual_assets=[],
         shape_candidates=[],
         text_members=[
-            text_member("text_0001", [32, 167, 78, 46], "推荐"),
-            text_member("text_0002", [152, 171, 63, 36], "穿搭"),
-            text_member("text_0003", [263, 171, 63, 36], "美妆"),
-            text_member("text_0004", [375, 173, 61, 36], "旅行"),
-            text_member("text_0005", [483, 168, 64, 42], "探店"),
-            text_member("text_0006", [594, 173, 59, 36], "家居"),
-            text_member("text_0007", [703, 175, 57, 31], "美食"),
-            text_member("text_0008", [796, 177, 25, 25], "三"),
+            text_member("text_0001", [32, 167, 78, 46], "Primary"),
+            text_member("text_0002", [152, 171, 63, 36], "Alpha"),
+            text_member("text_0003", [263, 171, 63, 36], "Beta"),
+            text_member("text_0004", [375, 173, 61, 36], "Gamma"),
+            text_member("text_0005", [483, 168, 64, 42], "Delta"),
+            text_member("text_0006", [594, 173, 59, 36], "Epsilon"),
+            text_member("text_0007", [703, 175, 57, 31], "Zeta"),
+            text_member("text_0008", [796, 177, 25, 25], "More"),
         ]
     )
     m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
