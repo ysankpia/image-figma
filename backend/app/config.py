@@ -45,6 +45,9 @@ class Settings:
     m29_image_internal_overlay_text_reprobe_enabled: bool = False
     m29_image_internal_overlay_text_max_items: int = 12
     m29_image_internal_overlay_text_upscale_factor: int = 3
+    m30_image_internal_overlay_promotion_enabled: bool = True
+    m30_image_internal_overlay_promotion_strict: bool = False
+    m30_image_internal_overlay_max_promotions: int = 1
     m30_shape_erasure_enabled: bool = True
     m30_image_erasure_enabled: bool = True
 
@@ -105,6 +108,15 @@ def get_settings() -> Settings:
         ),
         m29_image_internal_overlay_text_max_items=int(os.getenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_MAX_ITEMS", "12")),
         m29_image_internal_overlay_text_upscale_factor=int(os.getenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_UPSCALE_FACTOR", "3")),
+        m30_image_internal_overlay_promotion_enabled=parse_bool(
+            os.getenv("M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_ENABLED", "true"),
+            default=True,
+        ),
+        m30_image_internal_overlay_promotion_strict=parse_bool(
+            os.getenv("M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT", "false"),
+            default=False,
+        ),
+        m30_image_internal_overlay_max_promotions=int(os.getenv("M30_IMAGE_INTERNAL_OVERLAY_MAX_PROMOTIONS", "1")),
         m30_shape_erasure_enabled=parse_bool(os.getenv("M30_SHAPE_ERASURE_ENABLED", "true"), default=True),
         m30_image_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ERASURE_ENABLED", "true"), default=True),
     )

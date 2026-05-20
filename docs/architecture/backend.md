@@ -35,11 +35,14 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
 -> M29.2 small overlay text proposal audit
+-> M29.3 image-internal overlay ownership audit
+-> M29.4 image-internal overlay text recognition audit
 -> M29.0.3 visual evidence normalization with M29.1 lineage
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization with text editability decisions and fallback erasure only for editable text
+-> M30.5 image-internal overlay text promotion and parent asset cleanup
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> M37 hierarchy readiness diagnostic, if M31 artifacts exist
 -> save dsl_results path to m30/m30_materialized_dsl.json
@@ -90,6 +93,8 @@ M29.3 audits image-internal overlay ownership. It consumes source pixels, existi
 
 M29.4 audits image-internal overlay text recognition. It consumes source pixels, M29.2 candidates, and M29.3 parent-bound overlays, then writes `m29_4/image_internal_overlay_text_recognition.json`. Local OCR re-probe is disabled by default; when explicitly enabled, M29.4 accepts only narrow counter text such as `1/6`. M29.4 does not mutate OCR JSON, M29/M29.2/M29.3 artifacts, M30 DSL, parent image assets, fallback erasure, M31, M37, or Figma output.
 
+M30.5 promotes only M29.4 `promotion_ready` image-internal overlay text after M30 materialization and before asset publish. It copies the matched parent image asset, erases only glyph pixels mapped from the tight `recognizedTextBBox`, adds the cleaned copy as a DSL asset, retargets or creates the parent image node, and appends an editable `m30_image_internal_overlay_text` node. It does not re-run OCR, does not mutate M29.2/M29.3/M29.4, does not erase `overlayBBox`, and does not modify the original parent asset. The first release defaults to `maxPromotions=1`.
+
 M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
 
 M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
@@ -106,6 +111,9 @@ production:
   keep structured M29/M30 JSON
   keep M29.0.5 formal assets needed by M30
   keep M29.2 small overlay text proposal JSON/MD
+  keep M29.3 image internal overlay ownership JSON/MD
+  keep M29.4 image internal overlay text recognition JSON/MD
+  keep M30.5 image internal overlay promotion JSON/MD
   keep M30 DSL/report
   keep published renderer assets
   keep stage_timings.json
@@ -141,11 +149,14 @@ storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
 storage/m30_1_uploads/{taskId}/m29_0_2/
 storage/m30_1_uploads/{taskId}/m29_2/
+storage/m30_1_uploads/{taskId}/m29_3/
+storage/m30_1_uploads/{taskId}/m29_4/
 storage/m30_1_uploads/{taskId}/m29_0_3/
 storage/m30_1_uploads/{taskId}/m29_0_7/
 storage/m30_1_uploads/{taskId}/m29_0_4/
 storage/m30_1_uploads/{taskId}/m29_0_5/
 storage/m30_1_uploads/{taskId}/m30/
+storage/m30_1_uploads/{taskId}/m30_5/
 storage/m30_1_uploads/{taskId}/m37/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 storage/assets/{taskId}/m30/
@@ -188,6 +199,7 @@ m29_0_7
 m29_0_4
 m29_0_5
 m30_materialization
+m30_5_image_internal_overlay_promotion
 m30_asset_publish
 m37_hierarchy_readiness
 m30_completed
@@ -217,6 +229,8 @@ M31 diagnostics are optional by default. If `M31_UPLOAD_DIAGNOSTICS_STRICT=false
 M29.2 small overlay text audit is also optional by default. If `M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT=false`, M29.2 failure writes a failed `m29_2_small_overlay_text_audit` timing and an `error_logs` row, then the pipeline continues. If strict mode is true, M29.2 failure marks the task failed at `stage=m29_2_small_overlay_text_audit`.
 
 M29.3 and M29.4 are optional diagnostics by default. M29.4 runs only when M29.2 and M29.3 are enabled, because it consumes their reports. If `M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_STRICT=false`, M29.4 failure writes a failed `m29_4_image_internal_overlay_text_recognition` timing and an `error_logs` row, then the pipeline continues. If strict mode is true, M29.4 failure marks the task failed at that stage.
+
+M30.5 is enabled by default but changes DSL only when M29.4 has a safe `promotion_ready` item. If `M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT=false`, M30.5 failure writes a failed `m30_5_image_internal_overlay_promotion` timing and an `error_logs` row, then the pipeline continues with the unmodified M30 DSL. If strict mode is true, M30.5 failure marks the task failed at that stage.
 
 ## Database
 

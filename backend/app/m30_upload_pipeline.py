@@ -13,6 +13,7 @@ from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .image_internal_overlay import M293Options, extract_image_internal_overlays
+from .image_internal_overlay_promotion import M305Options, promote_image_internal_overlay_text
 from .image_internal_overlay_text_recognition import M294Options, extract_image_internal_overlay_text_recognition
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
@@ -59,6 +60,7 @@ class M30PipelinePaths:
     m2905: Path
     m31: Path
     m30: Path
+    m305: Path
     m37: Path
 
 
@@ -314,6 +316,18 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
 
+    if state.settings.m30_image_internal_overlay_promotion_enabled:
+        update_task(task_id, "m30_5_image_internal_overlay_promotion", 94, "Promoting image internal overlay text.")
+        run_m305_image_internal_overlay_promotion_stage(
+            task_id=task_id,
+            paths=paths,
+            timings=timings,
+            dsl=m30_result.dsl,
+            m294_json=paths.m294 / "image_internal_overlay_text_recognition.json",
+            m2905_json=m2905_json,
+            m2902_json=m2902_json,
+        )
+
     update_task(task_id, "m30_asset_publish", 96, "Publishing M30 assets.")
     run_stage(paths, timings, "m30_asset_publish", lambda: publish_m30_assets(task_id, paths.m30, m30_result.dsl, image))
     output_dsl = paths.m30 / "m30_materialized_dsl.json"
@@ -549,6 +563,40 @@ def run_m294_image_internal_overlay_text_recognition_stage(
     run_optional_stage(paths, timings, "m29_4_image_internal_overlay_text_recognition", action, task_id=task_id)
 
 
+def run_m305_image_internal_overlay_promotion_stage(
+    *,
+    task_id: str,
+    paths: M30PipelinePaths,
+    timings: list[StageTiming],
+    dsl: dict[str, Any],
+    m294_json: Path,
+    m2905_json: Path,
+    m2902_json: Path,
+) -> None:
+    options = M305Options(max_promotions=state.settings.m30_image_internal_overlay_max_promotions)
+    action = lambda: promote_image_internal_overlay_text(
+        dsl=dsl,
+        output_dir=paths.m305,
+        m30_dir=paths.m30,
+        m294_document=read_json_file(m294_json) if m294_json.exists() else {},
+        m294_json_path=str(m294_json),
+        m2905_document=read_json_file(m2905_json),
+        m2905_json_path=str(m2905_json),
+        m2902_document=read_json_file(m2902_json),
+        m2902_json_path=str(m2902_json),
+        options=options,
+    )
+    if state.settings.m30_image_internal_overlay_promotion_strict:
+        try:
+            run_stage(paths, timings, "m30_5_image_internal_overlay_promotion", action)
+        except M30UploadPipelineError:
+            raise
+        except Exception as error:
+            raise M30UploadPipelineError("m30_5_image_internal_overlay_promotion", error.__class__.__name__, str(error)) from error
+        return
+    run_optional_stage(paths, timings, "m30_5_image_internal_overlay_promotion", action, task_id=task_id)
+
+
 def run_local_ocr_reprobe(crop_png_data: bytes, _source_bbox: list[int]) -> dict[str, Any]:
     image = read_png_metadata(crop_png_data)
     if image is None:
@@ -734,6 +782,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m2905=root / "m29_0_5",
         m31=root / "m31",
         m30=root / "m30",
+        m305=root / "m30_5",
         m37=root / "m37",
     )
 

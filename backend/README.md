@@ -10,7 +10,11 @@ Figma plugin
 -> OCR + M29 evidence pipeline
 -> M31 reconstruction diagnostics
 -> M29.2 small overlay text miss audit
+-> M29.3 image internal overlay ownership audit
+-> M29.4 image internal overlay text recognition audit
 -> M30 materialized DSL
+-> M30.5 image internal overlay text promotion
+-> publish M30 image assets
 -> M37 hierarchy readiness diagnostics
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
@@ -21,6 +25,10 @@ The frozen pre-M29 upload chain has been removed from runtime source. `POST /api
 M31 is attached as a diagnostic side path after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change M30 DSL or Figma output.
 
 M29.2 is attached as an audit side path after M29.0.2. It looks for OCR-missed small overlay text proposals inside accepted image regions, writes `m29_2/small_overlay_text_candidates.json`, and does not change OCR, M29, M30, M31, M37, or Figma output.
+
+M29.3 and M29.4 build the parent-bound overlay evidence chain. M29.3 records image-internal overlay ownership; M29.4 can optionally recognize a narrow counter with local crop OCR. Both are audit-only and do not mutate OCR JSON, M29 artifacts, parent image assets, or visible Figma output.
+
+M30.5 is the controlled promotion stage. It consumes only M29.4 `promotion_ready` items, copies and cleans the parent image asset, and adds an editable overlay text node. It does not re-run OCR and does not modify the original parent asset. With M29.4 re-probe disabled by default, ordinary uploads usually write a M30.5 report with no DSL change.
 
 OCR text evidence is preserved through M29/M31. M30 decides whether each text member is editable text or graphic text that must remain in fallback; graphic text is not erased and not redrawn with a generic Figma text layer.
 
@@ -48,6 +56,7 @@ Focused current-chain checks:
 ```bash
 uv run pytest \
   tests/test_m30_upload_pipeline.py \
+  tests/test_image_internal_overlay_promotion.py \
   tests/test_evidence_grounded_dsl_materialization.py \
   tests/test_upload_flow.py \
   tests/test_config_env.py \
@@ -89,6 +98,10 @@ M34.3 adds `textSymbolLeakageDecisions` and summary counts for high-confidence l
 
 M29.2 reports `small_overlay_text_candidates.json` for OCR-missed tiny overlay text proposals. The guard summary keeps `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
 
+M29.3 reports `image_internal_overlays.json` for parent-bound overlay ownership. M29.4 reports `image_internal_overlay_text_recognition.json` for optional counter recognition. Both keep audit-only invariants until M30.5 consumes a `promotion_ready` item.
+
+M30.5 reports `image_internal_overlay_promotion_report.json`. When it promotes an item, the final DSL gains a cleaned parent image asset and an editable `m30_image_internal_overlay_text` node before asset publish.
+
 M30 text nodes also report `textForegroundColorSource` in node meta. The M30 report summary counts sampled foreground colors, contrast fallbacks, and hard fallback-to-default cases.
 
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
@@ -104,14 +117,17 @@ OCR
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
 -> M29.2 small overlay text proposal audit
+-> M29.3 image internal overlay ownership audit
+-> M29.4 image internal overlay text recognition audit
 -> M29.0.3 visual evidence normalization with lineage
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization
 -> M30.2 conservative text cover
--> M37 hierarchy readiness diagnostic
+-> M30.5 image internal overlay text promotion
 -> publish M30 image assets under /files/assets/{taskId}/m30/
+-> M37 hierarchy readiness diagnostic
 ```
 
 It deliberately does not run old pre-M29 diagnostic stages, mixed/residual acceptance audits, fallback masking, Auto Layout, Figma Components, SVG/vectorization, or icon recovery.
@@ -233,6 +249,24 @@ storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.md
 ```
 
 Local OCR re-probe is disabled by default. When enabled, M29.4 accepts only narrow counter text such as `1/6` and still keeps `materializationEligible=false`. It does not modify OCR JSON, M29/M29.2/M29.3 artifacts, M30 DSL, parent image assets, or visible Figma output.
+
+## M30.5 Image Internal Overlay Text Promotion
+
+```bash
+M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_ENABLED=true
+M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT=false
+M30_IMAGE_INTERNAL_OVERLAY_MAX_PROMOTIONS=1
+```
+
+M30.5 runs after M30 materialization and before M30 asset publish. It reads `m29_4/image_internal_overlay_text_recognition.json`, accepts only `promotion_ready` items with a tight local OCR bbox, and writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.json
+storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.md
+storage/m30_1_uploads/{taskId}/m30/assets/m30_image_internal_overlay_cleaned/*.png
+```
+
+The stage copies the parent image asset, cleans only bright glyph pixels mapped from `recognizedTextBBox`, retargets or creates the parent image node, and appends an editable `m30_image_internal_overlay_text` node. It does not run OCR, does not mutate M29.2/M29.3/M29.4, does not erase `overlayBBox`, and does not modify the original parent asset.
 
 ## M30 Materialization
 

@@ -100,6 +100,9 @@ Required backend coverage:
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
 - default upload creates M31 diagnostics after M29.
 - default upload creates M29.2 small overlay text audit after M29.0.2.
+- default upload creates M29.3 image internal overlay ownership audit after M29.2.
+- default upload creates M29.4 image internal overlay text recognition audit after M29.3.
+- default upload creates M30.5 promotion report after M30 materialization.
 - default upload creates M37 hierarchy readiness diagnostics when M31 artifacts exist.
 - M31 optional failure does not block M30 DSL when strict mode is off.
 - M31 failure blocks the task at `m31_reconstruction` when strict mode is on.
@@ -154,6 +157,29 @@ Required evidence coverage:
 - M30.2 text cover uses existing text bbox and conservative background sampling.
 - M36 samples editable text foreground color from source pixels or records a contrast/default fallback.
 - M37 audits M31-to-M30 hierarchy readiness without changing visible DSL output.
+
+## M30.5 Image Internal Overlay Text Promotion
+
+M30.5 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_image_internal_overlay_promotion.py tests/test_image_internal_overlay_text_recognition.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+Required M30.5 coverage:
+
+- `promotion_ready` M29.4 items with tight local OCR bbox can create a cleaned parent image asset and editable `m30_image_internal_overlay_text` node.
+- Existing parent image nodes are retargeted to the cleaned asset instead of duplicated.
+- If normal M30 skipped the parent image, M30.5 can create a parent image node from a unique M29.0.5 visual asset or M29.0.2 accepted image asset.
+- The original parent asset is not modified.
+- Cleanup maps page bbox to parent asset pixels and supports source/asset coordinate scaling.
+- Cleanup only overwrites detected bright glyph pixels inside `recognizedTextBBox`; it does not erase the whole overlay bbox.
+- Missing tight OCR bbox, ambiguous parent matches, missing parent assets, and cleanup failures are skipped with report reasons.
+- `maxPromotions=1` skips extra safe items with `skipped_max_promotions`.
+- Production upload writes M30.5 JSON/MD report; disabled env omits `m30_5/` and the stage timing.
+- Optional M30.5 failure does not block M30 when strict mode is off; strict mode fails at `m30_5_image_internal_overlay_promotion`.
+- M30 asset publish publishes cleaned parent assets through the existing `/files/assets/{taskId}/m30/...` path.
 
 ## M31 Reconstruction UI Tree
 
