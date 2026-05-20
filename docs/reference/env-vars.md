@@ -148,8 +148,6 @@ storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
 
 It does not rewrite `ocr/ocr.json`, does not rewrite M29 `nodes.json`, does not feed M30 materialization, and does not change Figma visible output.
 
-`M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES` is a global report cap. M29.2 first keeps a small per-image budget and then uses fair round-robin selection, so earlier accepted images cannot consume the full global cap before later image cards are scanned.
-
 `M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=true` enables diagnostic local crop OCR re-probe. The crop is upscaled by `M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR`; recognized text remains report-only and keeps `materializationEligible=false`.
 
 ## Removed Variables

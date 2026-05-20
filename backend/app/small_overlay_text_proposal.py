@@ -37,7 +37,6 @@ class M292Options:
     enabled: bool = True
     reprobe_enabled: bool = False
     max_candidates: int = 12
-    max_candidates_per_image: int = 4
     upscale_factor: int = 3
     crop_padding: int = 4
     min_width: int = 12
@@ -166,23 +165,29 @@ def extract_small_overlay_text_proposals(
     ocr_boxes = parse_ocr_boxes(ocr_document)
     images = accepted_images(m2902_document, m29_document)
     warnings: list[str] = []
-    selected_proposals, selection_warnings = select_fair_proposals(pixels, images, ocr_boxes, options)
-    warnings.extend(selection_warnings)
-
     candidates: list[M292Candidate] = []
-    for selected in selected_proposals:
-        candidate = build_candidate(
-            candidate_index=len(candidates) + 1,
-            proposal=selected["proposal"],
-            image=selected["image"],
-            pixels=pixels,
-            output_dir=output_dir,
-            options=options,
-            emit_debug_artifacts=emit_debug_artifacts,
-        )
-        if options.reprobe_enabled and candidate.decision == "proposal_only":
-            candidate = run_reprobe(candidate, pixels, output_dir, options, reprobe_fn, emit_debug_artifacts)
-        candidates.append(candidate)
+
+    for image in images:
+        if len(candidates) >= options.max_candidates:
+            warnings.append("M29.2 candidate limit reached; remaining accepted images were not scanned.")
+            break
+        proposals = propose_candidates_in_image(pixels, image, ocr_boxes, options)
+        for proposal in proposals:
+            if len(candidates) >= options.max_candidates:
+                warnings.append("M29.2 candidate limit reached; remaining proposals were dropped.")
+                break
+            candidate = build_candidate(
+                candidate_index=len(candidates) + 1,
+                proposal=proposal,
+                image=image,
+                pixels=pixels,
+                output_dir=output_dir,
+                options=options,
+                emit_debug_artifacts=emit_debug_artifacts,
+            )
+            if options.reprobe_enabled and candidate.decision == "proposal_only":
+                candidate = run_reprobe(candidate, pixels, output_dir, options, reprobe_fn, emit_debug_artifacts)
+            candidates.append(candidate)
 
     debug = M292DebugArtifacts()
     if emit_debug_artifacts:
@@ -258,38 +263,6 @@ def accepted_images(m2902_document: dict[str, Any], m29_document: dict[str, Any]
     return images
 
 
-def select_fair_proposals(
-    pixels: PngPixels,
-    images: list[dict[str, Any]],
-    ocr_boxes: list[dict[str, Any]],
-    options: M292Options,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    warnings: list[str] = []
-    per_image: list[dict[str, Any]] = []
-    for image in images:
-        proposals = propose_candidates_in_image(pixels, image, ocr_boxes, options)
-        kept = proposals[: max(0, options.max_candidates_per_image)]
-        if len(proposals) > len(kept):
-            warnings.append(f"M29.2 per-image candidate limit reached for {image.get('id') or 'unknown_image'}.")
-        per_image.append({"image": image, "proposals": kept})
-
-    selected: list[dict[str, Any]] = []
-    max_rounds = max((len(item["proposals"]) for item in per_image), default=0)
-    for selection_round in range(max_rounds):
-        for item in per_image:
-            proposals = item["proposals"]
-            if selection_round >= len(proposals):
-                continue
-            if len(selected) >= options.max_candidates:
-                warnings.append("M29.2 global candidate limit reached after fair per-image selection.")
-                return selected, warnings
-            proposal = dict(proposals[selection_round])
-            proposal["metrics"] = dict(proposal["metrics"])
-            proposal["metrics"]["selectionRound"] = selection_round + 1
-            selected.append({"image": item["image"], "proposal": proposal})
-    return selected, warnings
-
-
 def propose_candidates_in_image(
     pixels: PngPixels,
     image: dict[str, Any],
@@ -309,9 +282,7 @@ def propose_candidates_in_image(
         candidate_bbox = union_bbox([component["bbox"] for component in group])
         proposal = evaluate_group(candidate_bbox, group, clamped_image, ocr_boxes, options)
         proposals.append(proposal)
-    proposals.sort(key=proposal_sort_key)
-    for index, proposal in enumerate(proposals, start=1):
-        proposal["metrics"]["imageLocalRank"] = index
+    proposals.sort(key=lambda item: (0 if item["decision"] == "proposal_only" else 1, item["bbox"][1], item["bbox"][0]))
     return proposals
 
 
@@ -422,16 +393,12 @@ def is_small_text_component(component: dict[str, Any], image_bbox: list[int], op
 def component_fits_group(component: dict[str, Any], group: list[dict[str, Any]], options: M292Options) -> bool:
     bbox = component["bbox"]
     group_bbox = union_bbox([item["bbox"] for item in group])
-    candidate_bbox = union_bbox([item["bbox"] for item in [*group, component]])
-    tiny_overlay_cluster = candidate_bbox[2] <= 64 and candidate_bbox[3] <= 24
     median_height = sorted(item["bbox"][3] for item in group)[len(group) // 2]
     center_y = bbox[1] + bbox[3] / 2
     group_center_y = group_bbox[1] + group_bbox[3] / 2
-    center_limit = max(12, median_height * 1.4) if tiny_overlay_cluster else max(5, median_height * 0.65)
-    if abs(center_y - group_center_y) > center_limit:
+    if abs(center_y - group_center_y) > max(5, median_height * 0.65):
         return False
-    height_limit = max(8, median_height * 1.25) if tiny_overlay_cluster else max(6, median_height * 0.75)
-    if abs(bbox[3] - median_height) > height_limit:
+    if abs(bbox[3] - median_height) > max(6, median_height * 0.75):
         return False
     horizontal_gap = max(0, bbox[0] - bbox_x2(group_bbox), group_bbox[0] - bbox_x2(bbox))
     return horizontal_gap <= max(14, round(median_height * 1.4))
@@ -456,20 +423,15 @@ def evaluate_group(
     elif metrics["inkDensity"] < options.min_ink_density or metrics["inkDensity"] > options.max_ink_density:
         decision = "rejected_texture_like"
         reasons.append("ink_density_out_of_range")
+    elif metrics["baselineSpread"] > max(4, round(candidate_bbox[3] * 0.35)):
+        decision = "rejected_geometry"
+        reasons.append("baseline_spread_too_high")
     elif metrics["maxComponentAspectRatio"] > 5.0 or metrics["lineLikeComponentRatio"] > 0.35:
         decision = "rejected_texture_like"
         reasons.append("line_like_texture")
     elif metrics["ocrIoUMax"] > options.max_ocr_iou or metrics["ocrCoverageMax"] > options.max_ocr_coverage:
         decision = "covered_by_existing_ocr"
         reasons.append("covered_by_existing_ocr")
-    elif metrics["baselineSpread"] > max(4, round(candidate_bbox[3] * 0.35)):
-        if is_tiny_overlay_candidate(candidate_bbox, metrics, image_bbox, options):
-            metrics["baselinePenaltyApplied"] = True
-            reasons.append("baseline_spread_penalty")
-            reasons.append("ocr_missing")
-        else:
-            decision = "rejected_geometry"
-            reasons.append("baseline_spread_too_high")
     else:
         reasons.append("ocr_missing")
     return {"bbox": candidate_bbox, "group": group, "decision": decision, "reasons": reasons, "metrics": metrics}
@@ -504,7 +466,6 @@ def candidate_metrics(
         "componentCount": len(group),
         "inkDensity": round(ink_area / max(1, area), 4),
         "baselineSpread": round(max(centers) - min(centers), 3) if centers else 0.0,
-        "baselinePenaltyApplied": False,
         "medianComponentHeight": median(heights),
         "maxComponentAspectRatio": round(max_aspect, 4),
         "lineLikeComponentRatio": round(line_like_count / max(1, len(group)), 4),
@@ -514,7 +475,6 @@ def candidate_metrics(
         "matchedOcrBoxId": matched_id,
         "upscaleFactor": options.upscale_factor,
         "edgeDistance": edge_distance(candidate_bbox, image_bbox),
-        "cornerDistance": corner_distance(candidate_bbox, image_bbox),
     }
 
 
@@ -526,45 +486,6 @@ def bbox_geometry_ok(bbox: list[int], options: M292Options) -> bool:
         and options.min_height <= bbox[3] <= options.max_height
         and options.min_area <= area <= options.max_area
         and options.min_aspect_ratio <= aspect <= options.max_aspect_ratio
-    )
-
-
-def is_tiny_overlay_candidate(
-    bbox: list[int],
-    metrics: dict[str, Any],
-    image_bbox: list[int],
-    options: M292Options,
-) -> bool:
-    return (
-        bbox[2] <= 64
-        and bbox[3] <= 24
-        and options.min_component_count <= metrics["componentCount"] <= options.max_component_count
-        and options.min_ink_density <= metrics["inkDensity"] <= options.max_ink_density
-        and metrics["lineLikeComponentRatio"] <= 0.35
-        and near_image_edge(bbox, image_bbox, options)
-    )
-
-
-def proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, int, int, int]:
-    decision_rank = {
-        "proposal_only": 0,
-        "reprobe_recognized": 0,
-        "covered_by_existing_ocr": 1,
-        "reprobe_unrecognized": 2,
-        "reprobe_failed": 2,
-        "rejected_geometry": 3,
-        "rejected_texture_like": 3,
-    }.get(proposal["decision"], 4)
-    bbox = proposal["bbox"]
-    metrics = proposal["metrics"]
-    target_area = 240
-    return (
-        decision_rank,
-        int(metrics.get("cornerDistance", 0)),
-        int(metrics.get("edgeDistance", 0)),
-        abs(bbox_area(bbox) - target_area),
-        bbox[1],
-        bbox[0],
     )
 
 
@@ -817,18 +738,6 @@ def edge_distance(bbox: list[int], image_bbox: list[int]) -> int:
         bbox_y2(image_bbox) - bbox_y2(bbox),
     ]
     return max(0, min(distances))
-
-
-def corner_distance(bbox: list[int], image_bbox: list[int]) -> int:
-    center_x = bbox[0] + bbox[2] / 2
-    center_y = bbox[1] + bbox[3] / 2
-    corners = [
-        (image_bbox[0], image_bbox[1]),
-        (bbox_x2(image_bbox), image_bbox[1]),
-        (image_bbox[0], bbox_y2(image_bbox)),
-        (bbox_x2(image_bbox), bbox_y2(image_bbox)),
-    ]
-    return round(min(abs(center_x - x) + abs(center_y - y) for x, y in corners))
 
 
 def union_bbox(bboxes: list[list[int]]) -> list[int]:

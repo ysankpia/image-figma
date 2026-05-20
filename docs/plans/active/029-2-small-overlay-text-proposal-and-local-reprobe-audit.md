@@ -26,8 +26,6 @@ M29.2 does not materialize text. Even if local re-probe recognizes a counter-lik
   - `source == m29_image`
   - `suggestedNextAction == keep_accepted_image`
 - Detect small high-contrast component groups near accepted image edges.
-- Rank candidates fairly per accepted image before applying the global candidate cap.
-- Treat large `baselineSpread` as a penalty for tiny overlay candidates instead of a hard rejection.
 - Deduplicate candidates already covered by OCR boxes.
 - Write `small_overlay_text_candidates.json` and `.md` under `m29_2/`.
 - In development profile, write overlay PNG and candidate crop assets.
@@ -68,7 +66,6 @@ dslChanged = false
 ## Acceptance
 
 - OCR-missed small overlay counters inside accepted image regions can be reported as `proposal_only`.
-- Later accepted images are not starved by earlier noisy images.
 - Existing OCR-covered counters are reported as `covered_by_existing_ocr`, not promoted again.
 - Texture-like line groups and center photo noise are rejected or absent.
 - Optional re-probe can record `reprobe_recognized`, `reprobe_unrecognized`, or `reprobe_failed` without mutating the main OCR artifact.

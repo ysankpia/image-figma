@@ -76,7 +76,7 @@ summary.createdNewBBoxCount = 0
 summary.dslChanged = false
 ```
 
-Candidate decisions include `proposal_only`, `covered_by_existing_ocr`, `reprobe_recognized`, `reprobe_unrecognized`, and `reprobe_failed`. M29.2 ranks candidates per accepted image, then merges them with fair round-robin selection so earlier noisy images cannot starve later image cards. Candidate metrics include `cornerDistance`, `imageLocalRank`, `selectionRound`, and `baselinePenaltyApplied`. Production profile skips M29.2 overlay/crop PNGs; development profile writes them for local inspection.
+Candidate decisions include `proposal_only`, `covered_by_existing_ocr`, `reprobe_recognized`, `reprobe_unrecognized`, and `reprobe_failed`. Production profile skips M29.2 overlay/crop PNGs; development profile writes them for local inspection.
 
 M34.3 adds M30 text-symbol leakage diagnostics:
 
