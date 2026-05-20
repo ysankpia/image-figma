@@ -215,25 +215,6 @@ storage/m30_1_uploads/{taskId}/m29_3/image_internal_overlays.md
 
 The stage binds each overlay to its accepted image parent, for example `sourceImageNodeId=m29_image_003` and `sourceM29NodeId=image_003`. It does not recognize text, does not rewrite OCR or M29 artifacts, and does not feed M30 materialization. Production skips overlay/crop PNGs; development writes them for inspection.
 
-## M29.4 Image Internal Overlay Text Recognition
-
-```bash
-M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_ENABLED=true
-M29_IMAGE_INTERNAL_OVERLAY_TEXT_RECOGNITION_STRICT=false
-M29_IMAGE_INTERNAL_OVERLAY_TEXT_REPROBE_ENABLED=false
-M29_IMAGE_INTERNAL_OVERLAY_TEXT_MAX_ITEMS=12
-M29_IMAGE_INTERNAL_OVERLAY_TEXT_UPSCALE_FACTOR=3
-```
-
-M29.4 recognizes text inside M29.3 parent-bound overlays as audit-only evidence. It writes:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.json
-storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.md
-```
-
-Local OCR re-probe is disabled by default. When enabled, M29.4 accepts only narrow counter text such as `1/6` and still keeps `materializationEligible=false`. It does not modify OCR JSON, M29/M29.2/M29.3 artifacts, M30 DSL, parent image assets, or visible Figma output.
-
 ## M30 Materialization
 
 M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:

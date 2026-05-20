@@ -13,7 +13,6 @@ from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .image_internal_overlay import M293Options, extract_image_internal_overlays
-from .image_internal_overlay_text_recognition import M294Options, extract_image_internal_overlay_text_recognition
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -52,7 +51,6 @@ class M30PipelinePaths:
     m2902: Path
     m292: Path
     m293: Path
-    m294: Path
     m2903: Path
     m2907: Path
     m2904: Path
@@ -202,24 +200,6 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             m29_json=m29_json,
             m2902_document=m2902_document.to_dict(),
             m2902_json=m2902_json,
-            policy=policy,
-        )
-
-    if (
-        state.settings.m29_image_internal_overlay_text_recognition_enabled
-        and state.settings.m29_small_overlay_text_audit_enabled
-        and state.settings.m29_image_internal_overlay_audit_enabled
-    ):
-        update_task(task_id, "m29_4_image_internal_overlay_text_recognition", 52, "Auditing image internal overlay text recognition.")
-        run_m294_image_internal_overlay_text_recognition_stage(
-            task_id=task_id,
-            paths=paths,
-            timings=timings,
-            png_data=png_data,
-            source_image=source_image,
-            ocr_json=paths.ocr / "ocr.json",
-            m292_json=paths.m292 / "small_overlay_text_candidates.json",
-            m293_json=paths.m293 / "image_internal_overlays.json",
             policy=policy,
         )
 
@@ -507,48 +487,6 @@ def run_m293_image_internal_overlay_stage(
     run_optional_stage(paths, timings, "m29_3_image_internal_overlay_audit", action, task_id=task_id)
 
 
-def run_m294_image_internal_overlay_text_recognition_stage(
-    *,
-    task_id: str,
-    paths: M30PipelinePaths,
-    timings: list[StageTiming],
-    png_data: bytes,
-    source_image: str,
-    ocr_json: Path,
-    m292_json: Path,
-    m293_json: Path,
-    policy: M30ArtifactPolicy,
-) -> None:
-    options = M294Options(
-        reprobe_enabled=state.settings.m29_image_internal_overlay_text_reprobe_enabled,
-        max_items=state.settings.m29_image_internal_overlay_text_max_items,
-        upscale_factor=state.settings.m29_image_internal_overlay_text_upscale_factor,
-    )
-    reprobe_fn = run_local_ocr_reprobe if options.reprobe_enabled else None
-    action = lambda: extract_image_internal_overlay_text_recognition(
-        png_data=png_data,
-        source_image=source_image,
-        output_dir=paths.m294,
-        ocr_json_path=str(ocr_json),
-        m292_document=read_json_file(m292_json),
-        m292_candidates_json_path=str(m292_json),
-        m293_document=read_json_file(m293_json),
-        m293_overlays_json_path=str(m293_json),
-        options=options,
-        emit_debug_artifacts=policy.emit_debug_artifacts,
-        reprobe_fn=reprobe_fn,
-    )
-    if state.settings.m29_image_internal_overlay_text_recognition_strict:
-        try:
-            run_stage(paths, timings, "m29_4_image_internal_overlay_text_recognition", action)
-        except M30UploadPipelineError:
-            raise
-        except Exception as error:
-            raise M30UploadPipelineError("m29_4_image_internal_overlay_text_recognition", error.__class__.__name__, str(error)) from error
-        return
-    run_optional_stage(paths, timings, "m29_4_image_internal_overlay_text_recognition", action, task_id=task_id)
-
-
 def run_local_ocr_reprobe(crop_png_data: bytes, _source_bbox: list[int]) -> dict[str, Any]:
     image = read_png_metadata(crop_png_data)
     if image is None:
@@ -568,11 +506,7 @@ def run_local_ocr_reprobe(crop_png_data: bytes, _source_bbox: list[int]) -> dict
     if not document.blocks:
         return {"text": "", "confidence": 0.0}
     best = max(document.blocks, key=lambda block: block.confidence)
-    return {"text": best.text, "confidence": best.confidence, "bbox": best.bbox, "blockCount": len(document.blocks)}
-
-
-def read_json_file(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return {"text": best.text, "confidence": best.confidence}
 
 
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
@@ -727,7 +661,6 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m2902=root / "m29_0_2",
         m292=root / "m29_2",
         m293=root / "m29_3",
-        m294=root / "m29_4",
         m2903=root / "m29_0_3",
         m2907=root / "m29_0_7",
         m2904=root / "m29_0_4",
