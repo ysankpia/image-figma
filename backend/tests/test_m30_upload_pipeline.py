@@ -60,7 +60,6 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m29_2_small_overlay_text_audit",
         "m29_3_image_internal_overlay_audit",
         "m29_4_image_internal_overlay_text_recognition",
-        "m30_5_image_internal_overlay_promotion",
         "m29_0_5",
         "m30_materialization",
         "m37_hierarchy_readiness",
@@ -118,10 +117,6 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert m294_report["summary"]["materializedTextCount"] == 0
     assert m294_report["summary"]["createdNewBBoxCount"] == 0
     assert m294_report["summary"]["dslChanged"] is False
-    assert (task_root / "m30_5" / "image_internal_overlay_promotion_report.json").exists()
-    assert (task_root / "m30_5" / "image_internal_overlay_promotion_report.md").exists()
-    m305_report = json.loads((task_root / "m30_5" / "image_internal_overlay_promotion_report.json").read_text(encoding="utf-8"))
-    assert m305_report["summary"]["dslChanged"] is False
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
     m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
     assert m37_report["summary"]["createdVisibleFrameCount"] == 0
@@ -252,33 +247,6 @@ def test_m29_4_image_internal_overlay_text_recognition_can_be_disabled(
     assert "m29_4_image_internal_overlay_text_recognition" not in {item["stage"] for item in report["stageTimings"]["stages"]}
 
 
-def test_m30_5_image_internal_overlay_promotion_can_be_disabled(
-    tmp_path: Path,
-    monkeypatch,
-    png_file: tuple[str, bytes, str],
-) -> None:
-    storage_root = tmp_path / "storage"
-    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-    monkeypatch.setenv("M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_ENABLED", "false")
-
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name)
-
-    main = importlib.import_module("app.main")
-    with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
-        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
-
-    task_root = Path(report["outputDsl"]).parent.parent
-    assert not (task_root / "m30_5").exists()
-    assert "m30_5_image_internal_overlay_promotion" not in {item["stage"] for item in report["stageTimings"]["stages"]}
-
-
 def test_m29_2_optional_failure_does_not_block_m30_output(
     tmp_path: Path,
     monkeypatch,
@@ -387,42 +355,6 @@ def test_m29_4_optional_failure_does_not_block_m30_output(
     assert m294_timing["errorCode"] == "RuntimeError"
 
 
-def test_m30_5_optional_failure_does_not_block_m30_output(
-    tmp_path: Path,
-    monkeypatch,
-    png_file: tuple[str, bytes, str],
-) -> None:
-    storage_root = tmp_path / "storage"
-    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name)
-
-    main = importlib.import_module("app.main")
-    pipeline = importlib.import_module("app.m30_upload_pipeline")
-    monkeypatch.setattr(pipeline, "promote_image_internal_overlay_text", fail_m305)
-    with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
-
-        task = local_client.get(f"/api/tasks/{task_id}")
-        assert task.status_code == 200
-        assert task.json()["data"]["status"] == "completed"
-
-        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
-        assert dsl.status_code == 200
-
-        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
-
-    m305_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m30_5_image_internal_overlay_promotion")
-    assert m305_timing["status"] == "failed"
-    assert m305_timing["errorCode"] == "RuntimeError"
-
-
 def test_m29_4_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
@@ -448,36 +380,6 @@ def test_m29_4_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png
         assert data["status"] == "failed"
         assert data["stage"] == "m29_4_image_internal_overlay_text_recognition"
         assert "forced m29.4 failure" in data["message"]
-
-        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
-        assert dsl.status_code == 409
-
-
-def test_m30_5_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
-    storage_root = tmp_path / "storage"
-    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-    monkeypatch.setenv("M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT", "true")
-
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name)
-
-    main = importlib.import_module("app.main")
-    pipeline = importlib.import_module("app.m30_upload_pipeline")
-    monkeypatch.setattr(pipeline, "promote_image_internal_overlay_text", fail_m305)
-    with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
-
-        task = local_client.get(f"/api/tasks/{task_id}")
-        assert task.status_code == 200
-        data = task.json()["data"]
-        assert data["status"] == "failed"
-        assert data["stage"] == "m30_5_image_internal_overlay_promotion"
-        assert "forced m30.5 failure" in data["message"]
 
         dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
         assert dsl.status_code == 409
@@ -514,51 +416,6 @@ def test_m29_4_reprobe_enabled_can_record_promotion_ready(
     assert m294_report["summary"]["promotionReadyCount"] >= 1
     assert any(item["decision"] == "promotion_ready" and item["recognizedText"] == "1/6" for item in m294_report["items"])
     assert m294_report["summary"]["materializedTextCount"] == 0
-
-
-def test_m30_5_promotion_ready_creates_cleaned_asset_and_text_node(
-    tmp_path: Path,
-    monkeypatch,
-    png_file: tuple[str, bytes, str],
-) -> None:
-    storage_root = tmp_path / "storage"
-    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
-    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-    monkeypatch.setenv("M29_IMAGE_INTERNAL_OVERLAY_TEXT_REPROBE_ENABLED", "true")
-
-    for module_name in list(sys.modules):
-        if module_name == "app" or module_name.startswith("app."):
-            sys.modules.pop(module_name)
-
-    main = importlib.import_module("app.main")
-    pipeline = importlib.import_module("app.m30_upload_pipeline")
-    monkeypatch.setattr(pipeline, "extract_small_overlay_text_proposals", fake_m292_with_overlay)
-    monkeypatch.setattr(pipeline, "extract_image_internal_overlays", fake_m293_with_overlay)
-    monkeypatch.setattr(pipeline, "extract_text_aware_visual_object_refinement", fake_m2905_with_parent_asset)
-    monkeypatch.setattr(pipeline, "run_local_ocr_reprobe", lambda _png, _bbox: {"text": "1/6", "confidence": 0.91, "bbox": [12, 12, 60, 24]})
-    with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
-        assert upload.status_code == 200
-        task_id = upload.json()["data"]["taskId"]
-        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
-        dsl_response = local_client.get(f"/api/tasks/{task_id}/dsl")
-
-        assert dsl_response.status_code == 200
-        dsl = dsl_response.json()["data"]["dsl"]
-        overlay_text_nodes = [child for child in dsl["root"]["children"] if child.get("role") == "m30_image_internal_overlay_text"]
-        assert len(overlay_text_nodes) == 1
-        assert overlay_text_nodes[0]["content"]["text"] == "1/6"
-        cleaned_assets = [asset for asset in dsl["assets"] if asset.get("role") == "m30_image_internal_overlay_cleaned_parent"]
-        assert len(cleaned_assets) == 1
-        file_response = local_client.get(str(cleaned_assets[0]["url"]).replace("http://localhost:8000", ""))
-        assert file_response.status_code == 200
-        assert file_response.content.startswith(b"\x89PNG\r\n\x1a\n")
-
-    task_root = Path(report["outputDsl"]).parent.parent
-    m305_report = json.loads((task_root / "m30_5" / "image_internal_overlay_promotion_report.json").read_text(encoding="utf-8"))
-    assert m305_report["summary"]["promotedTextCount"] == 1
-    assert m305_report["summary"]["dslChanged"] is True
 
 
 def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -733,10 +590,6 @@ def fail_m294(**_kwargs: Any) -> None:
     raise RuntimeError("forced m29.4 failure")
 
 
-def fail_m305(**_kwargs: Any) -> None:
-    raise RuntimeError("forced m30.5 failure")
-
-
 def fake_m292_with_overlay(**kwargs: Any):
     output_dir = Path(kwargs["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -805,57 +658,3 @@ def fake_m293_with_overlay(**kwargs: Any):
     (output_dir / "image_internal_overlays.json").write_text(json.dumps(payload), encoding="utf-8")
     (output_dir / "image_internal_overlays.md").write_text("# fake M29.3\n", encoding="utf-8")
     return payload
-
-
-class FakeDocument:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self.payload = payload
-
-    def to_dict(self) -> dict[str, Any]:
-        return self.payload
-
-
-def fake_m2905_with_parent_asset(**kwargs: Any) -> FakeDocument:
-    output_dir = Path(kwargs["output_dir"])
-    asset_dir = output_dir / "assets" / "visual_assets"
-    asset_dir.mkdir(parents=True, exist_ok=True)
-    asset_path = asset_dir / "visual_asset_0023.png"
-    rows = [bytearray(bytes((120, 150, 180)) * 100) for _ in range(60)]
-    for row_idx in range(4, 22):
-        for column in range(58, 88):
-            set_test_pixel(rows, column, row_idx, (25, 25, 25))
-    for row_idx in range(8, 16):
-        for column in range(62, 82):
-            if (row_idx + column) % 3 != 0:
-                set_test_pixel(rows, column, row_idx, (248, 248, 248))
-    asset_path.write_bytes(encode_rgb_png(100, 60, [bytes(row) for row in rows]))
-    payload = {
-        "schemaName": "M2905TextAwareVisualObjectRefinementDocument",
-        "schemaVersion": "0.1",
-        "textMembers": [],
-        "shapeCandidates": [],
-        "visualAssets": [
-            {
-                "id": "visual_asset_0023",
-                "bbox": [10, 10, 100, 60],
-                "assetPath": "assets/visual_assets/visual_asset_0023.png",
-                "sourceEvidenceNodeIds": ["evidence_parent"],
-                "sourceObjectId": "voc_parent",
-                "decision": "candidate",
-                "assetUse": "image_asset",
-                "risks": [],
-                "textOverlapRatio": 0.02,
-            }
-        ],
-        "objects": [],
-        "warnings": [],
-        "debug": {},
-    }
-    (output_dir / "refined_visual_objects.json").write_text(json.dumps(payload), encoding="utf-8")
-    (output_dir / "refined_visual_objects.md").write_text("# fake M29.0.5\n", encoding="utf-8")
-    return FakeDocument(payload)
-
-
-def set_test_pixel(rows: list[bytearray], x: int, y: int, rgb: tuple[int, int, int]) -> None:
-    offset = x * 3
-    rows[y][offset : offset + 3] = bytes(rgb)

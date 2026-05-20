@@ -21,17 +21,12 @@ m29
 m31_reconstruction
 m29_1
 m29_0_2
-m29_2_small_overlay_text_audit
-m29_3_image_internal_overlay_audit
-m29_4_image_internal_overlay_text_recognition
 m29_0_3
 m29_0_7
 m29_0_4
 m29_0_5
 m30_materialization
-m30_5_image_internal_overlay_promotion
 m30_asset_publish
-m37_hierarchy_readiness
 m30_completed
 ```
 
@@ -69,8 +64,6 @@ M31_UPLOAD_DIAGNOSTICS_STRICT=true
 ```
 
 This keeps plugin preview usable while M31 grouping/ownership is being validated on real uploads.
-
-M29.2, M29.3, M29.4, and M30.5 also expose strict/off behavior through their own environment variables. Their default non-strict failures write failed stage timings plus `error_logs` and keep the preview path moving. M30.5 only changes DSL when M29.4 has a safe `promotion_ready` item; otherwise it writes a report with `dslChanged=false`.
 
 ## OCR As Required Evidence
 

@@ -121,28 +121,6 @@ summary.dslChanged = false
 
 Item decisions include `promotion_ready`, `covered_by_existing_ocr`, `pattern_rejected`, `ocr_unrecognized`, `ocr_failed`, and `not_attempted`. Production profile skips M29.4 overlay/crop PNGs; development profile writes them for local inspection.
 
-M30.5 writes image internal overlay promotion diagnostics:
-
-```text
-storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.json
-storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.md
-```
-
-The report observes:
-
-```text
-summary.sourcePromotionReadyCount
-summary.promotionAttemptCount
-summary.promotedTextCount
-summary.cleanedParentAssetCount
-summary.createdTextNodeCount
-summary.skippedCount
-summary.dslChanged
-summary.maxPromotions
-```
-
-Promotion records include the source M29.4 item, parent image ids, original/cleaned asset ids, created text node id, skip reasons, glyph pixel count, local recognized bbox, parent asset scale, and sampled foreground/background colors. M30.5 is the first image-internal overlay stage that may change the final DSL, and only after parent asset cleanup. If M29.4 has no `promotion_ready` items, the report still exists and `summary.dslChanged=false`.
-
 M34.3 adds M30 text-symbol leakage diagnostics:
 
 ```text

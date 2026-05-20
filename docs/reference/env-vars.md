@@ -39,9 +39,6 @@
 | `M29_IMAGE_INTERNAL_OVERLAY_TEXT_REPROBE_ENABLED` | 是否对 M29.4 overlay 执行局部 OCR re-probe | `false` | 否 |
 | `M29_IMAGE_INTERNAL_OVERLAY_TEXT_MAX_ITEMS` | 单任务 M29.4 recognition item 上限 | `12` | 否 |
 | `M29_IMAGE_INTERNAL_OVERLAY_TEXT_UPSCALE_FACTOR` | M29.4 re-probe crop 最近邻放大倍率 | `3` | 否 |
-| `M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_ENABLED` | 是否在 M30 materialization 后运行 M30.5 image-internal overlay text promotion | `true` | 否 |
-| `M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT` | M30.5 promotion 失败是否阻断 task completed | `false` | 否 |
-| `M30_IMAGE_INTERNAL_OVERLAY_MAX_PROMOTIONS` | 单任务 M30.5 promotion 上限 | `1` | 否 |
 | `OCR_MAX_ROTATION_ANGLE` | 允许物化为普通 text layer 的最大 OCR polygon 偏转角度 | `3.0` | 否 |
 | `OCR_MAX_BACKGROUND_TEXTURE` | 图形文字 preserve 判定使用的背景纹理阈值 | `0.45` | 否 |
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
@@ -202,25 +199,6 @@ storage/m30_1_uploads/{taskId}/m29_4/image_internal_overlay_text_recognition.md
 It does not rewrite `ocr/ocr.json`, does not rewrite M29/M29.2/M29.3 artifacts, does not feed M30 materialization, does not clean parent image assets, and does not change Figma visible output.
 
 `M29_IMAGE_INTERNAL_OVERLAY_TEXT_REPROBE_ENABLED=true` enables local crop OCR re-probe for narrow counter recognition. First version accepts only `^[0-9]{1,2}/[0-9]{1,2}$`; recognized text remains report-only and keeps `materializationEligible=false`.
-
-## M30.5 Image Internal Overlay Text Promotion
-
-```bash
-M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_ENABLED=true
-M30_IMAGE_INTERNAL_OVERLAY_PROMOTION_STRICT=false
-M30_IMAGE_INTERNAL_OVERLAY_MAX_PROMOTIONS=1
-```
-
-M30.5 consumes only M29.4 `promotion_ready` items after M30 materialization and before M30 asset publish. It writes:
-
-```text
-storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.json
-storage/m30_1_uploads/{taskId}/m30_5/image_internal_overlay_promotion_report.md
-```
-
-When a promotion is safe, M30.5 copies the matched parent image asset, cleans glyph pixels mapped from the tight `recognizedTextBBox`, adds the cleaned copy under `m30/assets/m30_image_internal_overlay_cleaned/`, and creates or retargets the parent image node plus an editable `m30_image_internal_overlay_text` node.
-
-M30.5 does not run OCR, does not mutate M29.2/M29.3/M29.4 artifacts, does not erase the whole `overlayBBox`, and does not modify the original parent asset. With the default M29.4 re-probe disabled, ordinary uploads write a M30.5 report but usually keep `dslChanged=false`.
 
 ## Removed Variables
 
