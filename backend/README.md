@@ -11,6 +11,7 @@ Figma plugin
 -> M31 reconstruction diagnostics
 -> M30 materialized DSL
 -> M37 hierarchy readiness diagnostics
+-> M38 controlled hierarchy materialization
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
 ```
@@ -26,6 +27,8 @@ M34.2 makes that M30 decision context-aware. Light OCR angle noise and broad ima
 M36 samples text foreground color from source PNG pixels for emitted editable text nodes. This replaces the old single dark default for colored and dark backgrounds while keeping preserved graphic text inside fallback.
 
 M37 reads M31 and final M30 artifacts to produce a hierarchy readiness report. It does not create frames, move DSL nodes, or change Figma output.
+
+M38 consumes the M37 safe direct-match bridge and rewrites the final DSL into transparent hierarchy groups. It only moves existing materialized M30 nodes, preserves absolute bboxes through parent-local coordinates, and does not change image assets or run new recognition.
 
 ## Run
 
@@ -104,8 +107,9 @@ OCR
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization
 -> M30.2 conservative text cover
--> M37 hierarchy readiness diagnostic
 -> publish M30 image assets under /files/assets/{taskId}/m30/
+-> M37 hierarchy readiness diagnostic
+-> M38 controlled hierarchy materialization
 ```
 
 It deliberately does not run old pre-M29 diagnostic stages, mixed/residual acceptance audits, fallback masking, Auto Layout, Figma Components, SVG/vectorization, or icon recovery.
@@ -251,6 +255,34 @@ storage/m30_1_uploads/{taskId}/m37/m37_hierarchy_readiness_report.json
 It records safe and unsafe future hierarchy candidates, mapping coverage, duplicate unit bboxes, micro units, relative coordinate violations, and fallback conflict risks.
 
 M37 does not change `/api/tasks/{taskId}/dsl`, create visible frames, enable nested DSL, or feed Renderer. The report keeps `createdVisibleFrameCount=0` and `dslChanged=false`.
+
+## M38 Controlled Hierarchy Materialization
+
+M38 is the first production hierarchy stage:
+
+```text
+flat M30 DSL + M37 safe direct-match candidates
+-> transparent DSL group containers
+-> final nested m30_materialized_dsl.json
+```
+
+It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m38/hierarchy_materialization_report.json
+storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl_flat.json
+storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json
+```
+
+`m30_materialized_dsl_flat.json` is written only when M38 changes the DSL. M38 does not run OCR, create new bboxes, create assets, erase pixels, recover icons, or change M37 artifacts.
+
+Runtime switches:
+
+```bash
+M38_HIERARCHY_MATERIALIZATION_ENABLED=true
+M38_HIERARCHY_MATERIALIZATION_STRICT=false
+M38_HIERARCHY_MAX_CONTAINERS=8
+```
 
 ## Storage
 

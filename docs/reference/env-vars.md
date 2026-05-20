@@ -31,6 +31,9 @@
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
 | `M30_SHAPE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 shape bbox | `true` | 否 |
 | `M30_IMAGE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 image bbox | `true` | 否 |
+| `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
+| `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
+| `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
 
 ## OCR
 
@@ -120,7 +123,27 @@ M34.3 默认启用 text-symbol leakage cleanup。它只在 M30 物化 editable t
 
 M36 text foreground color sampling 是 M30 materialization 的默认行为，没有单独环境变量。它只影响已物化的 editable `m30_text_member`，不会重画 preserved graphic text。
 
-M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不改变 `/api/tasks/{taskId}/dsl`。
+M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不直接改变 `/api/tasks/{taskId}/dsl`。
+
+## M38 Hierarchy Materialization
+
+```bash
+M38_HIERARCHY_MATERIALIZATION_ENABLED=true
+M38_HIERARCHY_MATERIALIZATION_STRICT=false
+M38_HIERARCHY_MAX_CONTAINERS=8
+```
+
+M38 默认在 M37 report 存在时运行。它只消费 M37 safe direct-match candidates，把现有 M30 text/image/shape 节点移动到透明 DSL `group` 容器下，并把 child 坐标转换为 parent-local 坐标。它不运行 OCR、不创建新 bbox、不改 assets、不做 icon/vector extraction。
+
+关闭 M38：
+
+```bash
+M38_HIERARCHY_MATERIALIZATION_ENABLED=false
+```
+
+关闭后最终 DSL 保持 M30 扁平 children，不生成 `storage/m30_1_uploads/{taskId}/m38/`，stage timings 里也不会出现 `m38_hierarchy_materialization`。
+
+默认 `STRICT=false` 时 M38 失败只写 failed stage timing 和 error log，任务继续完成。`STRICT=true` 时 M38 失败会让 task failed，stage 为 `m38_hierarchy_materialization`。
 
 `OCR_ARTISTIC_TEXT_FILTER_ENABLED` 是兼容旧 M34 配置的 alias：当未显式设置 `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` 时，它会影响 preserve 开关。它不再表示删除 OCR text boxes。
 

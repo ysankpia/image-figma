@@ -53,7 +53,15 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "materializedTextCoverCount" in report_data["summary"]
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
-    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m31_reconstruction", "m29_0_5", "m30_materialization", "m37_hierarchy_readiness"}
+    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {
+        "ocr",
+        "m29",
+        "m31_reconstruction",
+        "m29_0_5",
+        "m30_materialization",
+        "m37_hierarchy_readiness",
+        "m38_hierarchy_materialization",
+    }
 
     m31 = client.get(f"/api/tasks/{task_id}/m31-reconstruction")
     assert m31.status_code == 200
@@ -93,6 +101,15 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
     assert m37_report["summary"]["createdVisibleFrameCount"] == 0
     assert m37_report["summary"]["dslChanged"] is False
+    assert (task_root / "m38" / "hierarchy_materialization_report.json").exists()
+    m38_report = json.loads((task_root / "m38" / "hierarchy_materialization_report.json").read_text(encoding="utf-8"))
+    assert m38_report["summary"]["absolutePositionViolationCount"] == 0
+    assert m38_report["summary"]["fallbackMovedCount"] == 0
+    assert m38_report["summary"]["assetChanged"] is False
+    final_dsl = json.loads((task_root / "m30" / "m30_materialized_dsl.json").read_text(encoding="utf-8"))
+    if m38_report["summary"]["dslChanged"]:
+        assert has_role_recursive(final_dsl, "m38_container")
+        assert (task_root / "m30" / "m30_materialized_dsl_flat.json").exists()
     assert not list(task_root.glob("**/overlays"))
     assert not list(task_root.glob("**/preview*.png"))
     assert not (task_root / "m30" / "m30_materialization_preview.png").exists()
@@ -150,8 +167,10 @@ def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png
     task_root = Path(report["outputDsl"]).parent.parent
     assert not (task_root / "m31").exists()
     assert not (task_root / "m37").exists()
+    assert not (task_root / "m38").exists()
     assert "m31_reconstruction" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert "m38_hierarchy_materialization" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
 
@@ -190,6 +209,89 @@ def test_m31_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypa
     assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
+
+
+def test_m38_hierarchy_materialization_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
+    assert not (task_root / "m38").exists()
+    assert "m38_hierarchy_materialization" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+
+
+def test_m38_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "materialize_m38_hierarchy", fail_m38)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        assert task.json()["data"]["status"] == "completed"
+
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+
+    m38_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m38_hierarchy_materialization")
+    assert m38_timing["status"] == "failed"
+    assert m38_timing["errorCode"] == "RuntimeError"
+
+
+def test_m38_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "true")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "materialize_m38_hierarchy", fail_m38)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        data = task.json()["data"]
+        assert data["status"] == "failed"
+        assert data["stage"] == "m38_hierarchy_materialization"
+        assert "forced m38 failure" in data["message"]
+
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
+        assert dsl.status_code == 409
 
 
 def test_m31_strict_failure_marks_task_failed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -268,6 +370,17 @@ def has_role(dsl: dict, role: str) -> bool:
     return any(child.get("role") == role for child in dsl["root"]["children"] if isinstance(child, dict))
 
 
+def has_role_recursive(dsl: dict, role: str) -> bool:
+    def visit(node: Any) -> bool:
+        if not isinstance(node, dict):
+            return False
+        if node.get("role") == role:
+            return True
+        return any(visit(child) for child in node.get("children", []) if isinstance(node.get("children"), list))
+
+    return visit(dsl["root"])
+
+
 def visible_audit_only_children(dsl: dict) -> int:
     count = 0
     for child in dsl["root"]["children"]:
@@ -286,3 +399,7 @@ def make_png(width: int, height: int) -> bytes:
 
 def fail_m31(**_kwargs: Any) -> None:
     raise RuntimeError("forced m31 failure")
+
+
+def fail_m38(**_kwargs: Any) -> None:
+    raise RuntimeError("forced m38 failure")

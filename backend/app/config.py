@@ -34,6 +34,9 @@ class Settings:
     ocr_text_symbol_leakage_cleanup_enabled: bool = True
     m30_shape_erasure_enabled: bool = True
     m30_image_erasure_enabled: bool = True
+    m38_hierarchy_materialization_enabled: bool = True
+    m38_hierarchy_materialization_strict: bool = False
+    m38_hierarchy_max_containers: int = 8
 
 
 def get_settings() -> Settings:
@@ -72,6 +75,9 @@ def get_settings() -> Settings:
         ocr_text_symbol_leakage_cleanup_enabled=parse_bool(os.getenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "true"), default=True),
         m30_shape_erasure_enabled=parse_bool(os.getenv("M30_SHAPE_ERASURE_ENABLED", "true"), default=True),
         m30_image_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ERASURE_ENABLED", "true"), default=True),
+        m38_hierarchy_materialization_enabled=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "true"), default=True),
+        m38_hierarchy_materialization_strict=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "false"), default=False),
+        m38_hierarchy_max_containers=max(0, int(os.getenv("M38_HIERARCHY_MAX_CONTAINERS", "8"))),
     )
 
 

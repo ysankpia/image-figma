@@ -87,7 +87,7 @@ export interface DSLLayout {
 }
 
 export interface DSLStyle {
-  fill?: string | DSLGradientFill;
+  fill?: string | DSLGradientFill | null;
   color?: string;
   opacity?: number;
   visible?: boolean;

@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
+from .hierarchy_materialization import M38Options, materialize_m38_hierarchy
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
@@ -53,6 +54,7 @@ class M30PipelinePaths:
     m31: Path
     m30: Path
     m37: Path
+    m38: Path
 
 
 @dataclass(frozen=True)
@@ -263,6 +265,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     m31_tree = paths.m31 / "m31_reconstruction_tree.json"
     m31_report = paths.m31 / "m31_reconstruction_tree_report.json"
     m30_report = paths.m30 / "m30_materialization_report.json"
+    m37_report = paths.m37 / "m37_hierarchy_readiness_report.json"
     if m31_tree.exists() and m31_report.exists() and m30_report.exists():
         update_task(task_id, "m37_hierarchy_readiness", 98, "Auditing M37 hierarchy readiness.")
         run_optional_stage(
@@ -277,6 +280,16 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
                 output_dir=paths.m37,
             ),
             task_id=task_id,
+        )
+
+    if state.settings.m38_hierarchy_materialization_enabled and m37_report.exists():
+        update_task(task_id, "m38_hierarchy_materialization", 99, "Materializing M38 hierarchy containers.")
+        run_m38_hierarchy_materialization_stage(
+            task_id=task_id,
+            paths=paths,
+            timings=timings,
+            output_dsl=output_dsl,
+            m37_report=m37_report,
         )
 
     now = datetime.now(UTC).isoformat()
@@ -360,6 +373,33 @@ def run_m31_diagnostic_stage(
             raise M30UploadPipelineError("m31_reconstruction", error.__class__.__name__, str(error)) from error
         return
     run_optional_stage(paths, timings, "m31_reconstruction", action, task_id=task_id)
+
+
+def run_m38_hierarchy_materialization_stage(
+    *,
+    task_id: str,
+    paths: M30PipelinePaths,
+    timings: list[StageTiming],
+    output_dsl: Path,
+    m37_report: Path,
+) -> None:
+    action = lambda: materialize_m38_hierarchy(
+        m30_dsl_path=str(output_dsl),
+        m37_report_path=str(m37_report),
+        output_dir=paths.m38,
+        flat_dsl_output_path=str(paths.m30 / "m30_materialized_dsl_flat.json"),
+        final_dsl_output_path=str(output_dsl),
+        options=M38Options(max_containers=state.settings.m38_hierarchy_max_containers),
+    )
+    if state.settings.m38_hierarchy_materialization_strict:
+        try:
+            run_stage(paths, timings, "m38_hierarchy_materialization", action)
+        except M30UploadPipelineError:
+            raise
+        except Exception as error:
+            raise M30UploadPipelineError("m38_hierarchy_materialization", error.__class__.__name__, str(error)) from error
+        return
+    run_optional_stage(paths, timings, "m38_hierarchy_materialization", action, task_id=task_id)
 
 
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
@@ -519,6 +559,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m31=root / "m31",
         m30=root / "m30",
         m37=root / "m37",
+        m38=root / "m38",
     )
 
 

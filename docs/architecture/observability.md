@@ -93,6 +93,27 @@ createdVisibleFrameCount = 0
 dslChanged = false
 ```
 
+M38 adds `m38_hierarchy_materialization` to `stage_timings.json` when M37 exists and M38 is enabled. It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m38/hierarchy_materialization_report.json
+```
+
+The key guard fields are:
+
+```text
+absolutePositionViolationCount = 0
+fallbackMovedCount = 0
+originalReferenceMovedCount = 0
+assetChanged = false
+```
+
+If M38 changes the DSL, the flat baseline is preserved at:
+
+```text
+storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl_flat.json
+```
+
 ## Logs
 
 后端任务日志至少包含：

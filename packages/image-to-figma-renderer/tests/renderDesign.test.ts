@@ -193,4 +193,37 @@ describe("renderDesign", () => {
     const newlineNode = adapter.findNodeByName("Text / newline");
     expect(newlineNode?.textAutoResize).toBe("HEIGHT");
   });
+
+  it("renders transparent hierarchy groups with parent-local children", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = structuredClone(mobileHome as DesignDSL);
+    dsl.root.children!.push({
+      id: "m38_container_unit_1",
+      type: "group",
+      role: "m38_container",
+      name: "M38 Container / unit_1",
+      layout: { x: 100, y: 200, width: 160, height: 60 },
+      style: { fill: null, clipContent: false },
+      children: [
+        {
+          id: "m38_child_text",
+          type: "text",
+          role: "m30_text_member",
+          name: "Text / nested",
+          layout: { x: 10, y: 12, width: 80, height: 20 },
+          content: { text: "Nested" },
+          style: { fontSize: 14, color: "#111111" }
+        }
+      ]
+    });
+
+    const result = await renderDesign(dsl, { figma: adapter, validate: false });
+
+    expect(result.success).toBe(true);
+    const group = adapter.findNodeByName("M38 Container / unit_1");
+    expect(group?.fills).toEqual([]);
+    expect(group?.layout).toEqual({ x: 100, y: 200, width: 160, height: 60 });
+    expect(group?.children.map(child => child.name)).toEqual(["Text / nested"]);
+    expect(group?.children[0]?.layout).toEqual({ x: 10, y: 12, width: 80, height: 20 });
+  });
 });

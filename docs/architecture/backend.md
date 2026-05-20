@@ -41,6 +41,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M30 evidence-grounded DSL materialization with text editability decisions and fallback erasure only for editable text
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> M37 hierarchy readiness diagnostic, if M31 artifacts exist
+-> M38 controlled hierarchy materialization, if M37 report exists and M38 is enabled
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
 ```
@@ -88,6 +89,8 @@ M36 samples foreground color for emitted editable text from source PNG pixels. I
 M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
 
 M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and the final M30 DSL/report, then writes `m37_hierarchy_readiness_report.json`. It does not modify DSL, create visible frames, or change Renderer coordinate semantics.
+
+M38 is the first controlled hierarchy materialization stage. It consumes only M37 safe direct-match candidates, creates transparent DSL `group` containers, and moves existing M30 children under those containers with parent-local coordinates. It preserves absolute page bboxes in `rawLayout`/meta, does not change assets, does not run OCR or visual detection, and does not mutate M37 artifacts.
 
 ## Artifact Profiles
 
@@ -138,6 +141,7 @@ storage/m30_1_uploads/{taskId}/m29_0_4/
 storage/m30_1_uploads/{taskId}/m29_0_5/
 storage/m30_1_uploads/{taskId}/m30/
 storage/m30_1_uploads/{taskId}/m37/
+storage/m30_1_uploads/{taskId}/m38/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 storage/assets/{taskId}/m30/
 ```
@@ -178,6 +182,7 @@ m29_0_5
 m30_materialization
 m30_asset_publish
 m37_hierarchy_readiness
+m38_hierarchy_materialization
 m30_completed
 ```
 

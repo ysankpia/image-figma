@@ -119,6 +119,7 @@ Renderer 返回结果应包含：
 - 原图参考层默认隐藏。
 - fallback 区域作为 image 渲染。
 - children 按 DSL 顺序渲染，保持图层顺序可预测。
+- `style.fill = null` 表示显式无填充。Renderer 必须清空 Figma fills，供 M38 透明 hierarchy group 使用。
 
 ## Boolean Subtraction for Fallback Nodes
 

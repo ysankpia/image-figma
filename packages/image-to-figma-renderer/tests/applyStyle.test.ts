@@ -27,4 +27,13 @@ describe("applyStyle", () => {
   it("falls back to black for invalid hex", () => {
     expect(parseHexColor("not-a-color")).toEqual({ r: 0, g: 0, b: 0 });
   });
+
+  it("clears fills when fill is explicitly null", () => {
+    const adapter = new FakeFigmaAdapter();
+    const node = adapter.createFrame();
+
+    applyBaseStyle(adapter, node, { fill: null });
+
+    expect(adapter.nodes[0]!.fills).toEqual([]);
+  });
 });

@@ -69,4 +69,20 @@ describe("validateDSL", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.some((error) => error.code === "ASSET_NOT_FOUND")).toBe(true);
   });
+
+  it("accepts explicit transparent fill for hierarchy groups", () => {
+    const validateSchema = createSchemaValidator();
+    const dsl = loadExample("mobile-home.dsl.json");
+    dsl.root.children!.push({
+      id: "m38_container_unit_1",
+      type: "group",
+      role: "m38_container",
+      layout: { x: 10, y: 10, width: 100, height: 40 },
+      style: { fill: null, clipContent: false },
+      children: []
+    });
+
+    expect(validateSchema(dsl)).toBe(true);
+    expect(validateDSL(dsl)).toEqual({ valid: true, errors: [], warnings: [] });
+  });
 });

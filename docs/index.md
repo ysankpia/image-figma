@@ -41,6 +41,7 @@
 - 当前 M36 text foreground color sampling 计划：[plans/active/036-context-aware-text-foreground-color-sampling.md](plans/active/036-context-aware-text-foreground-color-sampling.md)
 - 当前 M36.1 contrast-weighted foreground sampling 计划：[plans/active/036-1-contrast-weighted-text-foreground-sampling.md](plans/active/036-1-contrast-weighted-text-foreground-sampling.md)
 - 当前 M37 hierarchy readiness 计划：[plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md](plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md)
+- 当前 M38 controlled hierarchy materialization 计划：[plans/active/038-controlled-hierarchy-materialization.md](plans/active/038-controlled-hierarchy-materialization.md)
 
 ## By Task Type
 
@@ -145,6 +146,7 @@
 - M34.3 text-symbol leakage cleanup 决策：[decisions/0057-clean-text-symbol-leakage-with-projection-gap-before-materialization.md](decisions/0057-clean-text-symbol-leakage-with-projection-gap-before-materialization.md)
 - M36 text foreground color sampling 决策：[decisions/0054-sample-text-foreground-color-from-source-pixels.md](decisions/0054-sample-text-foreground-color-from-source-pixels.md)
 - M37 hierarchy readiness 决策：[decisions/0055-audit-hierarchy-readiness-before-nested-dsl-output.md](decisions/0055-audit-hierarchy-readiness-before-nested-dsl-output.md)
+- M38 hierarchy materialization 决策：[decisions/0058-materialize-safe-hierarchy-containers-after-readiness-audit.md](decisions/0058-materialize-safe-hierarchy-containers-after-readiness-audit.md)
 - M36.1 contrast-weighted foreground sampling 决策：[decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md](decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)

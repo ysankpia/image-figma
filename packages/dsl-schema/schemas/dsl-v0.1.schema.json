@@ -148,6 +148,7 @@
       "properties": {
         "fill": {
           "oneOf": [
+            { "type": "null" },
             { "type": "string" },
             { "$ref": "#/definitions/gradientFill" }
           ]

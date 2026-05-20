@@ -234,6 +234,25 @@ Required M37 coverage:
 - `dslChanged = false`.
 - `/api/tasks/{taskId}/dsl` remains unchanged by M37.
 
+## M38 Controlled Hierarchy Materialization
+
+M38 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_hierarchy_materialization.py tests/test_m37_hierarchy_readiness.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+Required M38 coverage:
+
+- safe direct-match units create `role=m38_container` DSL groups.
+- moved children preserve absolute page bboxes through parent-local coordinates.
+- `fallback_region` and `original_reference` are never moved.
+- geometry-only matches remain diagnostic-only.
+- z-order interleaving and duplicate child ownership are skipped.
+- M38 report guard fields keep absolute drift and forbidden moved counts at zero.
+- Renderer/schema accept `style.fill=null` and clear group fills.
+
 ## Static Guards
 
 After M30.2.2, active backend source and tests must not reference the deleted legacy runtime surface:
