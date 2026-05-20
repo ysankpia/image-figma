@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from .dsl_factory import build_deterministic_dsl
 from .mixed_symbol_text_conflict_audit import find_forbidden_contract_terms
-from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
+from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, rgb_to_hex, sample_rect_edges_dominant_background, sample_text_foreground_rgb_with_source
 from .visual_evidence_normalization import parse_bbox
 from .visual_primitive_graph import bbox_in_bounds, draw_rect, measure_region
 
@@ -72,6 +72,13 @@ class M30MaterializedNode:
 class M30PendingNode:
     node: dict[str, Any]
     materialized: M30MaterializedNode
+
+
+@dataclass(frozen=True)
+class TextForegroundSample:
+    color: str
+    source: Literal["sampled_foreground", "default_contrast", "default_text_color_fallback"]
+    background_color: str | None
 
 
 @dataclass(frozen=True)
@@ -259,7 +266,7 @@ def materialize_evidence_grounded_dsl(
         m2902_document=m2902_document or {},
         options=options,
     )
-    append_text_nodes(existing_ids, m2905_document, image, options, text_decisions, pending_text_nodes, skipped)
+    append_text_nodes(existing_ids, m2905_document, pixels, image, options, text_decisions, pending_text_nodes, skipped)
     harmonize_text_font_sizes(pending_text_nodes, options)
     append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
@@ -309,6 +316,7 @@ def materialize_evidence_grounded_dsl(
         skipped=skipped,
         skipped_text_cover=skipped_text_cover,
         text_decisions=text_decisions,
+        text_foreground_counts=text_foreground_source_counts(pending_text_nodes),
         audit_refs=audit_refs,
     )
     report = M30Report(
@@ -818,6 +826,7 @@ def harmonize_text_font_sizes(pending_nodes: list[M30PendingNode], options: M30O
 def append_text_nodes(
     existing_ids: set[str],
     m2905_document: dict[str, Any],
+    pixels: Any,
     image: PngMetadata,
     options: M30Options,
     text_decisions: list[M30TextEditabilityDecision],
@@ -839,6 +848,7 @@ def append_text_nodes(
         if decision is not None and decision.decision != "editable_text":
             skipped.append(M30SkippedItem(source_id, "m2905_text_member", decision.decision, bbox, decision.reasons))
             continue
+        foreground = sample_text_foreground_for_node(pixels, bbox, options)
         node_id = next_unique_id(existing_ids, f"m30_text_{len(materialized) + 1:04d}")
         node = {
             "id": node_id,
@@ -849,7 +859,7 @@ def append_text_nodes(
             "style": {
                 "visible": True,
                 "opacity": 1,
-                "color": options.default_text_color,
+                "color": foreground.color,
                 "fontSize": estimate_font_size(bbox, options),
                 "fontFamily": "Inter",
                 "fontWeight": 400,
@@ -869,9 +879,36 @@ def append_text_nodes(
                 "riskFlags": list_strings(item.get("risks")),
                 "textEditabilityDecision": decision.decision if decision is not None else "editable_text",
                 "textEditabilityReasons": decision.reasons if decision is not None else ["source_evidence_trace"],
+                "textForegroundColorSource": foreground.source,
+                "textForegroundBackgroundColor": foreground.background_color,
             },
         }
         materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "text", source_id, bbox, "medium", ["source_evidence_trace"])))
+
+
+def sample_text_foreground_for_node(pixels: Any, bbox: list[int], options: M30Options) -> TextForegroundSample:
+    try:
+        sample = sample_rect_edges_dominant_background(
+            pixels,
+            bbox,
+            sides={"top", "bottom", "left", "right"},
+            inset=0,
+            thickness=1,
+            tolerance=24,
+            min_fraction=0.5,
+        )
+        rgb, source = sample_text_foreground_rgb_with_source(pixels, bbox, sample.mean_rgb)
+        return TextForegroundSample(
+            color=rgb_to_hex(list(rgb)),
+            source=source,
+            background_color=sample.color,
+        )
+    except Exception:
+        return TextForegroundSample(
+            color=options.default_text_color,
+            source="default_text_color_fallback",
+            background_color=None,
+        )
 
 
 def append_shape_nodes(
@@ -1323,6 +1360,7 @@ def build_summary(
     skipped: list[M30SkippedItem],
     skipped_text_cover: list[M30SkippedItem],
     text_decisions: list[M30TextEditabilityDecision],
+    text_foreground_counts: dict[str, int],
     audit_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     visual_skips = [item for item in skipped if item.source_kind == "m2905_visual_asset"]
@@ -1339,6 +1377,9 @@ def build_summary(
         "preservedGraphicTextCount": len(preserved_text),
         "reviewTextCount": len(review_text),
         "textEditabilityReasonCounts": text_editability_reason_counts(text_decisions),
+        "sampledTextForegroundCount": text_foreground_counts.get("sampled_foreground", 0),
+        "defaultContrastTextForegroundCount": text_foreground_counts.get("default_contrast", 0),
+        "defaultTextColorFallbackCount": text_foreground_counts.get("default_text_color_fallback", 0),
         "textCoverCandidateCount": len(materialized_text_cover) + len(skipped_text_cover),
         "materializedTextCoverCount": len(materialized_text_cover),
         "skippedTextCoverCount": len(skipped_text_cover),
@@ -1357,6 +1398,20 @@ def build_summary(
         "visibleAuditOnlyChildCount": count_visible_audit_only_children(dsl["root"]),
         "dslElementCount": count_elements(dsl["root"]),
     }
+
+
+def text_foreground_source_counts(text_nodes: list[M30PendingNode]) -> dict[str, int]:
+    counts = {
+        "sampled_foreground": 0,
+        "default_contrast": 0,
+        "default_text_color_fallback": 0,
+    }
+    for item in text_nodes:
+        meta = item.node.get("meta") if isinstance(item.node.get("meta"), dict) else {}
+        source = str(meta.get("textForegroundColorSource") or "")
+        if source in counts:
+            counts[source] += 1
+    return counts
 
 
 def write_preview(pixels: Any, output_dir: Path, nodes: list[M30MaterializedNode]) -> str:

@@ -369,6 +369,68 @@ def sample_rect_edges_dominant_background(
     )
 
 
+def sample_text_foreground_rgb(pixels: PngPixels, bbox: list[int], bg_rgb: tuple[int, int, int] | list[int]) -> tuple[int, int, int]:
+    return sample_text_foreground_rgb_with_source(pixels, bbox, bg_rgb)[0]
+
+
+def sample_text_foreground_rgb_with_source(
+    pixels: PngPixels,
+    bbox: list[int],
+    bg_rgb: tuple[int, int, int] | list[int],
+) -> tuple[tuple[int, int, int], str]:
+    if len(bbox) != 4:
+        raise UnsupportedPngCropError("Text foreground sample bbox must be [x, y, width, height].")
+    x, y, width, height = [round(value) for value in bbox]
+    bg = tuple(clamp_int(round(channel), 0, 255) for channel in bg_rgb)
+    if len(bg) != 3:
+        raise UnsupportedPngCropError("Text foreground background color must be RGB.")
+
+    x1 = clamp_int(x + 1, 0, pixels.width)
+    y1 = clamp_int(y + 1, 0, pixels.height)
+    x2 = clamp_int(x + width - 1, 0, pixels.width)
+    y2 = clamp_int(y + height - 1, 0, pixels.height)
+    if x2 <= x1 or y2 <= y1:
+        return default_contrast_rgb(bg), "default_contrast"
+
+    bg_r, bg_g, bg_b = bg
+    foreground_pixels: list[tuple[int, int, int]] = []
+    for row_index in range(y1, y2):
+        row = pixels.rows[row_index]
+        for column in range(x1, x2):
+            offset = column * 3
+            red = row[offset]
+            green = row[offset + 1]
+            blue = row[offset + 2]
+            if abs(red - bg_r) + abs(green - bg_g) + abs(blue - bg_b) > 64:
+                foreground_pixels.append((red, green, blue))
+
+    if not foreground_pixels:
+        return default_contrast_rgb(bg), "default_contrast"
+
+    buckets: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}
+    for red, green, blue in foreground_pixels:
+        key = (red // 16, green // 16, blue // 16)
+        buckets.setdefault(key, []).append((red, green, blue))
+
+    dominant = max(buckets.values(), key=len)
+    return (
+        (
+            round(sum(pixel[0] for pixel in dominant) / len(dominant)),
+            round(sum(pixel[1] for pixel in dominant) / len(dominant)),
+            round(sum(pixel[2] for pixel in dominant) / len(dominant)),
+        ),
+        "sampled_foreground",
+    )
+
+
+def default_contrast_rgb(bg_rgb: tuple[int, int, int] | list[int]) -> tuple[int, int, int]:
+    bg = tuple(clamp_int(round(channel), 0, 255) for channel in bg_rgb)
+    if len(bg) != 3:
+        raise UnsupportedPngCropError("Default contrast background color must be RGB.")
+    brightness = (bg[0] * 0.299) + (bg[1] * 0.587) + (bg[2] * 0.114)
+    return (255, 255, 255) if brightness < 128 else (17, 24, 39)
+
+
 def sample_points_dominant_background(
     pixels: PngPixels,
     sample_points: list[tuple[int, int]],

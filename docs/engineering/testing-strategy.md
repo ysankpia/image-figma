@@ -98,6 +98,7 @@ Required backend coverage:
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
 - default upload creates M31 diagnostics after M29.
+- default upload creates M37 hierarchy readiness diagnostics when M31 artifacts exist.
 - M31 optional failure does not block M30 DSL when strict mode is off.
 - M31 failure blocks the task at `m31_reconstruction` when strict mode is on.
 - M30 image assets are published under `/files/assets/{taskId}/m30/...`.
@@ -143,6 +144,8 @@ Required evidence coverage:
 - M30 does not rewrite M29 JSON.
 - M30 does not emit DSL `icon` type.
 - M30.2 text cover uses existing text bbox and conservative background sampling.
+- M36 samples editable text foreground color from source pixels or records a contrast/default fallback.
+- M37 audits M31-to-M30 hierarchy readiness without changing visible DSL output.
 
 ## M31 Reconstruction UI Tree
 
@@ -181,6 +184,43 @@ uv run pytest tests/test_png_tools.py tests/test_reconstruction_ui_tree.py tests
 ```
 
 The tests must cover decoded-pixels crop correctness and assert that `reconstruction_ui_tree.py` no longer references `crop_png`.
+
+## M36 Text Foreground Color
+
+M36 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_png_tools.py tests/test_evidence_grounded_dsl_materialization.py -q
+```
+
+Required M36 coverage:
+
+- white strokes on colored background sample as white foreground.
+- dark strokes on light background sample as dark foreground.
+- tiny or no-foreground bboxes fall back to contrast color.
+- emitted `m30_text_member` nodes record `textForegroundColorSource`.
+- M30 report summary records sampled/default foreground counts.
+- preserved graphic text still does not create `m30_text_member`.
+
+## M37 Hierarchy Readiness
+
+M37 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_m37_hierarchy_readiness.py tests/test_m30_upload_pipeline.py -q
+```
+
+Required M37 coverage:
+
+- M31 tree/report plus final M30 DSL/report create `m37_hierarchy_readiness_report.json`.
+- direct, geometry-text, and geometry-type matches are reported.
+- single primitive, micro, duplicate-bbox, unsupported-kind, and unmapped units are unsafe.
+- safe candidates require at least two mapped M30 children.
+- `createdVisibleFrameCount = 0`.
+- `dslChanged = false`.
+- `/api/tasks/{taskId}/dsl` remains unchanged by M37.
 
 ## Static Guards
 

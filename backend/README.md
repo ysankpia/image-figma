@@ -10,6 +10,7 @@ Figma plugin
 -> OCR + M29 evidence pipeline
 -> M31 reconstruction diagnostics
 -> M30 materialized DSL
+-> M37 hierarchy readiness diagnostics
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
 ```
@@ -21,6 +22,10 @@ M31 is attached as a diagnostic side path after M29. It builds a reconstruction 
 OCR text evidence is preserved through M29/M31. M30 decides whether each text member is editable text or graphic text that must remain in fallback; graphic text is not erased and not redrawn with a generic Figma text layer.
 
 M34.2 makes that M30 decision context-aware. Light OCR angle noise and broad image overlap can be overridden by generic geometry signals such as aligned text rows, compact overlay badges, metadata text clusters, and stable local background. The policy does not inspect business words or fixed screen coordinates.
+
+M36 samples text foreground color from source PNG pixels for emitted editable text nodes. This replaces the old single dark default for colored and dark backgrounds while keeping preserved graphic text inside fallback.
+
+M37 reads M31 and final M30 artifacts to produce a hierarchy readiness report. It does not create frames, move DSL nodes, or change Figma output.
 
 ## Run
 
@@ -77,6 +82,8 @@ progress = 100
 
 The M30 report also exposes `textEditabilityDecisions`, `preservedGraphicTextItems`, and `reviewTextItems`. These fields explain why a text evidence item became an editable `m30_text_member` or stayed in fallback.
 
+M30 text nodes also report `textForegroundColorSource` in node meta. The M30 report summary counts sampled foreground colors, contrast fallbacks, and hard fallback-to-default cases.
+
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
 
 ## Current Pipeline
@@ -95,6 +102,7 @@ OCR
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization
 -> M30.2 conservative text cover
+-> M37 hierarchy readiness diagnostic
 -> publish M30 image assets under /files/assets/{taskId}/m30/
 ```
 
@@ -185,6 +193,16 @@ Only `editable_text` creates a visible `m30_text_member`. `graphic_text_preserve
 
 Each text editability decision also reports `metrics.preserveSignals` and `metrics.editableCounterSignals`. M34.2 uses those fields to show when a weak preserve signal, such as mild OCR rotation or image containment, was overridden by generic UI geometry.
 
+M36 samples `style.color` for each emitted editable text node from source pixels:
+
+```text
+local dominant background
+-> high-contrast bbox interior pixels
+-> dominant foreground bucket
+```
+
+If no foreground pixels are available, it falls back to black or white based on background brightness. If sampling fails, it uses the configured default text color and records that fallback in node meta/report summary.
+
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 
 ## M31 Reconstruction UI Tree
@@ -212,6 +230,25 @@ uv run python scripts/run_m31_reconstruction_ui_tree.py \
 M31.1 is a runtime diagnostic API, not a Renderer input. It deliberately does not consume M29.0.2/M29.0.3/M29.0.4/M29.0.5 or M30 DSL as structural truth. Those stages remain in the current product runtime until later M32-M34 stages replace their responsibility.
 
 M31 unit fallback crops are cut from decoded source pixels. Do not route M31 fallback asset generation through compressed PNG crop helpers.
+
+## M37 Hierarchy Readiness
+
+M37 is a diagnostic bridge from M31 reconstruction units to M30 visible DSL nodes:
+
+```text
+M31 tree/report + final M30 DSL/report
+-> m37_hierarchy_readiness_report.json
+```
+
+It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m37/m37_hierarchy_readiness_report.json
+```
+
+It records safe and unsafe future hierarchy candidates, mapping coverage, duplicate unit bboxes, micro units, relative coordinate violations, and fallback conflict risks.
+
+M37 does not change `/api/tasks/{taskId}/dsl`, create visible frames, enable nested DSL, or feed Renderer. The report keeps `createdVisibleFrameCount=0` and `dslChanged=false`.
 
 ## Storage
 

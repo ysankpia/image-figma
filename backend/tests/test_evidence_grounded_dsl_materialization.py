@@ -436,6 +436,55 @@ def test_plain_ocr_text_remains_editable_text_candidate(tmp_path: Path) -> None:
     assert decisions[0]["reasons"] == ["source_evidence_trace"]
 
 
+def test_editable_text_samples_foreground_color_from_source_pixels(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 100, fill=(22, 119, 255))
+    rows = [bytearray(row) for row in canvas.rows]
+    for row_index in range(13, 18):
+        for column in range(14, 28):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\xff\xff\xff"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=100, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document_with_text_box("ocr_001", [10, 10, 40, 12], "Hello", meta={"angle": 0.0}),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["style"]["color"] == "#FFFFFF"
+    assert text_node["meta"]["textForegroundColorSource"] == "sampled_foreground"
+    assert text_node["meta"]["textForegroundBackgroundColor"] == "#1677FF"
+    assert result.report.summary["sampledTextForegroundCount"] == 1
+    assert result.report.summary["defaultContrastTextForegroundCount"] == 0
+    assert result.report.summary["defaultTextColorFallbackCount"] == 0
+
+
+def test_text_foreground_sampling_falls_back_to_contrast_color(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100, fill=(18, 28, 46)))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["style"]["color"] == "#FFFFFF"
+    assert text_node["meta"]["textForegroundColorSource"] == "default_contrast"
+    assert result.report.summary["defaultContrastTextForegroundCount"] == 1
+
+
 def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(120, 100))
     m2905_dir = tmp_path / "m29_0_5"

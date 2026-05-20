@@ -56,6 +56,30 @@ metrics.editableCounterSignals
 
 `preserveSignals` records the negative evidence that made the text risky. `editableCounterSignals` records generic UI geometry that made the text safe enough to materialize despite weak preserve signals.
 
+M36 records text foreground sampling diagnostics for emitted editable text:
+
+```text
+text node meta.textForegroundColorSource
+summary.sampledTextForegroundCount
+summary.defaultContrastTextForegroundCount
+summary.defaultTextColorFallbackCount
+```
+
+These fields explain whether `style.color` came from source-pixel foreground sampling, contrast fallback, or hard default fallback.
+
+M37 adds `m37_hierarchy_readiness` to `stage_timings.json` when M31 and M30 artifacts are available. It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m37/m37_hierarchy_readiness_report.json
+```
+
+The report is not a Renderer input. Its key guard fields are:
+
+```text
+createdVisibleFrameCount = 0
+dslChanged = false
+```
+
 ## Logs
 
 后端任务日志至少包含：

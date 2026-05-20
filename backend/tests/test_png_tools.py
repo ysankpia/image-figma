@@ -19,6 +19,7 @@ from app.png_tools import (
     read_png_metadata,
     sample_rect_edges,
     sample_region_background,
+    sample_text_foreground_rgb,
 )
 from conftest import make_png, png_chunk
 
@@ -105,6 +106,38 @@ def test_crop_pixels_to_png_rejects_invalid_regions() -> None:
     for region in invalid_regions:
         with pytest.raises(UnsupportedPngCropError):
             crop_pixels_to_png(pixels, region)
+
+
+def test_sample_text_foreground_rgb_isolates_high_contrast_stroke_color() -> None:
+    rows = [bytearray(bytes((22, 119, 255)) * 8) for _ in range(8)]
+    for row_index in range(3, 5):
+        for column in range(3, 5):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\xff\xff\xff"
+    pixels = decode_png_pixels(make_png_from_rows(8, 8, [bytes(row) for row in rows]))
+
+    foreground = sample_text_foreground_rgb(pixels, [2, 2, 4, 4], [22, 119, 255])
+
+    assert foreground == (255, 255, 255)
+
+
+def test_sample_text_foreground_rgb_returns_default_contrast_when_no_foreground_pixels() -> None:
+    pixels = decode_png_pixels(make_rgb_png(8, 8, (18, 28, 46)))
+
+    foreground = sample_text_foreground_rgb(pixels, [2, 2, 4, 4], [18, 28, 46])
+
+    assert foreground == (255, 255, 255)
+
+
+def test_sample_text_foreground_rgb_clamps_bbox_to_bounds() -> None:
+    rows = [bytearray(bytes((255, 255, 255)) * 8) for _ in range(8)]
+    for row_index in range(1, 3):
+        for column in range(1, 3):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x11\x18\x27"
+    pixels = decode_png_pixels(make_png_from_rows(8, 8, [bytes(row) for row in rows]))
+
+    foreground = sample_text_foreground_rgb(pixels, [-2, -2, 6, 6], [255, 255, 255])
+
+    assert foreground == (17, 24, 39)
 
 
 def test_crop_png_rejects_unsupported_color_type_after_metadata_is_readable() -> None:

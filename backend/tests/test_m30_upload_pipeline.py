@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "materializedTextCoverCount" in report_data["summary"]
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
-    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m31_reconstruction", "m29_0_5", "m30_materialization"}
+    assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {"ocr", "m29", "m31_reconstruction", "m29_0_5", "m30_materialization", "m37_hierarchy_readiness"}
 
     m31 = client.get(f"/api/tasks/{task_id}/m31-reconstruction")
     assert m31.status_code == 200
@@ -88,6 +89,10 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert (task_root / "m31" / "m31_reconstruction_tree.json").exists()
     assert (task_root / "m31" / "m31_reconstruction_tree_report.json").exists()
     assert (task_root / "m31" / "m31_unit_fallback_assets").exists()
+    assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
+    m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
+    assert m37_report["summary"]["createdVisibleFrameCount"] == 0
+    assert m37_report["summary"]["dslChanged"] is False
     assert not list(task_root.glob("**/overlays"))
     assert not list(task_root.glob("**/preview*.png"))
     assert not (task_root / "m30" / "m30_materialization_preview.png").exists()
@@ -144,7 +149,9 @@ def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png
 
     task_root = Path(report["outputDsl"]).parent.parent
     assert not (task_root / "m31").exists()
+    assert not (task_root / "m37").exists()
     assert "m31_reconstruction" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
 
@@ -180,6 +187,7 @@ def test_m31_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypa
     m31_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m31_reconstruction")
     assert m31_timing["status"] == "failed"
     assert m31_timing["errorCode"] == "RuntimeError"
+    assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
 

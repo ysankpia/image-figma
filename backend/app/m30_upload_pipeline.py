@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
+from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -51,6 +52,7 @@ class M30PipelinePaths:
     m2905: Path
     m31: Path
     m30: Path
+    m37: Path
 
 
 @dataclass(frozen=True)
@@ -256,6 +258,25 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     run_stage(paths, timings, "m30_asset_publish", lambda: publish_m30_assets(task_id, paths.m30, m30_result.dsl, image))
     output_dsl = paths.m30 / "m30_materialized_dsl.json"
     output_dsl.write_text(json.dumps(m30_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    m31_tree = paths.m31 / "m31_reconstruction_tree.json"
+    m31_report = paths.m31 / "m31_reconstruction_tree_report.json"
+    m30_report = paths.m30 / "m30_materialization_report.json"
+    if m31_tree.exists() and m31_report.exists() and m30_report.exists():
+        update_task(task_id, "m37_hierarchy_readiness", 98, "Auditing M37 hierarchy readiness.")
+        run_optional_stage(
+            paths,
+            timings,
+            "m37_hierarchy_readiness",
+            lambda: extract_m37_hierarchy_readiness(
+                m31_tree_path=str(m31_tree),
+                m31_report_path=str(m31_report),
+                m30_dsl_path=str(output_dsl),
+                m30_report_path=str(m30_report),
+                output_dir=paths.m37,
+            ),
+            task_id=task_id,
+        )
 
     now = datetime.now(UTC).isoformat()
     state.database.insert_dsl_result(
@@ -496,6 +517,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m2905=root / "m29_0_5",
         m31=root / "m31",
         m30=root / "m30",
+        m37=root / "m37",
     )
 
 

@@ -4,7 +4,7 @@ API v0.1 serves the current single-image preview path:
 
 ```text
 PNG upload
--> OCR + M29 + M31 diagnostics + M30
+-> OCR + M29 + M31 diagnostics + M30 + M37 diagnostics
 -> DSL v0.1
 -> Figma Renderer
 ```
@@ -100,6 +100,7 @@ Immediate success response:
 
 The endpoint creates a task and runs OCR + M29 + M30 in a background task. It does not run the removed pre-M29 upload chain.
 M31 reconstruction diagnostics run after M29 when `M31_UPLOAD_DIAGNOSTICS_ENABLED=true`; they do not change the DSL output.
+M37 hierarchy readiness diagnostics run after final M30 DSL/report exist and only when M31 artifacts exist. M37 does not add an API endpoint and does not change `/api/tasks/{taskId}/dsl`.
 
 ### `GET /api/tasks/{taskId}`
 

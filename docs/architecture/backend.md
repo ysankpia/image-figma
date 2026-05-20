@@ -40,6 +40,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization with text editability decisions and fallback erasure only for editable text
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
+-> M37 hierarchy readiness diagnostic, if M31 artifacts exist
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
 ```
@@ -81,6 +82,10 @@ stable_local_background
 ```
 
 These signals can override weak preserve signals such as light OCR angle noise or image containment. They do not use business words, fixed coordinates, or fixed-resolution pixel constants.
+
+M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
+
+M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and the final M30 DSL/report, then writes `m37_hierarchy_readiness_report.json`. It does not modify DSL, create visible frames, or change Renderer coordinate semantics.
 
 ## Artifact Profiles
 
@@ -130,6 +135,7 @@ storage/m30_1_uploads/{taskId}/m29_0_7/
 storage/m30_1_uploads/{taskId}/m29_0_4/
 storage/m30_1_uploads/{taskId}/m29_0_5/
 storage/m30_1_uploads/{taskId}/m30/
+storage/m30_1_uploads/{taskId}/m37/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 storage/assets/{taskId}/m30/
 ```
@@ -169,6 +175,7 @@ m29_0_4
 m29_0_5
 m30_materialization
 m30_asset_publish
+m37_hierarchy_readiness
 m30_completed
 ```
 
