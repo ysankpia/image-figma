@@ -116,7 +116,7 @@ describe("renderDesign", () => {
     );
   });
 
-  it("renders fallback region with boolean subtraction when maskBBoxes are present", async () => {
+  it("ignores maskBBoxes and renders fallback region flat", async () => {
     const adapter = new FakeFigmaAdapter();
     const dsl = structuredClone(mobileHome as DesignDSL);
 
@@ -141,44 +141,18 @@ describe("renderDesign", () => {
 
     expect(result.success).toBe(true);
 
-    const subtractNode = adapter.nodes.find(n => n.type === "BOOLEAN_OPERATION") as any;
-    expect(subtractNode).toBeDefined();
-    expect(subtractNode?.name).toBe("Fallback Region / Page 1");
-    expect(subtractNode?.fills).toBeDefined();
-    expect(subtractNode?.fills?.[0]?.type).toBe("IMAGE");
-    expect(subtractNode?.fills?.[0]?.imageHash).toBe("hash:http://localhost:8000/files/assets/task_mobile_home/banner.png");
-    expect(subtractNode?.visible).toBe(true);
-    expect(subtractNode?.opacity).toBe(1);
+    const rectangleNode = adapter.nodes.find(n => n.name === "Fallback Region / Page 1") as any;
+    expect(rectangleNode).toBeDefined();
+    expect(rectangleNode?.type).toBe("RECTANGLE");
+    expect(rectangleNode?.fills).toBeDefined();
+    expect(rectangleNode?.fills?.[0]?.type).toBe("IMAGE");
+    expect(rectangleNode?.fills?.[0]?.imageHash).toBe("hash:http://localhost:8000/files/assets/task_mobile_home/banner.png");
+    expect(rectangleNode?.visible).toBe(true);
+    expect(rectangleNode?.opacity).toBe(1);
 
-    const children = subtractNode?.children ?? [];
-    expect(children.length).toBe(3);
-
-    expect(children[0]).toBeDefined();
-    expect(children[1]).toBeDefined();
-    expect(children[2]).toBeDefined();
-
-    if (children[0] && children[1] && children[2]) {
-      expect(children[0].type).toBe("RECTANGLE");
-      expect(children[0].name).toBe("Image / fallback_region_1");
-
-      expect(children[1].type).toBe("RECTANGLE");
-      expect(children[1].name).toBe("Mask Rectangle / 0");
-      expect(children[1].layout).toEqual({ x: 10, y: 10, width: 40, height: 12 });
-
-      expect(children[2].type).toBe("RECTANGLE");
-      expect(children[2].name).toBe("Mask Rectangle / 1");
-      expect(children[2].layout).toEqual({ x: 15, y: 15, width: 10, height: 10 });
-    }
-
-    const rootNode = adapter.findNodeByName("mobile_home");
-    expect(rootNode).toBeDefined();
-    if (rootNode && children[0] && children[1] && children[2]) {
-      const rootChildrenIds = rootNode.children.map(c => c.id);
-      expect(rootChildrenIds).not.toContain(children[0].id);
-      expect(rootChildrenIds).not.toContain(children[1].id);
-      expect(rootChildrenIds).not.toContain(children[2].id);
-      expect(rootChildrenIds).toContain(subtractNode?.id);
-    }
+    // Ensure no boolean subtraction group is created.
+    const subtractNode = adapter.nodes.find(n => n.type === "BOOLEAN_OPERATION");
+    expect(subtractNode).toBeUndefined();
   });
 
   it("applies WIDTH_AND_HEIGHT to single-line text and HEIGHT to multi-line/paragraph text", async () => {

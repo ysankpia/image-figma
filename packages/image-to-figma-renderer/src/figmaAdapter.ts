@@ -131,9 +131,6 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
     },
     getNodeId(node) {
       return node.id;
-    },
-    createBooleanSubtract(nodes, parent) {
-      return figmaApi.subtract(nodes.map(toFigmaNode), toFigmaNode(parent)) as FigmaNode;
     }
   };
 }

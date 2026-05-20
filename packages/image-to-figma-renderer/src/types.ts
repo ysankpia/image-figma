@@ -60,7 +60,6 @@ export interface FigmaAdapter {
   loadFont(style: DSLStyle): Promise<FigmaFontName>;
   createImagePaint(source: ResolvedImageSource, mode: "fill" | "fit"): Promise<FigmaPaint>;
   getNodeId(node: FigmaNode): string;
-  createBooleanSubtract(nodes: FigmaNode[], parent: FigmaNode): FigmaNode;
 }
 
 export interface FigmaNode {

@@ -130,19 +130,6 @@ export class FakeFigmaAdapter implements FigmaAdapter {
     return node.id;
   }
 
-  createBooleanSubtract(nodes: FigmaNode[], parent: FigmaNode): FigmaNode {
-    const groupNode = this.createNode("BOOLEAN_OPERATION");
-    const fakeGroup = this.asFakeNode(groupNode);
-    fakeGroup.children = nodes.map(n => this.asFakeNode(n));
-
-    // Remove the nodes from the parent's children
-    const fakeParent = this.asFakeNode(parent);
-    const nodeIds = new Set(nodes.map(n => n.id));
-    fakeParent.children = fakeParent.children.filter(c => !nodeIds.has(c.id));
-
-    this.appendChild(parent, groupNode);
-    return groupNode;
-  }
 
   findNodeByName(name: string): FakeNode | undefined {
     return this.nodes.find((node) => node.name === name);

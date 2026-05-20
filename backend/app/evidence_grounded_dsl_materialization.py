@@ -225,7 +225,7 @@ def materialize_evidence_grounded_dsl(
 
     audit_refs = collect_audit_only_references(m2905_document)
     preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text_cover, *materialized_text]) if emit_preview_artifacts else None
-    inject_mask_bboxes_to_fallback_regions(dsl, materialized_text, materialized_image)
+    erase_text_from_fallback_images(dsl, output_dir, materialized_text)
     update_dsl_meta(dsl, mode, before_children, materialized_text, materialized_text_cover, materialized_shape, materialized_image, audit_refs)
 
     output_dsl_path = output_dir / "m30_materialized_dsl.json"
@@ -713,51 +713,97 @@ def collect_audit_only_references(m2905_document: dict[str, Any]) -> list[dict[s
     return refs
 
 
-def inject_mask_bboxes_to_fallback_regions(
+def erase_text_from_fallback_images(
     dsl: dict[str, Any],
+    output_dir: Path,
     materialized_text: list[M30MaterializedNode],
-    materialized_image: list[M30MaterializedNode],
 ) -> None:
-    mask_bboxes = []
-    for node in materialized_text:
-        mask_bboxes.append(node.bbox)
-    for node in materialized_image:
-        mask_bboxes.append(node.bbox)
+    if not materialized_text:
+        return
 
-    def bbox_intersects(box1: list[int], box2: list[int]) -> bool:
-        x1, y1, w1, h1 = box1
-        x2, y2, w2, h2 = box2
-        return not (x1 + w1 <= x2 or x2 + w2 <= x1 or y1 + h1 <= y2 or y2 + h2 <= y1)
+    fallback_assets = []
+    for asset in dsl.get("assets", []):
+        if isinstance(asset, dict) and asset.get("role") == "fallback_region" and asset.get("type") == "image":
+            url = asset.get("url")
+            if url:
+                fallback_assets.append(asset)
 
-    def find_and_inject(element: dict[str, Any]) -> None:
+    if not fallback_assets:
+        return
+
+    def find_element_offset_for_asset(element: dict[str, Any], asset_id: str) -> tuple[int, int] | None:
         if not isinstance(element, dict):
-            return
-        if element.get("role") == "fallback_region":
-            meta = element.get("meta")
-            if not isinstance(meta, dict):
-                meta = {}
-                element["meta"] = meta
-            
+            return None
+        if element.get("source", {}).get("assetId") == asset_id:
             layout = element.get("layout") or {}
-            rx = int(layout.get("x", 0))
-            ry = int(layout.get("y", 0))
-            rw = int(layout.get("width", 0))
-            rh = int(layout.get("height", 0))
-            region_bbox = meta.get("sourceBBox") or [rx, ry, rw, rh]
-            
-            region_mask_bboxes = []
-            for bbox in mask_bboxes:
-                if bbox_intersects(bbox, region_bbox):
-                    region_mask_bboxes.append(bbox)
-            
-            meta["maskBBoxes"] = region_mask_bboxes
-        
+            return int(layout.get("x", 0)), int(layout.get("y", 0))
         for child in element.get("children", []):
-            if isinstance(child, dict):
-                find_and_inject(child)
+            offset = find_element_offset_for_asset(child, asset_id)
+            if offset is not None:
+                return offset
+        return None
 
-    if "root" in dsl:
-        find_and_inject(dsl["root"])
+    for asset in fallback_assets:
+        asset_id = asset["assetId"]
+        url = asset["url"]
+        image_path = (output_dir / url).resolve()
+        if not image_path.exists():
+            continue
+
+        try:
+            image_bytes = image_path.read_bytes()
+            pixels = decode_png_pixels(image_bytes)
+        except Exception:
+            continue
+
+        offset = find_element_offset_for_asset(dsl.get("root", {}), asset_id)
+        rx, ry = offset if offset is not None else (0, 0)
+        asset_w, asset_h = pixels.width, pixels.height
+
+        mutable_rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+
+        for node in materialized_text:
+            tx, ty, tw, th = node.bbox
+            local_x = tx - rx
+            local_y = ty - ry
+
+            overlap_x1 = max(0, local_x)
+            overlap_y1 = max(0, local_y)
+            overlap_x2 = min(asset_w, local_x + tw)
+            overlap_y2 = min(asset_h, local_y + th)
+
+            if overlap_x2 > overlap_x1 and overlap_y2 > overlap_y1:
+                try:
+                    local_bbox = [local_x, local_y, tw, th]
+                    sample = sample_rect_edges_dominant_background(
+                        pixels,
+                        local_bbox,
+                        sides={"top", "bottom", "left", "right"},
+                        inset=0,
+                        thickness=1,
+                        tolerance=24,
+                        min_fraction=0.5,
+                    )
+                    fill_color = sample.mean_rgb
+                except Exception:
+                    fill_color = [247, 248, 250]
+
+                for row_idx in range(overlap_y1, overlap_y2):
+                    row = mutable_rows[row_idx]
+                    for col_idx in range(overlap_x1, overlap_x2):
+                        offset_idx = col_idx * 3
+                        row[offset_idx] = fill_color[0]
+                        row[offset_idx + 1] = fill_color[1]
+                        row[offset_idx + 2] = fill_color[2]
+                modified = True
+
+        if modified:
+            try:
+                encoded_png = encode_rgb_png(asset_w, asset_h, [bytes(row) for row in mutable_rows])
+                image_path.write_bytes(encoded_png)
+            except Exception:
+                pass
 
 
 def update_dsl_meta(

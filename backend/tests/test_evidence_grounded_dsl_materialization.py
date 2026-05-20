@@ -11,7 +11,7 @@ from app.evidence_grounded_dsl_materialization import (
     materialize_evidence_grounded_dsl,
 )
 from app.mixed_symbol_text_conflict_audit import FORBIDDEN_CONTRACT_TERMS, find_forbidden_contract_terms
-from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata
+from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata, decode_png_pixels
 from scripts.run_m30_evidence_grounded_dsl_materialization import resolve_mode
 
 
@@ -465,7 +465,13 @@ def count_children(dsl: dict, role: str) -> int:
 
 
 def test_mask_bboxes_injection_into_fallback_regions(tmp_path: Path) -> None:
-    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    canvas = make_canvas(120, 100, fill=(240, 240, 240))
+    # Write some black pixels where the text is located [10, 10, 40, 12]
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(11, 16):
+        for c in range(12, 22):
+            rows[r][c * 3 : c * 3 + 3] = b"\x00\x00\x00"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=100, rows=[bytes(row) for row in rows]))
     m2905_dir = tmp_path / "m29_0_5"
     
     visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(10, 10))
@@ -487,11 +493,17 @@ def test_mask_bboxes_injection_into_fallback_regions(tmp_path: Path) -> None:
     )
 
     fallback_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "fallback_region")
-    assert "maskBBoxes" in fallback_node["meta"]
-    mask_bboxes = fallback_node["meta"]["maskBBoxes"]
+    assert "maskBBoxes" not in fallback_node.get("meta", {})
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path = tmp_path / "m30" / fallback_asset["url"]
+    assert fallback_path.exists()
     
-    assert [10, 10, 40, 12] in mask_bboxes
-    assert [15, 15, 10, 10] in mask_bboxes
+    fallback_pixels = decode_png_pixels(fallback_path.read_bytes())
+    for r in range(11, 16):
+        for c in range(12, 22):
+            offset = c * 3
+            assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
 
 
 def test_text_font_size_harmonization(tmp_path: Path) -> None:
