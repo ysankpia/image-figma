@@ -79,6 +79,7 @@ cd backend
 uv run pytest \
   tests/test_m30_upload_pipeline.py \
   tests/test_evidence_grounded_dsl_materialization.py \
+  tests/test_small_overlay_text_proposal.py \
   tests/test_upload_flow.py \
   tests/test_config_env.py \
   tests/test_assets.py \
@@ -98,9 +99,12 @@ Required backend coverage:
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
 - default upload creates M31 diagnostics after M29.
+- default upload creates M29.2 small overlay text audit after M29.0.2.
 - default upload creates M37 hierarchy readiness diagnostics when M31 artifacts exist.
 - M31 optional failure does not block M30 DSL when strict mode is off.
 - M31 failure blocks the task at `m31_reconstruction` when strict mode is on.
+- M29.2 optional failure does not block M30 DSL when strict mode is off.
+- M29.2 can be disabled without creating `m29_2/` or a `m29_2_small_overlay_text_audit` timing.
 - M30 image assets are published under `/files/assets/{taskId}/m30/...`.
 - OCR provider failures fail the task and do not create fake completed DSL.
 - CORS covers `/api/upload-m30-preview`.
@@ -123,6 +127,7 @@ uv run pytest \
   tests/test_member_boundary_quality_audit.py \
   tests/test_mixed_symbol_text_conflict_audit.py \
   tests/test_residual_mixed_boundary_review.py \
+  tests/test_small_overlay_text_proposal.py \
   tests/test_evidence_grounded_dsl_materialization.py -q
 ```
 
@@ -140,6 +145,9 @@ Required evidence coverage:
 - light OCR angle noise can be overridden by `aligned_text_row` or `metadata_text_cluster`.
 - image-contained compact overlay text can be overridden by `compact_overlay_badge`.
 - large media graphic text still remains `graphic_text_preserve_in_fallback`.
+- M29.2 reports OCR-missed small overlay text proposals inside accepted image evidence without creating M30 text.
+- M29.2 dedupes candidates already covered by OCR.
+- M29.2 optional local re-probe stays diagnostic and does not mutate `ocr/ocr.json`.
 - M30 does not create new bboxes.
 - M30 does not rewrite M29 JSON.
 - M30 does not emit DSL `icon` type.
@@ -184,6 +192,26 @@ uv run pytest tests/test_png_tools.py tests/test_reconstruction_ui_tree.py tests
 ```
 
 The tests must cover decoded-pixels crop correctness and assert that `reconstruction_ui_tree.py` no longer references `crop_png`.
+
+## M29.2 Small Overlay Text Audit
+
+M29.2 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_png_tools.py tests/test_small_overlay_text_proposal.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+Required M29.2 coverage:
+
+- small counter-like overlay components inside accepted image regions produce `proposal_only` candidates.
+- candidates covered by existing OCR are marked `covered_by_existing_ocr`.
+- texture-like long lines and center photo noise do not become valid proposals.
+- candidate count is capped and emits a warning when truncated.
+- nearest-neighbor upscale preserves pixel colors and rejects invalid factors.
+- optional local re-probe can record recognized counters, rejected non-counter text, and provider failures.
+- `materializationEligible=false`, `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
+- production upload profile writes JSON/MD only; development profile writes overlay/crop debug assets.
 
 ## M36 Text Foreground Color
 

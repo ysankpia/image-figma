@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
+from .small_overlay_text_proposal import M292Options, extract_small_overlay_text_proposals
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
 from .text_aware_visual_object_refinement import (
@@ -46,6 +48,7 @@ class M30PipelinePaths:
     m29: Path
     m291: Path
     m2902: Path
+    m292: Path
     m2903: Path
     m2907: Path
     m2904: Path
@@ -163,6 +166,23 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
     m2902_json = paths.m2902 / "text_masked_media_audit.json"
+
+    if state.settings.m29_small_overlay_text_audit_enabled:
+        update_task(task_id, "m29_2_small_overlay_text_audit", 48, "Auditing small overlay text misses.")
+        run_m292_small_overlay_text_stage(
+            task_id=task_id,
+            paths=paths,
+            timings=timings,
+            png_data=png_data,
+            source_image=source_image,
+            ocr_document=ocr_document.to_dict(),
+            ocr_json=paths.ocr / "ocr.json",
+            m29_document=m29_document.to_dict(),
+            m29_json=m29_json,
+            m2902_document=m2902_document.to_dict(),
+            m2902_json=m2902_json,
+            policy=policy,
+        )
 
     update_task(task_id, "m29_0_3", 54, "Normalizing visual evidence.")
     m2903_document = run_stage(paths, timings, "m29_0_3", lambda: extract_visual_evidence_normalization(
@@ -362,6 +382,74 @@ def run_m31_diagnostic_stage(
     run_optional_stage(paths, timings, "m31_reconstruction", action, task_id=task_id)
 
 
+def run_m292_small_overlay_text_stage(
+    *,
+    task_id: str,
+    paths: M30PipelinePaths,
+    timings: list[StageTiming],
+    png_data: bytes,
+    source_image: str,
+    ocr_document: dict[str, Any],
+    ocr_json: Path,
+    m29_document: dict[str, Any],
+    m29_json: Path,
+    m2902_document: dict[str, Any],
+    m2902_json: Path,
+    policy: M30ArtifactPolicy,
+) -> None:
+    options = M292Options(
+        reprobe_enabled=state.settings.m29_small_overlay_text_reprobe_enabled,
+        max_candidates=state.settings.m29_small_overlay_text_max_candidates,
+        upscale_factor=state.settings.m29_small_overlay_text_upscale_factor,
+    )
+    reprobe_fn = run_local_ocr_reprobe if options.reprobe_enabled else None
+    action = lambda: extract_small_overlay_text_proposals(
+        png_data=png_data,
+        source_image=source_image,
+        output_dir=paths.m292,
+        ocr_document=ocr_document,
+        ocr_json_path=str(ocr_json),
+        m29_document=m29_document,
+        m29_nodes_json_path=str(m29_json),
+        m2902_document=m2902_document,
+        m2902_audit_json_path=str(m2902_json),
+        options=options,
+        emit_debug_artifacts=policy.emit_debug_artifacts,
+        reprobe_fn=reprobe_fn,
+    )
+    if state.settings.m29_small_overlay_text_audit_strict:
+        try:
+            run_stage(paths, timings, "m29_2_small_overlay_text_audit", action)
+        except M30UploadPipelineError:
+            raise
+        except Exception as error:
+            raise M30UploadPipelineError("m29_2_small_overlay_text_audit", error.__class__.__name__, str(error)) from error
+        return
+    run_optional_stage(paths, timings, "m29_2_small_overlay_text_audit", action, task_id=task_id)
+
+
+def run_local_ocr_reprobe(crop_png_data: bytes, _source_bbox: list[int]) -> dict[str, Any]:
+    image = read_png_metadata(crop_png_data)
+    if image is None:
+        raise ValueError("M29.2 local OCR reprobe crop is not a readable PNG.")
+    with tempfile.NamedTemporaryFile(suffix=".png") as handle:
+        handle.write(crop_png_data)
+        handle.flush()
+        document = extract_ocr(
+            task_id="m29_2_reprobe",
+            image=image,
+            settings=state.settings,
+            source_path=Path(handle.name),
+        )
+    if document.status == "failed":
+        message = document.error["message"] if document.error else "M29.2 local OCR reprobe failed."
+        raise RuntimeError(message)
+    if not document.blocks:
+        return {"text": "", "confidence": 0.0}
+    best = max(document.blocks, key=lambda block: block.confidence)
+    return {"text": best.text, "confidence": best.confidence}
+
+
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
     public_dir = state.storage.assets_dir / task_id / "m30"
     public_dir.mkdir(parents=True, exist_ok=True)
@@ -512,6 +600,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m29=root / "m29",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",
+        m292=root / "m29_2",
         m2903=root / "m29_0_3",
         m2907=root / "m29_0_7",
         m2904=root / "m29_0_4",

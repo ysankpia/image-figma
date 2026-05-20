@@ -9,6 +9,7 @@ Figma plugin
 -> POST /api/upload-m30-preview
 -> OCR + M29 evidence pipeline
 -> M31 reconstruction diagnostics
+-> M29.2 small overlay text miss audit
 -> M30 materialized DSL
 -> M37 hierarchy readiness diagnostics
 -> GET /api/tasks/{taskId}/dsl
@@ -18,6 +19,8 @@ Figma plugin
 The frozen pre-M29 upload chain has been removed from runtime source. `POST /api/upload` and the old task debug endpoints are not product contracts.
 
 M31 is attached as a diagnostic side path after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change M30 DSL or Figma output.
+
+M29.2 is attached as an audit side path after M29.0.2. It looks for OCR-missed small overlay text proposals inside accepted image regions, writes `m29_2/small_overlay_text_candidates.json`, and does not change OCR, M29, M30, M31, M37, or Figma output.
 
 OCR text evidence is preserved through M29/M31. M30 decides whether each text member is editable text or graphic text that must remain in fallback; graphic text is not erased and not redrawn with a generic Figma text layer.
 
@@ -84,6 +87,8 @@ The M30 report also exposes `textEditabilityDecisions`, `preservedGraphicTextIte
 
 M34.3 adds `textSymbolLeakageDecisions` and summary counts for high-confidence leading OCR symbol leakage cleanup. It keeps OCR/M29/M31 evidence unchanged and only changes emitted M30 text content/bbox when source pixels show a projection gap.
 
+M29.2 reports `small_overlay_text_candidates.json` for OCR-missed tiny overlay text proposals. The guard summary keeps `materializedTextCount=0`, `createdNewBBoxCount=0`, and `dslChanged=false`.
+
 M30 text nodes also report `textForegroundColorSource` in node meta. The M30 report summary counts sampled foreground colors, contrast fallbacks, and hard fallback-to-default cases.
 
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
@@ -98,6 +103,7 @@ OCR
 -> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
+-> M29.2 small overlay text proposal audit
 -> M29.0.3 visual evidence normalization with lineage
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
@@ -109,6 +115,8 @@ OCR
 ```
 
 It deliberately does not run old pre-M29 diagnostic stages, mixed/residual acceptance audits, fallback masking, Auto Layout, Figma Components, SVG/vectorization, or icon recovery.
+
+M29.2 is audit/proposal only. It does not patch `ocr/ocr.json`, does not create M30 text nodes, and does not make small overlay text editable in this stage. Optional local crop OCR re-probe is controlled by `M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=false`.
 
 ## OCR
 
@@ -168,6 +176,25 @@ storage/m30_1_uploads/{taskId}/m31/m31_unit_fallback_assets/
 M31 failures are optional by default: they write failed stage timing and an error log, then the pipeline continues to M30. With `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
 
 M31.1.1 crops unit fallback assets from the already decoded `PngPixels`, so source PNG decode happens once per M31 run instead of once per reconstruction unit.
+
+## M29.2 Small Overlay Text Audit
+
+```bash
+M29_SMALL_OVERLAY_TEXT_AUDIT_ENABLED=true
+M29_SMALL_OVERLAY_TEXT_AUDIT_STRICT=false
+M29_SMALL_OVERLAY_TEXT_REPROBE_ENABLED=false
+M29_SMALL_OVERLAY_TEXT_MAX_CANDIDATES=12
+M29_SMALL_OVERLAY_TEXT_UPSCALE_FACTOR=3
+```
+
+When enabled, `/api/upload-m30-preview` writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.json
+storage/m30_1_uploads/{taskId}/m29_2/small_overlay_text_candidates.md
+```
+
+`M30_PREVIEW_PROFILE=production` skips M29.2 overlay/crop PNGs. `M30_PREVIEW_PROFILE=development` writes the overlay and crop debug assets. M29.2 failures are optional by default; strict mode fails the task at `stage=m29_2_small_overlay_text_audit`.
 
 ## M30 Materialization
 

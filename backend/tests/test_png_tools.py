@@ -21,6 +21,7 @@ from app.png_tools import (
     sample_region_background,
     sample_text_foreground_rgb,
     find_leading_symbol_gap,
+    upscale_pixels_nearest,
 )
 from conftest import make_png, png_chunk
 
@@ -107,6 +108,28 @@ def test_crop_pixels_to_png_rejects_invalid_regions() -> None:
     for region in invalid_regions:
         with pytest.raises(UnsupportedPngCropError):
             crop_pixels_to_png(pixels, region)
+
+
+def test_upscale_pixels_nearest_triples_dimensions_and_preserves_colors() -> None:
+    rows = [
+        bytes((10, 20, 30)) + bytes((40, 50, 60)),
+        bytes((70, 80, 90)) + bytes((100, 110, 120)),
+    ]
+    pixels = decode_png_pixels(make_png_from_rows(2, 2, rows))
+
+    scaled = upscale_pixels_nearest(pixels, 3)
+
+    assert scaled.width == 6
+    assert scaled.height == 6
+    assert scaled.rows[:3] == [bytes((10, 20, 30)) * 3 + bytes((40, 50, 60)) * 3] * 3
+    assert scaled.rows[3:] == [bytes((70, 80, 90)) * 3 + bytes((100, 110, 120)) * 3] * 3
+
+
+def test_upscale_pixels_nearest_rejects_invalid_factor() -> None:
+    pixels = decode_png_pixels(make_rgb_png(2, 2, (10, 20, 30)))
+
+    with pytest.raises(UnsupportedPngCropError):
+        upscale_pixels_nearest(pixels, 0)
 
 
 def test_sample_text_foreground_rgb_isolates_high_contrast_stroke_color() -> None:
