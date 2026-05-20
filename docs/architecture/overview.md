@@ -10,7 +10,7 @@ Image-to-Figma Design v0.1 是一个多端协作系统。
 Figma Plugin UI
 -> Figma Plugin Main
 -> Backend API
--> OCR + M29 + M30 Processing Pipeline
+-> OCR + M29 + M31 diagnostics + M30 Processing Pipeline
 -> DSL v0.1
 -> Image-to-Figma Renderer
 -> Figma Canvas
@@ -79,6 +79,16 @@ Renderer 只消费 DSL，不做 OCR、M29、图片裁切、质量评分、Auto L
 DSL 是 Renderer 的唯一输入合同。M29 evidence 和 OCR 是后端内部证据，不是未经 M30 materialization 的 Renderer 输入。
 
 M31 tree 也不是 Renderer 输入。它是 evidence organization 层，用来验证 primitive ownership、unit fallback coverage 和后续 layer recovery 的可行性。
+
+OCR text 是证据，不等于可编辑 Figma text layer。M34.1 后，OCR/M29/M31 保留图形化文字证据，M30 materialization 通过 text editability decision 决定：
+
+```text
+editable_text -> 生成 m30_text_member
+graphic_text_preserve_in_fallback -> 保留在 fallback，不生成 text layer
+review_text -> 保留在 report，不生成 text layer
+```
+
+这个决策不改变 DSL schema，也不让 Renderer 读取 OCR/M29/M31 内部证据。
 
 ## Removed Legacy Path
 

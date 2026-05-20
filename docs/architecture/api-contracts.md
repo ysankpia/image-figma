@@ -154,12 +154,17 @@ Returns M30 materialization diagnostics:
 summary
 warnings
 skippedItems
+textEditabilityDecisions
+preservedGraphicTextItems
+reviewTextItems
 debugPreviewPath
 outputDsl
 stageTimings
 ```
 
 This endpoint is read-only and is not required by the Figma renderer.
+
+`textEditabilityDecisions` records whether each M30 text member became `editable_text`, `graphic_text_preserve_in_fallback`, or `review_text`. Only `editable_text` is emitted as visible DSL text. Preserved graphic text remains in fallback and is not erased from fallback image assets.
 
 ### `GET /api/tasks/{taskId}/m31-reconstruction`
 

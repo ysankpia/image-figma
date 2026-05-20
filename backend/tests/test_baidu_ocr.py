@@ -310,99 +310,61 @@ def test_parse_ppocrv5_rows_tilted_polygon_has_high_angle() -> None:
 
 
 # ---------------------------------------------------------------------------
-# M34: filter_artistic_text tests
+# M34.1: OCR evidence preservation tests
 # ---------------------------------------------------------------------------
 
 
-def test_filter_artistic_text_drops_rotated_text() -> None:
-    from app.m30_upload_pipeline import filter_artistic_text
-    from app.visual_primitive_graph import M29TextBox
-    from conftest import PNG_BYTES
-    from app.png_tools import decode_png_pixels
+def test_ocr_text_box_conversion_preserves_rotation_meta() -> None:
+    from app.text_masked_media_audit import text_boxes_from_ocr_document
 
-    pixels = decode_png_pixels(PNG_BYTES)
-
-    # Box with high rotation angle
-    rotated_box = M29TextBox(
-        id="ocr_text_001",
-        bbox=[10, 10, 40, 20],
-        text="ArtText",
-        confidence=0.95,
-        source="ocr",
-        kind="line",
-        meta={"angle": 15.0},
-    )
-    # Box with normal (horizontal) angle
-    normal_box = M29TextBox(
-        id="ocr_text_002",
-        bbox=[10, 40, 40, 20],
-        text="Normal",
-        confidence=0.95,
-        source="ocr",
-        kind="line",
-        meta={"angle": 0.5},
+    boxes, warnings = text_boxes_from_ocr_document(
+        {
+            "blocks": [
+                {
+                    "id": "ocr_text_001",
+                    "bbox": [10, 10, 40, 20],
+                    "text": "Graphic",
+                    "confidence": 0.95,
+                    "meta": {
+                        "angle": 15.0,
+                        "polygon": [[10, 10], [49, 20], [45, 39], [6, 29]],
+                    },
+                },
+                {
+                    "id": "ocr_text_002",
+                    "bbox": [10, 40, 40, 20],
+                    "text": "Normal",
+                    "confidence": 0.95,
+                    "meta": {"angle": 0.5},
+                },
+            ]
+        }
     )
 
-    class FakeSettings:
-        ocr_artistic_text_filter_enabled = True
-        ocr_max_rotation_angle = 3.0
-        ocr_max_background_texture = 0.45
-        ocr_max_background_color_count = 32
-
-    kept, warnings = filter_artistic_text([rotated_box, normal_box], pixels, FakeSettings())
-    assert len(kept) == 1
-    assert kept[0].id == "ocr_text_002"
-    assert len(warnings) == 1
-    assert "OCR_ARTISTIC_TEXT_FILTERED" in warnings[0]
-    assert "rotation" in warnings[0]
+    assert warnings == []
+    assert [box.id for box in boxes] == ["ocr_text_001", "ocr_text_002"]
+    assert boxes[0].meta["angle"] == 15.0
+    assert boxes[0].meta["polygon"] == [[10, 10], [49, 20], [45, 39], [6, 29]]
+    assert boxes[1].meta["angle"] == 0.5
 
 
-def test_filter_artistic_text_disabled_keeps_all() -> None:
-    from app.m30_upload_pipeline import filter_artistic_text
-    from app.visual_primitive_graph import M29TextBox
-    from conftest import PNG_BYTES
-    from app.png_tools import decode_png_pixels
+def test_ocr_text_box_conversion_keeps_box_without_meta() -> None:
+    from app.text_masked_media_audit import text_boxes_from_ocr_document
 
-    pixels = decode_png_pixels(PNG_BYTES)
-
-    rotated_box = M29TextBox(
-        id="ocr_text_001",
-        bbox=[10, 10, 40, 20],
-        text="ArtText",
-        confidence=0.95,
-        meta={"angle": 15.0},
+    boxes, warnings = text_boxes_from_ocr_document(
+        {
+            "blocks": [
+                {
+                    "id": "ocr_text_001",
+                    "bbox": [10, 10, 40, 20],
+                    "text": "Plain",
+                    "confidence": 0.95,
+                }
+            ]
+        }
     )
 
-    class FakeSettings:
-        ocr_artistic_text_filter_enabled = False
-
-    kept, warnings = filter_artistic_text([rotated_box], pixels, FakeSettings())
-    assert len(kept) == 1
-    assert len(warnings) == 0
-
-
-def test_filter_artistic_text_no_meta_angle_keeps_box() -> None:
-    from app.m30_upload_pipeline import filter_artistic_text
-    from app.visual_primitive_graph import M29TextBox
-    from conftest import PNG_BYTES
-    from app.png_tools import decode_png_pixels
-
-    pixels = decode_png_pixels(PNG_BYTES)
-
-    box = M29TextBox(
-        id="ocr_text_001",
-        bbox=[10, 10, 40, 20],
-        text="No Angle",
-        confidence=0.95,
-        meta={},
-    )
-
-    class FakeSettings:
-        ocr_artistic_text_filter_enabled = True
-        ocr_max_rotation_angle = 3.0
-        ocr_max_background_texture = 0.99
-        ocr_max_background_color_count = 999
-
-    kept, warnings = filter_artistic_text([box], pixels, FakeSettings())
-    assert len(kept) == 1
-    assert len(warnings) == 0
+    assert warnings == []
+    assert len(boxes) == 1
+    assert boxes[0].id == "ocr_text_001"
+    assert boxes[0].meta == {}

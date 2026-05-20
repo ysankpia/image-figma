@@ -95,6 +95,7 @@ Required backend coverage:
 - completed task returns M30 DSL from `m30_materialized_dsl.json`.
 - unfinished task returns `DSL_NOT_READY`.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
+- M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
 - default upload creates M31 diagnostics after M29.
 - M31 optional failure does not block M30 DSL when strict mode is off.
@@ -132,6 +133,9 @@ Required evidence coverage:
 - M29.0.7 ownership routing prevents text-owned evidence from forming visual objects.
 - M29.0.5 formal visual assets are created only for safe visual members.
 - M30 materializes only trusted textMembers, safe shapeCandidates, and safe visualAssets.
+- OCR text evidence is not dropped before M29; graphic text is preserved by M30 editability decision instead.
+- `graphic_text_preserve_in_fallback` does not generate `m30_text_member` and does not enter fallback erasure.
+- plain horizontal UI text still generates `m30_text_member`.
 - M30 does not create new bboxes.
 - M30 does not rewrite M29 JSON.
 - M30 does not emit DSL `icon` type.

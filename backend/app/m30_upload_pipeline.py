@@ -11,7 +11,7 @@ from typing import Any, Literal
 from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .ocr import extract_ocr
-from .png_tools import PngMetadata, PngPixels, decode_png_pixels, read_png_metadata
+from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
@@ -26,7 +26,7 @@ from .visual_object_candidate_audit import (
     M2904SourceExpansionRefs,
     extract_visual_object_candidate_audit,
 )
-from .visual_primitive_graph import M29TextBox, extract_m29_visual_primitive_graph, measure_region
+from .visual_primitive_graph import extract_m29_visual_primitive_graph
 
 M30PreviewProfile = Literal["production", "development"]
 
@@ -106,11 +106,6 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     update_task(task_id, "ocr", 8, "Running OCR.")
     ocr_document = run_stage(paths, timings, "ocr", lambda: run_ocr(task_id, image, upload_path, paths.ocr))
     text_boxes, text_warnings = text_boxes_from_ocr_document(ocr_document.to_dict())
-
-    # M34: Filter artistic / rotated text before downstream processing
-    pixels = decode_png_pixels(png_data)
-    text_boxes, artistic_warnings = filter_artistic_text(text_boxes, pixels, state.settings)
-    text_warnings.extend(artistic_warnings)
 
     update_task(task_id, "m29", 18, "Running M29 visual primitive graph.")
     m29_document = run_stage(paths, timings, "m29", lambda: extract_m29_visual_primitive_graph(
@@ -241,9 +236,17 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         source_image_path=str(upload_path),
         m2905_document=m2905_document.to_dict(),
         m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document.to_dict(),
         output_dir=paths.m30,
         mode="bootstrap-dsl-from-m29",
-        options=M30Options(text_cover_enabled=False),
+        options=M30Options(
+            text_cover_enabled=False,
+            text_editability_enabled=state.settings.ocr_text_editability_enabled,
+            preserve_graphic_text_in_media_units=state.settings.ocr_graphic_text_preserve_enabled,
+            max_editable_text_rotation_angle=state.settings.ocr_max_rotation_angle,
+            max_editable_background_texture=state.settings.ocr_max_background_texture,
+            max_editable_background_color_count=state.settings.ocr_max_background_color_count,
+        ),
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
 
@@ -522,50 +525,3 @@ def fail_task(task_id: str, stage: str, code: str, message: str) -> None:
         updated_at=now,
         failed_at=now,
     )
-
-
-def filter_artistic_text(
-    text_boxes: list[M29TextBox],
-    pixels: PngPixels,
-    settings: Any,
-) -> tuple[list[M29TextBox], list[str]]:
-    """M34: Filter out artistic / rotated / complex-background text boxes.
-
-    Returns (kept_boxes, warnings).  Filtered boxes are silently dropped from
-    the text box list so that downstream stages (M29, M29.0.2 text masking,
-    M30 pixel erasure, Figma text layer) never see them.  The text stays
-    intact in the background image.
-    """
-    if not getattr(settings, "ocr_artistic_text_filter_enabled", True):
-        return text_boxes, []
-
-    max_angle = getattr(settings, "ocr_max_rotation_angle", 3.0)
-    max_texture = getattr(settings, "ocr_max_background_texture", 0.45)
-    max_color_count = getattr(settings, "ocr_max_background_color_count", 32)
-
-    kept: list[M29TextBox] = []
-    warnings: list[str] = []
-
-    for box in text_boxes:
-        # --- Gate 1: Rotation angle from OCR polygon ---
-        angle = box.meta.get("angle") if box.meta else None
-        if isinstance(angle, (int, float)) and angle >= max_angle:
-            warnings.append(
-                f"OCR_ARTISTIC_TEXT_FILTERED: block {box.id} "
-                f"dropped (rotation {angle:.1f}° >= {max_angle}°)"
-            )
-            continue
-
-        # --- Gate 2: Background complexity (color count + texture) ---
-        metrics = measure_region(pixels, box.bbox)
-        if metrics.color_count >= max_color_count and metrics.texture_score >= max_texture:
-            warnings.append(
-                f"OCR_ARTISTIC_TEXT_FILTERED: block {box.id} "
-                f"dropped (background color_count={metrics.color_count} >= {max_color_count}, "
-                f"texture={metrics.texture_score:.3f} >= {max_texture})"
-            )
-            continue
-
-        kept.append(box)
-
-    return kept, warnings

@@ -26,7 +26,8 @@ class Settings:
     m30_preview_profile: str = "production"
     m31_upload_diagnostics_enabled: bool = True
     m31_upload_diagnostics_strict: bool = False
-    ocr_artistic_text_filter_enabled: bool = True
+    ocr_text_editability_enabled: bool = True
+    ocr_graphic_text_preserve_enabled: bool = True
     ocr_max_rotation_angle: float = 3.0
     ocr_max_background_texture: float = 0.45
     ocr_max_background_color_count: int = 32
@@ -57,7 +58,11 @@ def get_settings() -> Settings:
         m30_preview_profile=parse_m30_preview_profile(os.getenv("M30_PREVIEW_PROFILE", "production")),
         m31_upload_diagnostics_enabled=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "true"), default=True),
         m31_upload_diagnostics_strict=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "false"), default=False),
-        ocr_artistic_text_filter_enabled=parse_bool(os.getenv("OCR_ARTISTIC_TEXT_FILTER_ENABLED", "true"), default=True),
+        ocr_text_editability_enabled=parse_bool(os.getenv("OCR_TEXT_EDITABILITY_ENABLED", "true"), default=True),
+        ocr_graphic_text_preserve_enabled=parse_bool(
+            os.getenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", os.getenv("OCR_ARTISTIC_TEXT_FILTER_ENABLED", "true")),
+            default=True,
+        ),
         ocr_max_rotation_angle=float(os.getenv("OCR_MAX_ROTATION_ANGLE", "3.0")),
         ocr_max_background_texture=float(os.getenv("OCR_MAX_BACKGROUND_TEXTURE", "0.45")),
         ocr_max_background_color_count=int(os.getenv("OCR_MAX_BACKGROUND_COLOR_COUNT", "32")),

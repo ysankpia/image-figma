@@ -18,6 +18,8 @@ The frozen pre-M29 upload chain has been removed from runtime source. `POST /api
 
 M31 is attached as a diagnostic side path after M29. It builds a reconstruction UI tree from source PNG, OCR JSON, and M29 `nodes.json`; it does not change M30 DSL or Figma output.
 
+OCR text evidence is preserved through M29/M31. M30 decides whether each text member is editable text or graphic text that must remain in fallback; graphic text is not erased and not redrawn with a generic Figma text layer.
+
 ## Run
 
 ```bash
@@ -71,6 +73,8 @@ progress = 100
 
 `GET /api/tasks/{taskId}/m30-materialization` returns the M30 report summary, warnings, skipped items, output DSL path, optional debug preview path, and `stage_timings.json`.
 
+The M30 report also exposes `textEditabilityDecisions`, `preservedGraphicTextItems`, and `reviewTextItems`. These fields explain why a text evidence item became an editable `m30_text_member` or stayed in fallback.
+
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
 
 ## Current Pipeline
@@ -111,6 +115,15 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 In the M30 preview pipeline, OCR is required evidence. If the configured OCR provider fails, the task is marked `failed`; the backend does not create a fake completed M30 DSL.
+
+Baidu OCR polygon metadata is kept as evidence:
+
+```text
+OCRBlock.meta.angle
+OCRBlock.meta.polygon
+```
+
+M34.1 no longer drops rotated or graphic text before M29. Those text boxes remain auditable, then M30 decides whether they are safe to materialize as editable text.
 
 ## M30 Preview Profile
 
@@ -157,6 +170,16 @@ safe visualAssets
 It does not consume mixed/future/audit-only evidence as visible DSL children. Those references may appear only in reports or DSL meta.
 
 Safe visual assets are emitted as DSL `image` nodes, not `icon` nodes, because the current renderer does not implement an `icon` DSL type for this path.
+
+M30 text materialization now has an explicit editability decision:
+
+```text
+editable_text
+graphic_text_preserve_in_fallback
+review_text
+```
+
+Only `editable_text` creates a visible `m30_text_member`. `graphic_text_preserve_in_fallback` and `review_text` stay in fallback and are reported; they are not included in fallback pixel erasure. This prevents stylized media text from being erased and redrawn as plain UI text while keeping OCR/M29/M31 evidence intact.
 
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 

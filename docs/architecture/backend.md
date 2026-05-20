@@ -38,7 +38,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
--> M30/M32 evidence-grounded DSL materialization with fallback region masking (meta/maskBBoxes)
+-> M30 evidence-grounded DSL materialization with text editability decisions and fallback erasure only for editable text
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
@@ -60,6 +60,16 @@ icon recovery
 M31 reconstruction UI tree is a runtime diagnostic side path. It consumes only source PNG, OCR JSON/document, and M29 `nodes.json`/document, writes report artifacts, and does not change M30 DSL or renderer output.
 
 M31.1.1 ensures the source PNG is decoded once into `PngPixels`; unit fallback crops are sliced from decoded rows and then encoded as PNG. M31 fallback generation must not call compressed PNG crop helpers per unit.
+
+M34.1 keeps OCR text evidence in the source chain. Rotated or graphic text is not dropped before M29. Instead, M30 writes a text editability decision for each text member:
+
+```text
+editable_text
+graphic_text_preserve_in_fallback
+review_text
+```
+
+Only `editable_text` becomes visible `m30_text_member` and participates in fallback pixel erasure. Preserved graphic text remains inside the fallback image and appears in the M30 report for audit.
 
 ## Artifact Profiles
 

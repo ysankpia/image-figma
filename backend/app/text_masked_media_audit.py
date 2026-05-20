@@ -297,6 +297,8 @@ def text_box_to_dict(item: M29TextBox) -> dict[str, Any]:
     }
     if item.text is not None:
         data["text"] = item.text
+    if item.meta:
+        data["meta"] = item.meta
     return data
 
 

@@ -33,6 +33,20 @@ forbiddenHitCount
 
 M31.1.1 修正了 fallback crop 性能路径：unit fallback crops 从已解码 `PngPixels` 裁剪，不再对每个 unit 重新解码整张 PNG。若同类图的 `m31_reconstruction` 再次接近百秒，应优先检查是否回退到了 compressed PNG crop path。
 
+M34.1 增加 M30 text editability diagnostics：
+
+```text
+textEditabilityDecisions
+preservedGraphicTextItems
+reviewTextItems
+summary.editableTextCount
+summary.preservedGraphicTextCount
+summary.reviewTextCount
+summary.textEditabilityReasonCounts
+```
+
+这些字段回答的是“这段 OCR/M29 文字证据为什么没有被物化为普通 Figma text layer”。它们不是 OCR 过滤日志，因为 OCR 证据不会在 M29 前被删除。
+
 ## Logs
 
 后端任务日志至少包含：

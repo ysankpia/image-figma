@@ -12,11 +12,12 @@ from .dsl_factory import build_deterministic_dsl
 from .mixed_symbol_text_conflict_audit import find_forbidden_contract_terms
 from .png_tools import PngMetadata, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
 from .visual_evidence_normalization import parse_bbox
-from .visual_primitive_graph import bbox_in_bounds, draw_rect
+from .visual_primitive_graph import bbox_in_bounds, draw_rect, measure_region
 
 
 M30Mode = Literal["augment-existing-dsl", "bootstrap-dsl-from-m29"]
 MaterializedKind = Literal["text", "shape", "image", "text_cover"]
+TextEditabilityDecisionKind = Literal["editable_text", "graphic_text_preserve_in_fallback", "review_text"]
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,12 @@ class M30Options:
     text_cover_min_height: int = 4
     text_cover_max_area_ratio: float = 0.08
     text_cover_padding: int = 0
+    text_editability_enabled: bool = True
+    preserve_graphic_text_in_media_units: bool = True
+    max_editable_text_rotation_angle: float = 3.0
+    max_editable_background_texture: float = 0.45
+    max_editable_background_color_count: int = 32
+    unstable_background_sample_preserve: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -87,6 +94,30 @@ class M30SkippedItem:
 
 
 @dataclass(frozen=True)
+class M30TextEditabilityDecision:
+    source_text_member_id: str
+    source_text_box_id: str | None
+    decision: TextEditabilityDecisionKind
+    bbox: list[int]
+    text: str
+    reasons: list[str]
+    metrics: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "sourceTextMemberId": self.source_text_member_id,
+            "decision": self.decision,
+            "bbox": self.bbox,
+            "text": self.text,
+            "reasons": self.reasons,
+            "metrics": self.metrics,
+        }
+        if self.source_text_box_id:
+            data["sourceTextBoxId"] = self.source_text_box_id
+        return data
+
+
+@dataclass(frozen=True)
 class M30DebugArtifacts:
     materialization_preview: str | None = None
 
@@ -113,6 +144,7 @@ class M30Report:
     materialized_image_nodes: list[M30MaterializedNode]
     skipped_items: list[M30SkippedItem]
     skipped_text_cover_items: list[M30SkippedItem]
+    text_editability_decisions: list[M30TextEditabilityDecision]
     audit_only_references: list[dict[str, Any]]
     warnings: list[str]
     debug: M30DebugArtifacts
@@ -136,6 +168,9 @@ class M30Report:
             "materializedImageNodes": [item.to_dict() for item in self.materialized_image_nodes],
             "skippedItems": [item.to_dict() for item in self.skipped_items],
             "skippedTextCoverItems": [item.to_dict() for item in self.skipped_text_cover_items],
+            "textEditabilityDecisions": [item.to_dict() for item in self.text_editability_decisions],
+            "preservedGraphicTextItems": [item.to_dict() for item in self.text_editability_decisions if item.decision == "graphic_text_preserve_in_fallback"],
+            "reviewTextItems": [item.to_dict() for item in self.text_editability_decisions if item.decision == "review_text"],
             "auditOnlyReferences": self.audit_only_references,
             "warnings": self.warnings,
             "debug": self.debug.to_dict(),
@@ -156,6 +191,7 @@ def materialize_evidence_grounded_dsl(
     source_image_path: str,
     m2905_document: dict[str, Any],
     m2905_json_path: str,
+    m2902_document: dict[str, Any] | None = None,
     output_dir: Path,
     mode: M30Mode,
     base_dsl: dict[str, Any] | None = None,
@@ -200,7 +236,14 @@ def materialize_evidence_grounded_dsl(
     skipped: list[M30SkippedItem] = []
     skipped_text_cover: list[M30SkippedItem] = []
 
-    append_text_nodes(existing_ids, m2905_document, image, options, pending_text_nodes, skipped)
+    text_decisions = classify_text_editability(
+        pixels=pixels,
+        image=image,
+        m2905_document=m2905_document,
+        m2902_document=m2902_document or {},
+        options=options,
+    )
+    append_text_nodes(existing_ids, m2905_document, image, options, text_decisions, pending_text_nodes, skipped)
     harmonize_text_font_sizes(pending_text_nodes, options)
     append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
@@ -240,6 +283,7 @@ def materialize_evidence_grounded_dsl(
         materialized_image=materialized_image,
         skipped=skipped,
         skipped_text_cover=skipped_text_cover,
+        text_decisions=text_decisions,
         audit_refs=audit_refs,
     )
     report = M30Report(
@@ -258,6 +302,7 @@ def materialize_evidence_grounded_dsl(
         materialized_image_nodes=materialized_image,
         skipped_items=skipped,
         skipped_text_cover_items=skipped_text_cover,
+        text_editability_decisions=text_decisions,
         audit_only_references=audit_refs,
         warnings=warnings or [],
         debug=M30DebugArtifacts(materialization_preview=preview_path),
@@ -289,6 +334,135 @@ def build_bootstrap_dsl(source_path: Path, image: PngMetadata, output_dir: Path)
         regions=None,
         quality_flags=["m30_bootstrap_full_image_fallback"],
     )
+
+
+def classify_text_editability(
+    *,
+    pixels: Any,
+    image: PngMetadata,
+    m2905_document: dict[str, Any],
+    m2902_document: dict[str, Any],
+    options: M30Options,
+) -> list[M30TextEditabilityDecision]:
+    decisions: list[M30TextEditabilityDecision] = []
+    text_boxes_by_id = {
+        str(item.get("id")): item
+        for item in list_dicts(m2902_document.get("textBoxes"))
+        if item.get("id") is not None
+    }
+    visual_bboxes = [
+        bbox
+        for bbox in (parse_bbox(item.get("bbox")) for item in list_dicts(m2905_document.get("visualAssets")))
+        if bbox is not None
+    ]
+    image_area = max(1, image.width * image.height)
+
+    for item in list_dicts(m2905_document.get("textMembers")):
+        source_id = str(item.get("id") or "")
+        bbox = parse_bbox(item.get("bbox"))
+        text = str(item.get("text") or item.get("textPreview") or "").strip()
+        if not source_id or bbox is None or not text or not bbox_in_bounds(bbox, image.width, image.height):
+            continue
+
+        source_text_box_id = str(item.get("sourceTextBoxId") or "") or None
+        source_text_box = text_boxes_by_id.get(source_text_box_id or "")
+        source_meta = source_text_box.get("meta") if isinstance(source_text_box, dict) and isinstance(source_text_box.get("meta"), dict) else {}
+        reasons: list[str] = ["source_evidence_trace"]
+        decision: TextEditabilityDecisionKind = "editable_text"
+        metrics = build_text_editability_metrics(pixels, bbox, source_meta, visual_bboxes, image_area)
+
+        if options.text_editability_enabled:
+            preserve_reasons: list[str] = []
+            if options.preserve_graphic_text_in_media_units:
+                angle = metrics.get("angle")
+                if isinstance(angle, (int, float)) and angle >= options.max_editable_text_rotation_angle:
+                    preserve_reasons.append("rotated_or_skewed_text")
+                if metrics["visualOverlapRatio"] >= 0.35:
+                    preserve_reasons.append("image_embedded_text")
+                if is_media_region_text(bbox, image):
+                    preserve_reasons.append("media_region_text")
+                if is_high_visual_style_loss(text, bbox, image, metrics):
+                    preserve_reasons.append("high_visual_style_loss")
+                if (
+                    options.unstable_background_sample_preserve
+                    and metrics["colorCount"] >= options.max_editable_background_color_count
+                    and metrics["textureScore"] >= options.max_editable_background_texture
+                ):
+                    preserve_reasons.append("unstable_background_sample")
+
+            if preserve_reasons:
+                decision = "graphic_text_preserve_in_fallback"
+                reasons = unique_strings([*preserve_reasons, "source_evidence_trace"])
+
+        decisions.append(
+            M30TextEditabilityDecision(
+                source_text_member_id=source_id,
+                source_text_box_id=source_text_box_id,
+                decision=decision,
+                bbox=bbox,
+                text=text,
+                reasons=reasons,
+                metrics=metrics,
+            )
+        )
+    return decisions
+
+
+def build_text_editability_metrics(
+    pixels: Any,
+    bbox: list[int],
+    source_meta: dict[str, Any],
+    visual_bboxes: list[list[int]],
+    image_area: int,
+) -> dict[str, Any]:
+    measured = measure_region(pixels, bbox)
+    angle = source_meta.get("angle")
+    max_visual_overlap = max((bbox_overlap_ratio(bbox, visual_bbox) for visual_bbox in visual_bboxes), default=0.0)
+    return {
+        "angle": round(float(angle), 3) if isinstance(angle, (int, float)) else None,
+        "colorCount": measured.color_count,
+        "textureScore": measured.texture_score,
+        "edgeScore": measured.edge_score,
+        "fillRatio": measured.fill_ratio,
+        "bboxAreaRatio": round(bbox_area(bbox) / image_area, 6),
+        "visualOverlapRatio": round(max_visual_overlap, 4),
+    }
+
+
+def is_media_region_text(bbox: list[int], image: PngMetadata) -> bool:
+    if image.height < 600:
+        return False
+    x, y, width, height = bbox
+    center_y = y + height / 2
+    center_x = x + width / 2
+    return (
+        center_y >= image.height * 0.10
+        and center_y <= image.height * 0.32
+        and width >= image.width * 0.16
+        and center_x <= image.width * 0.55
+    )
+
+
+def is_high_visual_style_loss(text: str, bbox: list[int], image: PngMetadata, metrics: dict[str, Any]) -> bool:
+    _, y, width, height = bbox
+    if height < max(28, image.height * 0.018):
+        return False
+    if width < image.width * 0.14:
+        return False
+    if y > image.height * 0.36:
+        return False
+    return metrics["colorCount"] >= 24 and metrics["edgeScore"] >= 0.08 and bool(text)
+
+
+def unique_strings(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
 
 def harmonize_text_font_sizes(pending_nodes: list[M30PendingNode], options: M30Options) -> None:
     """
@@ -415,9 +589,11 @@ def append_text_nodes(
     m2905_document: dict[str, Any],
     image: PngMetadata,
     options: M30Options,
+    text_decisions: list[M30TextEditabilityDecision],
     materialized: list[M30PendingNode],
     skipped: list[M30SkippedItem],
 ) -> None:
+    decisions_by_member_id = {item.source_text_member_id: item for item in text_decisions}
     for item in list_dicts(m2905_document.get("textMembers")):
         source_id = str(item.get("id") or "")
         bbox = parse_bbox(item.get("bbox"))
@@ -427,6 +603,10 @@ def append_text_nodes(
             continue
         if not text:
             skipped.append(M30SkippedItem(source_id, "m2905_text_member", "missing_text", bbox))
+            continue
+        decision = decisions_by_member_id.get(source_id)
+        if decision is not None and decision.decision != "editable_text":
+            skipped.append(M30SkippedItem(source_id, "m2905_text_member", decision.decision, bbox, decision.reasons))
             continue
         node_id = next_unique_id(existing_ids, f"m30_text_{len(materialized) + 1:04d}")
         node = {
@@ -456,6 +636,8 @@ def append_text_nodes(
                 "ocrConfidence": item.get("confidence"),
                 "materializationConfidence": "medium",
                 "riskFlags": list_strings(item.get("risks")),
+                "textEditabilityDecision": decision.decision if decision is not None else "editable_text",
+                "textEditabilityReasons": decision.reasons if decision is not None else ["source_evidence_trace"],
             },
         }
         materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "text", source_id, bbox, "medium", ["source_evidence_trace"])))
@@ -845,15 +1027,23 @@ def build_summary(
     materialized_image: list[M30MaterializedNode],
     skipped: list[M30SkippedItem],
     skipped_text_cover: list[M30SkippedItem],
+    text_decisions: list[M30TextEditabilityDecision],
     audit_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     visual_skips = [item for item in skipped if item.source_kind == "m2905_visual_asset"]
     shape_skips = [item for item in skipped if item.source_kind == "m2905_shape_candidate"]
+    editable_text = [item for item in text_decisions if item.decision == "editable_text"]
+    preserved_text = [item for item in text_decisions if item.decision == "graphic_text_preserve_in_fallback"]
+    review_text = [item for item in text_decisions if item.decision == "review_text"]
     fallback_preserved = has_fallback_node(dsl)
     return {
         "mode": mode,
         "textMemberCount": len(list_dicts(m2905_document.get("textMembers"))),
         "materializedTextCount": len(materialized_text),
+        "editableTextCount": len(editable_text),
+        "preservedGraphicTextCount": len(preserved_text),
+        "reviewTextCount": len(review_text),
+        "textEditabilityReasonCounts": text_editability_reason_counts(text_decisions),
         "textCoverCandidateCount": len(materialized_text_cover) + len(skipped_text_cover),
         "materializedTextCoverCount": len(materialized_text_cover),
         "skippedTextCoverCount": len(skipped_text_cover),
@@ -952,7 +1142,20 @@ def materialized_children(root: dict[str, Any]) -> list[dict[str, Any]]:
 def report_without_forbidden_check(report: M30Report) -> dict[str, Any]:
     data = report.to_dict()
     data["forbiddenTermCheck"] = {"hits": [], "checkedScope": "m30_report_and_materialized_nodes"}
+    strip_user_text_for_forbidden_check(data)
     return data
+
+
+def strip_user_text_for_forbidden_check(value: Any) -> None:
+    if isinstance(value, dict):
+        for key in list(value.keys()):
+            if key in {"text", "content"}:
+                value[key] = ""
+            else:
+                strip_user_text_for_forbidden_check(value[key])
+    elif isinstance(value, list):
+        for item in value:
+            strip_user_text_for_forbidden_check(item)
 
 
 def replace_forbidden_check(report: M30Report, hits: list[str]) -> M30Report:
@@ -977,6 +1180,7 @@ def replace_forbidden_check(report: M30Report, hits: list[str]) -> M30Report:
         debug=report.debug,
         forbidden_term_check={"hits": hits, "checkedScope": "m30_report_and_materialized_nodes"},
         meta=report.meta,
+        text_editability_decisions=report.text_editability_decisions,
     )
 
 
@@ -1070,6 +1274,14 @@ def reason_counts(items: list[M30SkippedItem]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in items:
         counts[item.reason] = counts.get(item.reason, 0) + 1
+    return counts
+
+
+def text_editability_reason_counts(items: list[M30TextEditabilityDecision]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        for reason in item.reasons:
+            counts[reason] = counts.get(reason, 0) + 1
     return counts
 
 

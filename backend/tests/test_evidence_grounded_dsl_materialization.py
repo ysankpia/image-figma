@@ -194,11 +194,114 @@ def test_visual_asset_overlap_skips_text_cover(tmp_path: Path) -> None:
         m2905_json_path=str(m2905_json),
         output_dir=tmp_path / "m30",
         mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_editability_enabled=False),
     )
 
     assert count_children(result.dsl, "m30_visual_asset") == 1
     assert count_children(result.dsl, "m30_text_cover") == 0
     assert result.report.summary["skippedTextCoverReasons"]["unsafe_visual_overlap"] == 1
+
+
+def test_graphic_text_over_visual_asset_is_preserved_in_fallback_by_default(tmp_path: Path) -> None:
+    canvas = make_canvas(120, 100, fill=(240, 240, 240))
+    rows = [bytearray(row) for row in canvas.rows]
+    for row_index in range(11, 16):
+        for column in range(12, 22):
+            rows[row_index][column * 3 : column * 3 + 3] = b"\x00\x00\x00"
+    source = write_png(tmp_path / "source.png", PngPixels(width=120, height=100, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0002.png", make_canvas(40, 12))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_0002", [10, 10, 40, 12], str(visual_asset_path.relative_to(m2905_dir))),
+        ],
+        shape_candidates=[],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document_with_text_box("ocr_001", [10, 10, 40, 12], "Graphic"),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 0
+    assert count_children(result.dsl, "m30_text_cover") == 0
+    assert result.report.summary["materializedTextCount"] == 0
+    assert result.report.summary["preservedGraphicTextCount"] == 1
+    assert result.report.summary["editableTextCount"] == 0
+    assert result.report.summary["createdNewBBoxCount"] == 0
+    preserved = result.report.to_dict()["preservedGraphicTextItems"][0]
+    assert preserved["decision"] == "graphic_text_preserve_in_fallback"
+    assert "image_embedded_text" in preserved["reasons"]
+    skipped_reasons = {item.reason for item in result.report.skipped_items}
+    assert "graphic_text_preserve_in_fallback" in skipped_reasons
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_path = tmp_path / "m30" / fallback_asset["url"]
+    fallback_pixels = decode_png_pixels(fallback_path.read_bytes())
+    for row_index in range(11, 16):
+        for column in range(12, 22):
+            offset = column * 3
+            assert list(fallback_pixels.rows[row_index][offset : offset + 3]) == [0, 0, 0]
+
+
+def test_rotated_ocr_text_is_preserved_as_evidence_but_not_materialized_text(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+    m2902 = m2902_document_with_text_box(
+        "ocr_001",
+        [10, 10, 40, 12],
+        "Graphic",
+        meta={"angle": 12.5, "polygon": [[10, 10], [50, 18], [47, 30], [7, 22]]},
+    )
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902,
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 0
+    assert result.report.summary["preservedGraphicTextCount"] == 1
+    preserved = result.report.to_dict()["preservedGraphicTextItems"][0]
+    assert preserved["sourceTextBoxId"] == "ocr_001"
+    assert preserved["metrics"]["angle"] == 12.5
+    assert "rotated_or_skewed_text" in preserved["reasons"]
+
+
+def test_plain_ocr_text_remains_editable_text_candidate(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    m2905 = m2905_document(m2905_dir, visual_assets=[], shape_candidates=[])
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        m2902_document=m2902_document_with_text_box("ocr_001", [10, 10, 40, 12], "Hello", meta={"angle": 0.2}),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_text_member")
+    assert text_node["content"]["text"] == "Hello"
+    assert text_node["meta"]["textEditabilityDecision"] == "editable_text"
+    assert result.report.summary["editableTextCount"] == 1
+    assert result.report.summary["preservedGraphicTextCount"] == 0
+    decisions = result.report.to_dict()["textEditabilityDecisions"]
+    assert decisions[0]["decision"] == "editable_text"
+    assert decisions[0]["reasons"] == ["source_evidence_trace"]
 
 
 def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
@@ -388,6 +491,24 @@ def visual_asset(id: str, bbox: list[int], asset_path: str, *, text_overlap: flo
         "metrics": None,
         "risks": risks or [],
         "reasons": ["icon_asset_from_existing_member_bbox"],
+    }
+
+
+def m2902_document_with_text_box(id: str, bbox: list[int], text: str, meta: dict | None = None) -> dict:
+    item = {
+        "id": id,
+        "bbox": bbox,
+        "text": text,
+        "confidence": 0.96,
+        "source": "ocr",
+        "kind": "line",
+    }
+    if meta is not None:
+        item["meta"] = meta
+    return {
+        "schemaName": "M2902TextMaskedMediaAuditDocument",
+        "schemaVersion": "0.1",
+        "textBoxes": [item],
     }
 
 
@@ -619,5 +740,3 @@ def test_text_font_size_harmonization_mode_snapping(tmp_path: Path) -> None:
     # Non-snapped elements
     assert text_nodes["M30 Text / text_0001"]["style"]["fontSize"] == 36 # max capped at 36
     assert text_nodes["M30 Text / text_0008"]["style"]["fontSize"] == 20
-
-
