@@ -43,6 +43,7 @@ class VisibleNode:
     bbox: list[int]
     text: str | None
     source_ids: set[str]
+    boundary_classification: str | None = None
 
 
 def extract_m37_hierarchy_readiness(
@@ -109,6 +110,11 @@ def extract_m37_hierarchy_readiness(
         if fallback_risk:
             fallback_conflict_risk_count += 1
 
+        child_classifications = {
+            match["boundaryClassification"] for match in mapped_nodes if match.get("boundaryClassification")
+        }
+        has_boundary_conflict = len(child_classifications) > 1
+
         unsafe_reasons = unsafe_unit_reasons(
             unit=unit,
             bbox=bbox,
@@ -118,6 +124,7 @@ def extract_m37_hierarchy_readiness(
             duplicate_bbox=duplicate_bbox,
             micro_unit=micro_unit,
             relative_violations=relative_violations,
+            boundary_conflict=has_boundary_conflict,
         )
         unit_report = {
             "unitId": unit_id,
@@ -207,6 +214,7 @@ def visible_m30_nodes(root: dict[str, Any]) -> list[VisibleNode]:
                         bbox=bbox,
                         text=str(content.get("text")).strip() if content.get("text") is not None else None,
                         source_ids=node_source_ids(meta),
+                        boundary_classification=meta.get("boundaryClassification"),
                     )
                 )
         for child in node.get("children", []) if isinstance(node.get("children"), list) else []:
@@ -298,6 +306,7 @@ def match_visible_nodes(unit: dict[str, Any], primitives: list[dict[str, Any]], 
                     "matchKind": match_kind,
                     "bbox": node.bbox,
                     "relativeBBox": [node.bbox[0] - unit_bbox[0], node.bbox[1] - unit_bbox[1], node.bbox[2], node.bbox[3]],
+                    "boundaryClassification": node.boundary_classification,
                 }
             )
     return matches
@@ -358,6 +367,7 @@ def unsafe_unit_reasons(
     duplicate_bbox: bool,
     micro_unit: bool,
     relative_violations: int,
+    boundary_conflict: bool = False,
 ) -> list[str]:
     reasons: list[str] = []
     kind = str(unit.get("kind") or "")
@@ -386,6 +396,8 @@ def unsafe_unit_reasons(
         reasons.append("tiny_unit")
     if relative_violations:
         reasons.append("relative_coordinate_violation")
+    if boundary_conflict:
+        reasons.append("boundary_classification_conflict")
     return unique_strings(reasons)
 
 

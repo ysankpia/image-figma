@@ -87,3 +87,13 @@ uv run pytest tests/test_hierarchy_materialization.py tests/test_m37_hierarchy_r
 cd ..
 pnpm run check
 ```
+
+## Follow-up Notes from 2026-05-21
+
+Today's discussion clarified the next boundary after M38:
+
+- More `unit` candidates do not automatically create hierarchy; hierarchy only appears when parent-child relations are validated and materialized.
+- The remaining search area, bottom chrome, and similar fixed UI shells should be treated as a separate content-vs-chrome boundary problem, not as a one-off per-element patch.
+- `/Volumes/WorkDrive/Models/model_fp16.onnx` can be used later only as a candidate proposer to improve recall. It should not become the truth source for hierarchy.
+- The useful pattern from `ui-contract` is the contract split: evidence -> semantic judgment -> canonical AST -> renderable document.
+- The next likely phase is M39, which should define a generic boundary between content, chrome, candidate units, and validated groups before any further hierarchy policy changes.
