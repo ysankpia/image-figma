@@ -38,7 +38,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert visible_audit_only_children(dsl) == 0
 
     for asset in dsl["assets"]:
-        if asset.get("role") in {"fallback_region", "m30_visual_asset"}:
+        if asset.get("role") in {"fallback_region", "m30_visual_asset", "m30_composite_media_asset"}:
             assert str(asset["url"]).startswith(f"http://localhost:8000/files/assets/{task_id}/m30/")
             file_response = client.get(str(asset["url"]).replace("http://localhost:8000", ""))
             assert file_response.status_code == 200
@@ -51,12 +51,19 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert report_data["summary"]["permissionViolationCount"] == 0
     assert report_data["summary"]["createdNewBBoxCount"] == 0
     assert "materializedAcceptedImageCount" in report_data["summary"]
+    assert "materializedCompositeMediaCount" in report_data["summary"]
+    assert "cleanedMaterializedImageAssetCount" in report_data["summary"]
+    assert "erasedTextFromMaterializedImageAssetCount" in report_data["summary"]
+    assert "skippedCompositeMediaCount" in report_data["summary"]
     assert "materializedTextCoverCount" in report_data["summary"]
     report_file = Path(report_data["outputDsl"]).with_name("m30_materialization_report.json")
     full_report = json.loads(report_file.read_text(encoding="utf-8"))
     assert full_report["options"]["accepted_image_materialization_enabled"] is True
     assert full_report["options"]["accepted_image_max_text_overlap"] == 0.02
     assert full_report["options"]["accepted_image_min_area"] == 20000
+    assert full_report["options"]["image_asset_text_erasure_enabled"] is True
+    assert full_report["options"]["composite_media_materialization_enabled"] is True
+    assert full_report["options"]["composite_media_min_area"] == 50000
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
     assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {

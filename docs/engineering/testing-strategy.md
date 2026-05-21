@@ -137,6 +137,8 @@ Required evidence coverage:
 - M30.6 materializes only low-text-overlap large accepted image assets with recovered raw M29 lineage.
 - M30.6 does not relax text-overlap policy for ordinary icons or small visual assets.
 - M30.6 writes recovered lineage into M30 image node meta so M37 can direct-match image primitives without changing M37 rules.
+- M30.7 removes editable text pixels only from M30 copied media assets, never from M29.0.5 source assets.
+- M30.7 materializes only large `partially_separated` composite media with existing `combinedAssetPath`; it does not split internal art text.
 - OCR text evidence is not dropped before M29; graphic text is preserved by M30 editability decision instead.
 - `graphic_text_preserve_in_fallback` does not generate `m30_text_member` and does not enter fallback erasure.
 - plain horizontal UI text still generates `m30_text_member`.
@@ -150,14 +152,14 @@ Required evidence coverage:
 - M36 samples editable text foreground color from source pixels or records a contrast/default fallback.
 - M37 audits M31-to-M30 hierarchy readiness without changing visible DSL output.
 
-M30.6 focused coverage lives in `tests/test_evidence_grounded_dsl_materialization.py`:
+M30.6/M30.7 focused coverage lives in `tests/test_evidence_grounded_dsl_materialization.py`:
 
 ```bash
 cd backend
 uv run pytest tests/test_evidence_grounded_dsl_materialization.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
 ```
 
-It must cover low-overlap accepted image materialization, high-overlap/risk/missing-lineage skips, small icon isolation, fallback image erasure, and default runtime config exposure.
+It must cover low-overlap accepted image materialization, high-overlap/risk/missing-lineage skips, small icon isolation, fallback image erasure, copied image asset text cleanup, composite media materialization, composite media safety skips, and default runtime config exposure.
 
 ## M31 Reconstruction UI Tree
 

@@ -37,6 +37,9 @@ class Settings:
     m30_accepted_image_materialization_enabled: bool = True
     m30_accepted_image_max_text_overlap: float = 0.02
     m30_accepted_image_min_area: int = 20000
+    m30_image_asset_text_erasure_enabled: bool = True
+    m30_composite_media_materialization_enabled: bool = True
+    m30_composite_media_min_area: int = 50000
     m38_hierarchy_materialization_enabled: bool = True
     m38_hierarchy_materialization_strict: bool = False
     m38_hierarchy_max_containers: int = 8
@@ -81,6 +84,9 @@ def get_settings() -> Settings:
         m30_accepted_image_materialization_enabled=parse_bool(os.getenv("M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED", "true"), default=True),
         m30_accepted_image_max_text_overlap=float(os.getenv("M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP", "0.02")),
         m30_accepted_image_min_area=max(0, int(os.getenv("M30_ACCEPTED_IMAGE_MIN_AREA", "20000"))),
+        m30_image_asset_text_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED", "true"), default=True),
+        m30_composite_media_materialization_enabled=parse_bool(os.getenv("M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED", "true"), default=True),
+        m30_composite_media_min_area=max(0, int(os.getenv("M30_COMPOSITE_MEDIA_MIN_AREA", "50000"))),
         m38_hierarchy_materialization_enabled=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "true"), default=True),
         m38_hierarchy_materialization_strict=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "false"), default=False),
         m38_hierarchy_max_containers=max(0, int(os.getenv("M38_HIERARCHY_MAX_CONTAINERS", "8"))),

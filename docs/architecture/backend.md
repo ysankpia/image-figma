@@ -38,7 +38,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization with text editability decisions, accepted image materialization policy, and fallback erasure for materialized nodes
+-> M30 evidence-grounded DSL materialization with text editability decisions, accepted image materialization, copied media asset text cleanup, composite media materialization, and fallback erasure for materialized nodes
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
 -> M37 hierarchy readiness diagnostic, if M31 artifacts exist
 -> M38 controlled hierarchy materialization, if M37 report exists and M38 is enabled
@@ -91,6 +91,15 @@ M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editab
 M30.6 is an internal M30 image materialization policy. It does not add a runtime stage. It allows only large `assetUse=image_asset` entries from M29.0.5 to bypass the old zero text-overlap visual-asset gate when their overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node such as `image_003`.
 
 M30.6 writes recovered ids into the emitted image node meta, including the extended `sourceEvidenceNodeIds` list consumed by M37. It does not run OCR, does not recover image-internal overlays, does not fix `1/6`, does not clean parent image internals, and does not change M37/M38 grouping policy.
+
+M30.7 is also an internal M30 policy, not a runtime stage. It enforces raster pixel ownership after media materialization:
+
+```text
+editable text layer exists above copied media asset
+-> same text pixels must be removed from the copied media asset underneath
+```
+
+The cleanup edits only M30 copied assets under `m30/assets/`, never M29.0.5 source assets. It maps editable text bboxes into local image pixels and fills those bboxes with local background samples. M30.7 also materializes large M29.0.5 `partially_separated` objects with `combinedAssetPath` as `role=m30_composite_media_asset` image nodes, so carousel/banner blocks can be selected and dragged as single raster layers. It does not split their internal art text into editable text.
 
 M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and the final M30 DSL/report, then writes `m37_hierarchy_readiness_report.json`. It does not modify DSL, create visible frames, or change Renderer coordinate semantics.
 

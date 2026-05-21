@@ -92,6 +92,19 @@ image node meta.sourceM29NodeIds
 
 If a large product or banner image is still not draggable, first inspect `skippedItems[]` in `GET /api/tasks/{taskId}/m30-materialization`. A remaining `unsafe_text_overlap` means the item did not pass the M30.6 accepted-image gate, usually because overlap was above threshold, a high-risk flag was present, or lineage could not resolve back to a raw M29 image id.
 
+M30.7 adds raster deduplication and composite media diagnostics inside the same M30 report:
+
+```text
+summary.materializedCompositeMediaCount
+summary.cleanedMaterializedImageAssetCount
+summary.erasedTextFromMaterializedImageAssetCount
+summary.skippedCompositeMediaCount
+materializedImageNodes[].reasons includes composite_media_block
+image node meta.m30CompositeMediaMaterialization = true
+```
+
+If editable product-card text shows a ghost after dragging, inspect `cleanedMaterializedImageAssetCount` and warnings starting with `m30_image_asset_text_erasure_`. If a carousel/banner still cannot be selected, inspect `skippedItems[]` with `sourceKind=m2905_composite_media_object`; common skip reasons are `composite_media_too_small`, `missing_combined_asset_path`, `unsafe_composite_media_risk`, and `duplicate_materialized_image_bbox`.
+
 M37 adds `m37_hierarchy_readiness` to `stage_timings.json` when M31 and M30 artifacts are available. It writes:
 
 ```text

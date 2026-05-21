@@ -9,7 +9,7 @@ Figma plugin
 -> POST /api/upload-m30-preview
 -> OCR + M29 evidence pipeline
 -> M31 reconstruction diagnostics
--> M30 materialized DSL
+-> M30 materialized DSL with raster layer deduplication
 -> M37 hierarchy readiness diagnostics
 -> M38 controlled hierarchy materialization
 -> GET /api/tasks/{taskId}/dsl
@@ -25,6 +25,8 @@ OCR text evidence is preserved through M29/M31. M30 decides whether each text me
 M34.2 makes that M30 decision context-aware. Light OCR angle noise and broad image overlap can be overridden by generic geometry signals such as aligned text rows, compact overlay badges, metadata text clusters, and stable local background. The policy does not inspect business words or fixed screen coordinates.
 
 M36 samples text foreground color from source PNG pixels for emitted editable text nodes. This replaces the old single dark default for colored and dark backgrounds while keeping preserved graphic text inside fallback.
+
+M30 materializes safe text, shapes, images, and composite media into DSL layers, then deduplicates raster pixels that would otherwise be drawn twice. Editable text remains a top layer; if it sits inside a copied media asset, M30.7 erases that text bbox from the copied asset only. M29.0.5 source assets are never modified.
 
 M37 reads M31 and final M30 artifacts to produce a hierarchy readiness report. It does not create frames, move DSL nodes, or change Figma output.
 
@@ -105,7 +107,7 @@ OCR
 -> M29.0.7 text/visual ownership gate
 -> M29.0.4 visual object candidate audit with ownership routing
 -> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization
+-> M30 evidence-grounded DSL materialization with accepted images, copied media text cleanup, and composite media
 -> M30.2 conservative text cover
 -> publish M30 image assets under /files/assets/{taskId}/m30/
 -> M37 hierarchy readiness diagnostic
@@ -212,6 +214,8 @@ If no foreground pixels are available, it falls back to black or white based on 
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 
 M30.6 adds a narrow accepted-image materialization policy inside M30. Large `assetUse=image_asset` entries from M29.0.5 can become `m30_visual_asset` DSL image nodes when their text overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their bbox area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node. This makes product/banner images draggable as independent Figma image layers. It is not OCR, not image-internal overlay recovery, not a `1/6` fix, not parent asset cleanup, and not M38 grouping.
+
+M30.7 keeps those independent media layers clean. It fills editable text bboxes inside copied `m30_visual_asset`/`m30_composite_media_asset` PNGs with sampled local background, so dragging the text does not reveal baked duplicate text underneath. It also materializes large `decision=partially_separated` objects with `combinedAssetPath` as `m30_composite_media_asset`, which makes carousel/banner raster blocks draggable without pretending their internal art text is editable.
 
 ## M31 Reconstruction UI Tree
 

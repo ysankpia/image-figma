@@ -34,6 +34,9 @@
 | `M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED` | 是否启用 M30.6 低文字重叠大 image asset 物化策略 | `true` | 否 |
 | `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP` | M30.6 大 image asset 可接受的最大文字重叠比例 | `0.02` | 否 |
 | `M30_ACCEPTED_IMAGE_MIN_AREA` | M30.6 大 image asset 可物化的最小 bbox 面积 | `20000` | 否 |
+| `M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED` | 是否从 M30 copied media asset 中擦除已物化 editable text bbox | `true` | 否 |
+| `M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED` | 是否把大面积 `partially_separated` composite media 物化为独立 image node | `true` | 否 |
+| `M30_COMPOSITE_MEDIA_MIN_AREA` | M30.7 composite media 可物化的最小 bbox 面积 | `50000` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
 | `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
@@ -132,11 +135,18 @@ M36 text foreground color sampling 是 M30 materialization 的默认行为，没
 M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED=true
 M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP=0.02
 M30_ACCEPTED_IMAGE_MIN_AREA=20000
+M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED=true
+M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED=true
+M30_COMPOSITE_MEDIA_MIN_AREA=50000
 ```
 
 M30.6 默认启用。它只影响 M30 内部的 large accepted image asset policy：当 M29.0.5 已经产出 `assetUse=image_asset`，且文字重叠很低、面积足够大、没有高风险 text/boundary flags、并能通过 M29.0.4/M29.0.3 血统追溯回 raw M29 image node 时，M30 会把它物化成 `role=m30_visual_asset` 的 DSL image node。
 
 这不是 OCR、不是 `1/6` 或 image-internal overlay recovery、不是 parent asset cleanup，也不是 M38 grouping。普通 icon/small visual asset 仍然走原来的严格 `safe_visual_text_overlap_max=0.0` 策略。
+
+M30.7 也在 M30 内部运行，不新增 runtime stage。`M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED=true` 时，M30 只会修改自己复制到 `m30/assets/` 下的 media PNG：如果 editable `m30_text_member` 的 bbox 几乎完全落在 `m30_visual_asset` 或 `m30_composite_media_asset` 内部，就把该 bbox 在 copied image asset 中补成局部背景色，避免拖走上层文字后露出烘焙文字重影。原始 M29.0.5 asset 不会被修改。
+
+`M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED=true` 时，M30 会把大面积 `decision=partially_separated` 且有 `combinedAssetPath` 的 composite media 作为 `role=m30_composite_media_asset` image node 物化。它用于让轮播图/Banner 整块可选中、可拖动；第一版保留图内艺术标题烘焙在 raster 中，不做内部文字编辑。
 
 M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不直接改变 `/api/tasks/{taskId}/dsl`。
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import shutil
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -27,6 +28,9 @@ class M30Options:
     accepted_image_materialization_enabled: bool = True
     accepted_image_max_text_overlap: float = 0.02
     accepted_image_min_area: int = 20000
+    image_asset_text_erasure_enabled: bool = True
+    composite_media_materialization_enabled: bool = True
+    composite_media_min_area: int = 50000
     default_text_color: str = "#111827"
     min_text_font_size: int = 8
     max_text_font_size: int = 36
@@ -190,6 +194,12 @@ class AcceptedImageLineage:
 
 
 @dataclass(frozen=True)
+class M30ImageAssetTextErasureResult:
+    cleaned_asset_ids: list[str]
+    erased_text_bbox_count: int
+
+
+@dataclass(frozen=True)
 class M30DebugArtifacts:
     materialization_preview: str | None = None
 
@@ -275,6 +285,7 @@ def materialize_evidence_grounded_dsl(
     emit_preview_artifacts: bool = True,
 ) -> M30Result:
     options = options or M30Options()
+    report_warnings = list(warnings or [])
     source_path = Path(source_image_path).expanduser().resolve()
     png_data = source_path.read_bytes()
     image = read_png_metadata(png_data)
@@ -322,6 +333,7 @@ def materialize_evidence_grounded_dsl(
     harmonize_text_font_sizes(pending_text_nodes, options)
     append_shape_nodes(existing_ids, m2905_document, image, options, pending_shape_nodes, skipped)
     append_image_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
+    append_composite_media_nodes(dsl, existing_ids, assets_by_id, m2905_document, Path(m2905_json_path).expanduser().resolve().parent, output_dir, image, options, pending_image_nodes, skipped)
     append_text_cover_nodes(
         existing_ids=existing_ids,
         pixels=pixels,
@@ -340,8 +352,16 @@ def materialize_evidence_grounded_dsl(
     materialized_text_cover = [item.materialized for item in pending_text_cover_nodes]
     materialized_shape = [item.materialized for item in pending_shape_nodes]
     materialized_image = [item.materialized for item in pending_image_nodes]
+    image_asset_text_erasure = clean_text_from_materialized_image_assets(
+        dsl=dsl,
+        output_dir=output_dir,
+        materialized_image=materialized_image,
+        materialized_text=materialized_text,
+        options=options,
+        warnings=report_warnings,
+    )
 
-    audit_refs = collect_audit_only_references(m2905_document)
+    audit_refs = collect_audit_only_references(m2905_document, materialized_image)
     preview_path = write_preview(pixels, output_dir, [*materialized_shape, *materialized_image, *materialized_text_cover, *materialized_text]) if emit_preview_artifacts else None
     erase_text_from_fallback_images(dsl, output_dir, materialized_text)
     
@@ -371,6 +391,7 @@ def materialize_evidence_grounded_dsl(
         text_symbol_decisions=text_symbol_decisions,
         text_foreground_counts=text_foreground_source_counts(pending_text_nodes),
         audit_refs=audit_refs,
+        image_asset_text_erasure=image_asset_text_erasure,
     )
     report = M30Report(
         schema_name="M30EvidenceGroundedDslMaterializationReport",
@@ -391,7 +412,7 @@ def materialize_evidence_grounded_dsl(
         text_editability_decisions=text_decisions,
         text_symbol_leakage_decisions=text_symbol_decisions,
         audit_only_references=audit_refs,
-        warnings=warnings or [],
+        warnings=report_warnings,
         debug=M30DebugArtifacts(materialization_preview=preview_path),
         forbidden_term_check={"hits": [], "checkedScope": "m30_report_and_materialized_nodes"},
         meta={
@@ -1210,6 +1231,118 @@ def append_image_nodes(
         materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "image", source_id, bbox, "medium", reasons)))
 
 
+def append_composite_media_nodes(
+    dsl: dict[str, Any],
+    existing_ids: set[str],
+    assets_by_id: set[str],
+    m2905_document: dict[str, Any],
+    m2905_dir: Path,
+    output_dir: Path,
+    image: PngMetadata,
+    options: M30Options,
+    materialized: list[M30PendingNode],
+    skipped: list[M30SkippedItem],
+) -> None:
+    if not options.composite_media_materialization_enabled:
+        for item in list_dicts(m2905_document.get("objects")):
+            if item.get("decision") == "partially_separated":
+                source_id = str(item.get("id") or "unknown_composite_media")
+                skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "composite_media_materialization_disabled", parse_bbox(item.get("bbox")), list_strings(item.get("risks"))))
+        return
+
+    asset_dir = output_dir / "assets" / "m30_composite_media_assets"
+    materialized_source_ids = {item.materialized.source_id for item in materialized}
+    for item in list_dicts(m2905_document.get("objects")):
+        source_id = str(item.get("id") or "")
+        if item.get("decision") != "partially_separated":
+            continue
+
+        bbox = parse_bbox(item.get("bbox"))
+        risks = list_strings(item.get("risks"))
+        combined_asset_path = str(item.get("combinedAssetPath") or "").strip()
+        if not source_id or bbox is None or not bbox_in_bounds(bbox, image.width, image.height):
+            skipped.append(M30SkippedItem(source_id or "unknown_composite_media", "m2905_composite_media_object", "invalid_bbox", bbox, risks))
+            continue
+        if bbox_area(bbox) < options.composite_media_min_area:
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "composite_media_too_small", bbox, risks))
+            continue
+        if any(risk in {"split_needed", "wide_source"} for risk in risks):
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "unsafe_composite_media_risk", bbox, risks))
+            continue
+        if not combined_asset_path:
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "missing_combined_asset_path", bbox, risks))
+            continue
+        if any(visual_id in materialized_source_ids for visual_id in list_strings(item.get("visualAssetIds"))):
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "duplicate_materialized_visual_asset", bbox, risks))
+            continue
+        if any(bbox_iou(bbox, existing.materialized.bbox) >= 0.85 for existing in materialized):
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "duplicate_materialized_image_bbox", bbox, risks))
+            continue
+
+        source_asset_path = (m2905_dir / combined_asset_path).resolve()
+        if not source_asset_path.exists():
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "missing_combined_asset_path", bbox, risks))
+            continue
+
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        copied_path = asset_dir / f"{source_id}{source_asset_path.suffix.lower() or '.png'}"
+        shutil.copy2(source_asset_path, copied_path)
+        asset_id = next_unique_asset_id(assets_by_id, f"m30_composite_media_asset_{len(materialized) + 1:04d}")
+        dsl["assets"].append(
+            {
+                "assetId": asset_id,
+                "type": "image",
+                "role": "m30_composite_media_asset",
+                "url": relative_posix(output_dir, copied_path),
+                "format": image_format_for(copied_path),
+                "width": bbox[2],
+                "height": bbox[3],
+                "storage": "local",
+                "meta": {
+                    "m30Materialized": True,
+                    "m30CompositeMediaMaterialization": True,
+                    "sourceKind": "m2905_composite_media_object",
+                    "sourceRefinedObjectId": source_id,
+                    "sourceObjectId": item.get("sourceObjectId"),
+                    "sourceBBox": bbox,
+                    "sourceRisks": risks,
+                    "sourceCombinedAssetPath": combined_asset_path,
+                    "copiedFromExistingM2905Asset": combined_asset_path,
+                },
+            }
+        )
+        node_id = next_unique_id(existing_ids, f"m30_composite_media_{len(materialized) + 1:04d}")
+        node = {
+            "id": node_id,
+            "type": "image",
+            "role": "m30_composite_media_asset",
+            "name": f"M30 Composite Media / {source_id}",
+            "layout": layout_from_bbox(bbox),
+            "source": {"assetId": asset_id},
+            "imageFill": {"mode": "fit"},
+            "style": {"visible": True, "opacity": 1},
+            "meta": {
+                "m30Materialized": True,
+                "m30CompositeMediaMaterialization": True,
+                "sourceKind": "m2905_composite_media_object",
+                "sourceRefinedObjectId": source_id,
+                "sourceObjectId": item.get("sourceObjectId"),
+                "sourceBBox": bbox,
+                "sourceRisks": risks,
+                "sourceCombinedAssetPath": combined_asset_path,
+                "materializationConfidence": "medium",
+                "riskFlags": risks,
+            },
+        }
+        materialized.append(
+            M30PendingNode(
+                node,
+                M30MaterializedNode(node_id, "image", source_id, bbox, "medium", ["composite_media_block", "source_evidence_trace"]),
+            )
+        )
+        materialized_source_ids.add(source_id)
+
+
 M30_UNSAFE_VISUAL_TEXT_RISKS = {
     "contains_text",
     "text_overlay_shape",
@@ -1457,9 +1590,13 @@ def append_pending_nodes(dsl: dict[str, Any], nodes: list[M30PendingNode]) -> No
         children.append(item.node)
 
 
-def collect_audit_only_references(m2905_document: dict[str, Any]) -> list[dict[str, Any]]:
+def collect_audit_only_references(m2905_document: dict[str, Any], materialized_image: list[M30MaterializedNode] | None = None) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
+    materialized_image_source_ids = {item.source_id for item in materialized_image or []}
     for item in list_dicts(m2905_document.get("objects")):
+        source_id = str(item.get("id") or "")
+        if source_id in materialized_image_source_ids:
+            continue
         if item.get("combinedAssetUse") == "audit_only":
             refs.append({"sourceKind": "m2905_refined_object", "id": item.get("id"), "reason": "audit_only_source"})
     return refs
@@ -1484,6 +1621,138 @@ def collect_preserved_text_bboxes(
             if bbox:
                 bboxes.append(bbox)
     return bboxes
+
+
+def clean_text_from_materialized_image_assets(
+    *,
+    dsl: dict[str, Any],
+    output_dir: Path,
+    materialized_image: list[M30MaterializedNode],
+    materialized_text: list[M30MaterializedNode],
+    options: M30Options,
+    warnings: list[str],
+) -> M30ImageAssetTextErasureResult:
+    if not options.image_asset_text_erasure_enabled or not materialized_image or not materialized_text:
+        return M30ImageAssetTextErasureResult(cleaned_asset_ids=[], erased_text_bbox_count=0)
+
+    image_nodes = {
+        item.id: materialized_node_by_id(dsl["root"], item.id)
+        for item in materialized_image
+    }
+    text_by_image: dict[str, list[M30MaterializedNode]] = {}
+    for image_item in materialized_image:
+        image_node = image_nodes.get(image_item.id, {})
+        if image_node.get("role") not in {"m30_visual_asset", "m30_composite_media_asset"}:
+            continue
+        contained_text = [
+            text_item
+            for text_item in materialized_text
+            if bbox_overlap_ratio(text_item.bbox, image_item.bbox) >= 0.98
+        ]
+        if contained_text:
+            text_by_image[image_item.id] = contained_text
+
+    if not text_by_image:
+        return M30ImageAssetTextErasureResult(cleaned_asset_ids=[], erased_text_bbox_count=0)
+
+    assets = {
+        str(asset.get("assetId")): asset
+        for asset in list_dicts(dsl.get("assets"))
+        if asset.get("assetId")
+    }
+    cleaned_asset_ids: list[str] = []
+    erased_count = 0
+
+    for image_item in materialized_image:
+        texts = text_by_image.get(image_item.id)
+        if not texts:
+            continue
+        node = image_nodes.get(image_item.id, {})
+        asset_id = str(node.get("source", {}).get("assetId") or "")
+        asset = assets.get(asset_id)
+        if asset is None:
+            continue
+        url = str(asset.get("url") or "")
+        if not url or url.startswith(("http://", "https://")):
+            continue
+        image_path = (output_dir / url).resolve()
+        if not image_path.exists():
+            continue
+        try:
+            asset_bytes = image_path.read_bytes()
+            pixels = decode_png_pixels(asset_bytes)
+        except Exception as error:
+            warnings.append(f"m30_image_asset_text_erasure_decode_failed:{asset_id}:{error.__class__.__name__}")
+            continue
+
+        scale_x = pixels.width / max(1, image_item.bbox[2])
+        scale_y = pixels.height / max(1, image_item.bbox[3])
+        mutable_rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        asset_erased_count = 0
+
+        for text_item in texts:
+            local_bbox = map_page_bbox_to_asset_pixels(text_item.bbox, image_item.bbox, pixels.width, pixels.height, scale_x, scale_y)
+            if local_bbox is None:
+                continue
+            try:
+                fill_color = sample_outer_bbox_ring_rgb(pixels, local_bbox)
+            except Exception:
+                try:
+                    sample = sample_rect_edges_dominant_background(
+                        pixels,
+                        local_bbox,
+                        sides={"top", "bottom", "left", "right"},
+                        inset=0,
+                        thickness=1,
+                        tolerance=32,
+                        min_fraction=0.35,
+                    )
+                    fill_color = sample.mean_rgb
+                except Exception:
+                    fill_color = [247, 248, 250]
+                    warnings.append(f"m30_image_asset_text_erasure_sample_fallback:{asset_id}:{text_item.id}")
+            x, y, width, height = local_bbox
+            for row_idx in range(y, y + height):
+                row = mutable_rows[row_idx]
+                for col_idx in range(x, x + width):
+                    offset = col_idx * 3
+                    row[offset] = fill_color[0]
+                    row[offset + 1] = fill_color[1]
+                    row[offset + 2] = fill_color[2]
+            modified = True
+            asset_erased_count += 1
+
+        if modified:
+            try:
+                image_path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in mutable_rows]))
+                cleaned_asset_ids.append(asset_id)
+                erased_count += asset_erased_count
+            except Exception as error:
+                warnings.append(f"m30_image_asset_text_erasure_write_failed:{asset_id}:{error.__class__.__name__}")
+
+    return M30ImageAssetTextErasureResult(cleaned_asset_ids=unique_strings(cleaned_asset_ids), erased_text_bbox_count=erased_count)
+
+
+def map_page_bbox_to_asset_pixels(
+    text_bbox: list[int],
+    image_bbox: list[int],
+    asset_width: int,
+    asset_height: int,
+    scale_x: float,
+    scale_y: float,
+) -> list[int] | None:
+    local_x = (text_bbox[0] - image_bbox[0]) * scale_x
+    local_y = (text_bbox[1] - image_bbox[1]) * scale_y
+    local_w = text_bbox[2] * scale_x
+    local_h = text_bbox[3] * scale_y
+    x1 = max(0, math.floor(local_x))
+    y1 = max(0, math.floor(local_y))
+    x2 = min(asset_width, math.ceil(local_x + local_w))
+    y2 = min(asset_height, math.ceil(local_y + local_h))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return [x1, y1, x2 - x1, y2 - y1]
 
 
 def _erase_bboxes_from_fallback_images(
@@ -1707,13 +1976,20 @@ def build_summary(
     text_symbol_decisions: list[M30TextSymbolLeakageDecision],
     text_foreground_counts: dict[str, int],
     audit_refs: list[dict[str, Any]],
+    image_asset_text_erasure: M30ImageAssetTextErasureResult,
 ) -> dict[str, Any]:
     visual_skips = [item for item in skipped if item.source_kind == "m2905_visual_asset"]
     shape_skips = [item for item in skipped if item.source_kind == "m2905_shape_candidate"]
+    composite_skips = [item for item in skipped if item.source_kind == "m2905_composite_media_object"]
     accepted_image_nodes = [
         item
         for item in materialized_image
         if materialized_node_by_id(dsl["root"], item.id).get("meta", {}).get("m30AcceptedImageMaterialization") is True
+    ]
+    composite_media_nodes = [
+        item
+        for item in materialized_image
+        if materialized_node_by_id(dsl["root"], item.id).get("meta", {}).get("m30CompositeMediaMaterialization") is True
     ]
     editable_text = [item for item in text_decisions if item.decision == "editable_text"]
     preserved_text = [item for item in text_decisions if item.decision == "graphic_text_preserve_in_fallback"]
@@ -1742,6 +2018,10 @@ def build_summary(
         "visualAssetCount": len(list_dicts(m2905_document.get("visualAssets"))),
         "materializedImageCount": len(materialized_image),
         "materializedAcceptedImageCount": len(accepted_image_nodes),
+        "materializedCompositeMediaCount": len(composite_media_nodes),
+        "cleanedMaterializedImageAssetCount": len(image_asset_text_erasure.cleaned_asset_ids),
+        "erasedTextFromMaterializedImageAssetCount": image_asset_text_erasure.erased_text_bbox_count,
+        "skippedCompositeMediaCount": len(composite_skips),
         "skippedMixedOrAuditOnlyCount": len(audit_refs),
         "skippedUnsafeVisualAssetCount": len(visual_skips),
         "skippedUnreliableShapeCount": len(shape_skips),
@@ -1993,6 +2273,14 @@ def bbox_overlap_ratio(left: list[int], right: list[int]) -> float:
     if area <= 0:
         return 0.0
     return bbox_intersection_area(left, right) / area
+
+
+def bbox_iou(left: list[int], right: list[int]) -> float:
+    intersection = bbox_intersection_area(left, right)
+    if intersection <= 0:
+        return 0.0
+    union = bbox_area(left) + bbox_area(right) - intersection
+    return intersection / max(1, union)
 
 
 def bbox_center_x(bbox: list[int]) -> float:

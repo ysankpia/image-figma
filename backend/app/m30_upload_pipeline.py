@@ -256,6 +256,9 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             accepted_image_materialization_enabled=state.settings.m30_accepted_image_materialization_enabled,
             accepted_image_max_text_overlap=state.settings.m30_accepted_image_max_text_overlap,
             accepted_image_min_area=state.settings.m30_accepted_image_min_area,
+            image_asset_text_erasure_enabled=state.settings.m30_image_asset_text_erasure_enabled,
+            composite_media_materialization_enabled=state.settings.m30_composite_media_materialization_enabled,
+            composite_media_min_area=state.settings.m30_composite_media_min_area,
         ),
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))

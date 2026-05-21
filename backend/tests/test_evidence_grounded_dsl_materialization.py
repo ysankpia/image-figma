@@ -706,6 +706,8 @@ def test_low_overlap_large_accepted_image_materializes_with_raw_lineage(tmp_path
     assert meta["sourceM29NodeIds"] == ["image_003"]
     assert meta["acceptedImageTextOverlapRatio"] == 0.015
     assert result.report.summary["materializedAcceptedImageCount"] == 1
+    assert result.report.summary["cleanedMaterializedImageAssetCount"] == 0
+    assert result.report.summary["erasedTextFromMaterializedImageAssetCount"] == 0
     materialized = result.report.materialized_image_nodes[0]
     assert {"accepted_image_low_text_overlap", "raw_m29_lineage_recovered"} <= set(materialized.reasons)
 
@@ -715,6 +717,198 @@ def test_low_overlap_large_accepted_image_materializes_with_raw_lineage(tmp_path
         for c in range(50, 70):
             offset = c * 3
             assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
+
+
+def test_materialized_image_asset_text_erasure_cleans_only_m30_copy(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 120, fill=(240, 240, 240))
+    source = write_png(tmp_path / "source.png", canvas)
+    m2905_dir = tmp_path / "m29_0_5"
+    asset_pixels = make_canvas(100, 70, fill=(200, 210, 220))
+    rows = [bytearray(row) for row in asset_pixels.rows]
+    for r in range(10, 25):
+        for c in range(12, 40):
+            rows[r][c * 3 : c * 3 + 3] = b"\x00\x00\x00"
+    original_asset = PngPixels(width=100, height=70, rows=[bytes(row) for row in rows])
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_product.png", original_asset)
+    original_asset_before = visual_asset_path.read_bytes()
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [20, 20, 100, 70]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [20, 20, 100, 70]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset(
+                "visual_asset_product",
+                [20, 20, 100, 70],
+                str(visual_asset_path.relative_to(m2905_dir)),
+                text_overlap=0.01,
+                asset_use="image_asset",
+                visual_kind="image_like",
+                source_evidence_ids=["evidence_0004"],
+            )
+        ],
+        shape_candidates=[],
+        text_members=[
+            text_member("text_member_0001", [32, 30, 28, 15], "穿搭"),
+        ],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_editability_enabled=False, accepted_image_min_area=1000),
+    )
+
+    assert count_children(result.dsl, "m30_text_member") == 1
+    assert visual_asset_path.read_bytes() == original_asset_before
+    image_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "m30_visual_asset")
+    copied_pixels = decode_png_pixels((tmp_path / "m30" / image_asset["url"]).read_bytes())
+    for r in range(10, 25):
+        for c in range(12, 40):
+            offset = c * 3
+            assert list(copied_pixels.rows[r][offset : offset + 3]) == [200, 210, 220]
+    assert result.report.summary["cleanedMaterializedImageAssetCount"] == 1
+    assert result.report.summary["erasedTextFromMaterializedImageAssetCount"] == 1
+
+
+def test_materialized_image_asset_text_erasure_ignores_external_text(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(180, 120))
+    m2905_dir = tmp_path / "m29_0_5"
+    asset_pixels = make_canvas(100, 70, fill=(200, 210, 220))
+    rows = [bytearray(row) for row in asset_pixels.rows]
+    for r in range(10, 25):
+        for c in range(80, 100):
+            rows[r][c * 3 : c * 3 + 3] = b"\x00\x00\x00"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_product.png", PngPixels(width=100, height=70, rows=[bytes(row) for row in rows]))
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [20, 20, 100, 70]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [20, 20, 100, 70]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_product", [20, 20, 100, 70], str(visual_asset_path.relative_to(m2905_dir)), text_overlap=0.01, asset_use="image_asset", visual_kind="image_like", source_evidence_ids=["evidence_0004"])
+        ],
+        shape_candidates=[],
+        text_members=[
+            text_member("text_member_0001", [100, 30, 40, 15], "外部"),
+        ],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(text_editability_enabled=False, accepted_image_min_area=1000),
+    )
+
+    image_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "m30_visual_asset")
+    copied_pixels = decode_png_pixels((tmp_path / "m30" / image_asset["url"]).read_bytes())
+    for r in range(10, 25):
+        for c in range(80, 100):
+            offset = c * 3
+            assert list(copied_pixels.rows[r][offset : offset + 3]) == [0, 0, 0]
+    assert result.report.summary["cleanedMaterializedImageAssetCount"] == 0
+    assert result.report.summary["erasedTextFromMaterializedImageAssetCount"] == 0
+
+
+def test_large_partially_separated_composite_media_materializes_and_erases_fallback(tmp_path: Path) -> None:
+    canvas = make_canvas(220, 160, fill=(240, 240, 240))
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(20, 100):
+        for c in range(20, 170):
+            rows[r][c * 3 : c * 3 + 3] = b"\x10\x40\x80"
+    source = write_png(tmp_path / "source.png", PngPixels(width=220, height=160, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    composite_path = write_png(m2905_dir / "assets" / "combined_objects" / "refined_0001.png", make_canvas(150, 80, fill=(16, 64, 128)))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[],
+    )
+    m2905["objects"] = [
+        composite_object("refined_0001", [20, 20, 150, 80], str(composite_path.relative_to(m2905_dir)), risks=["high_text_overlap", "text_touching_visual"])
+    ]
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(composite_media_min_area=1000),
+    )
+
+    composite_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_composite_media_asset")
+    assert composite_node["layout"] == {"x": 20, "y": 20, "width": 150, "height": 80}
+    assert composite_node["meta"]["m30CompositeMediaMaterialization"] is True
+    assert result.report.summary["materializedCompositeMediaCount"] == 1
+    assert result.report.summary["skippedCompositeMediaCount"] == 0
+    assert result.report.summary["createdNewBBoxCount"] == 0
+    assert result.report.summary["permissionViolationCount"] == 0
+    assert result.report.summary["fallbackPreserved"] is True
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_pixels = decode_png_pixels((tmp_path / "m30" / fallback_asset["url"]).read_bytes())
+    for r in range(30, 50):
+        for c in range(30, 50):
+            offset = c * 3
+            assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
+
+
+def test_composite_media_safety_gates_skip_invalid_candidates(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(260, 200))
+    m2905_dir = tmp_path / "m29_0_5"
+    composite_path = write_png(m2905_dir / "assets" / "combined_objects" / "refined_0001.png", make_canvas(150, 80))
+    duplicate_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_large.png", make_canvas(150, 80))
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [20, 20, 150, 80]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [20, 20, 150, 80]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_large", [20, 20, 150, 80], str(duplicate_asset_path.relative_to(m2905_dir)), text_overlap=0.01, asset_use="image_asset", visual_kind="image_like", source_evidence_ids=["evidence_0004"])
+        ],
+        shape_candidates=[],
+        text_members=[],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905["objects"] = [
+        composite_object("refined_small", [1, 1, 40, 20], str(composite_path.relative_to(m2905_dir))),
+        composite_object("refined_missing_path", [80, 1, 150, 80], ""),
+        composite_object("refined_split", [1, 100, 150, 80], str(composite_path.relative_to(m2905_dir)), risks=["split_needed"]),
+        composite_object("refined_duplicate", [20, 20, 150, 80], str(composite_path.relative_to(m2905_dir)), visual_asset_ids=["visual_asset_large"]),
+    ]
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(accepted_image_min_area=1000, composite_media_min_area=1000),
+    )
+
+    assert count_children(result.dsl, "m30_composite_media_asset") == 0
+    skipped = {item.id: item.reason for item in result.report.skipped_items if item.source_kind == "m2905_composite_media_object"}
+    assert skipped == {
+        "refined_small": "composite_media_too_small",
+        "refined_missing_path": "missing_combined_asset_path",
+        "refined_split": "unsafe_composite_media_risk",
+        "refined_duplicate": "duplicate_materialized_visual_asset",
+    }
+    assert result.report.summary["skippedCompositeMediaCount"] == 4
 
 
 def test_large_accepted_image_policy_keeps_high_overlap_risk_and_missing_lineage_blocked(tmp_path: Path) -> None:
@@ -1029,6 +1223,27 @@ def shape_candidate(id: str, bbox: list[int], *, color: str | None) -> dict:
         "reasons": ["shape_like_member"],
         "risks": [],
         "previewAssetPath": None,
+    }
+
+
+def composite_object(id: str, bbox: list[int], combined_asset_path: str, *, risks: list[str] | None = None, visual_asset_ids: list[str] | None = None) -> dict:
+    return {
+        "id": id,
+        "sourceObjectId": "object_carousel",
+        "sourceObjectKind": "unknown",
+        "sourceDecision": "candidate",
+        "bbox": bbox,
+        "decision": "partially_separated",
+        "combinedAssetPath": combined_asset_path,
+        "combinedAssetUse": "audit_only",
+        "visualAssetIds": visual_asset_ids or [],
+        "shapeCandidateIds": [],
+        "textMemberIds": [],
+        "unresolvedMemberIds": [],
+        "risks": risks or ["high_text_overlap", "text_touching_visual"],
+        "reasons": ["partial_text_visual_separation"],
+        "separationQuality": 0.42,
+        "suggestedNextAction": "materialize_composite_media",
     }
 
 
