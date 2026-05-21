@@ -80,6 +80,18 @@ These fields explain whether `style.color` came from source-pixel foreground sam
 
 M36.1 keeps these fields stable but changes the internal foreground bucket selection from largest bucket to contrast-weighted scoring. If small white badge text is rendered dark, inspect source-pixel candidates before changing OCR or text editability.
 
+M30.6 adds accepted-image materialization diagnostics inside the existing M30 report:
+
+```text
+summary.materializedAcceptedImageCount
+materializedImageNodes[].reasons includes accepted_image_low_text_overlap
+materializedImageNodes[].reasons includes raw_m29_lineage_recovered
+image node meta.m30AcceptedImageMaterialization = true
+image node meta.sourceM29NodeIds
+```
+
+If a large product or banner image is still not draggable, first inspect `skippedItems[]` in `GET /api/tasks/{taskId}/m30-materialization`. A remaining `unsafe_text_overlap` means the item did not pass the M30.6 accepted-image gate, usually because overlap was above threshold, a high-risk flag was present, or lineage could not resolve back to a raw M29 image id.
+
 M37 adds `m37_hierarchy_readiness` to `stage_timings.json` when M31 and M30 artifacts are available. It writes:
 
 ```text

@@ -63,6 +63,9 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "false")
     monkeypatch.setenv("M30_SHAPE_ERASURE_ENABLED", "false")
     monkeypatch.setenv("M30_IMAGE_ERASURE_ENABLED", "false")
+    monkeypatch.setenv("M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED", "false")
+    monkeypatch.setenv("M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP", "0.03")
+    monkeypatch.setenv("M30_ACCEPTED_IMAGE_MIN_AREA", "12345")
     monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "false")
     monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "true")
     monkeypatch.setenv("M38_HIERARCHY_MAX_CONTAINERS", "3")
@@ -79,6 +82,9 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.ocr_text_symbol_leakage_cleanup_enabled is False
     assert settings.m30_shape_erasure_enabled is False
     assert settings.m30_image_erasure_enabled is False
+    assert settings.m30_accepted_image_materialization_enabled is False
+    assert settings.m30_accepted_image_max_text_overlap == 0.03
+    assert settings.m30_accepted_image_min_area == 12345
     assert settings.m38_hierarchy_materialization_enabled is False
     assert settings.m38_hierarchy_materialization_strict is True
     assert settings.m38_hierarchy_max_containers == 3

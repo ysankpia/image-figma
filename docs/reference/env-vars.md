@@ -31,6 +31,9 @@
 | `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
 | `M30_SHAPE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 shape bbox | `true` | 否 |
 | `M30_IMAGE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 image bbox | `true` | 否 |
+| `M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED` | 是否启用 M30.6 低文字重叠大 image asset 物化策略 | `true` | 否 |
+| `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP` | M30.6 大 image asset 可接受的最大文字重叠比例 | `0.02` | 否 |
+| `M30_ACCEPTED_IMAGE_MIN_AREA` | M30.6 大 image asset 可物化的最小 bbox 面积 | `20000` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
 | `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
@@ -122,6 +125,18 @@ metrics.editableCounterSignals
 M34.3 默认启用 text-symbol leakage cleanup。它只在 M30 物化 editable text 前运行，第一版自动清理高置信 leading uppercase `Q` 泄漏，并且必须有源像素投影间隙证据。OCR JSON、M29 nodes、M31 tree 和 Renderer 合同都不改变。
 
 M36 text foreground color sampling 是 M30 materialization 的默认行为，没有单独环境变量。它只影响已物化的 editable `m30_text_member`，不会重画 preserved graphic text。
+
+## M30 Accepted Image Materialization
+
+```bash
+M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED=true
+M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP=0.02
+M30_ACCEPTED_IMAGE_MIN_AREA=20000
+```
+
+M30.6 默认启用。它只影响 M30 内部的 large accepted image asset policy：当 M29.0.5 已经产出 `assetUse=image_asset`，且文字重叠很低、面积足够大、没有高风险 text/boundary flags、并能通过 M29.0.4/M29.0.3 血统追溯回 raw M29 image node 时，M30 会把它物化成 `role=m30_visual_asset` 的 DSL image node。
+
+这不是 OCR、不是 `1/6` 或 image-internal overlay recovery、不是 parent asset cleanup，也不是 M38 grouping。普通 icon/small visual asset 仍然走原来的严格 `safe_visual_text_overlap_max=0.0` 策略。
 
 M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不直接改变 `/api/tasks/{taskId}/dsl`。
 

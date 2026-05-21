@@ -656,6 +656,134 @@ def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
     assert {"missing_reliable_fill", "unsafe_text_overlap"} <= reasons
 
 
+def test_low_overlap_large_accepted_image_materializes_with_raw_lineage(tmp_path: Path) -> None:
+    canvas = make_canvas(420, 320, fill=(240, 240, 240))
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(30, 210):
+        for c in range(40, 280):
+            rows[r][c * 3 : c * 3 + 3] = b"\x15\x44\x66"
+    source = write_png(tmp_path / "source.png", PngPixels(width=420, height=320, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(240, 180, fill=(20, 60, 90)))
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [40, 30, 240, 180]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [40, 30, 240, 180]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset(
+                "visual_asset_0001",
+                [40, 30, 240, 180],
+                str(visual_asset_path.relative_to(m2905_dir)),
+                text_overlap=0.015,
+                asset_use="image_asset",
+                visual_kind="image_like",
+                source_evidence_ids=["evidence_0004"],
+            )
+        ],
+        shape_candidates=[],
+        text_members=[],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    image_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_visual_asset")
+    meta = image_node["meta"]
+    assert image_node["layout"] == {"x": 40, "y": 30, "width": 240, "height": 180}
+    assert meta["m30AcceptedImageMaterialization"] is True
+    assert meta["sourceEvidenceNodeIds"] == ["evidence_0004", "accepted_image_003", "m29_image_003", "image_003"]
+    assert meta["sourceM2904EvidenceNodeIds"] == ["evidence_0004"]
+    assert meta["sourceM2903ItemIds"] == ["accepted_image_003"]
+    assert meta["sourceM2903SourceEvidenceIds"] == ["m29_image_003"]
+    assert meta["sourceM29NodeIds"] == ["image_003"]
+    assert meta["acceptedImageTextOverlapRatio"] == 0.015
+    assert result.report.summary["materializedAcceptedImageCount"] == 1
+    materialized = result.report.materialized_image_nodes[0]
+    assert {"accepted_image_low_text_overlap", "raw_m29_lineage_recovered"} <= set(materialized.reasons)
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_pixels = decode_png_pixels((tmp_path / "m30" / fallback_asset["url"]).read_bytes())
+    for r in range(40, 60):
+        for c in range(50, 70):
+            offset = c * 3
+            assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
+
+
+def test_large_accepted_image_policy_keeps_high_overlap_risk_and_missing_lineage_blocked(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(420, 320))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(240, 180))
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [40, 30, 240, 180]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [40, 30, 240, 180]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_high_overlap", [40, 30, 240, 180], str(visual_asset_path.relative_to(m2905_dir)), text_overlap=0.03, asset_use="image_asset", visual_kind="image_like", source_evidence_ids=["evidence_0004"]),
+            visual_asset("visual_asset_high_risk", [40, 30, 240, 180], str(visual_asset_path.relative_to(m2905_dir)), text_overlap=0.01, risks=["high_text_overlap"], asset_use="image_asset", visual_kind="image_like", source_evidence_ids=["evidence_0004"]),
+            visual_asset("visual_asset_missing_lineage", [40, 30, 240, 180], str(visual_asset_path.relative_to(m2905_dir)), text_overlap=0.01, asset_use="image_asset", visual_kind="image_like", source_evidence_ids=["evidence_missing"]),
+        ],
+        shape_candidates=[],
+        text_members=[],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_visual_asset") == 0
+    skipped = {item.id: item.reason for item in result.report.skipped_items if item.source_kind == "m2905_visual_asset"}
+    assert skipped == {
+        "visual_asset_high_overlap": "unsafe_text_overlap",
+        "visual_asset_high_risk": "unsafe_text_overlap",
+        "visual_asset_missing_lineage": "unsafe_text_overlap",
+    }
+
+
+def test_small_icon_visual_asset_does_not_use_accepted_image_policy(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(120, 100))
+    m2905_dir = tmp_path / "m29_0_5"
+    visual_asset_path = write_png(m2905_dir / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(18, 18))
+    m2903_json = write_json(tmp_path / "m29_0_3" / "visual_evidence.json", m2903_document("accepted_image_003", "m29_image_003", [60, 10, 18, 18]))
+    m2904_json = write_json(tmp_path / "m29_0_4" / "visual_object_candidates.json", m2904_document("evidence_0004", "accepted_image_003", [60, 10, 18, 18]))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[
+            visual_asset("visual_asset_0001", [60, 10, 18, 18], str(visual_asset_path.relative_to(m2905_dir)), text_overlap=0.01, source_evidence_ids=["evidence_0004"])
+        ],
+        shape_candidates=[],
+        text_members=[],
+        source_m2903=str(m2903_json),
+        source_m2904=str(m2904_json),
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_visual_asset") == 0
+    assert next(item for item in result.report.skipped_items if item.id == "visual_asset_0001").reason == "unsafe_text_overlap"
+
+
 def test_audit_only_references_never_become_visible_children(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(100, 80))
     m2905_dir = tmp_path / "m29_0_5"
@@ -755,12 +883,16 @@ def m2905_document(
     shape_candidates: list[dict] | None = None,
     text_risks: list[str] | None = None,
     text_members: list[dict] | None = None,
+    source_m2903: str | None = None,
+    source_m2904: str | None = None,
 ) -> dict:
     visual_asset_path = write_png(root / "assets" / "visual_assets" / "visual_asset_0001.png", make_canvas(18, 18))
     return {
         "schemaName": "M2905TextAwareVisualObjectRefinementDocument",
         "schemaVersion": "0.1",
         "sourceImage": "synthetic.png",
+        "sourceM2903VisualEvidenceJson": source_m2903,
+        "sourceM2904VisualObjectCandidatesJson": source_m2904,
         "objects": [],
         "visualAssets": visual_assets if visual_assets is not None else [visual_asset("visual_asset_0001", [60, 10, 18, 18], str(visual_asset_path.relative_to(root)))],
         "shapeCandidates": shape_candidates if shape_candidates is not None else [shape_candidate("shape_0001", [10, 40, 50, 20], color="#AABBCC")],
@@ -800,20 +932,61 @@ def text_member(id: str, bbox: list[int], text: str, risks: list[str] | None = N
     }
 
 
-def visual_asset(id: str, bbox: list[int], asset_path: str, *, text_overlap: float = 0.0, risks: list[str] | None = None) -> dict:
+def visual_asset(
+    id: str,
+    bbox: list[int],
+    asset_path: str,
+    *,
+    text_overlap: float = 0.0,
+    risks: list[str] | None = None,
+    asset_use: str = "icon_asset",
+    visual_kind: str = "icon_like",
+    source_evidence_ids: list[str] | None = None,
+) -> dict:
     return {
         "id": id,
         "sourceObjectId": "object_001",
-        "sourceEvidenceNodeIds": ["evidence_visual_001"],
+        "sourceEvidenceNodeIds": source_evidence_ids if source_evidence_ids is not None else ["evidence_visual_001"],
         "bbox": bbox,
-        "visualKind": "icon_like",
-        "assetUse": "icon_asset",
+        "visualKind": visual_kind,
+        "assetUse": asset_use,
         "decision": "candidate",
         "assetPath": asset_path,
         "textOverlapRatio": text_overlap,
         "metrics": None,
         "risks": risks or [],
         "reasons": ["icon_asset_from_existing_member_bbox"],
+    }
+
+
+def m2903_document(item_id: str, source_evidence_id: str, bbox: list[int]) -> dict:
+    return {
+        "schemaName": "M2903VisualEvidenceDocument",
+        "schemaVersion": "0.1",
+        "items": [
+            {
+                "id": item_id,
+                "source": "m29_image",
+                "sourceEvidenceId": source_evidence_id,
+                "visualKind": "accepted_image",
+                "decision": "accepted",
+                "bbox": bbox,
+            }
+        ],
+    }
+
+
+def m2904_document(evidence_id: str, source_id: str, bbox: list[int]) -> dict:
+    return {
+        "schemaName": "M2904VisualObjectCandidateDocument",
+        "schemaVersion": "0.1",
+        "evidenceNodes": [
+            {
+                "id": evidence_id,
+                "sourceId": source_id,
+                "bbox": bbox,
+            }
+        ],
     }
 
 

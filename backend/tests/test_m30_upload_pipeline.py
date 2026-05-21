@@ -50,7 +50,13 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert report_data["summary"]["fallbackPreserved"] is True
     assert report_data["summary"]["permissionViolationCount"] == 0
     assert report_data["summary"]["createdNewBBoxCount"] == 0
+    assert "materializedAcceptedImageCount" in report_data["summary"]
     assert "materializedTextCoverCount" in report_data["summary"]
+    report_file = Path(report_data["outputDsl"]).with_name("m30_materialization_report.json")
+    full_report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert full_report["options"]["accepted_image_materialization_enabled"] is True
+    assert full_report["options"]["accepted_image_max_text_overlap"] == 0.02
+    assert full_report["options"]["accepted_image_min_area"] == 20000
     assert report_data["debugPreviewPath"] is None
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
     assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {

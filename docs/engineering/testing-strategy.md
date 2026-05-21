@@ -134,6 +134,9 @@ Required evidence coverage:
 - M29.0.7 ownership routing prevents text-owned evidence from forming visual objects.
 - M29.0.5 formal visual assets are created only for safe visual members.
 - M30 materializes only trusted textMembers, safe shapeCandidates, and safe visualAssets.
+- M30.6 materializes only low-text-overlap large accepted image assets with recovered raw M29 lineage.
+- M30.6 does not relax text-overlap policy for ordinary icons or small visual assets.
+- M30.6 writes recovered lineage into M30 image node meta so M37 can direct-match image primitives without changing M37 rules.
 - OCR text evidence is not dropped before M29; graphic text is preserved by M30 editability decision instead.
 - `graphic_text_preserve_in_fallback` does not generate `m30_text_member` and does not enter fallback erasure.
 - plain horizontal UI text still generates `m30_text_member`.
@@ -146,6 +149,15 @@ Required evidence coverage:
 - M30.2 text cover uses existing text bbox and conservative background sampling.
 - M36 samples editable text foreground color from source pixels or records a contrast/default fallback.
 - M37 audits M31-to-M30 hierarchy readiness without changing visible DSL output.
+
+M30.6 focused coverage lives in `tests/test_evidence_grounded_dsl_materialization.py`:
+
+```bash
+cd backend
+uv run pytest tests/test_evidence_grounded_dsl_materialization.py tests/test_m30_upload_pipeline.py tests/test_config_env.py -q
+```
+
+It must cover low-overlap accepted image materialization, high-overlap/risk/missing-lineage skips, small icon isolation, fallback image erasure, and default runtime config exposure.
 
 ## M31 Reconstruction UI Tree
 

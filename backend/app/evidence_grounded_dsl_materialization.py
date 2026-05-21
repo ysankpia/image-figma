@@ -24,6 +24,9 @@ TextEditabilityDecisionKind = Literal["editable_text", "graphic_text_preserve_in
 class M30Options:
     safe_visual_text_overlap_max: float = 0.0
     safe_shape_text_overlap_max: float = 0.0
+    accepted_image_materialization_enabled: bool = True
+    accepted_image_max_text_overlap: float = 0.02
+    accepted_image_min_area: int = 20000
     default_text_color: str = "#111827"
     min_text_font_size: int = 8
     max_text_font_size: int = 36
@@ -176,6 +179,14 @@ class TextEditabilityItem:
 @dataclass(frozen=True)
 class VisualEditabilityItem:
     bbox: list[int]
+
+
+@dataclass(frozen=True)
+class AcceptedImageLineage:
+    source_m2904_evidence_node_ids: list[str]
+    source_m2903_item_ids: list[str]
+    source_m2903_source_evidence_ids: list[str]
+    source_m29_node_ids: list[str]
 
 
 @dataclass(frozen=True)
@@ -1113,11 +1124,15 @@ def append_image_nodes(
     skipped: list[M30SkippedItem],
 ) -> None:
     asset_dir = output_dir / "assets" / "m30_visual_assets"
+    m2903_document = read_optional_json(resolve_source_json_path(m2905_document, "sourceM2903VisualEvidenceJson"))
+    m2904_document = read_optional_json(resolve_source_json_path(m2905_document, "sourceM2904VisualObjectCandidatesJson"))
     for item in list_dicts(m2905_document.get("visualAssets")):
         source_id = str(item.get("id") or "")
         bbox = parse_bbox(item.get("bbox"))
         risks = list_strings(item.get("risks"))
         asset_path = str(item.get("assetPath") or "").strip()
+        lineage = resolve_accepted_image_lineage(item, m2903_document, m2904_document)
+        accepted_image_policy = is_safe_accepted_image_asset(item, bbox, risks, lineage, options)
         if not source_id or bbox is None or not bbox_in_bounds(bbox, image.width, image.height):
             skipped.append(M30SkippedItem(source_id or "unknown_visual_asset", "m2905_visual_asset", "invalid_bbox", bbox, risks))
             continue
@@ -1130,7 +1145,13 @@ def append_image_nodes(
         if not asset_path:
             skipped.append(M30SkippedItem(source_id, "m2905_visual_asset", "missing_asset_path", bbox, risks))
             continue
-        if to_float(item.get("textOverlapRatio")) > options.safe_visual_text_overlap_max or any(risk in {"contains_text", "text_overlay_shape", "text_touching_visual", "high_text_overlap", "unresolved_boundary", "split_needed"} for risk in risks):
+        if (
+            not accepted_image_policy
+            and (
+                to_float(item.get("textOverlapRatio")) > options.safe_visual_text_overlap_max
+                or any(risk in M30_UNSAFE_VISUAL_TEXT_RISKS for risk in risks)
+            )
+        ):
             skipped.append(M30SkippedItem(source_id, "m2905_visual_asset", "unsafe_text_overlap", bbox, risks))
             continue
         source_asset_path = (m2905_dir / asset_path).resolve()
@@ -1156,10 +1177,15 @@ def append_image_nodes(
                     "sourceKind": "m2905_visual_asset",
                     "sourceVisualAssetId": source_id,
                     "copiedFromExistingM2905Asset": asset_path,
+                    **accepted_image_asset_meta(item, lineage, accepted_image_policy),
                 },
             }
         )
         node_id = next_unique_id(existing_ids, f"m30_image_{len(materialized) + 1:04d}")
+        source_evidence_node_ids = extended_source_evidence_node_ids(item, lineage, accepted_image_policy)
+        reasons = ["source_evidence_trace"]
+        if accepted_image_policy:
+            reasons.extend(["accepted_image_low_text_overlap", "raw_m29_lineage_recovered"])
         node = {
             "id": node_id,
             "type": "image",
@@ -1173,14 +1199,153 @@ def append_image_nodes(
                 "m30Materialized": True,
                 "sourceKind": "m2905_visual_asset",
                 "sourceVisualAssetId": source_id,
-                "sourceEvidenceNodeIds": list_strings(item.get("sourceEvidenceNodeIds")),
+                "sourceEvidenceNodeIds": source_evidence_node_ids,
+                **accepted_image_node_meta(item, lineage, accepted_image_policy),
                 "sourceObjectId": item.get("sourceObjectId"),
                 "sourceBBox": bbox,
                 "materializationConfidence": "medium",
                 "riskFlags": risks,
             },
         }
-        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "image", source_id, bbox, "medium", ["source_evidence_trace"])))
+        materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "image", source_id, bbox, "medium", reasons)))
+
+
+M30_UNSAFE_VISUAL_TEXT_RISKS = {
+    "contains_text",
+    "text_overlay_shape",
+    "text_touching_visual",
+    "high_text_overlap",
+    "unresolved_boundary",
+    "split_needed",
+}
+
+
+def resolve_source_json_path(document: dict[str, Any], key: str) -> Path | None:
+    value = document.get(key)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return Path(value).expanduser().resolve()
+
+
+def read_optional_json(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def resolve_accepted_image_lineage(
+    item: dict[str, Any],
+    m2903_document: dict[str, Any],
+    m2904_document: dict[str, Any],
+) -> AcceptedImageLineage | None:
+    m2904_by_id = {str(node.get("id")): node for node in list_dicts(m2904_document.get("evidenceNodes")) if node.get("id")}
+    m2903_by_id = {str(node.get("id")): node for node in list_dicts(m2903_document.get("items")) if node.get("id")}
+    source_m2904_ids: list[str] = []
+    source_m2903_ids: list[str] = []
+    source_m2903_evidence_ids: list[str] = []
+    source_m29_node_ids: list[str] = []
+
+    for evidence_id in list_strings(item.get("sourceEvidenceNodeIds")):
+        evidence = m2904_by_id.get(evidence_id)
+        if evidence is None:
+            continue
+        source_m2904_ids.append(evidence_id)
+        m2903_id = str(evidence.get("sourceId") or "")
+        if not m2903_id:
+            continue
+        source_m2903_ids.append(m2903_id)
+        m2903_item = m2903_by_id.get(m2903_id)
+        if m2903_item is None or m2903_item.get("visualKind") != "accepted_image":
+            continue
+        source_evidence_id = str(m2903_item.get("sourceEvidenceId") or "")
+        if source_evidence_id:
+            source_m2903_evidence_ids.append(source_evidence_id)
+            raw_id = raw_m29_image_node_id(source_evidence_id)
+            if raw_id:
+                source_m29_node_ids.append(raw_id)
+
+    source_m2903_evidence_ids = unique_strings(source_m2903_evidence_ids)
+    source_m29_node_ids = unique_strings(source_m29_node_ids)
+    if not source_m2903_evidence_ids or not source_m29_node_ids:
+        return None
+    return AcceptedImageLineage(
+        source_m2904_evidence_node_ids=unique_strings(source_m2904_ids),
+        source_m2903_item_ids=unique_strings(source_m2903_ids),
+        source_m2903_source_evidence_ids=source_m2903_evidence_ids,
+        source_m29_node_ids=source_m29_node_ids,
+    )
+
+
+def raw_m29_image_node_id(source_evidence_id: str) -> str | None:
+    prefix = "m29_image_"
+    if not source_evidence_id.startswith(prefix):
+        return None
+    suffix = source_evidence_id[len(prefix) :]
+    if not suffix.isdigit():
+        return None
+    return f"image_{int(suffix):03d}"
+
+
+def is_safe_accepted_image_asset(
+    item: dict[str, Any],
+    bbox: list[int] | None,
+    risks: list[str],
+    lineage: AcceptedImageLineage | None,
+    options: M30Options,
+) -> bool:
+    if not options.accepted_image_materialization_enabled:
+        return False
+    if item.get("assetUse") != "image_asset" or item.get("decision") not in {"candidate", "accepted"}:
+        return False
+    if bbox is None or bbox_area(bbox) < options.accepted_image_min_area:
+        return False
+    if to_float(item.get("textOverlapRatio")) > options.accepted_image_max_text_overlap:
+        return False
+    if any(risk in M30_UNSAFE_VISUAL_TEXT_RISKS for risk in risks):
+        return False
+    return lineage is not None
+
+
+def extended_source_evidence_node_ids(item: dict[str, Any], lineage: AcceptedImageLineage | None, accepted_image_policy: bool) -> list[str]:
+    ids = list_strings(item.get("sourceEvidenceNodeIds"))
+    if accepted_image_policy and lineage is not None:
+        ids.extend(lineage.source_m2904_evidence_node_ids)
+        ids.extend(lineage.source_m2903_item_ids)
+        ids.extend(lineage.source_m2903_source_evidence_ids)
+        ids.extend(lineage.source_m29_node_ids)
+    return unique_strings(ids)
+
+
+def accepted_image_node_meta(
+    item: dict[str, Any],
+    lineage: AcceptedImageLineage | None,
+    accepted_image_policy: bool,
+) -> dict[str, Any]:
+    if not accepted_image_policy or lineage is None:
+        return {}
+    return {
+        "sourceM2904EvidenceNodeIds": lineage.source_m2904_evidence_node_ids,
+        "sourceM2903ItemIds": lineage.source_m2903_item_ids,
+        "sourceM2903SourceEvidenceIds": lineage.source_m2903_source_evidence_ids,
+        "sourceM29NodeIds": lineage.source_m29_node_ids,
+        "m30AcceptedImageMaterialization": True,
+        "acceptedImageTextOverlapRatio": round(to_float(item.get("textOverlapRatio")), 4),
+    }
+
+
+def accepted_image_asset_meta(
+    item: dict[str, Any],
+    lineage: AcceptedImageLineage | None,
+    accepted_image_policy: bool,
+) -> dict[str, Any]:
+    if not accepted_image_policy or lineage is None:
+        return {}
+    return {
+        "m30AcceptedImageMaterialization": True,
+        "sourceM29NodeIds": lineage.source_m29_node_ids,
+        "acceptedImageTextOverlapRatio": round(to_float(item.get("textOverlapRatio")), 4),
+    }
 
 
 def append_text_cover_nodes(
@@ -1327,6 +1492,7 @@ def _erase_bboxes_from_fallback_images(
     nodes: list[M30MaterializedNode],
     *,
     preserved_text_bboxes: list[list[int]] | None = None,
+    sample_outside_bbox: bool = False,
 ) -> None:
     if not nodes:
         return
@@ -1385,17 +1551,20 @@ def _erase_bboxes_from_fallback_images(
 
             if overlap_x2 > overlap_x1 and overlap_y2 > overlap_y1:
                 try:
-                    local_bbox = [local_x, local_y, tw, th]
-                    sample = sample_rect_edges_dominant_background(
-                        pixels,
-                        local_bbox,
-                        sides={"top", "bottom", "left", "right"},
-                        inset=0,
-                        thickness=1,
-                        tolerance=24,
-                        min_fraction=0.5,
-                    )
-                    fill_color = sample.mean_rgb
+                    if sample_outside_bbox:
+                        fill_color = sample_outer_bbox_ring_rgb(pixels, [local_x, local_y, tw, th])
+                    else:
+                        local_bbox = [local_x, local_y, tw, th]
+                        sample = sample_rect_edges_dominant_background(
+                            pixels,
+                            local_bbox,
+                            sides={"top", "bottom", "left", "right"},
+                            inset=0,
+                            thickness=1,
+                            tolerance=24,
+                            min_fraction=0.5,
+                        )
+                        fill_color = sample.mean_rgb
                 except Exception:
                     fill_color = [247, 248, 250]
 
@@ -1429,6 +1598,38 @@ def _erase_bboxes_from_fallback_images(
                 pass
 
 
+def sample_outer_bbox_ring_rgb(pixels: Any, bbox: list[int]) -> list[int]:
+    x, y, w, h = bbox
+    samples: list[tuple[int, int, int]] = []
+    margin = 3
+    x1 = max(0, x - margin)
+    y1 = max(0, y - margin)
+    x2 = min(pixels.width, x + w + margin)
+    y2 = min(pixels.height, y + h + margin)
+    for row_idx in range(y1, y2):
+        for col_idx in range(x1, x2):
+            inside = x <= col_idx < x + w and y <= row_idx < y + h
+            if inside:
+                continue
+            near_x_edge = abs(col_idx - x) <= margin or abs(col_idx - (x + w - 1)) <= margin
+            near_y_edge = abs(row_idx - y) <= margin or abs(row_idx - (y + h - 1)) <= margin
+            if not near_x_edge and not near_y_edge:
+                continue
+            offset = col_idx * 3
+            row = pixels.rows[row_idx]
+            samples.append((row[offset], row[offset + 1], row[offset + 2]))
+    if not samples:
+        raise ValueError("outer bbox ring has no samples")
+    return median_rgb(samples)
+
+
+def median_rgb(samples: list[tuple[int, int, int]]) -> list[int]:
+    return [
+        sorted(pixel[channel] for pixel in samples)[len(samples) // 2]
+        for channel in range(3)
+    ]
+
+
 def erase_text_from_fallback_images(
     dsl: dict[str, Any],
     output_dir: Path,
@@ -1454,7 +1655,13 @@ def erase_images_from_fallback_images(
     *,
     preserved_text_bboxes: list[list[int]] | None = None,
 ) -> None:
-    _erase_bboxes_from_fallback_images(dsl, output_dir, materialized_image, preserved_text_bboxes=preserved_text_bboxes)
+    _erase_bboxes_from_fallback_images(
+        dsl,
+        output_dir,
+        materialized_image,
+        preserved_text_bboxes=preserved_text_bboxes,
+        sample_outside_bbox=True,
+    )
 
 
 def update_dsl_meta(
@@ -1503,6 +1710,11 @@ def build_summary(
 ) -> dict[str, Any]:
     visual_skips = [item for item in skipped if item.source_kind == "m2905_visual_asset"]
     shape_skips = [item for item in skipped if item.source_kind == "m2905_shape_candidate"]
+    accepted_image_nodes = [
+        item
+        for item in materialized_image
+        if materialized_node_by_id(dsl["root"], item.id).get("meta", {}).get("m30AcceptedImageMaterialization") is True
+    ]
     editable_text = [item for item in text_decisions if item.decision == "editable_text"]
     preserved_text = [item for item in text_decisions if item.decision == "graphic_text_preserve_in_fallback"]
     review_text = [item for item in text_decisions if item.decision == "review_text"]
@@ -1529,6 +1741,7 @@ def build_summary(
         "materializedShapeCount": len(materialized_shape),
         "visualAssetCount": len(list_dicts(m2905_document.get("visualAssets"))),
         "materializedImageCount": len(materialized_image),
+        "materializedAcceptedImageCount": len(accepted_image_nodes),
         "skippedMixedOrAuditOnlyCount": len(audit_refs),
         "skippedUnsafeVisualAssetCount": len(visual_skips),
         "skippedUnreliableShapeCount": len(shape_skips),
@@ -1539,6 +1752,18 @@ def build_summary(
         "visibleAuditOnlyChildCount": count_visible_audit_only_children(dsl["root"]),
         "dslElementCount": count_elements(dsl["root"]),
     }
+
+
+def materialized_node_by_id(root: dict[str, Any], node_id: str) -> dict[str, Any]:
+    for child in root.get("children", []) if isinstance(root.get("children"), list) else []:
+        if not isinstance(child, dict):
+            continue
+        if child.get("id") == node_id:
+            return child
+        found = materialized_node_by_id(child, node_id)
+        if found:
+            return found
+    return {}
 
 
 def text_symbol_leakage_reason_counts(decisions: list[M30TextSymbolLeakageDecision]) -> dict[str, int]:

@@ -253,6 +253,9 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             text_symbol_leakage_cleanup_enabled=state.settings.ocr_text_symbol_leakage_cleanup_enabled,
             shape_erasure_enabled=state.settings.m30_shape_erasure_enabled,
             image_erasure_enabled=state.settings.m30_image_erasure_enabled,
+            accepted_image_materialization_enabled=state.settings.m30_accepted_image_materialization_enabled,
+            accepted_image_max_text_overlap=state.settings.m30_accepted_image_max_text_overlap,
+            accepted_image_min_area=state.settings.m30_accepted_image_min_area,
         ),
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))

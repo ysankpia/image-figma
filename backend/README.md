@@ -211,6 +211,8 @@ If no foreground pixels are available, it falls back to black or white based on 
 
 M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG background sampling is stable and overlap risk is low. It does not hide fallback, mask fallback regions, or do inpainting.
 
+M30.6 adds a narrow accepted-image materialization policy inside M30. Large `assetUse=image_asset` entries from M29.0.5 can become `m30_visual_asset` DSL image nodes when their text overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their bbox area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node. This makes product/banner images draggable as independent Figma image layers. It is not OCR, not image-internal overlay recovery, not a `1/6` fix, not parent asset cleanup, and not M38 grouping.
+
 ## M31 Reconstruction UI Tree
 
 M31 starts the next abstraction layer:
