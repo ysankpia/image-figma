@@ -139,6 +139,26 @@ If M38 changes the DSL, the flat baseline is preserved at:
 storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl_flat.json
 ```
 
+M39 adds `m39_boundary_classification` to `stage_timings.json`. It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m39/m39_boundary_classification_report.json
+```
+
+The report summary includes:
+
+```text
+chromeNodeCount
+contentNodeCount
+totalClassifiedNodeCount
+onnxModelLoaded
+onnxCandidateCount
+ruleOnlyClassificationCount
+modelAssistedClassificationCount
+```
+
+Each classified M30 DSL node receives `meta.boundaryClassification` set to `"chrome"` or `"content"`. If a product-card text in the center is incorrectly classified as chrome, inspect the report's per-node classification entries and verify relative geometry rule thresholds. If the ONNX model is not loaded, `onnxModelLoaded` will be `false` and all classifications are rule-only.
+
 ## Logs
 
 后端任务日志至少包含：

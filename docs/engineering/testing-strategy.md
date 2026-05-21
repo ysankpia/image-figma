@@ -267,6 +267,28 @@ Required M38 coverage:
 - M38 report guard fields keep absolute drift and forbidden moved counts at zero.
 - Renderer/schema accept `style.fill=null` and clear group fills.
 
+## M39 Content-Chrome Boundary Classification
+
+M39 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_content_chrome_classification.py tests/test_hierarchy_materialization.py tests/test_m37_hierarchy_readiness.py tests/test_m30_upload_pipeline.py -q
+```
+
+Required M39 coverage:
+
+- M30 DSL nodes receive `meta.boundaryClassification` set to `"chrome"` or `"content"`.
+- Top/bottom full-width spans are classified as chrome.
+- Right-edge float zones are classified as chrome.
+- Center-page nodes are protected from chrome classification even when the ONNX model proposes them.
+- ONNX model absence causes silent fallback to rule-only classification.
+- M39 report `m39_boundary_classification_report.json` is written.
+- M37 marks reconstruction units with both chrome and content children as unsafe (`boundary_classification_conflict`).
+- M38 skips units with `boundary_classification_conflict`.
+- Pipeline succeeds even without `onnxruntime`.
+- M39 does not create visible nodes, move elements, or change DSL assets.
+
 ## Static Guards
 
 After M30.2.2, active backend source and tests must not reference the deleted legacy runtime surface:
