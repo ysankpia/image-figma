@@ -77,6 +77,7 @@ combinedAssetPath exists
 bbox is valid and area >= M30_COMPOSITE_MEDIA_MIN_AREA
 risks do not contain split_needed or wide_source
 no high-IoU duplicate image asset is already materialized
+not an outer shell that almost fully contains a tighter selected composite media bbox
 ```
 
 The output node is:
@@ -88,6 +89,8 @@ sourceKind = m2905_composite_media_object
 ```
 
 Composite media keeps its baked internal title/art text in the image. It is materialized as one movable raster block.
+
+When M29.0.5 emits nested `partially_separated` candidates for the same visual area, M30.7 selects composite media from smaller bbox to larger bbox. A later larger candidate is skipped when it almost fully contains an already selected tighter composite media bbox. This preserves the real media block, such as the carousel image, without also materializing a header/tab chrome shell that would duplicate editable UI text.
 
 ## Outputs
 

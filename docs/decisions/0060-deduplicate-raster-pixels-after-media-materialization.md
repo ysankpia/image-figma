@@ -31,6 +31,8 @@ The copied image asset cleanup uses page-to-local pixel mapping and ring/edge ba
 
 Composite media materialization keeps internal image text baked into the raster. This is intentional: the first product goal is block mobility, not editable carousel title recovery.
 
+Composite media selection also enforces one raster owner per physical media area. M29.0.5 can emit both a tight carousel candidate and a larger shell candidate that includes surrounding tab/header chrome. M30.7 sorts candidates from smaller bbox to larger bbox and skips a larger candidate when it almost fully contains an already selected tighter composite. This prevents editable chrome text from being baked into a lower raster layer and rendered again as `m30_text_member`.
+
 ## Consequences
 
 Benefits:

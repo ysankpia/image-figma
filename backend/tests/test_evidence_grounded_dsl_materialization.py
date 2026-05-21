@@ -866,6 +866,47 @@ def test_large_partially_separated_composite_media_materializes_and_erases_fallb
             assert list(fallback_pixels.rows[r][offset : offset + 3]) == [240, 240, 240]
 
 
+def test_composite_media_prefers_tight_inner_candidate_over_outer_chrome_shell(tmp_path: Path) -> None:
+    canvas = make_canvas(240, 180, fill=(240, 240, 240))
+    rows = [bytearray(row) for row in canvas.rows]
+    for r in range(70, 150):
+        for c in range(20, 210):
+            rows[r][c * 3 : c * 3 + 3] = b"\x10\x40\x80"
+    source = write_png(tmp_path / "source.png", PngPixels(width=240, height=180, rows=[bytes(row) for row in rows]))
+    m2905_dir = tmp_path / "m29_0_5"
+    inner_path = write_png(m2905_dir / "assets" / "combined_objects" / "refined_inner.png", make_canvas(190, 80, fill=(16, 64, 128)))
+    outer_path = write_png(m2905_dir / "assets" / "combined_objects" / "refined_outer.png", make_canvas(190, 120, fill=(250, 250, 250)))
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[],
+        text_members=[],
+    )
+    m2905["objects"] = [
+        composite_object("refined_outer", [20, 30, 190, 120], str(outer_path.relative_to(m2905_dir))),
+        composite_object("refined_inner", [20, 70, 190, 80], str(inner_path.relative_to(m2905_dir))),
+    ]
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+        options=M30Options(composite_media_min_area=1000),
+    )
+
+    composite_nodes = [child for child in result.dsl["root"]["children"] if child.get("role") == "m30_composite_media_asset"]
+    assert len(composite_nodes) == 1
+    assert composite_nodes[0]["meta"]["sourceRefinedObjectId"] == "refined_inner"
+    assert composite_nodes[0]["layout"] == {"x": 20, "y": 70, "width": 190, "height": 80}
+    skipped = {item.id: item.reason for item in result.report.skipped_items if item.source_kind == "m2905_composite_media_object"}
+    assert skipped["refined_outer"] == "duplicate_outer_composite_media_bbox"
+    assert result.report.summary["materializedCompositeMediaCount"] == 1
+    assert result.report.summary["skippedCompositeMediaCount"] == 1
+
+
 def test_composite_media_safety_gates_skip_invalid_candidates(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_canvas(260, 200))
     m2905_dir = tmp_path / "m29_0_5"

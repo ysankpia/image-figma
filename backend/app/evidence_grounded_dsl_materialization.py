@@ -200,6 +200,16 @@ class M30ImageAssetTextErasureResult:
 
 
 @dataclass(frozen=True)
+class M30CompositeMediaCandidate:
+    item: dict[str, Any]
+    source_id: str
+    bbox: list[int]
+    risks: list[str]
+    combined_asset_path: str
+    source_asset_path: Path
+
+
+@dataclass(frozen=True)
 class M30DebugArtifacts:
     materialization_preview: str | None = None
 
@@ -1252,6 +1262,7 @@ def append_composite_media_nodes(
 
     asset_dir = output_dir / "assets" / "m30_composite_media_assets"
     materialized_source_ids = {item.materialized.source_id for item in materialized}
+    candidates: list[M30CompositeMediaCandidate] = []
     for item in list_dicts(m2905_document.get("objects")):
         source_id = str(item.get("id") or "")
         if item.get("decision") != "partially_separated":
@@ -1272,18 +1283,30 @@ def append_composite_media_nodes(
         if not combined_asset_path:
             skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "missing_combined_asset_path", bbox, risks))
             continue
+
+        source_asset_path = (m2905_dir / combined_asset_path).resolve()
+        if not source_asset_path.exists():
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "missing_combined_asset_path", bbox, risks))
+            continue
+        candidates.append(M30CompositeMediaCandidate(item, source_id, bbox, risks, combined_asset_path, source_asset_path))
+
+    selected_composite_bboxes: list[list[int]] = []
+    for candidate in sorted(candidates, key=lambda value: (bbox_area(value.bbox), value.bbox[1], value.bbox[0], value.source_id)):
+        item = candidate.item
+        source_id = candidate.source_id
+        bbox = candidate.bbox
+        risks = candidate.risks
+        combined_asset_path = candidate.combined_asset_path
+        source_asset_path = candidate.source_asset_path
         if any(visual_id in materialized_source_ids for visual_id in list_strings(item.get("visualAssetIds"))):
             skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "duplicate_materialized_visual_asset", bbox, risks))
             continue
         if any(bbox_iou(bbox, existing.materialized.bbox) >= 0.85 for existing in materialized):
             skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "duplicate_materialized_image_bbox", bbox, risks))
             continue
-
-        source_asset_path = (m2905_dir / combined_asset_path).resolve()
-        if not source_asset_path.exists():
-            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "missing_combined_asset_path", bbox, risks))
+        if any(is_outer_composite_media_duplicate(bbox, selected_bbox) for selected_bbox in selected_composite_bboxes):
+            skipped.append(M30SkippedItem(source_id, "m2905_composite_media_object", "duplicate_outer_composite_media_bbox", bbox, risks))
             continue
-
         asset_dir.mkdir(parents=True, exist_ok=True)
         copied_path = asset_dir / f"{source_id}{source_asset_path.suffix.lower() or '.png'}"
         shutil.copy2(source_asset_path, copied_path)
@@ -1341,6 +1364,15 @@ def append_composite_media_nodes(
             )
         )
         materialized_source_ids.add(source_id)
+        selected_composite_bboxes.append(bbox)
+
+
+def is_outer_composite_media_duplicate(candidate_bbox: list[int], selected_bbox: list[int]) -> bool:
+    candidate_area = bbox_area(candidate_bbox)
+    selected_area = bbox_area(selected_bbox)
+    if candidate_area <= selected_area:
+        return False
+    return bbox_overlap_ratio(selected_bbox, candidate_bbox) >= 0.98
 
 
 M30_UNSAFE_VISUAL_TEXT_RISKS = {
