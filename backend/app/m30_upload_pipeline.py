@@ -267,19 +267,25 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     update_task(task_id, "m30_asset_publish", 96, "Publishing M30 assets.")
     run_stage(paths, timings, "m30_asset_publish", lambda: publish_m30_assets(task_id, paths.m30, m30_result.dsl, image))
 
-    update_task(task_id, "m39_boundary_classification", 97, "Running M39 boundary classification.")
-    from .content_chrome_classification import classify_content_chrome
-    run_stage(
-        paths,
-        timings,
-        "m39_boundary_classification",
-        lambda: classify_content_chrome(
-            dsl=m30_result.dsl,
-            task_id=task_id,
-            output_dir=paths.m39,
-            source_image_path=upload_path,
-        ),
-    )
+    if state.settings.m39_content_chrome_classification_enabled:
+        update_task(task_id, "m39_boundary_classification", 97, "Running M39 boundary classification.")
+        from .content_chrome_classification import M39Options, classify_content_chrome
+
+        run_stage(
+            paths,
+            timings,
+            "m39_boundary_classification",
+            lambda: classify_content_chrome(
+                dsl=m30_result.dsl,
+                task_id=task_id,
+                output_dir=paths.m39,
+                source_image_path=upload_path,
+                options=M39Options(
+                    onnx_proposer_enabled=state.settings.m39_onnx_proposer_enabled,
+                    onnx_model_path=state.settings.m39_onnx_model_path,
+                ),
+            ),
+        )
 
     output_dsl = paths.m30 / "m30_materialized_dsl.json"
     output_dsl.write_text(json.dumps(m30_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")

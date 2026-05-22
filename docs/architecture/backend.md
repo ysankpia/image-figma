@@ -40,7 +40,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.0.5 text-aware visual object refinement
 -> M30 evidence-grounded DSL materialization with text editability decisions, accepted image materialization, copied media asset text cleanup, composite media materialization, and fallback erasure for materialized nodes
 -> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
--> M39 content-chrome boundary classification, classifies M30 nodes as chrome or content using relative geometry rules and optional ONNX model proposer
+-> M39 content-chrome boundary classification, classifies materialized M30 nodes as chrome or content using relative geometry rules and optional ONNX model proposer
 -> M37 hierarchy readiness diagnostic, if M31 artifacts exist
 -> M38 controlled hierarchy materialization, if M37 report exists and M38 is enabled; skips units with boundary_classification_conflict
 -> save dsl_results path to m30/m30_materialized_dsl.json
@@ -106,14 +106,16 @@ M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and t
 
 M38 is the first controlled hierarchy materialization stage. It consumes only M37 safe direct-match candidates, creates transparent DSL `group` containers, and moves existing M30 children under those containers with parent-local coordinates. It preserves absolute page bboxes in `rawLayout`/meta, does not change assets, does not run OCR or visual detection, and does not mutate M37 artifacts.
 
-M39 is the content-chrome boundary classification stage. It runs between M30 asset publish and M37 hierarchy readiness. It reads the M30 DSL and optionally the source PNG, classifies each M30 DSL node as `"chrome"` or `"content"` in the node `meta.boundaryClassification` field using:
+M39 is the content-chrome boundary classification stage. It runs between M30 asset publish and M37 hierarchy readiness. It reads the M30 DSL and optionally the source PNG, classifies materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes as `"chrome"` or `"content"` in the node `meta.boundaryClassification` field using:
 
 ```text
 relative geometry rules (top/bottom 12% full-width spans, right-edge floats)
 optional ONNX model proposer (YOLOv8, non-blocking, dynamically loaded)
 ```
 
-M37 uses M39 labels to mark reconstruction units that contain both chrome and content nodes as unsafe (`boundary_classification_conflict`). M38 skips those units. M39 does not create visible elements, does not move nodes, does not change assets. If `onnxruntime` is not installed, M39 falls back to rule-only classification silently.
+M37 uses M39 labels to mark reconstruction units that contain both chrome and content nodes as unsafe (`boundary_classification_conflict`). M38 skips those units. M39 does not create visible elements, does not move nodes, does not change assets, and never classifies `fallback_region` or `original_reference`.
+
+M39 can be disabled with `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false`. The optional proposer is controlled by `M39_ONNX_PROPOSER_ENABLED` and `M39_ONNX_MODEL_PATH`; missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason`/warnings in the M39 report and falls back to rule-only classification.
 
 ## Artifact Profiles
 

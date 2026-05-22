@@ -144,7 +144,18 @@ m30_text_member
 m30_text_cover
 m30_shape_candidate
 m30_visual_asset
+m30_composite_media_asset
 ```
+
+M39 may add `meta.boundaryClassification` to materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes:
+
+```json
+{
+  "boundaryClassification": "content"
+}
+```
+
+This is a hierarchy-safety label only. It is not a renderer instruction, does not create nodes, does not move nodes, and does not apply to `fallback_region` or `original_reference`.
 
 ### Text
 

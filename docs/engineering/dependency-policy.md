@@ -69,6 +69,12 @@ M10 OCR provider 默认仍是 `fake`，可选 `baidu_ppocrv5` 通过 HTTP 调用
 - 不引入 `rapidocr`。
 - 不引入 `onnxruntime`。
 
+M39 content/chrome classification can optionally use a local ONNX proposer, but it must not add main dependencies:
+
+- `numpy`、`Pillow`、`onnxruntime` are imported dynamically inside the optional proposer path only.
+- Missing dependencies, missing model file, unexpected output shape, or inference failure must downgrade to rule-only classification.
+- The model output is only a candidate proposal and never bypasses geometry safety rules or becomes DSL truth.
+
 M26 perception benchmark 的 OpenCV/SAM2/UIED 依赖是可选实验依赖，不进入主 dependencies：
 
 - OpenCV smoke 可用 `uv run --with opencv-python-headless python scripts/run_m26_perception_smoke.py --providers current_rules,opencv` 临时安装运行。

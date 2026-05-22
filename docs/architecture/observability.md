@@ -148,16 +148,27 @@ storage/m30_1_uploads/{taskId}/m39/m39_boundary_classification_report.json
 The report summary includes:
 
 ```text
+totalClassifiedNodeCount
 chromeNodeCount
 contentNodeCount
-totalClassifiedNodeCount
+onnxProposerEnabled
 onnxModelLoaded
 onnxCandidateCount
 ruleOnlyClassificationCount
 modelAssistedClassificationCount
 ```
 
-Each classified M30 DSL node receives `meta.boundaryClassification` set to `"chrome"` or `"content"`. If a product-card text in the center is incorrectly classified as chrome, inspect the report's per-node classification entries and verify relative geometry rule thresholds. If the ONNX model is not loaded, `onnxModelLoaded` will be `false` and all classifications are rule-only.
+The report also includes top-level `modelSkippedReason`, `warnings`, `proposedChromeBoxes`, and `classifiedNodes[]`. `modelSkippedReason` is `null` when the proposer ran or was disabled without error; expected fallback values include `missing_dependency:numpy`, `missing_dependency:PIL`, `missing_dependency:onnxruntime`, `missing_model`, `inference_failed`, and `unexpected_output_shape`.
+
+Each classified M30 DSL node receives `meta.boundaryClassification` set to `"chrome"` or `"content"`. Per-node entries include `nodeId`, `role`, `bbox`, `classification`, `matchedRules`, `modelAssisted`, and `onnxOverlap`. If a product-card text in the center is incorrectly classified as chrome, inspect the report's per-node classification entries and verify relative geometry rule thresholds. If the ONNX model is not loaded, `onnxModelLoaded` will be `false` and all classifications are rule-only.
+
+The read-only API endpoint is:
+
+```text
+GET /api/tasks/{taskId}/m39-boundary-classification
+```
+
+It returns task status/stage, summary, warnings, `modelSkippedReason`, classified nodes, report path, and `stage_timings.json`. If M39 is disabled or the report is missing, it returns `M39_BOUNDARY_CLASSIFICATION_NOT_FOUND`.
 
 ## Logs
 

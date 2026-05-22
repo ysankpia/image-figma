@@ -200,6 +200,69 @@ def test_m37_geometry_text_match_is_diagnostic_only(tmp_path: Path) -> None:
     assert result.report["summary"]["dslChanged"] is False
 
 
+def test_m37_composite_media_can_geometry_type_match_as_image(tmp_path: Path) -> None:
+    m31_tree = {
+        "schemaName": "M31ReconstructionUiTree",
+        "schemaVersion": "0.1",
+        "imageSize": {"width": 240, "height": 160},
+        "root": {"id": "page", "kind": "page", "bbox": [0, 0, 240, 160], "children": ["unit_1"]},
+        "nodes": [
+            {
+                "id": "unit_1",
+                "kind": "reconstruction_unit",
+                "unitKind": "row_unit",
+                "visualKind": "card_like",
+                "bbox": [20, 20, 140, 80],
+                "children": ["prim_image", "prim_text"],
+            }
+        ],
+        "primitiveRefs": [
+            {"id": "prim_image", "sourceId": "unrelated_image", "primitiveType": "image", "bbox": [20, 20, 120, 70], "ownerUnitId": "unit_1"},
+            {"id": "prim_text", "sourceId": "text_001", "primitiveType": "text", "bbox": [30, 30, 40, 20], "ownerUnitId": "unit_1", "text": "A"},
+        ],
+    }
+    m30_dsl = {
+        "version": "0.1",
+        "page": {"width": 240, "height": 160},
+        "assets": [],
+        "root": {
+            "id": "root",
+            "type": "frame",
+            "children": [
+                {
+                    "id": "m30_composite",
+                    "type": "image",
+                    "role": "m30_composite_media_asset",
+                    "layout": {"x": 20, "y": 20, "width": 120, "height": 70},
+                    "meta": {
+                        "m30Materialized": True,
+                        "sourceKind": "m2905_composite_media_object",
+                        "sourceRefinedObjectId": "different_refined_object",
+                    },
+                },
+                m30_text_node("m30_text_1", [30, 30, 40, 20], "A", "unrelated_text"),
+            ],
+        },
+    }
+    tree_path = write_json(tmp_path / "m31_tree.json", m31_tree)
+    m31_report_path = write_json(tmp_path / "m31_report.json", {"summary": {}})
+    dsl_path = write_json(tmp_path / "m30_dsl.json", m30_dsl)
+    m30_report_path = write_json(tmp_path / "m30_report.json", {"summary": {}})
+
+    result = extract_m37_hierarchy_readiness(
+        m31_tree_path=str(tree_path),
+        m31_report_path=str(m31_report_path),
+        m30_dsl_path=str(dsl_path),
+        m30_report_path=str(m30_report_path),
+        output_dir=tmp_path / "m37",
+    )
+
+    unit = result.report["unitReports"][0]
+    assert unit["safeContainerCandidate"] is True
+    assert unit["matchCounts"]["geometry_type_match"] == 1
+    assert any(match["m30NodeId"] == "m30_composite" and match["matchKind"] == "geometry_type_match" for match in unit["matches"])
+
+
 def m30_text_node(node_id: str, bbox: list[int], text: str, source_text_box_id: str) -> dict:
     return {
         "id": node_id,

@@ -10,6 +10,7 @@ Figma plugin
 -> OCR + M29 evidence pipeline
 -> M31 reconstruction diagnostics
 -> M30 materialized DSL with raster layer deduplication
+-> M39 content/chrome boundary classification
 -> M37 hierarchy readiness diagnostics
 -> M38 controlled hierarchy materialization
 -> GET /api/tasks/{taskId}/dsl
@@ -31,6 +32,8 @@ M30 materializes safe text, shapes, images, and composite media into DSL layers,
 M37 reads M31 and final M30 artifacts to produce a hierarchy readiness report. It does not create frames, move DSL nodes, or change Figma output.
 
 M38 consumes the M37 safe direct-match bridge and rewrites the final DSL into transparent hierarchy groups. It only moves existing materialized M30 nodes, preserves absolute bboxes through parent-local coordinates, and does not change image assets or run new recognition.
+
+M39 runs between M30 asset publishing and M37. It labels materialized M30 text, shape, visual image, and composite media nodes as `chrome` or `content` using generic relative geometry plus an optional ONNX proposer. The proposer is not a truth source: missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason` and falls back to rule-only classification.
 
 ## Run
 
@@ -66,6 +69,7 @@ GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
 GET  /api/tasks/{taskId}/m30-materialization
 GET  /api/tasks/{taskId}/m31-reconstruction
+GET  /api/tasks/{taskId}/m39-boundary-classification
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -93,6 +97,8 @@ M30 text nodes also report `textForegroundColorSource` in node meta. The M30 rep
 
 `GET /api/tasks/{taskId}/m31-reconstruction` returns M31 reconstruction summary metrics, warnings, review buckets, unit summaries, the full tree path, optional debug overlay path, and `stage_timings.json`. It does not return the full tree JSON.
 
+`GET /api/tasks/{taskId}/m39-boundary-classification` returns M39 summary metrics, warnings, `modelSkippedReason`, classified node entries, output report path, and `stage_timings.json`. If M39 is disabled or no report exists, it returns `M39_BOUNDARY_CLASSIFICATION_NOT_FOUND`.
+
 ## Current Pipeline
 
 The upload preview pipeline runs:
@@ -110,6 +116,7 @@ OCR
 -> M30 evidence-grounded DSL materialization with accepted images, copied media text cleanup, and composite media
 -> M30.2 conservative text cover
 -> publish M30 image assets under /files/assets/{taskId}/m30/
+-> M39 content-chrome boundary classification
 -> M37 hierarchy readiness diagnostic
 -> M38 controlled hierarchy materialization
 ```
@@ -216,6 +223,18 @@ M30.2 adds conservative `m30_text_cover` shape nodes only when source PNG backgr
 M30.6 adds a narrow accepted-image materialization policy inside M30. Large `assetUse=image_asset` entries from M29.0.5 can become `m30_visual_asset` DSL image nodes when their text overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their bbox area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node. This makes product/banner images draggable as independent Figma image layers. It is not OCR, not image-internal overlay recovery, not a `1/6` fix, not parent asset cleanup, and not M38 grouping.
 
 M30.7 keeps those independent media layers clean. It fills editable text bboxes inside copied `m30_visual_asset`/`m30_composite_media_asset` PNGs with sampled local background, so dragging the text does not reveal baked duplicate text underneath. It also materializes large `decision=partially_separated` objects with `combinedAssetPath` as `m30_composite_media_asset`, which makes carousel/banner raster blocks draggable without pretending their internal art text is editable.
+
+## M39 Content-Chrome Boundary Classification
+
+```bash
+M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=true
+M39_ONNX_PROPOSER_ENABLED=true
+M39_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+```
+
+M39 writes `meta.boundaryClassification` on materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes. It does not classify or move `fallback_region` or `original_reference`.
+
+The built-in geometry rules cover top/bottom 12% full-width chrome and right-edge floating chrome, with a center-page safety override. The optional ONNX model can only propose chrome boxes; it cannot override the safety rules or become DSL truth. `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false` skips the stage and returns the pipeline to M39-before behavior.
 
 ## M31 Reconstruction UI Tree
 

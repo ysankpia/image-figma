@@ -202,7 +202,7 @@ def visible_m30_nodes(root: dict[str, Any]) -> list[VisibleNode]:
             return
         meta = node.get("meta") if isinstance(node.get("meta"), dict) else {}
         role = str(node.get("role") or "")
-        if meta.get("m30Materialized") is True and role in {"m30_text_member", "m30_shape_candidate", "m30_visual_asset"}:
+        if meta.get("m30Materialized") is True and role in {"m30_text_member", "m30_shape_candidate", "m30_visual_asset", "m30_composite_media_asset"}:
             bbox = layout_bbox(node.get("layout"))
             if bbox is not None:
                 content = node.get("content") if isinstance(node.get("content"), dict) else {}
@@ -235,12 +235,27 @@ def layout_bbox(layout: Any) -> list[int] | None:
 
 def node_source_ids(meta: dict[str, Any]) -> set[str]:
     ids: set[str] = set()
-    for key in ("sourceTextMemberId", "sourceTextBoxId", "sourceEvidenceNodeId", "sourceVisualAssetId", "sourceShapeCandidateId", "sourceObjectId"):
+    for key in (
+        "sourceTextMemberId",
+        "sourceTextBoxId",
+        "sourceEvidenceNodeId",
+        "sourceVisualAssetId",
+        "sourceShapeCandidateId",
+        "sourceRefinedObjectId",
+        "sourceObjectId",
+    ):
         value = meta.get(key)
         if value is not None:
             ids.add(str(value))
-    for value in meta.get("sourceEvidenceNodeIds", []) if isinstance(meta.get("sourceEvidenceNodeIds"), list) else []:
-        ids.add(str(value))
+    for key in (
+        "sourceEvidenceNodeIds",
+        "sourceM2904EvidenceNodeIds",
+        "sourceM2903ItemIds",
+        "sourceM2903SourceEvidenceIds",
+        "sourceM29NodeIds",
+    ):
+        for value in meta.get(key, []) if isinstance(meta.get(key), list) else []:
+            ids.add(str(value))
     return ids
 
 
@@ -338,7 +353,7 @@ def bbox_best_iou(bbox: list[int], candidates: list[list[int] | None]) -> float:
 def role_matches_primitive_type(node: VisibleNode, primitive_types: set[str]) -> bool:
     if node.role == "m30_text_member":
         return "text" in primitive_types
-    if node.role == "m30_visual_asset":
+    if node.role in {"m30_visual_asset", "m30_composite_media_asset"}:
         return bool({"image", "symbol"} & primitive_types)
     if node.role == "m30_shape_candidate":
         return "shape" in primitive_types

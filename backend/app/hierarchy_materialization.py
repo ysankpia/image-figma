@@ -10,7 +10,7 @@ from typing import Any
 from .visual_evidence_normalization import parse_bbox
 
 
-M38_MOVABLE_ROLES = {"m30_text_member", "m30_shape_candidate", "m30_visual_asset"}
+M38_MOVABLE_ROLES = {"m30_text_member", "m30_shape_candidate", "m30_visual_asset", "m30_composite_media_asset"}
 M38_FORBIDDEN_ROLES = {"fallback_region", "original_reference"}
 
 

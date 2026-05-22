@@ -37,6 +37,9 @@
 | `M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED` | 是否从 M30 copied media asset 中擦除已物化 editable text bbox | `true` | 否 |
 | `M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED` | 是否把大面积 `partially_separated` composite media 物化为独立 image node | `true` | 否 |
 | `M30_COMPOSITE_MEDIA_MIN_AREA` | M30.7 composite media 可物化的最小 bbox 面积 | `50000` | 否 |
+| `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED` | 是否在 M30 asset publish 后运行 M39 content/chrome 边界分类 | `true` | 否 |
+| `M39_ONNX_PROPOSER_ENABLED` | 是否允许 M39 尝试本机 ONNX 模型候选提议器；失败时降级 rule-only | `true` | 否 |
+| `M39_ONNX_MODEL_PATH` | M39 可选 ONNX proposer 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
 | `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
@@ -149,6 +152,20 @@ M30.7 也在 M30 内部运行，不新增 runtime stage。`M30_IMAGE_ASSET_TEXT_
 `M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED=true` 时，M30 会把大面积 `decision=partially_separated` 且有 `combinedAssetPath` 的 composite media 作为 `role=m30_composite_media_asset` image node 物化。它用于让轮播图/Banner 整块可选中、可拖动；第一版保留图内艺术标题烘焙在 raster 中，不做内部文字编辑。
 
 M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不直接改变 `/api/tasks/{taskId}/dsl`。
+
+## M39 Content-Chrome Boundary Classification
+
+```bash
+M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=true
+M39_ONNX_PROPOSER_ENABLED=true
+M39_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+```
+
+M39 runs after M30 asset publishing and before M37. It classifies materialized M30 text, shape, visual image, and composite media nodes as `chrome` or `content` in `meta.boundaryClassification`.
+
+`M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false` skips the stage entirely. No `storage/m30_1_uploads/{taskId}/m39/` report is created and M37/M38 behave as they did before M39.
+
+`M39_ONNX_PROPOSER_ENABLED=true` only allows an optional candidate proposer. `numpy`, `Pillow`, `onnxruntime`, the model file, output shape, or inference can all be absent or fail without failing the upload. Those cases are reported as `modelSkippedReason` in `m39_boundary_classification_report.json`; final classification remains rule-gated.
 
 ## M38 Hierarchy Materialization
 

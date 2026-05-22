@@ -72,9 +72,17 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m31_reconstruction",
         "m29_0_5",
         "m30_materialization",
+        "m39_boundary_classification",
         "m37_hierarchy_readiness",
         "m38_hierarchy_materialization",
     }
+    m39 = client.get(f"/api/tasks/{task_id}/m39-boundary-classification")
+    assert m39.status_code == 200
+    m39_data = m39.json()["data"]
+    assert m39_data["summary"]["totalClassifiedNodeCount"] > 0
+    assert "modelSkippedReason" in m39_data
+    assert isinstance(m39_data["classifiedNodes"], list)
+    assert str(m39_data["outputReport"]).endswith("m39_boundary_classification_report.json")
 
     m31 = client.get(f"/api/tasks/{task_id}/m31-reconstruction")
     assert m31.status_code == 200
@@ -111,6 +119,7 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert (task_root / "m31" / "m31_reconstruction_tree_report.json").exists()
     assert (task_root / "m31" / "m31_unit_fallback_assets").exists()
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
+    assert (task_root / "m39" / "m39_boundary_classification_report.json").exists()
     m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
     assert m37_report["summary"]["createdVisibleFrameCount"] == 0
     assert m37_report["summary"]["dslChanged"] is False
@@ -120,6 +129,7 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert m38_report["summary"]["fallbackMovedCount"] == 0
     assert m38_report["summary"]["assetChanged"] is False
     final_dsl = json.loads((task_root / "m30" / "m30_materialized_dsl.json").read_text(encoding="utf-8"))
+    assert all_m30_classifiable_nodes_have_boundary_classification(final_dsl)
     if m38_report["summary"]["dslChanged"]:
         assert has_role_recursive(final_dsl, "m38_container")
         assert (task_root / "m30" / "m30_materialized_dsl_flat.json").exists()
@@ -246,6 +256,59 @@ def test_m38_hierarchy_materialization_can_be_disabled(tmp_path: Path, monkeypat
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
     assert not (task_root / "m38").exists()
     assert "m38_hierarchy_materialization" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+
+
+def test_m39_content_chrome_classification_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M39_CONTENT_CHROME_CLASSIFICATION_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl").json()["data"]["dsl"]
+        m39 = local_client.get(f"/api/tasks/{task_id}/m39-boundary-classification")
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert not (task_root / "m39").exists()
+    assert "m39_boundary_classification" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert no_m30_classifiable_nodes_have_boundary_classification(dsl)
+    assert m39.status_code == 404
+    assert m39.json()["error"]["code"] == "M39_BOUNDARY_CLASSIFICATION_NOT_FOUND"
+
+
+def test_m39_missing_model_keeps_upload_completed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M39_ONNX_MODEL_PATH", str(tmp_path / "missing.onnx"))
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        task = local_client.get(f"/api/tasks/{task_id}").json()["data"]
+        m39 = local_client.get(f"/api/tasks/{task_id}/m39-boundary-classification").json()["data"]
+
+    assert task["status"] == "completed"
+    assert m39["modelSkippedReason"] == "missing_model"
+    assert m39["summary"]["onnxModelLoaded"] is False
+    assert m39["summary"]["ruleOnlyClassificationCount"] == m39["summary"]["totalClassifiedNodeCount"]
 
 
 def test_m38_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -403,6 +466,35 @@ def visible_audit_only_children(dsl: dict) -> int:
         if meta.get("sourceKind") in {"m2913_audit", "m29032_review", "mixed_symbol_text_candidate"}:
             count += 1
     return count
+
+
+def all_m30_classifiable_nodes_have_boundary_classification(dsl: dict) -> bool:
+    found = False
+    for node in walk_nodes(dsl.get("root")):
+        meta = node.get("meta") if isinstance(node.get("meta"), dict) else {}
+        if meta.get("m30Materialized") is True and node.get("role") in {"m30_text_member", "m30_shape_candidate", "m30_visual_asset", "m30_composite_media_asset"}:
+            found = True
+            if meta.get("boundaryClassification") not in {"chrome", "content"}:
+                return False
+    return found
+
+
+def no_m30_classifiable_nodes_have_boundary_classification(dsl: dict) -> bool:
+    for node in walk_nodes(dsl.get("root")):
+        meta = node.get("meta") if isinstance(node.get("meta"), dict) else {}
+        if meta.get("m30Materialized") is True and node.get("role") in {"m30_text_member", "m30_shape_candidate", "m30_visual_asset", "m30_composite_media_asset"}:
+            if "boundaryClassification" in meta:
+                return False
+    return True
+
+
+def walk_nodes(node: Any) -> list[dict]:
+    if not isinstance(node, dict):
+        return []
+    result = [node]
+    for child in node.get("children", []) if isinstance(node.get("children"), list) else []:
+        result.extend(walk_nodes(child))
+    return result
 
 
 def make_png(width: int, height: int) -> bytes:

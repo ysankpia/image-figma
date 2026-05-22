@@ -278,15 +278,16 @@ uv run pytest tests/test_content_chrome_classification.py tests/test_hierarchy_m
 
 Required M39 coverage:
 
-- M30 DSL nodes receive `meta.boundaryClassification` set to `"chrome"` or `"content"`.
+- Materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes receive `meta.boundaryClassification` set to `"chrome"` or `"content"`.
 - Top/bottom full-width spans are classified as chrome.
 - Right-edge float zones are classified as chrome.
 - Center-page nodes are protected from chrome classification even when the ONNX model proposes them.
-- ONNX model absence causes silent fallback to rule-only classification.
+- ONNX model absence, missing optional dependencies, bad output shape, or inference failure causes fallback to rule-only classification and records `modelSkippedReason`/warnings.
 - M39 report `m39_boundary_classification_report.json` is written.
+- `GET /api/tasks/{taskId}/m39-boundary-classification` returns the report summary and returns `M39_BOUNDARY_CLASSIFICATION_NOT_FOUND` when disabled or missing.
 - M37 marks reconstruction units with both chrome and content children as unsafe (`boundary_classification_conflict`).
-- M38 skips units with `boundary_classification_conflict`.
-- Pipeline succeeds even without `onnxruntime`.
+- M38 skips units with `boundary_classification_conflict`, can move `m30_composite_media_asset` only when M37 marks it as a safe direct match, and never moves `fallback_region` or `original_reference`.
+- Pipeline succeeds even without `numpy`, `Pillow`, `onnxruntime`, or the local ONNX model.
 - M39 does not create visible nodes, move elements, or change DSL assets.
 
 ## Static Guards
