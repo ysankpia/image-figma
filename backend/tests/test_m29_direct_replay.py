@@ -111,6 +111,80 @@ def test_node_budget_prevents_layer_explosion(tmp_path: Path) -> None:
     assert result.report["summary"]["skippedReasons"]["node_budget_exceeded"] == 6
 
 
+def test_m292_document_controls_direct_replay_decisions(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(
+            100,
+            80,
+            fill=(248, 248, 248),
+            marks=[([10, 10, 20, 10], (0, 0, 0)), ([50, 10, 20, 10], (0, 0, 0)), ([10, 40, 8, 8], (20, 20, 20)), ([23, 40, 8, 8], (20, 20, 20))],
+        ),
+    )
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node("symbol_001", "symbol", [10, 40, 8, 8]),
+            m29_node("symbol_002", "symbol", [23, 40, 8, 8]),
+            m29_node("shape_001", "shape", [50, 10, 20, 10], style={"fill": "#000000"}),
+        ],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 4, "editableTextCount": 1, "preservedRasterTextCount": 1},
+        "sourceObjects": [
+            m292_object("m292_text", [10, 10, 20, 10], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+            m292_object("m292_preserve", [50, 10, 20, 10], "preserve_raster_text", "preserve_raster", "preserve_in_parent_raster"),
+            m292_object("m292_icon", [10, 40, 21, 8], "raster_icon", "raster_icon", "icon_replay", m29_ids=["symbol_001", "symbol_002"]),
+            m292_object("m292_shape", [60, 55, 18, 4], "separator", "shape_geometry", "shape_replay", m29_ids=["shape_001"]),
+        ],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "Hi", [10, 10, 20, 10])]),
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    assert count_children(result.dsl, "m29_direct_text") == 1
+    assert count_children(result.dsl, "m29_direct_symbol") == 1
+    assert count_children(result.dsl, "m29_direct_shape") == 1
+    assert result.report["summary"]["fallbackErasedBBoxCount"] == 3
+    assert result.report["summary"]["skippedReasons"]["preserve_in_parent_raster"] == 1
+    assert result.report["summary"]["m292SourcePhysicalGraph"]["sourceObjectCount"] == 4
+    icon = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_symbol")
+    assert icon["layout"]["width"] == 21
+    assert icon["meta"]["sourceM292ObjectId"] == "m292_icon"
+    assert icon["meta"]["sourceM29NodeIds"] == ["symbol_001", "symbol_002"]
+
+
+def test_m292_preserve_raster_text_is_not_erased_from_fallback(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(80, 60, fill=(240, 240, 240), marks=[([20, 20, 18, 8], (0, 0, 0))]))
+    original_pixel = source.read_bytes()
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [
+            m292_object("m292_art", [20, 20, 18, 8], "preserve_raster_text", "preserve_raster", "preserve_in_parent_raster"),
+        ],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=original_pixel,
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[]),
+        ocr_document=ocr_document([ocr_block("ocr_art", "ART", [20, 20, 18, 8])]),
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    fallback_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "fallback_region")
+    fallback_pixels = decode_png_pixels((tmp_path / "out" / fallback_asset["url"]).read_bytes())
+    assert fallback_pixels.rows[22][22 * 3 : 22 * 3 + 3] == b"\x00\x00\x00"
+    assert result.report["summary"]["fallbackErasedBBoxCount"] == 0
+
+
 def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250, 250), marks: list[tuple[list[int], tuple[int, int, int]]] | None = None) -> PngPixels:
     rows = [bytearray(bytes(fill) * width) for _ in range(height)]
     for bbox, color in marks or []:
@@ -175,3 +249,33 @@ def ocr_block(block_id: str, text: str, bbox: list[int]) -> dict:
 
 def count_children(dsl: dict, role: str) -> int:
     return sum(1 for child in dsl["root"]["children"] if child.get("role") == role)
+
+
+def m292_object(
+    object_id: str,
+    bbox: list[int],
+    visual_kind: str,
+    pixel_owner: str,
+    replay_decision: str,
+    *,
+    m29_ids: list[str] | None = None,
+    ocr_ids: list[str] | None = None,
+) -> dict:
+    return {
+        "id": object_id,
+        "bbox": bbox,
+        "visualKind": visual_kind,
+        "pixelOwner": pixel_owner,
+        "replayDecision": replay_decision,
+        "sourceEvidence": {
+            "ocrBoxIds": ocr_ids or [],
+            "m29NodeIds": m29_ids or [],
+            "blockedIds": [],
+            "localBackgroundConfidence": 0.9,
+            "textOverlapRatio": 0.0,
+            "mediaContainmentRatio": 0.0,
+        },
+        "confidence": "high",
+        "reasons": ["test"],
+        "risks": [],
+    }

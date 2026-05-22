@@ -174,12 +174,19 @@ Focused command:
 
 ```bash
 cd backend
-uv run pytest tests/test_m29_direct_replay.py tests/test_m30_upload_pipeline.py tests/test_routes_tasks.py -q
+uv run pytest tests/test_source_ui_physical_graph.py tests/test_m29_direct_replay.py tests/test_m30_upload_pipeline.py tests/test_routes_tasks.py -q
 ```
 
 Required coverage:
 
+- M29.2 classifies high-confidence UI OCR text as `editable_ui_text`.
+- M29.2 preserves OCR text inside textured media as raster.
+- M29.2 merges adjacent symbol fragments into one `raster_icon`.
+- M29.2 only replays stable UI shapes and keeps complex blur/shadow diagnostic-only.
+- M29.2 media regions prevent internal fragments from becoming separate replay layers.
 - OCR text suppresses high-overlap M29 raster primitive.
+- M29 direct consumes M29.2 `replayDecision` when the document is available.
+- `preserve_in_parent_raster` does not create visible nodes and does not erase fallback pixels.
 - M29 image/symbol/simple shape can be replayed as DSL visible nodes.
 - blocked/unknown primitives remain report-only.
 - fallback erases replayed bboxes without mutating source PNG or M29 assets.

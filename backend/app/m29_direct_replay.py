@@ -66,6 +66,7 @@ def build_m29_direct_replay_dsl(
     m29_document: dict[str, Any],
     output_dir: Path,
     ocr_document: dict[str, Any] | None = None,
+    m292_document: dict[str, Any] | None = None,
     options: M29DirectReplayOptions | None = None,
     task_id: str = "m29_direct_replay",
 ) -> M29DirectReplayResult:
@@ -112,32 +113,50 @@ def build_m29_direct_replay_dsl(
         warnings.append("ocr_missing_text_replay_disabled")
 
     m29_nodes = list_dicts(m29_document.get("nodes"))
-    replay_text_nodes(
-        dsl=dsl,
-        existing_ids=existing_ids,
-        pixels=pixels,
-        image=image,
-        ocr_boxes=ocr_boxes,
-        m29_nodes=m29_nodes,
-        options=options,
-        replayed=replayed,
-        skipped=skipped,
-    )
-    replay_m29_nodes(
-        dsl=dsl,
-        existing_ids=existing_ids,
-        asset_ids=asset_ids,
-        pixels=pixels,
-        image=image,
-        m29_nodes=m29_nodes,
-        m29_blocked=list_dicts(m29_document.get("blocked")),
-        m29_dir=resolve_m29_dir(m29_document),
-        output_dir=output_dir,
-        ocr_bboxes=[item.bbox for item in ocr_boxes],
-        replayed=replayed,
-        skipped=skipped,
-        options=options,
-    )
+    m292_objects = list_dicts((m292_document or {}).get("sourceObjects"))
+    if m292_objects:
+        replay_m292_objects(
+            dsl=dsl,
+            existing_ids=existing_ids,
+            asset_ids=asset_ids,
+            pixels=pixels,
+            image=image,
+            m29_nodes=m29_nodes,
+            m29_dir=resolve_m29_dir(m29_document),
+            output_dir=output_dir,
+            ocr_boxes=ocr_boxes,
+            m292_objects=m292_objects,
+            replayed=replayed,
+            skipped=skipped,
+            options=options,
+        )
+    else:
+        replay_text_nodes(
+            dsl=dsl,
+            existing_ids=existing_ids,
+            pixels=pixels,
+            image=image,
+            ocr_boxes=ocr_boxes,
+            m29_nodes=m29_nodes,
+            options=options,
+            replayed=replayed,
+            skipped=skipped,
+        )
+        replay_m29_nodes(
+            dsl=dsl,
+            existing_ids=existing_ids,
+            asset_ids=asset_ids,
+            pixels=pixels,
+            image=image,
+            m29_nodes=m29_nodes,
+            m29_blocked=list_dicts(m29_document.get("blocked")),
+            m29_dir=resolve_m29_dir(m29_document),
+            output_dir=output_dir,
+            ocr_bboxes=[item.bbox for item in ocr_boxes],
+            replayed=replayed,
+            skipped=skipped,
+            options=options,
+        )
 
     fallback_erased_count = 0
     if options.erase_replayed_bboxes_from_fallback:
@@ -151,6 +170,8 @@ def build_m29_direct_replay_dsl(
         fallback_erased_count=fallback_erased_count,
         options=options,
     )
+    if isinstance((m292_document or {}).get("summary"), dict):
+        summary["m292SourcePhysicalGraph"] = dict(m292_document["summary"])
     report = {
         "schemaName": "M29DirectReplayReport",
         "schemaVersion": "0.1",
@@ -163,7 +184,7 @@ def build_m29_direct_replay_dsl(
         "meta": {
             "dslChanged": True,
             "branchOnlyExperiment": True,
-            "truthSource": "source_png_plus_ocr_plus_m29_nodes",
+            "truthSource": "source_png_plus_ocr_plus_m29_2_source_objects" if m292_objects else "source_png_plus_ocr_plus_m29_nodes",
         },
     }
     (output_dir / "m29_direct_replay_dsl.json").write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -333,6 +354,132 @@ def replay_m29_nodes(
         skipped.append(skip_item(str(blocked.get("id") or "unknown_blocked"), "m29_blocked", bbox, "blocked_primitive"))
 
 
+def replay_m292_objects(
+    *,
+    dsl: dict[str, Any],
+    existing_ids: set[str],
+    asset_ids: set[str],
+    pixels: PngPixels,
+    image: PngMetadata,
+    m29_nodes: list[dict[str, Any]],
+    m29_dir: Path | None,
+    output_dir: Path,
+    ocr_boxes: list[Any],
+    m292_objects: list[dict[str, Any]],
+    replayed: list[ReplayNode],
+    skipped: list[dict[str, Any]],
+    options: M29DirectReplayOptions,
+) -> None:
+    children = dsl["root"].setdefault("children", [])
+    m29_by_id = {str(node.get("id") or ""): node for node in m29_nodes if node.get("id")}
+    ocr_by_id = {str(box.id): box for box in ocr_boxes if getattr(box, "id", None)}
+    for item in m292_objects:
+        object_id = str(item.get("id") or "unknown_m292_object")
+        decision = str(item.get("replayDecision") or "")
+        visual_kind = str(item.get("visualKind") or "")
+        pixel_owner = str(item.get("pixelOwner") or "")
+        bbox = parse_bbox(item.get("bbox"))
+        if bbox is None or not bbox_in_bounds(bbox, image.width, image.height):
+            skipped.append(skip_item(object_id, "m29_2_source_object", bbox, "invalid_bbox"))
+            continue
+        if decision in {"preserve_in_parent_raster", "skip"}:
+            skipped.append(skip_item(object_id, "m29_2_source_object", bbox, decision))
+            continue
+        if len(replayed) >= options.max_total_visible_nodes:
+            skipped.append(skip_item(object_id, "m29_2_source_object", bbox, "node_budget_exceeded"))
+            continue
+        meta = m292_meta(item)
+        if decision == "text_replay" and options.enable_text_replay:
+            source_box = first_ocr_box(item, ocr_by_id)
+            text = str(getattr(source_box, "text", "") or "").strip()
+            if not text:
+                skipped.append(skip_item(object_id, "m29_2_text", bbox, "missing_text"))
+                continue
+            bg = sample_text_background(pixels, bbox)
+            fg = sample_text_foreground(pixels, bbox, bg)
+            node_id = next_unique_id(existing_ids, f"m29_direct_text_{len([node for node in replayed if node.kind == 'text']) + 1:04d}")
+            children.append(
+                {
+                    "id": node_id,
+                    "type": "text",
+                    "role": "m29_direct_text",
+                    "name": f"M29 Direct Text / {object_id}",
+                    "layout": layout_from_bbox(bbox),
+                    "style": {
+                        "visible": True,
+                        "opacity": 1,
+                        "color": rgb_to_hex(list(fg)),
+                        "fontSize": estimate_font_size(bbox),
+                        "fontFamily": "Inter",
+                        "fontWeight": 400,
+                        "textAlign": "left",
+                    },
+                    "content": {"text": text},
+                    "meta": {
+                        "m29DirectReplay": True,
+                        "sourceKind": "m29_2_source_object",
+                        "sourceOcrBlockId": getattr(source_box, "id", object_id),
+                        "sourceBBox": bbox,
+                        "replayDecision": "ocr_text_replay",
+                        "replayReasons": ["m29_2_source_ownership_text_replay"],
+                        **meta,
+                    },
+                }
+            )
+            replayed.append(ReplayNode(node_id, "text", object_id, bbox))
+        elif decision == "image_replay" and options.enable_image_replay:
+            node = first_m29_node(item, m29_by_id)
+            append_image_replay_node(
+                dsl,
+                children,
+                existing_ids,
+                asset_ids,
+                pixels,
+                m29_dir,
+                output_dir,
+                node or {"id": object_id, "type": "image"},
+                bbox,
+                replayed,
+                "m29_direct_image",
+                extra_meta=meta,
+            )
+        elif decision == "icon_replay" and options.enable_symbol_replay:
+            if bbox_area(bbox) < options.min_symbol_area:
+                skipped.append(skip_item(object_id, "m29_2_icon", bbox, "too_small"))
+                continue
+            append_image_replay_node(
+                dsl,
+                children,
+                existing_ids,
+                asset_ids,
+                pixels,
+                m29_dir,
+                output_dir,
+                {"id": object_id, "type": "symbol"},
+                bbox,
+                replayed,
+                "m29_direct_symbol",
+                extra_meta={**meta, "sourceM29NodeIds": m292_source_ids(item, "m29NodeIds")},
+                force_crop=True,
+            )
+        elif decision == "shape_replay" and options.enable_simple_shape_replay:
+            append_shape_replay_node(
+                children,
+                existing_ids,
+                {
+                    "id": object_id,
+                    "type": "shape",
+                    "style": {"fill": sampled_shape_fill(pixels, bbox)},
+                    "subtype": visual_kind,
+                },
+                bbox,
+                replayed,
+                extra_meta=meta,
+            )
+        else:
+            skipped.append(skip_item(object_id, f"m29_2_{visual_kind}_{pixel_owner}", bbox, "unsupported_replay_decision"))
+
+
 def append_image_replay_node(
     dsl: dict[str, Any],
     children: list[dict[str, Any]],
@@ -345,6 +492,9 @@ def append_image_replay_node(
     bbox: list[int],
     replayed: list[ReplayNode],
     role: str,
+    *,
+    extra_meta: dict[str, Any] | None = None,
+    force_crop: bool = False,
 ) -> None:
     source_id = str(node.get("id") or f"{role}_unknown")
     asset_dir = output_dir / "assets" / role
@@ -352,7 +502,7 @@ def append_image_replay_node(
     source_asset = resolve_source_asset(m29_dir, node)
     suffix = source_asset.suffix.lower() if source_asset is not None else ".png"
     copied_path = asset_dir / f"{source_id}{suffix or '.png'}"
-    if source_asset is not None and source_asset.exists():
+    if source_asset is not None and source_asset.exists() and not force_crop:
         shutil.copy2(source_asset, copied_path)
     else:
         copied_path.write_bytes(crop_pixels(pixels, bbox))
@@ -395,6 +545,7 @@ def append_image_replay_node(
                 "sourceAssetPath": node.get("assetPath"),
                 "replayDecision": f"{node.get('type')}_replay",
                 "replayReasons": ["m29_visual_primitive_replay"],
+                **(extra_meta or {}),
             },
         }
     )
@@ -407,6 +558,8 @@ def append_shape_replay_node(
     node: dict[str, Any],
     bbox: list[int],
     replayed: list[ReplayNode],
+    *,
+    extra_meta: dict[str, Any] | None = None,
 ) -> None:
     source_id = str(node.get("id") or "unknown_shape")
     style = node.get("style") if isinstance(node.get("style"), dict) else {}
@@ -430,6 +583,7 @@ def append_shape_replay_node(
             "sourceBBox": bbox,
             "replayDecision": "simple_shape_replay",
             "replayReasons": ["simple_shape"],
+            **(extra_meta or {}),
         },
     }
     children.append(shape_node)
@@ -565,6 +719,43 @@ def sample_text_foreground(pixels: PngPixels, bbox: list[int], bg_rgb: list[int]
 
 def estimate_font_size(bbox: list[int]) -> int:
     return max(8, min(64, round(bbox[3] * 0.82)))
+
+
+def m292_meta(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sourceM292ObjectId": str(item.get("id") or ""),
+        "m292VisualKind": str(item.get("visualKind") or ""),
+        "m292PixelOwner": str(item.get("pixelOwner") or ""),
+        "m292ReplayDecision": str(item.get("replayDecision") or ""),
+        "m292Reasons": [str(reason) for reason in item.get("reasons", []) if isinstance(reason, str)],
+    }
+
+
+def m292_source_ids(item: dict[str, Any], key: str) -> list[str]:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    values = evidence.get(key) if isinstance(evidence, dict) else []
+    return [str(value) for value in values if isinstance(value, str) and value]
+
+
+def first_m29_node(item: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    for source_id in m292_source_ids(item, "m29NodeIds"):
+        node = by_id.get(source_id)
+        if node is not None:
+            return node
+    return None
+
+
+def first_ocr_box(item: dict[str, Any], by_id: dict[str, Any]) -> Any | None:
+    for source_id in m292_source_ids(item, "ocrBoxIds"):
+        box = by_id.get(source_id)
+        if box is not None:
+            return box
+    return None
+
+
+def sampled_shape_fill(pixels: PngPixels, bbox: list[int]) -> str:
+    metrics = measure_region(pixels, bbox)
+    return rgb_to_hex(list(metrics.mean_rgb))
 
 
 def resolve_m29_dir(m29_document: dict[str, Any]) -> Path | None:

@@ -102,7 +102,7 @@ The endpoint creates a task and runs OCR + M29 + M30 in a background task. It do
 M31 reconstruction diagnostics run after M29 when `M31_UPLOAD_DIAGNOSTICS_ENABLED=true`; they do not change the DSL output.
 M37 hierarchy readiness diagnostics run after final M30 DSL/report exist and only when M31 artifacts exist. M37 does not add an API endpoint and does not change `/api/tasks/{taskId}/dsl`.
 
-On the `experiment/m29-direct-replay` branch, the same task also writes an experimental M29 direct replay variant after OCR and M29 complete. This variant is not saved in `dsl_results` and does not replace the mainline DSL endpoint.
+On the `experiment/m29-direct-replay` branch, the same task also writes an experimental M29 direct replay variant after OCR, M29, and optional M29.2 source ownership complete. This variant is not saved in `dsl_results` and does not replace the mainline DSL endpoint.
 
 ### `GET /api/tasks/{taskId}`
 
@@ -172,6 +172,7 @@ The variant files are:
 ```text
 storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
 storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_report.json
+storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph.json
 ```
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`. If the variant does not exist, it returns `M29_DIRECT_DSL_NOT_FOUND`.

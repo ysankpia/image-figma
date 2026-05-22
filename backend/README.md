@@ -8,6 +8,7 @@ The product runtime is now:
 Figma plugin
 -> POST /api/upload-m30-preview
 -> OCR + M29 evidence pipeline
+-> M29.2 source-level UI physical graph
 -> M29 Direct Replay experiment variant
 -> M31 reconstruction diagnostics
 -> M30 materialized DSL with raster layer deduplication
@@ -39,7 +40,7 @@ M39 runs between M30 asset publishing and M37. It labels materialized M30 text, 
 
 M39.1 runs after M38 as a read-only unit structure readiness audit. It explains existing safe groups, blocked/micro units, product-card/banner/chrome/content candidates, and ONNX box candidates. It does not create visible nodes, move DSL nodes, edit assets, promote units, implement M40, or emit Codia schema.
 
-On `experiment/m29-direct-replay`, the same upload task also writes an experimental M29 direct variant for Figma side-by-side comparison. This variant reuses the same OCR and raw M29 evidence, writes `m29_direct/m29_direct_replay_dsl.json`, publishes assets under `/files/assets/{taskId}/m29_direct/`, and is available through `GET /api/tasks/{taskId}/m29-direct-dsl`. It does not replace the mainline `/dsl` result. M29 direct failures are non-blocking; the mainline task can still complete and the variant endpoint then returns `M29_DIRECT_DSL_NOT_FOUND`.
+On `experiment/m29-direct-replay`, the same upload task also writes an experimental M29 direct variant for Figma side-by-side comparison. Before replay it runs M29.2, which classifies source pixel ownership into editable text, preserved raster text, media, raster icons, stable UI shapes, and diagnostic-only objects. This variant reuses the same OCR and raw M29 evidence, writes `m29_direct/m29_direct_replay_dsl.json`, publishes assets under `/files/assets/{taskId}/m29_direct/`, and is available through `GET /api/tasks/{taskId}/m29-direct-dsl`. It does not replace the mainline `/dsl` result. M29.2/M29 direct failures are non-blocking; the mainline task can still complete and the variant endpoint then returns `M29_DIRECT_DSL_NOT_FOUND` only if the direct variant is unavailable.
 
 ## Run
 
@@ -118,6 +119,7 @@ The upload preview pipeline runs:
 ```text
 OCR
 -> M29 visual primitive graph
+-> M29.2 source-level UI physical graph
 -> M29 direct replay variant
 -> publish M29 direct assets under /files/assets/{taskId}/m29_direct/
 -> M31 reconstruction diagnostics

@@ -37,9 +37,35 @@ M31.1.1 修正了 fallback crop 性能路径：unit fallback crops 从已解码 
 M29 Direct Replay compare mode adds two stages to `stage_timings.json`:
 
 ```text
+m29_2_source_ui_physical_graph
 m29_direct_replay
 m29_direct_asset_publish
 ```
+
+M29.2 writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph.json
+storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph_overlay.png
+```
+
+The report summary includes:
+
+```text
+sourceObjectCount
+m29NodeCount
+ocrTextCount
+editableTextCount
+preservedRasterTextCount
+rasterIconCount
+mediaRegionCount
+shapeGeometryCount
+diagnosticOnlyCount
+dslChanged
+assetChanged
+```
+
+Each source object records `visualKind`, `pixelOwner`, `replayDecision`, `sourceEvidence`, `confidence`, `reasons`, and `risks`. If the M29 direct side renders ordinary UI text as raster or turns art text into generic text, inspect this report before changing downstream M30/M39 rules.
 
 It writes:
 
@@ -63,6 +89,7 @@ skippedDuplicateCount
 fallbackErasedBBoxCount
 visibleNodeCount
 maxTotalVisibleNodesExceeded
+m292SourcePhysicalGraph
 ```
 
 The read-only API endpoint is:

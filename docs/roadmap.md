@@ -66,6 +66,27 @@ one PNG upload
 
 Compare mode 不是默认路线切换。`Generate from PNG` 仍然只渲染当前主线 DSL；`Generate Compare` 才渲染双路线。
 
+### M29.2 Source-Level UI Physical Graph
+
+M29 direct compare 暴露的下一层问题不是缺少 unit promotion，而是源头像素归属仍然太粗。M29.2 在 direct replay 前新增 source-level ownership gate：
+
+```text
+PNG + OCR + M29 primitive evidence
+-> source objects with visualKind / pixelOwner / replayDecision
+-> safer M29 direct replay
+```
+
+当前最高杠杆验证是 M29.2 direct-path source validation，而不是继续推进 M39.1.1/M39.2。M39.1.1/M39.2 保留为主线后续，但在 M29 direct 路线判断完成前不作为下一优先级。
+
+M29.2 的第一性原则：
+
+- 普通 UI text 才变 editable text。
+- 艺术字、商品图内部字、banner 内部字优先保留 raster。
+- 小 icon fragments 先合并成 raster icon，再 replay。
+- UI 背景/分割线才作为 shape geometry replay。
+- fallback 只擦除已安全 replay 的 bbox。
+- 不接模型、不做单点 hack、不替换主线 `/dsl`。
+
 ## Direction Change
 
 M20-M28 证明了单独追 icon crop、SAM mask、provider benchmark、局部视觉候选不能形成稳定 Figma 输出。截图是扁平渲染结果，不能从“裁几个 icon”直接跳到可编辑设计稿。
@@ -87,8 +108,9 @@ M20-M28 证明了单独追 icon crop、SAM mask、provider benchmark、局部视
 flowchart TD
   A["PNG pixels"] --> B["OCR text evidence"]
   A --> C["M29 visual primitive graph"]
-  B --> Q["M29 direct replay experiment"]
-  C --> Q
+  B --> R["M29.2 source UI physical graph"]
+  C --> R
+  R --> Q["M29 direct replay experiment"]
   Q -. "branch-only flat draft" .-> P["Figma renderer / adapter output"]
   B --> D["M29.0.x evidence gates"]
   C --> D

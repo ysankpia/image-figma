@@ -16,6 +16,7 @@ from .m29_direct_replay import build_m29_direct_replay_dsl
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
+from .source_ui_physical_graph import extract_source_ui_physical_graph
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
 from .text_aware_visual_object_refinement import (
@@ -47,6 +48,7 @@ class M30PipelinePaths:
     root: Path
     ocr: Path
     m29: Path
+    m29_2: Path
     m29_direct: Path
     m291: Path
     m2902: Path
@@ -127,12 +129,27 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     ))
     m29_json = paths.m29 / "nodes.json"
 
+    update_task(task_id, "m29_2_source_ui_physical_graph", 21, "Classifying M29.2 source pixel ownership.")
+    m292_document = run_optional_stage(
+        paths,
+        timings,
+        "m29_2_source_ui_physical_graph",
+        lambda: extract_source_ui_physical_graph(
+            source_png=png_data,
+            m29_document=m29_document.to_dict(),
+            ocr_document=ocr_document.to_dict(),
+            output_dir=paths.m29_2,
+        ),
+        task_id=task_id,
+    )
+
     update_task(task_id, "m29_direct_replay", 22, "Building M29 direct replay variant.")
     m29_direct_result = run_optional_stage(paths, timings, "m29_direct_replay", lambda: build_m29_direct_replay_dsl(
         source_png=png_data,
         source_image_path=str(upload_path),
         m29_document={**m29_document.to_dict(), "sourceM29NodesJson": str(m29_json)},
         ocr_document=ocr_document.to_dict(),
+        m292_document=m292_document,
         output_dir=paths.m29_direct,
         task_id=f"{task_id}_m29_direct",
     ), task_id=task_id)
@@ -643,6 +660,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         root=root,
         ocr=root / "ocr",
         m29=root / "m29",
+        m29_2=root / "m29_2",
         m29_direct=root / "m29_direct",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",

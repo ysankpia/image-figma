@@ -69,6 +69,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {
         "ocr",
         "m29",
+        "m29_2_source_ui_physical_graph",
         "m29_direct_replay",
         "m29_direct_asset_publish",
         "m31_reconstruction",
@@ -86,6 +87,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert m29_direct_data["report"]["summary"]["visibleNodeCount"] >= 1
     assert str(m29_direct_data["report"]["outputReport"]).endswith("m29_direct_replay_report.json")
     assert {item["stage"] for item in m29_direct_data["report"]["stageTimings"]["stages"]} >= {
+        "m29_2_source_ui_physical_graph",
         "m29_direct_replay",
         "m29_direct_asset_publish",
     }
@@ -177,6 +179,8 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert not (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
     assert (task_root / "ocr" / "ocr.json").exists()
     assert (task_root / "m29" / "nodes.json").exists()
+    assert (task_root / "m29_2" / "source_ui_physical_graph.json").exists()
+    assert (task_root / "m29_2" / "source_ui_physical_graph_overlay.png").exists()
     assert (task_root / "m29_direct" / "m29_direct_replay_dsl.json").exists()
     assert (task_root / "m29_direct" / "m29_direct_replay_report.json").exists()
     assert (task_root / "m29_0_5" / "refined_visual_objects.json").exists()

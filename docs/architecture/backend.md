@@ -1,6 +1,6 @@
 # 后端架构
 
-后端负责接收 PNG、创建任务、运行 OCR + M29 + M29 direct experiment variant + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
+后端负责接收 PNG、创建任务、运行 OCR + M29 + M29.2 source ownership + M29 direct experiment variant + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
 
 ## Runtime Surface
 
@@ -34,6 +34,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> create task status=processing stage=m30_queued
 -> OCR
 -> M29 visual primitive graph
+-> M29.2 source-level UI physical graph for direct replay ownership
 -> M29 direct replay experiment variant
 -> copy M29 direct assets to assets/{taskId}/m29_direct and rewrite URLs
 -> M31 reconstruction diagnostics
@@ -125,7 +126,9 @@ M39 can be disabled with `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false`. The 
 
 M39.1 is a read-only unit structure readiness audit stage. It runs after M38 when M31 artifacts exist and writes `m39_1/unit_structure_readiness_report.json`. It normalizes M37 safe/unsafe units, derives diagnostic product-card/banner/chrome-shell/content-section candidates from M30/M39 geometry, and records ONNX box candidates as diagnostic-only unless corroborated by existing rule evidence. It does not create visible nodes, move DSL nodes, change assets, promote units, implement M40, or adapt to Codia schema.
 
-M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, not the product default. It runs after OCR and raw M29 so it can reuse the same evidence. It writes a flat DSL/report under `m29_direct/`, publishes its assets under `/files/assets/{taskId}/m29_direct/`, and is exposed only through `GET /api/tasks/{taskId}/m29-direct-dsl`. The mainline `dsl_results` row still points to `m30/m30_materialized_dsl.json`. M29 direct failures are non-blocking: the stage timing records the failure, the mainline task may still complete, and the variant endpoint returns `M29_DIRECT_DSL_NOT_FOUND`.
+M29.2 Source-Level UI Physical Graph is an experiment-branch source ownership gate for M29 direct replay. It reads source PNG, OCR, and raw M29 primitives, then writes `m29_2/source_ui_physical_graph.json` plus an overlay. Its source objects classify `visualKind`, `pixelOwner`, and `replayDecision` so direct replay can preserve raster art text, merge icon fragments, replay stable UI shapes, and erase fallback only for safe replayed bboxes. M29.2 is not a mainline DSL producer and does not affect `/api/tasks/{taskId}/dsl`.
+
+M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, not the product default. It runs after OCR, raw M29, and optional M29.2 so it can reuse the same evidence. It writes a flat DSL/report under `m29_direct/`, publishes its assets under `/files/assets/{taskId}/m29_direct/`, and is exposed only through `GET /api/tasks/{taskId}/m29-direct-dsl`. The mainline `dsl_results` row still points to `m30/m30_materialized_dsl.json`. M29.2 and M29 direct failures are non-blocking: the stage timing records the failure, the mainline task may still complete, and the variant endpoint returns `M29_DIRECT_DSL_NOT_FOUND` only if the direct variant is unavailable.
 
 ## Artifact Profiles
 
@@ -167,6 +170,7 @@ Each M30 preview task writes:
 storage/uploads/{taskId}/original.png
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 storage/m30_1_uploads/{taskId}/m29/
+storage/m30_1_uploads/{taskId}/m29_2/
 storage/m30_1_uploads/{taskId}/m29_direct/
 storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
@@ -211,6 +215,7 @@ Current stage names are concrete pipeline stages, for example:
 m30_queued
 ocr
 m29
+m29_2_source_ui_physical_graph
 m29_direct_replay
 m29_direct_asset_publish
 m31_reconstruction
