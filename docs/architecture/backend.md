@@ -1,6 +1,6 @@
 # 后端架构
 
-后端负责接收 PNG、创建任务、运行 OCR + M29 + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
+后端负责接收 PNG、创建任务、运行 OCR + M29 + M29 direct experiment variant + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
 
 ## Runtime Surface
 
@@ -11,6 +11,7 @@ GET  /api/health
 POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
+GET  /api/tasks/{taskId}/m29-direct-dsl
 GET  /api/tasks/{taskId}/m30-materialization
 GET  /api/tasks/{taskId}/m31-reconstruction
 GET  /api/tasks/{taskId}/m39-boundary-classification
@@ -33,6 +34,8 @@ receive multipart PNG at /api/upload-m30-preview
 -> create task status=processing stage=m30_queued
 -> OCR
 -> M29 visual primitive graph
+-> M29 direct replay experiment variant
+-> copy M29 direct assets to assets/{taskId}/m29_direct and rewrite URLs
 -> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit
@@ -122,6 +125,8 @@ M39 can be disabled with `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false`. The 
 
 M39.1 is a read-only unit structure readiness audit stage. It runs after M38 when M31 artifacts exist and writes `m39_1/unit_structure_readiness_report.json`. It normalizes M37 safe/unsafe units, derives diagnostic product-card/banner/chrome-shell/content-section candidates from M30/M39 geometry, and records ONNX box candidates as diagnostic-only unless corroborated by existing rule evidence. It does not create visible nodes, move DSL nodes, change assets, promote units, implement M40, or adapt to Codia schema.
 
+M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, not the product default. It runs after OCR and raw M29 so it can reuse the same evidence. It writes a flat DSL/report under `m29_direct/`, publishes its assets under `/files/assets/{taskId}/m29_direct/`, and is exposed only through `GET /api/tasks/{taskId}/m29-direct-dsl`. The mainline `dsl_results` row still points to `m30/m30_materialized_dsl.json`. M29 direct failures are non-blocking: the stage timing records the failure, the mainline task may still complete, and the variant endpoint returns `M29_DIRECT_DSL_NOT_FOUND`.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.
@@ -162,6 +167,7 @@ Each M30 preview task writes:
 storage/uploads/{taskId}/original.png
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 storage/m30_1_uploads/{taskId}/m29/
+storage/m30_1_uploads/{taskId}/m29_direct/
 storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
 storage/m30_1_uploads/{taskId}/m29_0_2/
@@ -176,6 +182,7 @@ storage/m30_1_uploads/{taskId}/m39/
 storage/m30_1_uploads/{taskId}/m39_1/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 storage/assets/{taskId}/m30/
+storage/assets/{taskId}/m29_direct/
 ```
 
 `backend/storage/` is diagnostic/runtime data and must not be committed.
@@ -204,6 +211,8 @@ Current stage names are concrete pipeline stages, for example:
 m30_queued
 ocr
 m29
+m29_direct_replay
+m29_direct_asset_publish
 m31_reconstruction
 m29_1
 m29_0_2

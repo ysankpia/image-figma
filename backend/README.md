@@ -8,6 +8,7 @@ The product runtime is now:
 Figma plugin
 -> POST /api/upload-m30-preview
 -> OCR + M29 evidence pipeline
+-> M29 Direct Replay experiment variant
 -> M31 reconstruction diagnostics
 -> M30 materialized DSL with raster layer deduplication
 -> M39 content/chrome boundary classification
@@ -37,6 +38,8 @@ M38 consumes the M37 safe direct-match bridge and rewrites the final DSL into tr
 M39 runs between M30 asset publishing and M37. It labels materialized M30 text, shape, visual image, and composite media nodes as `chrome` or `content` using generic relative geometry plus an optional ONNX proposer. The proposer is not a truth source: missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason` and falls back to rule-only classification.
 
 M39.1 runs after M38 as a read-only unit structure readiness audit. It explains existing safe groups, blocked/micro units, product-card/banner/chrome/content candidates, and ONNX box candidates. It does not create visible nodes, move DSL nodes, edit assets, promote units, implement M40, or emit Codia schema.
+
+On `experiment/m29-direct-replay`, the same upload task also writes an experimental M29 direct variant for Figma side-by-side comparison. This variant reuses the same OCR and raw M29 evidence, writes `m29_direct/m29_direct_replay_dsl.json`, publishes assets under `/files/assets/{taskId}/m29_direct/`, and is available through `GET /api/tasks/{taskId}/m29-direct-dsl`. It does not replace the mainline `/dsl` result. M29 direct failures are non-blocking; the mainline task can still complete and the variant endpoint then returns `M29_DIRECT_DSL_NOT_FOUND`.
 
 ## Run
 
@@ -70,6 +73,7 @@ GET  /api/health
 POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
+GET  /api/tasks/{taskId}/m29-direct-dsl
 GET  /api/tasks/{taskId}/m30-materialization
 GET  /api/tasks/{taskId}/m31-reconstruction
 GET  /api/tasks/{taskId}/m39-boundary-classification
@@ -90,6 +94,8 @@ progress = 100
 ```
 
 `GET /api/tasks/{taskId}/dsl` then returns `storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json`.
+
+`GET /api/tasks/{taskId}/m29-direct-dsl` returns the experiment variant from `storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json` plus report summary, warnings, output report path, and stage timings. It is used by plugin `Generate Compare`; it is not the default product DSL.
 
 `GET /api/tasks/{taskId}/m30-materialization` returns the M30 report summary, warnings, skipped items, output DSL path, optional debug preview path, and `stage_timings.json`.
 
@@ -112,6 +118,8 @@ The upload preview pipeline runs:
 ```text
 OCR
 -> M29 visual primitive graph
+-> M29 direct replay variant
+-> publish M29 direct assets under /files/assets/{taskId}/m29_direct/
 -> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping
 -> M29.0.2 text-masked media audit

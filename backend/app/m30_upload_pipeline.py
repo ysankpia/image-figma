@@ -12,6 +12,7 @@ from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
 from .hierarchy_materialization import M38Options, materialize_m38_hierarchy
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
+from .m29_direct_replay import build_m29_direct_replay_dsl
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -46,6 +47,7 @@ class M30PipelinePaths:
     root: Path
     ocr: Path
     m29: Path
+    m29_direct: Path
     m291: Path
     m2902: Path
     m2903: Path
@@ -124,6 +126,24 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         emit_preview_artifacts=policy.emit_preview_artifacts,
     ))
     m29_json = paths.m29 / "nodes.json"
+
+    update_task(task_id, "m29_direct_replay", 22, "Building M29 direct replay variant.")
+    m29_direct_result = run_optional_stage(paths, timings, "m29_direct_replay", lambda: build_m29_direct_replay_dsl(
+        source_png=png_data,
+        source_image_path=str(upload_path),
+        m29_document={**m29_document.to_dict(), "sourceM29NodesJson": str(m29_json)},
+        ocr_document=ocr_document.to_dict(),
+        output_dir=paths.m29_direct,
+        task_id=f"{task_id}_m29_direct",
+    ), task_id=task_id)
+    if m29_direct_result is not None:
+        run_optional_stage(
+            paths,
+            timings,
+            "m29_direct_asset_publish",
+            lambda: publish_m29_direct_assets(task_id, paths.m29_direct, m29_direct_result.dsl, image),
+            task_id=task_id,
+        )
 
     if state.settings.m31_upload_diagnostics_enabled:
         update_task(task_id, "m31_reconstruction", 24, "Building M31 reconstruction diagnostics.")
@@ -461,7 +481,16 @@ def run_m38_hierarchy_materialization_stage(
 
 
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
-    public_dir = state.storage.assets_dir / task_id / "m30"
+    publish_variant_assets(task_id, "m30", m30_dir, dsl, image)
+
+
+def publish_m29_direct_assets(task_id: str, m29_direct_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
+    publish_variant_assets(task_id, "m29_direct", m29_direct_dir, dsl, image)
+    (m29_direct_dir / "m29_direct_replay_dsl.json").write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def publish_variant_assets(task_id: str, variant: str, source_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
+    public_dir = state.storage.assets_dir / task_id / variant
     public_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.now(UTC).isoformat()
     seen_names: set[str] = set()
@@ -471,13 +500,13 @@ def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: 
         url = str(asset.get("url") or "")
         if not url or url.startswith(("http://", "https://")):
             continue
-        source = resolve_m30_asset_path(m30_dir, url)
+        source = resolve_m30_asset_path(source_dir, url)
         if source is None or not source.exists():
             continue
         filename = unique_filename(source.name, seen_names)
         target = public_dir / filename
         shutil.copy2(source, target)
-        asset["url"] = state.storage.m30_asset_url(task_id, filename)
+        asset["url"] = variant_asset_url(task_id, variant, filename)
         asset["storage"] = "local"
         state.database.insert_asset(
             {
@@ -492,6 +521,12 @@ def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: 
                 "created_at": now,
             }
         )
+
+
+def variant_asset_url(task_id: str, variant: str, filename: str) -> str:
+    if variant == "m30":
+        return state.storage.m30_asset_url(task_id, filename)
+    return f"{state.storage.public_base_url}/files/assets/{task_id}/{variant}/{filename}"
 
 
 def resolve_m30_asset_path(m30_dir: Path, url: str) -> Path | None:
@@ -608,6 +643,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         root=root,
         ocr=root / "ocr",
         m29=root / "m29",
+        m29_direct=root / "m29_direct",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",
         m2903=root / "m29_0_3",

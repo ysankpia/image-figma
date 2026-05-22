@@ -4,7 +4,7 @@ API v0.1 serves the current single-image preview path:
 
 ```text
 PNG upload
--> OCR + M29 + M31 diagnostics + M30 + M37 diagnostics
+-> OCR + M29 + M29 direct experiment variant + M31 diagnostics + M30 + M37 diagnostics
 -> DSL v0.1
 -> Figma Renderer
 ```
@@ -102,6 +102,8 @@ The endpoint creates a task and runs OCR + M29 + M30 in a background task. It do
 M31 reconstruction diagnostics run after M29 when `M31_UPLOAD_DIAGNOSTICS_ENABLED=true`; they do not change the DSL output.
 M37 hierarchy readiness diagnostics run after final M30 DSL/report exist and only when M31 artifacts exist. M37 does not add an API endpoint and does not change `/api/tasks/{taskId}/dsl`.
 
+On the `experiment/m29-direct-replay` branch, the same task also writes an experimental M29 direct replay variant after OCR and M29 complete. This variant is not saved in `dsl_results` and does not replace the mainline DSL endpoint.
+
 ### `GET /api/tasks/{taskId}`
 
 Returns task status:
@@ -146,6 +148,37 @@ The DSL must:
 - never emit DSL `icon` type from the M30 upload path.
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`.
+
+### `GET /api/tasks/{taskId}/m29-direct-dsl`
+
+Returns the experimental M29 Direct Replay variant only after the task is completed.
+
+Response data:
+
+```json
+{
+  "dsl": {},
+  "report": {
+    "summary": {},
+    "warnings": [],
+    "outputReport": "/abs/path/m29_direct_replay_report.json",
+    "stageTimings": {}
+  }
+}
+```
+
+The variant files are:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
+storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_report.json
+```
+
+If the task is not completed, the endpoint returns `DSL_NOT_READY`. If the variant does not exist, it returns `M29_DIRECT_DSL_NOT_FOUND`.
+
+The endpoint also returns `M29_DIRECT_DSL_NOT_FOUND` when the variant JSON exists but `m29_direct_asset_publish` did not complete. This prevents the plugin from rendering a DSL that still points at unpublished local asset paths.
+
+This endpoint is for Figma compare mode and route experiments only. It does not change `/api/tasks/{taskId}/dsl`.
 
 ### `GET /api/tasks/{taskId}/m30-materialization`
 
@@ -226,6 +259,12 @@ M30 image assets referenced by the renderer must be fetchable through:
 
 ```text
 /files/assets/{taskId}/m30/...
+```
+
+M29 direct replay assets referenced by compare mode must be fetchable through:
+
+```text
+/files/assets/{taskId}/m29_direct/...
 ```
 
 ## Removed Endpoints

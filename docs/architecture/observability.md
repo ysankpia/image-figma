@@ -8,6 +8,7 @@ v0.1 只做能定位问题的日志，不做完整监控平台。
 
 ```text
 storage/m30_1_uploads/{taskId}/stage_timings.json
+GET /api/tasks/{taskId}/m29-direct-dsl
 GET /api/tasks/{taskId}/m30-materialization
 GET /api/tasks/{taskId}/m31-reconstruction
 ```
@@ -32,6 +33,47 @@ forbiddenHitCount
 这些是结构质量指标，不是视觉相似度指标。M31 默认非阻塞失败；失败时 `stage_timings.json` 会记录 failed `m31_reconstruction`，同时写入 `error_logs`。
 
 M31.1.1 修正了 fallback crop 性能路径：unit fallback crops 从已解码 `PngPixels` 裁剪，不再对每个 unit 重新解码整张 PNG。若同类图的 `m31_reconstruction` 再次接近百秒，应优先检查是否回退到了 compressed PNG crop path。
+
+M29 Direct Replay compare mode adds two stages to `stage_timings.json`:
+
+```text
+m29_direct_replay
+m29_direct_asset_publish
+```
+
+It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
+storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_report.json
+storage/assets/{taskId}/m29_direct/*
+```
+
+The report summary includes:
+
+```text
+m29NodeCount
+ocrTextCount
+replayedTextCount
+replayedImageCount
+replayedSymbolCount
+replayedShapeCount
+skippedBlockedCount
+skippedDuplicateCount
+fallbackErasedBBoxCount
+visibleNodeCount
+maxTotalVisibleNodesExceeded
+```
+
+The read-only API endpoint is:
+
+```text
+GET /api/tasks/{taskId}/m29-direct-dsl
+```
+
+It returns the experimental DSL, report summary, warnings, output report path, and stage timings. If the task is not complete it returns `DSL_NOT_READY`; if the variant is missing it returns `M29_DIRECT_DSL_NOT_FOUND`.
+
+If `m29_direct_replay` or `m29_direct_asset_publish` fails, the failed stage is visible in `stage_timings.json`. This does not necessarily mean the upload task failed, because M29 direct is non-blocking and the mainline M30/M38/M39 DSL can still complete.
 
 M34.1 增加 M30 text editability diagnostics：
 

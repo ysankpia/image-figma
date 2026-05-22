@@ -7,7 +7,7 @@ import {
   type RenderWarning
 } from "@image-figma/image-to-figma-renderer";
 import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json";
-import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPngM30Preview } from "./apiClient";
+import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, getTaskM29DirectDsl, uploadPngM30Preview } from "./apiClient";
 import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
 
 declare const __html__: string;
@@ -40,6 +40,11 @@ figma.ui.onmessage = async (message: PluginToMainMessage) => {
 
     if (message.type === "render-uploaded-png") {
       await renderUploadedPng(message.fileName, toUint8Array(message.bytes));
+      return;
+    }
+
+    if (message.type === "render-uploaded-png-compare") {
+      await renderUploadedPngCompare(message.fileName, toUint8Array(message.bytes));
       return;
     }
 
@@ -99,6 +104,40 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
   reportRenderResult(result);
 }
 
+async function renderUploadedPngCompare(fileName: string, bytes: Uint8Array): Promise<void> {
+  postToUI({ type: "render-started", source: "upload_compare" });
+  postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
+
+  const upload = await uploadPngM30Preview(fileName, bytes);
+  postToUI({ type: "status", message: "Running comparison pipelines.", tone: "normal" });
+
+  const task = await waitForCompletedTask(upload.taskId);
+  if (task.status === "failed") {
+    throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
+  }
+
+  postToUI({ type: "status", message: "Fetching comparison designs.", tone: "normal" });
+  const m29DirectDsl = await getTaskM29DirectDsl(upload.taskId);
+  const mainlineDsl = await getTaskDsl(upload.taskId);
+
+  postToUI({ type: "status", message: "Writing comparison to Figma.", tone: "normal" });
+  const leftDsl = labelRoot(cloneDsl(m29DirectDsl), `M29 Direct Replay / ${fileName}`, 0);
+  const rightDsl = labelRoot(cloneDsl(mainlineDsl), `Current Mainline / ${fileName}`, (m29DirectDsl.page?.width || mainlineDsl.page.width) + 80);
+
+  const adapter = createFigmaAdapter(figma as never);
+  const leftResult = await renderDesign(leftDsl, {
+    figma: adapter,
+    validate: true,
+    createOriginalReference: true
+  });
+  const rightResult = await renderDesign(rightDsl, {
+    figma: adapter,
+    validate: true,
+    createOriginalReference: true
+  });
+  reportCombinedRenderResult([leftResult, rightResult]);
+}
+
 async function waitForCompletedTask(taskId: string) {
   for (let index = 0; index < 180; index += 1) {
     const task = await getTask(taskId);
@@ -133,6 +172,45 @@ function reportRenderResult(result: RenderResult): void {
     warnings: result.warnings.map(toPluginRenderMessage)
   });
   figma.notify(`Image-to-Figma failed: ${message}`, { error: true });
+}
+
+function reportCombinedRenderResult(results: RenderResult[]): void {
+  const warnings = results.flatMap((result) => result.warnings);
+  const errors = results.flatMap((result) => result.errors);
+  const renderedElementCount = results.reduce((total, result) => total + result.renderedElementCount, 0);
+  if (errors.length === 0 && results.every((result) => result.success)) {
+    postToUI({
+      type: "render-succeeded",
+      renderedElementCount,
+      warningCount: warnings.length,
+      warnings: warnings.map(toPluginRenderMessage)
+    });
+    figma.notify(`Image-to-Figma rendered comparison with ${renderedElementCount} elements.`);
+    return;
+  }
+
+  const firstError = errors.length > 0 ? errors[0] : undefined;
+  const message = firstError ? firstError.message : "Comparison render failed.";
+  postToUI({
+    type: "render-failed",
+    message,
+    errors: errors.map(toPluginRenderMessage),
+    warnings: warnings.map(toPluginRenderMessage)
+  });
+  figma.notify(`Image-to-Figma comparison failed: ${message}`, { error: true });
+}
+
+function cloneDsl(dsl: DesignDSL): DesignDSL {
+  return JSON.parse(JSON.stringify(dsl)) as DesignDSL;
+}
+
+function labelRoot(dsl: DesignDSL, name: string, x: number): DesignDSL {
+  dsl.root.name = name;
+  dsl.root.layout = {
+    ...dsl.root.layout,
+    x
+  };
+  return dsl;
 }
 
 function postToUI(message: MainToPluginMessage): void {

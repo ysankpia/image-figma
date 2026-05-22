@@ -26,6 +26,46 @@ M29/M30/M31/M37/M38/M39 产物是证据链和中间结构。
 模型、Figma MCP、UIC/Codia schema 都只能提供候选或参考，不能直接成为内部真值源。
 ```
 
+## Active Branch Experiment
+
+### M29 Direct Replay
+
+当前在 `experiment/m29-direct-replay` 分支验证一条旁路：
+
+```text
+source PNG + OCR text boxes + M29 visual primitive graph
+-> flat DSL v0.1
+-> existing renderer
+```
+
+这个实验的目标是判断 M29 的强像素拆分能力是否可以先生成一个高保真、可编辑、可拖动的 flat draft。它不是默认主链路，不替换 M30/M37/M38/M39，也不做 Auto Layout、Component/Instance 或代码生成。
+
+第一版判断标准：
+
+- OCR text 成为 editable text。
+- M29 image/symbol/simple shape 成为独立可拖 layer。
+- OCR text 压制重叠 raster primitive，避免文字重复。
+- fallback 对 replayed bbox 让位，避免明显重影。
+- visible node 数量受预算保护，避免图层爆炸。
+
+如果 M29 direct replay 效果好，后续可以把它发展为 experimental draft path，再让 M30/M37/M38/M39 成为质量门、结构增强和组件化前置诊断。如果效果不好，保留实验证据，继续当前 M39.1.1 -> M39.2 主线。
+
+### Figma Compare Mode
+
+M29 direct 的路线判断不能只看 report。当前分支新增 compare mode：
+
+```text
+one PNG upload
+-> one backend task
+-> M29 direct flat DSL
+-> current mainline DSL
+-> Figma side-by-side render
+```
+
+左侧是 `M29 Direct Replay / {filename}`，右侧是 `Current Mainline / {filename}`。这让验收回到真实目标：能不能在 Figma 里选中、拖动、编辑、检查重影和图层混乱度。
+
+Compare mode 不是默认路线切换。`Generate from PNG` 仍然只渲染当前主线 DSL；`Generate Compare` 才渲染双路线。
+
 ## Direction Change
 
 M20-M28 证明了单独追 icon crop、SAM mask、provider benchmark、局部视觉候选不能形成稳定 Figma 输出。截图是扁平渲染结果，不能从“裁几个 icon”直接跳到可编辑设计稿。
@@ -47,6 +87,9 @@ M20-M28 证明了单独追 icon crop、SAM mask、provider benchmark、局部视
 flowchart TD
   A["PNG pixels"] --> B["OCR text evidence"]
   A --> C["M29 visual primitive graph"]
+  B --> Q["M29 direct replay experiment"]
+  C --> Q
+  Q -. "branch-only flat draft" .-> P["Figma renderer / adapter output"]
   B --> D["M29.0.x evidence gates"]
   C --> D
   D --> E["M30 visible DSL materialization"]

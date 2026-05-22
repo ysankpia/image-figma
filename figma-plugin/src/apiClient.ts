@@ -66,6 +66,15 @@ export async function getTaskDsl(taskId: string): Promise<DesignDSL> {
   return data.dsl as DesignDSL;
 }
 
+export async function getTaskM29DirectDsl(taskId: string): Promise<DesignDSL> {
+  const response = await apiFetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/m29-direct-dsl`);
+  const data = response.data as { dsl?: unknown };
+  if (!data || typeof data !== "object" || !data.dsl) {
+    throw new BackendApiError("BACKEND_M29_DIRECT_DSL_INVALID_RESPONSE", "Backend returned an invalid M29 direct DSL response.");
+  }
+  return data.dsl as DesignDSL;
+}
+
 async function apiFetch(url: string, init?: ApiRequestInit): Promise<ApiSuccessResponse> {
   let response: ApiResponse;
   try {

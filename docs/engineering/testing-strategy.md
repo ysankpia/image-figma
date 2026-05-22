@@ -21,7 +21,9 @@ v0.1 重点验证：
 - 后端当前 API 可创建任务、更新状态、返回 M30 DSL。
 - M29/M30 evidence chain 不污染 visible DSL children。
 - 插件默认上传走 `/api/upload-m30-preview`。
+- 插件 compare mode 上传一次后分别拉取 M29 direct variant 和主线 DSL。
 - 本地 M30 image asset URL 可由 renderer fetch。
+- 本地 M29 direct image asset URL 可由 renderer fetch。
 
 ## DSL Schema
 
@@ -67,6 +69,8 @@ pnpm --filter @image-figma/figma-plugin run build
 - 默认上传调用 `/api/upload-m30-preview`。
 - 上传后轮询 `/api/tasks/{taskId}`。
 - completed 后调用 `/api/tasks/{taskId}/dsl`。
+- compare mode completed 后调用 `/api/tasks/{taskId}/m29-direct-dsl` 和 `/api/tasks/{taskId}/dsl`。
+- compare mode 把第二份 DSL root 平移 `page.width + 80`。
 - renderer writes M30 DSL to Figma。
 - UI 能显示 upload、processing、fetching DSL、rendering、success/failure 状态。
 
@@ -93,7 +97,9 @@ Required backend coverage:
 - `POST /api/upload-m30-preview` accepts PNG and creates a processing task.
 - invalid MIME, invalid PNG, unreadable dimensions, and too-large file are rejected.
 - completed task returns M30 DSL from `m30_materialized_dsl.json`.
+- completed task returns M29 direct experiment DSL from `m29_direct_replay_dsl.json` through `/api/tasks/{taskId}/m29-direct-dsl`.
 - unfinished task returns `DSL_NOT_READY`.
+- missing M29 direct variant returns `M29_DIRECT_DSL_NOT_FOUND`.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
@@ -102,6 +108,7 @@ Required backend coverage:
 - M31 optional failure does not block M30 DSL when strict mode is off.
 - M31 failure blocks the task at `m31_reconstruction` when strict mode is on.
 - M30 image assets are published under `/files/assets/{taskId}/m30/...`.
+- M29 direct assets are published under `/files/assets/{taskId}/m29_direct/...`.
 - OCR provider failures fail the task and do not create fake completed DSL.
 - CORS covers `/api/upload-m30-preview`.
 
@@ -160,6 +167,30 @@ uv run pytest tests/test_evidence_grounded_dsl_materialization.py tests/test_m30
 ```
 
 It must cover low-overlap accepted image materialization, high-overlap/risk/missing-lineage skips, small icon isolation, fallback image erasure, copied image asset text cleanup, composite media materialization, composite media safety skips, and default runtime config exposure.
+
+## M29 Direct Replay Compare Mode
+
+Focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_m29_direct_replay.py tests/test_m30_upload_pipeline.py tests/test_routes_tasks.py -q
+```
+
+Required coverage:
+
+- OCR text suppresses high-overlap M29 raster primitive.
+- M29 image/symbol/simple shape can be replayed as DSL visible nodes.
+- blocked/unknown primitives remain report-only.
+- fallback erases replayed bboxes without mutating source PNG or M29 assets.
+- node budget prevents flat layer explosion.
+- M29 direct root/base assets use `m29_direct_*` namespace.
+- upload pipeline writes `m29_direct_replay` and `m29_direct_asset_publish` timings.
+- upload pipeline writes `m29_direct/m29_direct_replay_dsl.json` and report.
+- `/api/tasks/{taskId}/m29-direct-dsl` returns DSL/report after completion.
+- M29 direct assets are served from `/files/assets/{taskId}/m29_direct/...`.
+- M29 direct failures do not block the mainline `/api/tasks/{taskId}/dsl`.
+- `/api/tasks/{taskId}/dsl` remains the current mainline DSL.
 
 ## M31 Reconstruction UI Tree
 
@@ -349,6 +380,7 @@ Acceptance:
 
 - task reaches `completed`.
 - `/api/tasks/{taskId}/dsl` returns M30 materialized DSL.
+- `Generate Compare` renders M29 direct on the left and current mainline on the right.
 - Figma renders fallback plus editable M30 text/shape/image where evidence is safe.
 - `/api/tasks/{taskId}/m30-materialization` shows stage timings.
 - `/api/upload` returns 404.

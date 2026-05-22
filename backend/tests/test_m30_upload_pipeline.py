@@ -69,6 +69,8 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert {item["stage"] for item in report_data["stageTimings"]["stages"]} >= {
         "ocr",
         "m29",
+        "m29_direct_replay",
+        "m29_direct_asset_publish",
         "m31_reconstruction",
         "m29_0_5",
         "m30_materialization",
@@ -77,6 +79,24 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m38_hierarchy_materialization",
         "m39_1_unit_structure_readiness_audit",
     }
+    m29_direct = client.get(f"/api/tasks/{task_id}/m29-direct-dsl")
+    assert m29_direct.status_code == 200
+    m29_direct_data = m29_direct.json()["data"]
+    assert m29_direct_data["dsl"]["meta"]["m29DirectReplay"] is True
+    assert m29_direct_data["report"]["summary"]["visibleNodeCount"] >= 1
+    assert str(m29_direct_data["report"]["outputReport"]).endswith("m29_direct_replay_report.json")
+    assert {item["stage"] for item in m29_direct_data["report"]["stageTimings"]["stages"]} >= {
+        "m29_direct_replay",
+        "m29_direct_asset_publish",
+    }
+    assert has_role(m29_direct_data["dsl"], "m29_direct_text")
+    for asset in m29_direct_data["dsl"]["assets"]:
+        if asset.get("role") in {"fallback_region", "m29_direct_image", "m29_direct_symbol"}:
+            assert str(asset["url"]).startswith(f"http://localhost:8000/files/assets/{task_id}/m29_direct/")
+            file_response = client.get(str(asset["url"]).replace("http://localhost:8000", ""))
+            assert file_response.status_code == 200
+            assert file_response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
     m39 = client.get(f"/api/tasks/{task_id}/m39-boundary-classification")
     assert m39.status_code == 200
     m39_data = m39.json()["data"]
@@ -157,6 +177,8 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert not (task_root / "m31" / "m31_reconstruction_tree_overlay.png").exists()
     assert (task_root / "ocr" / "ocr.json").exists()
     assert (task_root / "m29" / "nodes.json").exists()
+    assert (task_root / "m29_direct" / "m29_direct_replay_dsl.json").exists()
+    assert (task_root / "m29_direct" / "m29_direct_replay_report.json").exists()
     assert (task_root / "m29_0_5" / "refined_visual_objects.json").exists()
     assert (task_root / "m30" / "m30_materialized_dsl.json").exists()
 
@@ -252,6 +274,43 @@ def test_m31_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypa
     assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
+
+
+def test_m29_direct_replay_failure_does_not_block_mainline_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    monkeypatch.setattr(pipeline, "build_m29_direct_replay_dsl", fail_m29_direct)
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+
+        task = local_client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200
+        assert task.json()["data"]["status"] == "completed"
+
+        dsl = local_client.get(f"/api/tasks/{task_id}/dsl")
+        assert dsl.status_code == 200
+
+        m29_direct = local_client.get(f"/api/tasks/{task_id}/m29-direct-dsl")
+        assert m29_direct.status_code == 404
+        assert m29_direct.json()["error"]["code"] == "M29_DIRECT_DSL_NOT_FOUND"
+
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+
+    m29_timing = next(item for item in report["stageTimings"]["stages"] if item["stage"] == "m29_direct_replay")
+    assert m29_timing["status"] == "failed"
+    assert m29_timing["errorCode"] == "RuntimeError"
+    assert "m29_direct_asset_publish" not in {item["stage"] for item in report["stageTimings"]["stages"]}
 
 
 def test_m38_hierarchy_materialization_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -577,6 +636,10 @@ def make_png(width: int, height: int) -> bytes:
 
 def fail_m31(**_kwargs: Any) -> None:
     raise RuntimeError("forced m31 failure")
+
+
+def fail_m29_direct(**_kwargs: Any) -> None:
+    raise RuntimeError("forced m29 direct failure")
 
 
 def fail_m38(**_kwargs: Any) -> None:
