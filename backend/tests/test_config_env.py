@@ -72,6 +72,9 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("M39_CONTENT_CHROME_CLASSIFICATION_ENABLED", "false")
     monkeypatch.setenv("M39_ONNX_PROPOSER_ENABLED", "false")
     monkeypatch.setenv("M39_ONNX_MODEL_PATH", str(tmp_path / "model.onnx"))
+    monkeypatch.setenv("M39_1_UNIT_STRUCTURE_READINESS_ENABLED", "false")
+    monkeypatch.setenv("M39_1_ONNX_UNIT_PROPOSER_ENABLED", "false")
+    monkeypatch.setenv("M39_1_ONNX_MODEL_PATH", str(tmp_path / "unit-model.onnx"))
     monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "false")
     monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "true")
     monkeypatch.setenv("M38_HIERARCHY_MAX_CONTAINERS", "3")
@@ -97,6 +100,9 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.m39_content_chrome_classification_enabled is False
     assert settings.m39_onnx_proposer_enabled is False
     assert settings.m39_onnx_model_path == tmp_path / "model.onnx"
+    assert settings.m39_1_unit_structure_readiness_enabled is False
+    assert settings.m39_1_onnx_unit_proposer_enabled is False
+    assert settings.m39_1_onnx_model_path == tmp_path / "unit-model.onnx"
     assert settings.m38_hierarchy_materialization_enabled is False
     assert settings.m38_hierarchy_materialization_strict is True
     assert settings.m38_hierarchy_max_containers == 3

@@ -45,6 +45,7 @@
 - 当前 M37 hierarchy readiness 计划：[plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md](plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md)
 - 当前 M38 controlled hierarchy materialization 计划：[plans/active/038-controlled-hierarchy-materialization.md](plans/active/038-controlled-hierarchy-materialization.md)
 - 当前 M39 content-chrome boundary classification 计划：[plans/active/039-content-chrome-boundary-classification.md](plans/active/039-content-chrome-boundary-classification.md)
+- 当前 M39.1 unit structure readiness audit 计划：[plans/active/039-1-unit-structure-readiness-audit.md](plans/active/039-1-unit-structure-readiness-audit.md)
 - 当前 M40 nested hierarchy materialization 计划：[plans/active/040-nested-hierarchy-materialization.md](plans/active/040-nested-hierarchy-materialization.md)
 
 ## By Task Type
@@ -156,6 +157,7 @@
 - M36.1 contrast-weighted foreground sampling 决策：[decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md](decisions/0056-weight-text-foreground-sampling-by-contrast-not-count.md)
 - M39 content-chrome boundary classification 决策：[decisions/0061-content-chrome-boundary-classification.md](decisions/0061-content-chrome-boundary-classification.md)
 - M40 nested hierarchy materialization 决策：[decisions/0062-nested-hierarchy-materialization.md](decisions/0062-nested-hierarchy-materialization.md)
+- M39.1 unit structure readiness audit 决策：[decisions/0063-audit-unit-structure-readiness-before-unit-promotion.md](decisions/0063-audit-unit-structure-readiness-before-unit-promotion.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 

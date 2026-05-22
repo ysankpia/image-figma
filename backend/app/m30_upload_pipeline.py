@@ -23,6 +23,7 @@ from .text_aware_visual_object_refinement import (
 )
 from .text_masked_media_audit import extract_text_masked_media_audit, text_boxes_from_ocr_document
 from .text_visual_ownership_gate import extract_text_visual_ownership_gate
+from .unit_structure_readiness import M391Options, audit_unit_structure_readiness
 from .visual_evidence_normalization import extract_visual_evidence_normalization
 from .visual_object_candidate_audit import (
     M2904SourceExpansionRefs,
@@ -56,6 +57,7 @@ class M30PipelinePaths:
     m37: Path
     m38: Path
     m39: Path
+    m39_1: Path
 
 
 @dataclass(frozen=True)
@@ -318,6 +320,34 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             timings=timings,
             output_dsl=output_dsl,
             m37_report=m37_report,
+        )
+
+    if state.settings.m39_1_unit_structure_readiness_enabled and m31_tree.exists() and m31_report.exists():
+        update_task(task_id, "m39_1_unit_structure_readiness_audit", 99, "Auditing M39.1 unit structure readiness.")
+        run_optional_stage(
+            paths,
+            timings,
+            "m39_1_unit_structure_readiness_audit",
+            lambda: audit_unit_structure_readiness(
+                task_id=task_id,
+                m30_dsl_path=str(output_dsl),
+                m31_tree_path=str(m31_tree),
+                m31_report_path=str(m31_report),
+                m37_report_path=str(m37_report) if m37_report.exists() else None,
+                m38_report_path=str(paths.m38 / "hierarchy_materialization_report.json")
+                if (paths.m38 / "hierarchy_materialization_report.json").exists()
+                else None,
+                m39_report_path=str(paths.m39 / "m39_boundary_classification_report.json")
+                if (paths.m39 / "m39_boundary_classification_report.json").exists()
+                else None,
+                output_dir=paths.m39_1,
+                source_image_path=upload_path,
+                options=M391Options(
+                    onnx_unit_proposer_enabled=state.settings.m39_1_onnx_unit_proposer_enabled,
+                    onnx_model_path=state.settings.m39_1_onnx_model_path,
+                ),
+            ),
+            task_id=task_id,
         )
 
     now = datetime.now(UTC).isoformat()
@@ -589,6 +619,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m37=root / "m37",
         m38=root / "m38",
         m39=root / "m39",
+        m39_1=root / "m39_1",
     )
 
 

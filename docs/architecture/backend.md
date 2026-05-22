@@ -13,6 +13,8 @@ GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
 GET  /api/tasks/{taskId}/m30-materialization
 GET  /api/tasks/{taskId}/m31-reconstruction
+GET  /api/tasks/{taskId}/m39-boundary-classification
+GET  /api/tasks/{taskId}/m39-1-unit-structure-readiness
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -43,6 +45,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M39 content-chrome boundary classification, classifies materialized M30 nodes as chrome or content using relative geometry rules and optional ONNX model proposer
 -> M37 hierarchy readiness diagnostic, if M31 artifacts exist
 -> M38 controlled hierarchy materialization, if M37 report exists and M38 is enabled; skips units with boundary_classification_conflict
+-> M39.1 unit structure readiness audit, if M31 artifacts exist
 -> save dsl_results path to m30/m30_materialized_dsl.json
 -> mark task completed
 ```
@@ -117,6 +120,8 @@ M37 uses M39 labels to mark reconstruction units that contain both chrome and co
 
 M39 can be disabled with `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false`. The optional proposer is controlled by `M39_ONNX_PROPOSER_ENABLED` and `M39_ONNX_MODEL_PATH`; missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason`/warnings in the M39 report and falls back to rule-only classification.
 
+M39.1 is a read-only unit structure readiness audit stage. It runs after M38 when M31 artifacts exist and writes `m39_1/unit_structure_readiness_report.json`. It normalizes M37 safe/unsafe units, derives diagnostic product-card/banner/chrome-shell/content-section candidates from M30/M39 geometry, and records ONNX box candidates as diagnostic-only unless corroborated by existing rule evidence. It does not create visible nodes, move DSL nodes, change assets, promote units, implement M40, or adapt to Codia schema.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.
@@ -168,6 +173,7 @@ storage/m30_1_uploads/{taskId}/m30/
 storage/m30_1_uploads/{taskId}/m37/
 storage/m30_1_uploads/{taskId}/m38/
 storage/m30_1_uploads/{taskId}/m39/
+storage/m30_1_uploads/{taskId}/m39_1/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 storage/assets/{taskId}/m30/
 ```
@@ -210,6 +216,7 @@ m30_asset_publish
 m39_boundary_classification
 m37_hierarchy_readiness
 m38_hierarchy_materialization
+m39_1_unit_structure_readiness_audit
 m30_completed
 ```
 

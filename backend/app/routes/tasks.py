@@ -199,3 +199,43 @@ def get_task_m39_boundary_classification(task_id: str) -> dict[str, object]:
         "stageTimings": timings,
     }
     return success_response(data)
+
+
+@router.get("/tasks/{task_id}/m39-1-unit-structure-readiness")
+def get_task_m39_1_unit_structure_readiness(task_id: str) -> dict[str, object]:
+    task = state.database.get_task(task_id)
+    if task is None:
+        raise ApiError(
+            "TASK_NOT_FOUND",
+            "Task not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="task_lookup",
+            task_id=task_id,
+        )
+
+    report_path = state.settings.storage_root / "m30_1_uploads" / task_id / "m39_1" / "unit_structure_readiness_report.json"
+    if not report_path.exists():
+        raise ApiError(
+            "M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND",
+            "M39.1 unit structure readiness report not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            stage="m39_1_unit_structure_readiness_lookup",
+            task_id=task_id,
+        )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    timings_path = report_path.parent.parent / "stage_timings.json"
+    timings = json.loads(timings_path.read_text(encoding="utf-8")) if timings_path.exists() else {}
+    data: dict[str, object] = {
+        "taskId": task_id,
+        "status": task["status"],
+        "stage": task["stage"],
+        "summary": report.get("summary", {}),
+        "warnings": report.get("warnings", []),
+        "modelSkippedReason": report.get("modelSkippedReason"),
+        "candidateUnits": report.get("candidateUnits", []),
+        "promotionHints": report.get("promotionHints", []),
+        "outputReport": str(report_path),
+        "stageTimings": timings,
+    }
+    return success_response(data)

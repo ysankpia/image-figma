@@ -184,7 +184,7 @@ def test_classify_content_chrome_missing_dependency_falls_back_to_rules(tmp_path
             return None, "missing_dependency:numpy"
         return MagicMock(), None
 
-    with patch("app.content_chrome_classification.import_optional_module", side_effect=fake_import):
+    with patch("app.onnx_box_proposer.import_optional_module", side_effect=fake_import):
         report = app.content_chrome_classification.classify_content_chrome(
             dsl,
             "task_dummy",
@@ -217,10 +217,10 @@ def test_classify_content_chrome_unexpected_model_shape_falls_back_to_rules(tmp_
     fake_ort = MagicMock()
     fake_ort.InferenceSession.return_value = MagicMock()
     with patch(
-        "app.content_chrome_classification.import_optional_module",
+        "app.onnx_box_proposer.import_optional_module",
         return_value=(fake_ort, None),
     ), patch(
-        "app.content_chrome_classification.run_model_inference",
+        "app.onnx_box_proposer.run_model_inference",
         side_effect=app.content_chrome_classification.UnexpectedOnnxOutputShape("bad shape"),
     ):
         report = app.content_chrome_classification.classify_content_chrome(

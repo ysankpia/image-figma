@@ -40,6 +40,9 @@
 | `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED` | 是否在 M30 asset publish 后运行 M39 content/chrome 边界分类 | `true` | 否 |
 | `M39_ONNX_PROPOSER_ENABLED` | 是否允许 M39 尝试本机 ONNX 模型候选提议器；失败时降级 rule-only | `true` | 否 |
 | `M39_ONNX_MODEL_PATH` | M39 可选 ONNX proposer 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 否 |
+| `M39_1_UNIT_STRUCTURE_READINESS_ENABLED` | 是否在 M38 后运行 M39.1 unit structure readiness 只读审计 | `true` | 否 |
+| `M39_1_ONNX_UNIT_PROPOSER_ENABLED` | 是否允许 M39.1 尝试本机 ONNX unit box 候选提议器；失败时降级 rule-only | `true` | 否 |
+| `M39_1_ONNX_MODEL_PATH` | M39.1 可选 ONNX unit proposer 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
 | `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
 | `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
@@ -166,6 +169,20 @@ M39 runs after M30 asset publishing and before M37. It classifies materialized M
 `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false` skips the stage entirely. No `storage/m30_1_uploads/{taskId}/m39/` report is created and M37/M38 behave as they did before M39.
 
 `M39_ONNX_PROPOSER_ENABLED=true` only allows an optional candidate proposer. `numpy`, `Pillow`, `onnxruntime`, the model file, output shape, or inference can all be absent or fail without failing the upload. Those cases are reported as `modelSkippedReason` in `m39_boundary_classification_report.json`; final classification remains rule-gated.
+
+## M39.1 Unit Structure Readiness Audit
+
+```bash
+M39_1_UNIT_STRUCTURE_READINESS_ENABLED=true
+M39_1_ONNX_UNIT_PROPOSER_ENABLED=true
+M39_1_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+```
+
+M39.1 runs after M38 when M31 artifacts exist. It writes `storage/m30_1_uploads/{taskId}/m39_1/unit_structure_readiness_report.json`, explaining safe M37 units, blocked/micro units, product-card/banner/chrome/content diagnostic candidates, blocker reasons, and future promotion hints.
+
+M39.1 is report-only. It does not create visible nodes, move DSL nodes, edit assets, promote units, implement M40 nested hierarchy, or output Codia-compatible schema.
+
+`M39_1_ONNX_UNIT_PROPOSER_ENABLED=true` only allows optional unit box proposals. Missing `numpy`, `Pillow`, `onnxruntime`, missing model, bad output shape, or inference failure records `modelSkippedReason` and does not fail the upload. Model-only candidates remain `diagnostic_only` and cannot become DSL truth.
 
 ## M38 Hierarchy Materialization
 

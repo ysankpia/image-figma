@@ -290,6 +290,26 @@ Required M39 coverage:
 - Pipeline succeeds even without `numpy`, `Pillow`, `onnxruntime`, or the local ONNX model.
 - M39 does not create visible nodes, move elements, or change DSL assets.
 
+## M39.1 Unit Structure Readiness Audit
+
+M39.1 focused command:
+
+```bash
+cd backend
+uv run pytest tests/test_unit_structure_readiness.py tests/test_m30_upload_pipeline.py tests/test_content_chrome_classification.py tests/test_m37_hierarchy_readiness.py tests/test_hierarchy_materialization.py tests/test_config_env.py -q
+```
+
+Required M39.1 coverage:
+
+- Existing M37 safe units become `ready_for_existing_m38` candidates.
+- Unsafe/micro M37 units remain blocked and preserve blocker reasons.
+- M30 image+text geometry can produce product-card/banner diagnostic candidates without mutating the DSL.
+- M39 boundary labels can produce chrome-shell/content-section candidates without promoting them.
+- ONNX absence, missing optional dependencies, bad output shape, or inference failure falls back without failing upload.
+- Model-only candidates remain `diagnostic_only` with `model_only_untrusted`.
+- Report guard fields remain `dslChanged=false`, `createdVisibleNodeCount=0`, and `assetChanged=false`.
+- `GET /api/tasks/{taskId}/m39-1-unit-structure-readiness` returns the report and returns `M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND` when disabled or missing.
+
 ## Static Guards
 
 After M30.2.2, active backend source and tests must not reference the deleted legacy runtime surface:

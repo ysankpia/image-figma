@@ -170,6 +170,44 @@ GET /api/tasks/{taskId}/m39-boundary-classification
 
 It returns task status/stage, summary, warnings, `modelSkippedReason`, classified nodes, report path, and `stage_timings.json`. If M39 is disabled or the report is missing, it returns `M39_BOUNDARY_CLASSIFICATION_NOT_FOUND`.
 
+M39.1 adds `m39_1_unit_structure_readiness_audit` to `stage_timings.json` when M31 artifacts exist and the stage is enabled. It writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m39_1/unit_structure_readiness_report.json
+```
+
+The report summary includes:
+
+```text
+m30NodeCount
+m31UnitCount
+m37SafeUnitCount
+m38CreatedContainerCount
+candidateUnitCount
+readyCandidateCount
+blockedCandidateCount
+microCandidateCount
+chromeShellCandidateCount
+contentSectionCandidateCount
+productCardCandidateCount
+bannerCandidateCount
+onnxModelLoaded
+onnxCandidateCount
+dslChanged = false
+createdVisibleNodeCount = 0
+assetChanged = false
+```
+
+`candidateUnits[]` explains existing safe M37 units, blocked/micro units, geometry-derived product-card/banner candidates, boundary-derived chrome/content candidates, and diagnostic ONNX boxes. `blockerSummary` aggregates reasons such as `micro_unit_only`, `insufficient_direct_matches`, `lineage_gap`, `boundary_classification_conflict`, `duplicate_unit_bbox`, `unsupported_visual_kind`, `model_only_untrusted`, and `overlaps_existing_safe_unit`.
+
+The read-only API endpoint is:
+
+```text
+GET /api/tasks/{taskId}/m39-1-unit-structure-readiness
+```
+
+It returns task status/stage, summary, warnings, `modelSkippedReason`, candidate units, promotion hints, report path, and `stage_timings.json`. If M39.1 is disabled or the report is missing, it returns `M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND`.
+
 ## Logs
 
 后端任务日志至少包含：

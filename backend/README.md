@@ -13,6 +13,7 @@ Figma plugin
 -> M39 content/chrome boundary classification
 -> M37 hierarchy readiness diagnostics
 -> M38 controlled hierarchy materialization
+-> M39.1 unit structure readiness audit
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
 ```
@@ -34,6 +35,8 @@ M37 reads M31 and final M30 artifacts to produce a hierarchy readiness report. I
 M38 consumes the M37 safe direct-match bridge and rewrites the final DSL into transparent hierarchy groups. It only moves existing materialized M30 nodes, preserves absolute bboxes through parent-local coordinates, and does not change image assets or run new recognition.
 
 M39 runs between M30 asset publishing and M37. It labels materialized M30 text, shape, visual image, and composite media nodes as `chrome` or `content` using generic relative geometry plus an optional ONNX proposer. The proposer is not a truth source: missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason` and falls back to rule-only classification.
+
+M39.1 runs after M38 as a read-only unit structure readiness audit. It explains existing safe groups, blocked/micro units, product-card/banner/chrome/content candidates, and ONNX box candidates. It does not create visible nodes, move DSL nodes, edit assets, promote units, implement M40, or emit Codia schema.
 
 ## Run
 
@@ -70,6 +73,7 @@ GET  /api/tasks/{taskId}/dsl
 GET  /api/tasks/{taskId}/m30-materialization
 GET  /api/tasks/{taskId}/m31-reconstruction
 GET  /api/tasks/{taskId}/m39-boundary-classification
+GET  /api/tasks/{taskId}/m39-1-unit-structure-readiness
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -99,6 +103,8 @@ M30 text nodes also report `textForegroundColorSource` in node meta. The M30 rep
 
 `GET /api/tasks/{taskId}/m39-boundary-classification` returns M39 summary metrics, warnings, `modelSkippedReason`, classified node entries, output report path, and `stage_timings.json`. If M39 is disabled or no report exists, it returns `M39_BOUNDARY_CLASSIFICATION_NOT_FOUND`.
 
+`GET /api/tasks/{taskId}/m39-1-unit-structure-readiness` returns M39.1 summary metrics, warnings, `modelSkippedReason`, candidate units, promotion hints, output report path, and `stage_timings.json`. If M39.1 is disabled or no report exists, it returns `M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND`.
+
 ## Current Pipeline
 
 The upload preview pipeline runs:
@@ -119,6 +125,7 @@ OCR
 -> M39 content-chrome boundary classification
 -> M37 hierarchy readiness diagnostic
 -> M38 controlled hierarchy materialization
+-> M39.1 unit structure readiness audit
 ```
 
 It deliberately does not run old pre-M29 diagnostic stages, mixed/residual acceptance audits, fallback masking, Auto Layout, Figma Components, SVG/vectorization, or icon recovery.
@@ -235,6 +242,22 @@ M39_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
 M39 writes `meta.boundaryClassification` on materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes. It does not classify or move `fallback_region` or `original_reference`.
 
 The built-in geometry rules cover top/bottom 12% full-width chrome and right-edge floating chrome, with a center-page safety override. The optional ONNX model can only propose chrome boxes; it cannot override the safety rules or become DSL truth. `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false` skips the stage and returns the pipeline to M39-before behavior.
+
+## M39.1 Unit Structure Readiness Audit
+
+```bash
+M39_1_UNIT_STRUCTURE_READINESS_ENABLED=true
+M39_1_ONNX_UNIT_PROPOSER_ENABLED=true
+M39_1_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+```
+
+M39.1 writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m39_1/unit_structure_readiness_report.json
+```
+
+It normalizes M37 safe/unsafe units into candidate units, derives diagnostic product-card/banner/chrome-shell/content-section candidates from existing M30/M39 evidence, and records future promotion hints. ONNX proposals are optional and remain diagnostic unless corroborated by rule evidence. M39.1 is not M40, not a visual fix, not a single-element hack, not a model truth source, and not a Codia adapter.
 
 ## M31 Reconstruction UI Tree
 

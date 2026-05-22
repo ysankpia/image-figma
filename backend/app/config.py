@@ -43,6 +43,9 @@ class Settings:
     m39_content_chrome_classification_enabled: bool = True
     m39_onnx_proposer_enabled: bool = True
     m39_onnx_model_path: Path = Path("/Volumes/WorkDrive/Models/model_fp16.onnx")
+    m39_1_unit_structure_readiness_enabled: bool = True
+    m39_1_onnx_unit_proposer_enabled: bool = True
+    m39_1_onnx_model_path: Path = Path("/Volumes/WorkDrive/Models/model_fp16.onnx")
     m38_hierarchy_materialization_enabled: bool = True
     m38_hierarchy_materialization_strict: bool = False
     m38_hierarchy_max_containers: int = 8
@@ -97,6 +100,14 @@ def get_settings() -> Settings:
         m39_onnx_proposer_enabled=parse_bool(os.getenv("M39_ONNX_PROPOSER_ENABLED", "true"), default=True),
         m39_onnx_model_path=Path(
             os.getenv("M39_ONNX_MODEL_PATH", "/Volumes/WorkDrive/Models/model_fp16.onnx")
+        ).expanduser(),
+        m39_1_unit_structure_readiness_enabled=parse_bool(
+            os.getenv("M39_1_UNIT_STRUCTURE_READINESS_ENABLED", "true"),
+            default=True,
+        ),
+        m39_1_onnx_unit_proposer_enabled=parse_bool(os.getenv("M39_1_ONNX_UNIT_PROPOSER_ENABLED", "true"), default=True),
+        m39_1_onnx_model_path=Path(
+            os.getenv("M39_1_ONNX_MODEL_PATH", "/Volumes/WorkDrive/Models/model_fp16.onnx")
         ).expanduser(),
         m38_hierarchy_materialization_enabled=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "true"), default=True),
         m38_hierarchy_materialization_strict=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "false"), default=False),

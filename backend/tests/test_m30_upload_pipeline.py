@@ -75,6 +75,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m39_boundary_classification",
         "m37_hierarchy_readiness",
         "m38_hierarchy_materialization",
+        "m39_1_unit_structure_readiness_audit",
     }
     m39 = client.get(f"/api/tasks/{task_id}/m39-boundary-classification")
     assert m39.status_code == 200
@@ -83,6 +84,17 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
     assert "modelSkippedReason" in m39_data
     assert isinstance(m39_data["classifiedNodes"], list)
     assert str(m39_data["outputReport"]).endswith("m39_boundary_classification_report.json")
+    m391 = client.get(f"/api/tasks/{task_id}/m39-1-unit-structure-readiness")
+    assert m391.status_code == 200
+    m391_data = m391.json()["data"]
+    assert m391_data["summary"]["candidateUnitCount"] >= 0
+    assert m391_data["summary"]["dslChanged"] is False
+    assert m391_data["summary"]["createdVisibleNodeCount"] == 0
+    assert m391_data["summary"]["assetChanged"] is False
+    assert "modelSkippedReason" in m391_data
+    assert isinstance(m391_data["candidateUnits"], list)
+    assert isinstance(m391_data["promotionHints"], list)
+    assert str(m391_data["outputReport"]).endswith("unit_structure_readiness_report.json")
 
     m31 = client.get(f"/api/tasks/{task_id}/m31-reconstruction")
     assert m31.status_code == 200
@@ -120,6 +132,7 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert (task_root / "m31" / "m31_unit_fallback_assets").exists()
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
     assert (task_root / "m39" / "m39_boundary_classification_report.json").exists()
+    assert (task_root / "m39_1" / "unit_structure_readiness_report.json").exists()
     m37_report = json.loads((task_root / "m37" / "m37_hierarchy_readiness_report.json").read_text(encoding="utf-8"))
     assert m37_report["summary"]["createdVisibleFrameCount"] == 0
     assert m37_report["summary"]["dslChanged"] is False
@@ -127,7 +140,12 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     m38_report = json.loads((task_root / "m38" / "hierarchy_materialization_report.json").read_text(encoding="utf-8"))
     assert m38_report["summary"]["absolutePositionViolationCount"] == 0
     assert m38_report["summary"]["fallbackMovedCount"] == 0
+    assert m38_report["summary"]["originalReferenceMovedCount"] == 0
     assert m38_report["summary"]["assetChanged"] is False
+    m391_report = json.loads((task_root / "m39_1" / "unit_structure_readiness_report.json").read_text(encoding="utf-8"))
+    assert m391_report["summary"]["dslChanged"] is False
+    assert m391_report["summary"]["createdVisibleNodeCount"] == 0
+    assert m391_report["summary"]["assetChanged"] is False
     final_dsl = json.loads((task_root / "m30" / "m30_materialized_dsl.json").read_text(encoding="utf-8"))
     assert all_m30_classifiable_nodes_have_boundary_classification(final_dsl)
     if m38_report["summary"]["dslChanged"]:
@@ -191,9 +209,11 @@ def test_m31_upload_diagnostics_can_be_disabled(tmp_path: Path, monkeypatch, png
     assert not (task_root / "m31").exists()
     assert not (task_root / "m37").exists()
     assert not (task_root / "m38").exists()
+    assert not (task_root / "m39_1").exists()
     assert "m31_reconstruction" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert "m37_hierarchy_readiness" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert "m38_hierarchy_materialization" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert "m39_1_unit_structure_readiness_audit" not in {item["stage"] for item in report["stageTimings"]["stages"]}
     assert m31.status_code == 404
     assert m31.json()["error"]["code"] == "M31_RECONSTRUCTION_NOT_FOUND"
 
@@ -255,7 +275,9 @@ def test_m38_hierarchy_materialization_can_be_disabled(tmp_path: Path, monkeypat
     task_root = Path(report["outputDsl"]).parent.parent
     assert (task_root / "m37" / "m37_hierarchy_readiness_report.json").exists()
     assert not (task_root / "m38").exists()
+    assert (task_root / "m39_1" / "unit_structure_readiness_report.json").exists()
     assert "m38_hierarchy_materialization" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert "m39_1_unit_structure_readiness_audit" in {item["stage"] for item in report["stageTimings"]["stages"]}
 
 
 def test_m39_content_chrome_classification_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -309,6 +331,57 @@ def test_m39_missing_model_keeps_upload_completed(tmp_path: Path, monkeypatch, p
     assert m39["modelSkippedReason"] == "missing_model"
     assert m39["summary"]["onnxModelLoaded"] is False
     assert m39["summary"]["ruleOnlyClassificationCount"] == m39["summary"]["totalClassifiedNodeCount"]
+
+
+def test_m39_1_unit_structure_readiness_can_be_disabled(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M39_1_UNIT_STRUCTURE_READINESS_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/m30-materialization").json()["data"]
+        m391 = local_client.get(f"/api/tasks/{task_id}/m39-1-unit-structure-readiness")
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert not (task_root / "m39_1").exists()
+    assert "m39_1_unit_structure_readiness_audit" not in {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert m391.status_code == 404
+    assert m391.json()["error"]["code"] == "M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND"
+
+
+def test_m39_1_missing_model_keeps_upload_completed(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M39_1_ONNX_MODEL_PATH", str(tmp_path / "missing.onnx"))
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        task = local_client.get(f"/api/tasks/{task_id}").json()["data"]
+        m391 = local_client.get(f"/api/tasks/{task_id}/m39-1-unit-structure-readiness").json()["data"]
+
+    assert task["status"] == "completed"
+    assert m391["modelSkippedReason"] == "missing_model"
+    assert m391["summary"]["onnxModelLoaded"] is False
+    assert m391["summary"]["onnxCandidateCount"] == 0
 
 
 def test_m38_optional_failure_does_not_block_m30_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
