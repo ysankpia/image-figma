@@ -56,8 +56,9 @@ M292ReplayDecision = Literal[
 @dataclass(frozen=True)
 class M292SourcePhysicalOptions:
     min_text_confidence: float = 0.60
-    editable_text_max_texture: float = 0.24
     editable_text_max_media_overlap: float = 0.82
+    media_display_text_min_height: int = 40
+    media_display_text_min_width_ratio: float = 0.22
     min_media_area: int = 1200
     media_color_threshold: int = 24
     media_texture_threshold: float = 0.16
@@ -204,7 +205,6 @@ def classify_ocr_text_objects(
             continue
         text = str(box.text or "").strip()
         media_overlap = max((bbox_overlap_ratio(bbox, media.bbox) for media in media_objects), default=0.0)
-        metrics = measure_region(pixels, bbox)
         local_conf = local_background_confidence(pixels, bbox)
         overlapped_m29 = [
             str(node.get("id") or "")
@@ -229,7 +229,7 @@ def classify_ocr_text_objects(
                 )
             )
             continue
-        if media_overlap >= options.editable_text_max_media_overlap or metrics.texture_score > options.editable_text_max_texture:
+        if media_overlap >= options.editable_text_max_media_overlap and is_media_display_text(bbox, width, options):
             objects.append(
                 make_object(
                     bbox=bbox,
@@ -242,7 +242,7 @@ def classify_ocr_text_objects(
                     text_overlap=1.0,
                     media_containment=media_overlap,
                     confidence="medium",
-                    reasons=["text_inside_media_or_complex_background"],
+                    reasons=["large_display_text_inside_media"],
                     risks=["preserve_raster_text"],
                 )
             )
@@ -264,6 +264,12 @@ def classify_ocr_text_objects(
             )
         )
     return objects
+
+
+def is_media_display_text(bbox: list[int], image_width: int, options: M292SourcePhysicalOptions) -> bool:
+    return bbox[3] >= options.media_display_text_min_height or (
+        bbox[2] >= round(image_width * options.media_display_text_min_width_ratio) and bbox[3] >= round(options.media_display_text_min_height * 0.75)
+    )
 
 
 def cluster_icon_objects(

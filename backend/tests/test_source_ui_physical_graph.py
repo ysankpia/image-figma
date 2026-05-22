@@ -29,7 +29,7 @@ def test_ocr_text_inside_large_textured_media_is_preserved_as_raster(tmp_path: P
     result = extract_source_ui_physical_graph(
         source_png=png_bytes(source),
         m29_document=m29,
-        ocr_document=ocr_document([ocr_block("ocr_art", "SALE", [40, 36, 44, 18])]),
+        ocr_document=ocr_document([ocr_block("ocr_art", "SALE", [24, 28, 72, 42])]),
         output_dir=tmp_path / "m29_2",
     )
 
@@ -39,6 +39,23 @@ def test_ocr_text_inside_large_textured_media_is_preserved_as_raster(tmp_path: P
     assert text["sourceEvidence"]["mediaContainmentRatio"] >= 0.98
     assert result["summary"]["mediaRegionCount"] == 1
     assert result["summary"]["preservedRasterTextCount"] == 1
+
+
+def test_small_media_overlay_label_remains_editable_text(tmp_path: Path) -> None:
+    source = make_textured_png(220, 140, [10, 10, 150, 80])
+    m29 = m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 150, 80], metrics={"colorCount": 80, "textureScore": 0.4})])
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_badge", "1/9", [118, 66, 24, 14])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    text = only_object(result, "editable_ui_text")
+    assert text["pixelOwner"] == "editable_text"
+    assert text["replayDecision"] == "text_replay"
+    assert text["sourceEvidence"]["mediaContainmentRatio"] >= 0.98
 
 
 def test_adjacent_symbol_fragments_merge_into_one_raster_icon(tmp_path: Path) -> None:
