@@ -70,3 +70,9 @@ The report includes summary counts, `candidateUnits[]`, `blockerSummary`, `promo
 cd backend
 uv run pytest tests/test_unit_structure_readiness.py tests/test_m30_upload_pipeline.py tests/test_content_chrome_classification.py tests/test_m37_hierarchy_readiness.py tests/test_hierarchy_materialization.py tests/test_config_env.py -q
 ```
+
+## Next Stage
+
+M39.1 已证明当前主要瓶颈不是“没有组件化按钮”，而是候选 unit 质量还不够稳定。下一阶段固定为 [M39.1.1 Unit Candidate Quality Gate](039-1-1-unit-candidate-quality-gate.md)。
+
+M39.1.1 仍然是 report-only：先过滤 icon fragment、micro unit、重复 bbox、content/chrome 混合和模型孤证，再允许后续 M39.2 做 unit promotion。

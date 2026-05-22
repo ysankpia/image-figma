@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Figma MCP Uploaded Page Prototype</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page-width: 853px;
+        --page-height: 1844px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #e9eaee;
+        font-family:
+          Inter,
+          "Noto Sans SC",
+          "Noto Sans JP",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      .viewport {
+        display: grid;
+        min-height: 100vh;
+        place-items: start center;
+        padding: 24px;
+      }
+
+      .page {
+        position: relative;
+        width: var(--page-width);
+        height: var(--page-height);
+        overflow: hidden;
+        background: #f7f8fa;
+        box-shadow: 0 18px 60px rgb(0 0 0 / 18%);
+        transform-origin: top center;
+      }
+
+      .layer,
+      .image-layer,
+      .text-layer,
+      .group-layer {
+        position: absolute;
+      }
+
+      .image-layer img {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        pointer-events: none;
+      }
+
+      .cover img {
+        object-fit: cover;
+      }
+
+      .contain img {
+        object-fit: contain;
+      }
+
+      .text-layer,
+      .group-layer p {
+        margin: 0;
+        font-style: normal;
+        font-weight: 400;
+        line-height: normal;
+        white-space: nowrap;
+        word-break: break-word;
+      }
+
+      .group-layer {
+        overflow: hidden;
+        font-weight: 400;
+        line-height: normal;
+        white-space: nowrap;
+        word-break: break-word;
+      }
+
+      .group-layer p {
+        position: absolute;
+      }
+
+      @media (max-width: 901px) {
+        .viewport {
+          padding: 0;
+        }
+
+        .page {
+          box-shadow: none;
+          transform: scale(calc(100vw / 853));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="viewport">
+      <section class="page" data-node-id="1442:1706" aria-label="uploaded_png">
+        <div class="image-layer cover" style="left:0; top:0; width:853px; height:1844px" data-node-id="1442:1708">
+          <img alt="" src="./assets/fallback-full-image.png" />
+        </div>
+        <div class="image-layer contain" style="left:798px; top:1665px; width:55px; height:23px" data-node-id="1442:1709">
+          <img alt="" src="./assets/m30-image-visual-asset-0001.png" />
+        </div>
+        <div class="image-layer contain" style="left:237px; top:1707px; width:37px; height:37px" data-node-id="1442:1710">
+          <img alt="" src="./assets/m30-image-visual-asset-0002.png" />
+        </div>
+        <div class="image-layer contain" style="left:447px; top:1020px; width:34px; height:34px" data-node-id="1442:1711">
+          <img alt="" src="./assets/m30-image-visual-asset-0003.png" />
+        </div>
+        <div class="image-layer contain" style="left:729px; top:1707px; width:30px; height:35px" data-node-id="1442:1712">
+          <img alt="" src="./assets/m30-image-visual-asset-0004.png" />
+        </div>
+        <div class="image-layer contain" style="left:75px; top:1707px; width:36px; height:35px" data-node-id="1442:1713">
+          <img alt="" src="./assets/m30-image-visual-asset-0005.png" />
+        </div>
+        <div class="image-layer contain" style="left:572px; top:1709px; width:36px; height:32px" data-node-id="1442:1714">
+          <img alt="" src="./assets/m30-image-visual-asset-0006.png" />
+        </div>
+        <div class="image-layer contain" style="left:68px; top:505px; width:48px; height:39px" data-node-id="1442:1715">
+          <img alt="" src="./assets/m30-image-visual-asset-0007.png" />
+        </div>
+        <div class="image-layer contain" style="left:744px; top:502px; width:36px; height:45px" data-node-id="1442:1716">
+          <img alt="" src="./assets/m30-image-visual-asset-0008.png" />
+        </div>
+        <div class="image-layer contain" style="left:446px; top:1550px; width:35px; height:35px" data-node-id="1442:1717">
+          <img alt="" src="./assets/m30-image-visual-asset-0009.png" />
+        </div>
+        <div class="image-layer contain" style="left:571px; top:502px; width:44px; height:44px" data-node-id="1442:1718">
+          <img alt="" src="./assets/m30-image-visual-asset-0010.png" />
+        </div>
+        <div class="image-layer contain" style="left:714px; top:28px; width:29px; height:22px" data-node-id="1442:1719">
+          <img alt="" src="./assets/m30-image-visual-asset-0011.png" />
+        </div>
+        <div class="image-layer contain" style="left:36px; top:1486px; width:35px; height:34px" data-node-id="1442:1720">
+          <img alt="" src="./assets/m30-image-visual-asset-0012.png" />
+        </div>
+        <div class="image-layer contain" style="left:36px; top:994px; width:35px; height:34px" data-node-id="1442:1721">
+          <img alt="" src="./assets/m30-image-visual-asset-0013.png" />
+        </div>
+        <div class="image-layer contain" style="left:407px; top:505px; width:36px; height:38px" data-node-id="1442:1722">
+          <img alt="" src="./assets/m30-image-visual-asset-0014.png" />
+        </div>
+        <div class="image-layer contain" style="left:235px; top:502px; width:42px; height:41px" data-node-id="1442:1723">
+          <img alt="" src="./assets/m30-image-visual-asset-0015.png" />
+        </div>
+        <div class="image-layer contain" style="left:731px; top:1501px; width:89px; height:94px" data-node-id="1442:1724">
+          <img alt="" src="./assets/m30-image-visual-asset-0016.png" />
+        </div>
+        <div class="image-layer contain" style="left:120px; top:954px; width:23px; height:25px" data-node-id="1442:1725">
+          <img alt="" src="./assets/m30-image-visual-asset-0017.png" />
+        </div>
+        <div class="image-layer contain" style="left:724px; top:944px; width:26px; height:22px" data-node-id="1442:1726">
+          <img alt="" src="./assets/m30-image-visual-asset-0018.png" />
+        </div>
+        <div class="image-layer contain" style="left:58px; top:216px; width:30px; height:7px" data-node-id="1442:1727">
+          <img alt="" src="./assets/m30-image-visual-asset-0019.png" />
+        </div>
+        <div class="image-layer contain" style="left:447px; top:1020px; width:34px; height:34px" data-node-id="1442:1728">
+          <img alt="" src="./assets/m30-image-visual-asset-0003.png" />
+        </div>
+        <div class="image-layer contain" style="left:446px; top:1550px; width:35px; height:35px" data-node-id="1442:1729">
+          <img alt="" src="./assets/m30-image-visual-asset-0009.png" />
+        </div>
+        <div class="image-layer contain" style="left:36px; top:1486px; width:35px; height:34px" data-node-id="1442:1730">
+          <img alt="" src="./assets/m30-image-visual-asset-0012.png" />
+        </div>
+        <div class="image-layer contain" style="left:18px; top:1095px; width:404px; height:305px" data-node-id="1442:1731">
+          <img alt="" src="./assets/m30-image-visual-asset-0023.png" />
+        </div>
+        <div class="image-layer contain" style="left:18px; top:603px; width:404px; height:307px" data-node-id="1442:1732">
+          <img alt="" src="./assets/m30-image-visual-asset-0024.png" />
+        </div>
+        <div class="image-layer contain" style="left:36px; top:994px; width:35px; height:34px" data-node-id="1442:1733">
+          <img alt="" src="./assets/m30-image-visual-asset-0013.png" />
+        </div>
+        <div class="image-layer contain" style="left:767px; top:84px; width:49px; height:49px" data-node-id="1442:1734">
+          <img alt="" src="./assets/m30-image-visual-asset-0026.png" />
+        </div>
+        <div class="image-layer contain" style="left:431px; top:1125px; width:404px; height:333px" data-node-id="1442:1735">
+          <img alt="" src="./assets/m30-image-visual-asset-0027.png" />
+        </div>
+        <div class="image-layer contain" style="left:430px; top:603px; width:405px; height:335px" data-node-id="1442:1736">
+          <img alt="" src="./assets/m30-image-visual-asset-0028.png" />
+        </div>
+        <div class="image-layer contain" style="left:729px; top:1726px; width:30px; height:16px" data-node-id="1442:1737">
+          <img alt="" src="./assets/m30-image-visual-asset-0029.png" />
+        </div>
+        <div class="image-layer contain" style="left:735px; top:1707px; width:19px; height:18px" data-node-id="1442:1738">
+          <img alt="" src="./assets/m30-image-visual-asset-0030.png" />
+        </div>
+        <div class="image-layer contain" style="left:729px; top:1707px; width:30px; height:35px" data-node-id="1442:1739">
+          <img alt="" src="./assets/m30-image-visual-asset-0004.png" />
+        </div>
+        <div class="image-layer contain" style="left:667px; top:98px; width:31px; height:32px" data-node-id="1442:1740">
+          <img alt="" src="./assets/m30-image-visual-asset-0032.png" />
+        </div>
+        <div class="image-layer contain" style="left:664px; top:29px; width:34px; height:22px" data-node-id="1442:1741">
+          <img alt="" src="./assets/m30-image-visual-asset-0033.png" />
+        </div>
+        <div class="image-layer contain" style="left:68px; top:505px; width:48px; height:39px" data-node-id="1442:1742">
+          <img alt="" src="./assets/m30-image-visual-asset-0007.png" />
+        </div>
+        <div class="image-layer contain" style="left:235px; top:502px; width:42px; height:41px" data-node-id="1442:1743">
+          <img alt="" src="./assets/m30-image-visual-asset-0015.png" />
+        </div>
+        <div class="image-layer contain" style="left:571px; top:502px; width:44px; height:44px" data-node-id="1442:1744">
+          <img alt="" src="./assets/m30-image-visual-asset-0010.png" />
+        </div>
+        <div class="image-layer contain" style="left:744px; top:502px; width:36px; height:45px" data-node-id="1442:1745">
+          <img alt="" src="./assets/m30-image-visual-asset-0008.png" />
+        </div>
+        <div class="image-layer contain" style="left:389px; top:1705px; width:75px; height:57px" data-node-id="1442:1746">
+          <img alt="" src="./assets/m30-image-visual-asset-0038.png" />
+        </div>
+        <div class="image-layer contain" style="left:407px; top:505px; width:36px; height:38px" data-node-id="1442:1747">
+          <img alt="" src="./assets/m30-image-visual-asset-0014.png" />
+        </div>
+        <div class="image-layer contain" style="left:75px; top:1707px; width:36px; height:35px" data-node-id="1442:1748">
+          <img alt="" src="./assets/m30-image-visual-asset-0005.png" />
+        </div>
+        <div class="image-layer contain" style="left:578px; top:1704px; width:38px; height:23px" data-node-id="1442:1749">
+          <img alt="" src="./assets/m30-image-visual-asset-0041.png" />
+        </div>
+        <div class="image-layer contain" style="left:120px; top:954px; width:23px; height:25px" data-node-id="1442:1750">
+          <img alt="" src="./assets/m30-image-visual-asset-0017.png" />
+        </div>
+        <div class="image-layer contain" style="left:724px; top:944px; width:26px; height:22px" data-node-id="1442:1751">
+          <img alt="" src="./assets/m30-image-visual-asset-0018.png" />
+        </div>
+        <div class="image-layer contain" style="left:247px; top:1717px; width:17px; height:17px" data-node-id="1442:1752">
+          <img alt="" src="./assets/m30-image-visual-asset-0044.png" />
+        </div>
+        <div class="image-layer contain" style="left:18px; top:236px; width:817px; height:241px" data-node-id="1442:1753">
+          <img alt="" src="./assets/m30-composite-media-refined-0018.png" />
+        </div>
+
+        <div class="group-layer" style="left:0; top:1590px; width:853px; height:100px" data-node-id="1442:1754">
+          <p style="left:762px; top:62px; color:#374319; font-size:30px">中</p>
+          <p style="left:741px; top:8px; color:#686869; font-size:22px">6231</p>
+          <p style="left:453px; top:12px; color:#fc4949; font-size:17px">#新手化妆</p>
+          <p style="left:573px; top:12px; color:#fd5759; font-size:17px">#日常妆容</p>
+        </div>
+        <div class="group-layer" style="left:70px; top:1704px; width:696px; height:71px; font-size:19px" data-node-id="1442:1759">
+          <p style="left:164px; top:46px; color:#686869">发现</p>
+          <p style="left:654px; top:46px; color:#686867">我的</p>
+          <p style="left:2px; top:46px; color:#fd5758">首页</p>
+          <p style="left:499px; top:46px; color:#585758">消息</p>
+        </div>
+
+        <p class="text-layer" style="left:486px; top:1022px; color:#696969; font-size:22px" data-node-id="1442:1764">栗子酱</p>
+        <p class="text-layer" style="left:65px; top:555px; color:#595959; font-size:24px" data-node-id="1442:1765">关注</p>
+        <p class="text-layer" style="left:737px; top:557px; color:#585758; font-size:24px" data-node-id="1442:1766">活动</p>
+        <p class="text-layer" style="left:487px; top:1552px; color:#5a595a; font-size:22px" data-node-id="1442:1767">是阿宁呀</p>
+        <p class="text-layer" style="left:567px; top:557px; color:#595859; font-size:24px" data-node-id="1442:1768">附近</p>
+        <p class="text-layer" style="left:754px; top:27px; color:#040404; font-size:19px" data-node-id="1442:1769">1006</p>
+        <p class="text-layer" style="left:78px; top:1491px; color:#696969; font-size:17px" data-node-id="1442:1770">奶油波波</p>
+        <p class="text-layer" style="left:78px; top:995px; color:#6a6a6a; font-size:22px" data-node-id="1442:1771">小怡同学</p>
+        <p class="text-layer" style="left:400px; top:557px; color:#585759; font-size:24px" data-node-id="1442:1772">话题</p>
+        <p class="text-layer" style="left:228px; top:557px; color:#59595a; font-size:24px" data-node-id="1442:1773">收藏</p>
+        <p class="text-layer" style="left:34px; top:951px; color:#070707; font-size:24px" data-node-id="1442:1774">连衣裙</p>
+        <p class="text-layer" style="left:444px; top:939px; color:#0a0909; font-size:24px" data-node-id="1442:1775">藏在巷子里的宝藏咖啡馆</p>
+
+        <div class="group-layer" style="left:30px; top:165px; width:793px; height:50px" data-node-id="1442:1776">
+          <p style="left:2px; top:2px; color:#080706; font-size:36px">推荐</p>
+          <p style="left:766px; top:12px; color:#353639; font-size:20px">三</p>
+          <p style="left:345px; top:8px; color:#4a4949; font-size:30px">旅行</p>
+          <p style="left:122px; top:6px; color:#4b4a4a; font-size:30px">穿搭</p>
+          <p style="left:564px; top:8px; color:#4a4949; font-size:30px">家居</p>
+          <p style="left:673px; top:10px; color:#4a4949; font-size:30px">美食</p>
+          <p style="left:233px; top:6px; color:#484748; font-size:30px">美妆</p>
+          <p style="left:453px; top:3px; color:#4a4949; font-size:30px">探店</p>
+        </div>
+
+        <p class="text-layer" style="left:449px; top:1066px; color:#fd474a; font-size:26px" data-node-id="1442:1785">#北京探店</p>
+        <div class="group-layer" style="left:42px; top:1535px; width:360px; height:25px; font-size:17px" data-node-id="1442:1786">
+          <p style="left:2px; top:2px; color:#fc4649">#日本旅行</p>
+          <p style="left:251px; top:2px; color:#69696a">日本·镰仓</p>
+        </div>
+        <p class="text-layer" style="left:34px; top:1408px; color:#0a090a; font-size:20px" data-node-id="1442:1789">镰仓一日游攻略一惬意又治愈</p>
+        <p class="text-layer" style="left:38px; top:916px; color:#090808; font-size:22px" data-node-id="1442:1790">春日约会穿搭温柔显白</p>
+        <p class="text-layer" style="left:44px; top:1045px; color:#fd4749; font-size:16px" data-node-id="1442:1791">#春日穿搭灵感</p>
+        <p class="text-layer" style="left:446px; top:1473px; color:#090909; font-size:20px" data-node-id="1442:1792">新手必看！5分钟出门妆容</p>
+        <p class="text-layer" style="left:470px; top:620px; color:#fafaf8; font-size:20px" data-node-id="1442:1793">探店</p>
+        <p class="text-layer" style="left:116px; top:96px; color:#9a9a9a; font-size:27px" data-node-id="1442:1794">春日穿搭灵感</p>
+        <p class="text-layer" style="left:446px; top:1508px; color:#090909; font-size:20px" data-node-id="1442:1795">干净又自然 ✨</p>
+        <p class="text-layer" style="left:63px; top:19px; color:#040404; font-size:30px" data-node-id="1442:1796">9:41</p>
+        <p class="text-layer" style="left:38px; top:619px; color:#fafbfc; font-size:20px" data-node-id="1442:1797">穿搭</p>
+        <p class="text-layer" style="left:781px; top:624px; color:#fafbf6; font-size:13px" data-node-id="1442:1798">1/9</p>
+        <p class="text-layer" style="left:446px; top:976px; color:#090909; font-size:22px" data-node-id="1442:1799">氛围感拉满～</p>
+        <p class="text-layer" style="left:318px; top:997px; color:#585859; font-size:22px" data-node-id="1442:1800">1.2万</p>
+        <p class="text-layer" style="left:729px; top:1022px; color:#5a5a5a; font-size:22px" data-node-id="1442:1801">8564</p>
+        <p class="text-layer" style="left:748px; top:1065px; color:#686868; font-size:26px" data-node-id="1442:1802">北京</p>
+        <p class="text-layer" style="left:36px; top:1112px; color:#fafbfc; font-size:22px" data-node-id="1442:1803">旅行</p>
+        <p class="text-layer" style="left:472px; top:1143px; color:#fafbfb; font-size:19px" data-node-id="1442:1804">美妆</p>
+        <p class="text-layer" style="left:32px; top:1438px; color:#0a0908; font-size:28px" data-node-id="1442:1805">的海边小城</p>
+        <p class="text-layer" style="left:320px; top:1491px; color:#595859; font-size:17px" data-node-id="1442:1806">1.7万</p>
+      </section>
+    </main>
+  </body>
+</html>

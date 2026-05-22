@@ -1,7 +1,22 @@
 # M40 Nested Multi-Level Hierarchy Materialization
 
-- 状态：active
+- 状态：deferred
 - 日期：2026-05-22
+
+## Deferral Note
+
+本计划暂缓。ADR 0064 已将当前下一阶段改为：
+
+```text
+M39.1.1 Unit Candidate Quality Gate
+-> M39.2 Unit Promotion
+-> M40 Layout Semantics
+-> M41 Component / Instance Extraction
+```
+
+原因：M39.1 报告已经显示当前 candidate unit 仍包含小 icon、小图片碎片、重复 bbox、micro unit 和模型孤证。若现在直接做嵌套层级，会把错误候选固化成错误结构。
+
+本文件保留为 M40 历史草案，后续 M40 应在 M39.2 promoted units 稳定后重写为 layout semantics / nested hierarchy 的最终计划。
 
 ## Goal
 

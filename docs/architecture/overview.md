@@ -2,6 +2,17 @@
 
 Image-to-Figma Design v0.1 是一个多端协作系统。
 
+当前阶段路线以 [../roadmap.md](../roadmap.md) 为准。后续结构化顺序固定为：
+
+```text
+M39.1.1 Unit Candidate Quality Gate
+-> M39.2 Unit Promotion
+-> M40 Layout Semantics
+-> M41 Component / Instance Extraction
+```
+
+不要在 M39.1.1 前直接实现 M40/M41，也不要为单个黑条、搜索框或轮播图写特化规则。
+
 ## System Summary
 
 核心链路：

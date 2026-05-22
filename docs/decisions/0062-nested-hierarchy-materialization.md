@@ -1,7 +1,13 @@
 # ADR: Nested Multi-Level Hierarchy Materialization
 
-- 状态：accepted
+- 状态：deferred
 - 日期：2026-05-22
+
+## Current Status
+
+本 ADR 已被 [ADR 0064](0064-gate-unit-candidates-before-promotion-and-componentization.md) 延后执行。当前下一阶段不是 M40，而是 M39.1.1 Unit Candidate Quality Gate。
+
+M40 的核心问题仍然有效，但必须等 M39.2 产出稳定 promoted units 后再重新确认范围。否则 nested hierarchy 会把 M39.1 中的小碎片候选和重复候选固化成错误结构。
 
 ## Context
 

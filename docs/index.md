@@ -6,6 +6,7 @@
 
 - 项目入口：[../README.md](../README.md)
 - Agent 工作规则：[../AGENTS.md](../AGENTS.md)
+- 当前项目演进路线图：[roadmap.md](roadmap.md)
 - 当前 visual primitive graph 计划：[plans/active/029-visual-primitive-graph-harness.md](plans/active/029-visual-primitive-graph-harness.md)
 - 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
 - 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
@@ -46,7 +47,8 @@
 - 当前 M38 controlled hierarchy materialization 计划：[plans/active/038-controlled-hierarchy-materialization.md](plans/active/038-controlled-hierarchy-materialization.md)
 - 当前 M39 content-chrome boundary classification 计划：[plans/active/039-content-chrome-boundary-classification.md](plans/active/039-content-chrome-boundary-classification.md)
 - 当前 M39.1 unit structure readiness audit 计划：[plans/active/039-1-unit-structure-readiness-audit.md](plans/active/039-1-unit-structure-readiness-audit.md)
-- 当前 M40 nested hierarchy materialization 计划：[plans/active/040-nested-hierarchy-materialization.md](plans/active/040-nested-hierarchy-materialization.md)
+- 当前 M39.1.1 unit candidate quality gate 计划：[plans/active/039-1-1-unit-candidate-quality-gate.md](plans/active/039-1-1-unit-candidate-quality-gate.md)
+- M40 nested hierarchy materialization 草案，已暂缓到 M39.2 之后：[plans/active/040-nested-hierarchy-materialization.md](plans/active/040-nested-hierarchy-materialization.md)
 
 ## By Task Type
 
@@ -158,6 +160,7 @@
 - M39 content-chrome boundary classification 决策：[decisions/0061-content-chrome-boundary-classification.md](decisions/0061-content-chrome-boundary-classification.md)
 - M40 nested hierarchy materialization 决策：[decisions/0062-nested-hierarchy-materialization.md](decisions/0062-nested-hierarchy-materialization.md)
 - M39.1 unit structure readiness audit 决策：[decisions/0063-audit-unit-structure-readiness-before-unit-promotion.md](decisions/0063-audit-unit-structure-readiness-before-unit-promotion.md)
+- M39.1.1/M39.2/M40/M41 阶段顺序决策：[decisions/0064-gate-unit-candidates-before-promotion-and-componentization.md](decisions/0064-gate-unit-candidates-before-promotion-and-componentization.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
 
