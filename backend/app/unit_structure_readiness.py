@@ -117,9 +117,13 @@ def audit_unit_structure_readiness(
         if isinstance(reason, str)
     )
     promotion_hints = build_promotion_hints(candidate_units)
+    m31_report_unit_count = int(m31_report.get("summary", {}).get("unitCount") or len(list_dicts(m31_report.get("unitSummaries"))))
+    m37_unit_report_count = len(list_dicts(m37_report.get("unitReports")))
     summary = {
         "m30NodeCount": len(visible_nodes),
-        "m31UnitCount": int(m31_report.get("summary", {}).get("unitCount") or len(list_dicts(m31_report.get("unitSummaries")))),
+        "m31UnitCount": m37_unit_report_count or m31_report_unit_count,
+        "m31ReportUnitCount": m31_report_unit_count,
+        "m37UnitReportCount": m37_unit_report_count,
         "m37SafeUnitCount": int(m37_report.get("summary", {}).get("safeContainerUnitCount") or 0),
         "m38CreatedContainerCount": int(m38_report.get("summary", {}).get("createdContainerCount") or 0),
         "candidateUnitCount": len(candidate_units),
