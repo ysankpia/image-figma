@@ -138,6 +138,77 @@ def test_low_confidence_image_stays_unknown_without_protection(tmp_path: Path) -
     assert document.meta["counts"]["image"] == 0
 
 
+def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rect(canvas, 30, 28, 190, 44, (238, 238, 238))
+    draw_circle(canvas, 48, 50, 5, (120, 120, 120))
+    draw_rect(canvas, 68, 44, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    assert any(bbox_contains(node.bbox, [68, 42, 64, 18]) and node.bbox[2] <= 160 for node in support)
+    assert any("contains_text_evidence" in node.reasons for node in support)
+    assert all(is_protective_shape(node) for node in support)
+
+
+def test_low_contrast_support_region_is_detected_on_dark_theme(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (18, 18, 20))
+    draw_rect(canvas, 30, 28, 190, 44, (25, 25, 28))
+    draw_circle(canvas, 48, 50, 5, (155, 155, 160))
+    draw_circle(canvas, 204, 50, 5, (155, 155, 160))
+    draw_rect(canvas, 68, 44, 64, 12, (225, 225, 228))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    assert any(bbox_contains(node.bbox, [68, 42, 64, 18]) and node.metrics.brightness < 80 for node in support)
+
+
+def test_low_contrast_support_region_is_not_for_plain_page_background(tmp_path: Path) -> None:
+    canvas = make_canvas(220, 120, (248, 248, 248))
+    draw_rect(canvas, 58, 42, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_plain", [58, 40, 64, 18], text="Plain", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+
+
+def test_low_contrast_support_region_does_not_swallow_textured_media(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 140, (248, 248, 248))
+    draw_noise_patch(canvas, 20, 20, 200, 80)
+    draw_rect(canvas, 58, 48, 72, 14, (250, 250, 250))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media", [58, 46, 72, 18], text="Media", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70, low_contrast_support_max_area_ratio=0.35),
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+
+
 def test_image_protection_blocks_internal_fragments(tmp_path: Path) -> None:
     canvas = make_canvas(100, 100, (255, 255, 255))
     draw_noise_patch(canvas, 10, 10, 60, 60)

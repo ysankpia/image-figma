@@ -34,6 +34,30 @@ def test_m295_maps_m292_replay_decisions_to_plan_actions(tmp_path: Path) -> None
     assert (tmp_path / "m29_5" / "replay_plan.json").exists()
 
 
+def test_m295_plan_items_are_sorted_for_replay_layer_order(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_layer_order",
+        m292_document=m292_document(
+            [
+                m292_object("text", [20, 20, 30, 10], "editable_ui_text", "editable_text", "text_replay"),
+                m292_object("image", [0, 0, 100, 60], "media_region", "preserve_raster", "image_replay"),
+                m292_object("icon", [70, 20, 10, 10], "raster_icon", "raster_icon", "icon_replay"),
+                m292_object("shape", [0, 0, 100, 60], "control_background", "shape_geometry", "shape_replay"),
+            ]
+        ),
+        m2931_report=m2931_report([], []),
+        m294_report=m294_report([]),
+        output_dir=tmp_path / "m29_5",
+    )
+
+    assert [item["finalReplayAction"] for item in result.report["planItems"]] == [
+        "shape_replay",
+        "image_replay",
+        "icon_replay",
+        "text_replay",
+    ]
+
+
 def test_m295_preserve_raster_text_has_no_cleanup_targets(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_preserve",

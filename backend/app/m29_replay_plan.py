@@ -353,7 +353,7 @@ def apply_node_budget(plan_items: list[dict[str, Any]], max_visible_nodes: int) 
 
 
 def visible_plan_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
-    action_rank = {"text_replay": 0, "image_replay": 1, "icon_replay": 2, "shape_replay": 3}.get(item["finalReplayAction"], 9)
+    action_rank = {"shape_replay": 0, "image_replay": 1, "icon_replay": 2, "text_replay": 3}.get(item["finalReplayAction"], 9)
     confidence_rank = {"high": 0, "medium": 1, "low": 2}.get(item["confidence"], 2)
     return action_rank, confidence_rank, item["sourceObjectId"]
 
@@ -438,10 +438,10 @@ def validate_replay_plan(report: dict[str, Any]) -> None:
 
 def plan_sort_key(item: dict[str, Any]) -> tuple[int, str]:
     action_order = {
-        "text_replay": 0,
+        "shape_replay": 0,
         "image_replay": 1,
         "icon_replay": 2,
-        "shape_replay": 3,
+        "text_replay": 3,
         "preserve_in_parent_raster": 4,
         "fallback_only": 5,
         "diagnostic_only": 6,

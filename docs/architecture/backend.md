@@ -133,6 +133,8 @@ M29.2 Source-Level UI Physical Graph is an experiment-branch source ownership ga
 
 M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, not the product default. It runs after OCR, raw M29, and optional M29.2 so it can reuse the same evidence. It writes a flat DSL/report under `m29_direct/`, publishes its assets under `/files/assets/{taskId}/m29_direct/`, and is exposed only through `GET /api/tasks/{taskId}/m29-direct-dsl`. The mainline `dsl_results` row still points to `m30/m30_materialized_dsl.json`. M29.2 and M29 direct failures are non-blocking: the stage timing records the failure, the mainline task may still complete, and the variant endpoint returns `M29_DIRECT_DSL_NOT_FOUND` only if the direct variant is unavailable.
 
+Raw M29 includes a low-contrast support-region detector for the direct replay path. It emits `shape` primitives with subtype `low_contrast_support` only when a stable low-texture region contains OCR text plus same-line foreground evidence and has measurable inner/outer color separation. This is a physical support-region detector, not a SearchBar detector, and it supports both light and dark themes. M29.2 consumes these shapes as `shape_geometry + shape_replay`.
+
 M29.3.1 is a read-only pairwise relation report over M29.2 source objects. It does not create visible nodes or modify assets. M29.4 is a read-only stable cluster report over M29.3.1. M29.5 is a read-only replay plan stage over M29.2 + M29.3.1 + M29.4; it feeds `m29_direct_replay` and is the last quality gate before the experiment variant is materialized.
 
 ## Artifact Profiles

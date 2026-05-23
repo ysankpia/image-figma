@@ -187,9 +187,12 @@ Required coverage:
 - M29.2 preserves OCR text inside textured media as raster.
 - M29.2 merges adjacent symbol fragments into one `raster_icon`.
 - M29.2 only replays stable UI shapes and keeps complex blur/shadow diagnostic-only.
+- M29 low-contrast support regions are detected from physical evidence on light and dark themes, without SearchBar-specific rules.
+- M29.2 consumes `low_contrast_support` as replay-safe shape geometry.
 - M29.2 media regions prevent internal fragments from becoming separate replay layers.
 - OCR text suppresses high-overlap M29 raster primitive.
 - M29 direct consumes M29.2 `replayDecision` when the document is available.
+- M29.5 and M29 direct preserve visible replay order: shape/support/background, then image, then icon, then text.
 - `preserve_in_parent_raster` does not create visible nodes and does not erase fallback pixels.
 - M29 image/symbol/simple shape can be replayed as DSL visible nodes.
 - blocked/unknown primitives remain report-only.

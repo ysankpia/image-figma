@@ -109,6 +109,28 @@ def test_simple_shape_replays_but_complex_shape_is_diagnostic(tmp_path: Path) ->
     assert diagnostic["replayDecision"] == "skip"
 
 
+def test_low_contrast_support_shape_replays_as_control_background(tmp_path: Path) -> None:
+    source = make_png(160, 100, fill=(248, 248, 248), marks=[([20, 20, 100, 32], (238, 238, 238))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node("shape_support_001", "shape", [20, 20, 100, 32], subtype="low_contrast_support", metrics={"colorCount": 1, "textureScore": 0.02}),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    assert shape["pixelOwner"] == "shape_geometry"
+    assert shape["replayDecision"] == "shape_replay"
+    assert shape["sourceEvidence"]["m29NodeIds"] == ["shape_support_001"]
+
+
 def test_symbol_inside_media_is_not_separately_replayed(tmp_path: Path) -> None:
     source = make_textured_png(180, 120, [20, 20, 110, 70])
     m29 = m29_document(

@@ -370,6 +370,8 @@ def test_m295_plan_cleanup_targets_drive_copied_image_asset_erasure(tmp_path: Pa
     copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
     assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] != b"\x00\x00\x00"
     assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 1
+    roles = [child.get("role") for child in result.dsl["root"]["children"]]
+    assert roles.index("m29_direct_image") < roles.index("m29_direct_text")
 
 
 def test_m295_plan_without_asset_cleanup_target_does_not_erase_copied_image(tmp_path: Path) -> None:

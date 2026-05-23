@@ -119,6 +119,8 @@ M29.3.0 是无状态几何 kernel，先定义两个区域之间的 primary set r
 
 M29.5 是 M29 direct 左侧实验路径的 replay quality gate。它把 M29.2 ownership、M29.3.1 relation graph 和 M29.4 stable clusters 收束为 `m29_5/replay_plan.json`，再由 `m29_direct_replay` 消费。M29.5 不创建 DSL 节点、不改 assets、不做组件化、不切换默认 `/dsl`。
 
+M29 Direct 当前质量修复只收两个物理问题：replay 可见层级统一为 `shape/support/background -> image -> icon -> text`，以及 raw M29 对低对比 support region 产生 `low_contrast_support` shape。后者使用局部稳定填充、内外环颜色差异、OCR text 和同线 foreground evidence，不使用 `SearchBar` 语义名，也不假设支撑区域必须是白色。OCR-symbol leakage、小型纹理 foreground ownership 和组件化继续留在后续阶段。
+
 M29.2.1 的 ownership 层先定义 6 类 owner：
 
 ```text
@@ -292,7 +294,8 @@ flowchart TD
   A --> C["M29 visual primitive graph"]
   B --> R["M29.2 source UI physical graph"]
   C --> R
-  R --> Q["M29 direct replay experiment"]
+  R --> S["M29.3.1 relation graph / M29.4 stable clusters / M29.5 replay plan"]
+  S --> Q["M29 direct replay experiment"]
   Q -. "branch-only flat draft" .-> P["Figma renderer / adapter output"]
   B --> D["M29.0.x evidence gates"]
   C --> D
