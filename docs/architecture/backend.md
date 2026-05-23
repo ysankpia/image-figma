@@ -136,6 +136,8 @@ M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, no
 
 Raw M29 includes a low-contrast support-region detector for the direct replay path. It emits `shape` primitives with subtype `low_contrast_support` only when a stable low-texture region contains OCR text plus same-line foreground evidence and has measurable inner/outer color separation. This is a physical support-region detector, not a SearchBar detector, and it supports both light and dark themes. `low_contrast_support` only proposes a candidate bbox; raw M29 then fits shape geometry from pixel occupancy. M29 Direct only replays radius when `geometry.kind` is `rounded_rect`, `pill`, `circle`, or `ellipse` with non-low confidence. Rect/unknown support regions replay fill only.
 
+`low_contrast_support` must also prove finite support. Candidates touching the canvas edge without a complete outer ring are rejected instead of being replayed as open chrome bands. M29.2 separates geometry fit from shape replay safety: a circle or ellipse fit does not imply `shape_geometry` ownership when the region is small, multi-color, high-texture, or edge-complex. Those small complex foregrounds are routed to raster icon replay or safe fallback, using only physical evidence rather than UI semantic names.
+
 M29.3.1 is a read-only pairwise relation report over M29.2 source objects. It does not create visible nodes or modify assets. M29.4 is a read-only stable cluster report over M29.3.1. M29.5 is a read-only replay plan stage over M29.2 + M29.3.1 + M29.4; it feeds `m29_direct_replay` and is the last quality gate before the experiment variant is materialized.
 
 ## Artifact Profiles

@@ -123,6 +123,8 @@ M29 Direct 当前质量修复只收物理问题：replay 可见层级统一为 `
 
 这一路线已经暴露出下一层缺失：`bbox` 不是 shape，只是 shape 的外接矩形。矩形、圆角矩形、胶囊、圆、椭圆、线条和不规则图形必须由 mask/occupancy 的 shape geometry fit 证明，不能只靠 `height / 2` 之类的 bbox-derived radius。M29 Shape Geometry Fit 阶段让 raw M29 shape 带上 `geometry.kind`、`geometry.params`、`fitError` 和 `geometry.confidence`。M29 Direct 只能消费 geometry fit 通过的 radius；`low_contrast_support` 只提出候选区域，不再直接提供半高 radius。OCR-symbol leakage、小型纹理 foreground ownership 和组件化继续留在后续阶段。
 
+M29.2.2 继续把 owner 合同收紧：`low_contrast_support` 必须证明自己是有限闭合 support，而不是贴画布边界的 open band；小型 circle/ellipse/badge 也必须证明低纹理、低颜色数、fill 稳定，才能 shape replay。几何拟合只回答“像什么”，不能直接决定 owner。小型复杂 foreground 如果被 raw M29 blocked 在颜色、纹理或边缘阈值上，但无 OCR/media overlap，应恢复为 raster foreground/icon 候选，避免头像、底部图标这类前景被变成纯色色块或直接丢失。这仍然不引入 SearchBar/StatusBar/Avatar/TabBar 语义规则。
+
 M29.2.1 的 ownership 层先定义 6 类 owner：
 
 ```text

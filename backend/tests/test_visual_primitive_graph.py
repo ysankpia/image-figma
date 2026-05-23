@@ -166,24 +166,47 @@ def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Pa
 
 def test_low_contrast_support_rect_geometry_does_not_emit_radius(tmp_path: Path) -> None:
     canvas = make_canvas(260, 120, (248, 248, 248))
-    draw_rect(canvas, 30, 0, 190, 44, (238, 238, 238))
-    draw_circle(canvas, 48, 22, 5, (120, 120, 120))
-    draw_rect(canvas, 68, 16, 64, 12, (70, 70, 70))
+    draw_rect(canvas, 30, 28, 190, 44, (238, 238, 238))
+    draw_circle(canvas, 48, 50, 5, (120, 120, 120))
+    draw_circle(canvas, 204, 50, 5, (120, 120, 120))
+    draw_rect(canvas, 68, 44, 64, 12, (70, 70, 70))
 
     document = extract_m29_visual_primitive_graph(
         png_data=pixels_to_png(canvas),
         source_image="synthetic.png",
         output_dir=tmp_path,
-        text_boxes=[M29TextBox("ocr_query", [68, 14, 64, 18], text="Query", source="test", kind="line")],
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
         options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
     )
 
     support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
     assert support
-    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 14, 64, 18]))
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]))
     assert support_node.geometry is not None
     assert support_node.geometry["kind"] in {"rect", "unknown"}
     assert "radius" not in (support_node.style or {})
+
+
+def test_low_contrast_support_rejects_top_edge_open_band(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rect(canvas, 20, 0, 220, 46, (238, 238, 238))
+    draw_circle(canvas, 38, 23, 5, (120, 120, 120))
+    draw_circle(canvas, 224, 23, 5, (120, 120, 120))
+    draw_rect(canvas, 60, 17, 72, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_top", [60, 15, 72, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    assert not [
+        node
+        for node in document.nodes
+        if node.type == "shape" and node.subtype == "low_contrast_support" and bbox_contains(node.bbox, [60, 15, 72, 18])
+    ]
 
 
 def test_low_contrast_support_region_is_detected_on_dark_theme(tmp_path: Path) -> None:

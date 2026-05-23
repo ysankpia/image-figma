@@ -131,6 +131,115 @@ def test_low_contrast_support_shape_replays_as_control_background(tmp_path: Path
     assert shape["sourceEvidence"]["m29NodeIds"] == ["shape_support_001"]
 
 
+def test_small_textured_circle_shape_replays_as_raster_icon_not_shape(tmp_path: Path) -> None:
+    source = make_png(120, 90, fill=(248, 248, 248), marks=[([24, 24, 36, 36], (120, 80, 40))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "shape_avatar_like",
+                "shape",
+                [24, 24, 36, 36],
+                subtype="badge_background",
+                metrics={"colorCount": 112, "textureScore": 0.24, "edgeScore": 0.36, "fillRatio": 0.76},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    icon = only_object(result, "raster_icon")
+    assert icon["bbox"] == [24, 24, 36, 36]
+    assert icon["pixelOwner"] == "raster_icon"
+    assert icon["replayDecision"] == "icon_replay"
+    assert "small_textured_foreground_shape" in icon["reasons"]
+    assert not [item for item in result["sourceObjects"] if item["pixelOwner"] == "shape_geometry"]
+
+
+def test_low_texture_badge_shape_still_replays_as_shape(tmp_path: Path) -> None:
+    source = make_png(120, 90, fill=(248, 248, 248), marks=[([24, 24, 36, 20], (235, 235, 235))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node("shape_badge", "shape", [24, 24, 36, 20], subtype="badge_background", metrics={"colorCount": 2, "textureScore": 0.02, "edgeScore": 0.04}),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    assert shape["pixelOwner"] == "shape_geometry"
+    assert shape["replayDecision"] == "shape_replay"
+
+
+def test_blocked_complex_small_foreground_recovers_as_raster_icon(tmp_path: Path) -> None:
+    source = make_png(120, 90, fill=(248, 248, 248), marks=[([40, 28, 32, 32], (90, 40, 160))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[],
+        blocked=[
+            {
+                "id": "blocked_icon",
+                "bbox": [40, 28, 32, 32],
+                "source": "symbol_detector",
+                "reasons": ["symbol_color_too_high", "symbol_texture_too_high", "symbol_edge_too_high", "weak_symbol_metrics"],
+                "metrics": {"colorCount": 80, "textureScore": 0.32, "edgeScore": 0.42, "fillRatio": 0.70},
+            }
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    icon = only_object(result, "raster_icon")
+    assert icon["pixelOwner"] == "raster_icon"
+    assert icon["replayDecision"] == "icon_replay"
+    assert icon["sourceEvidence"]["blockedIds"] == ["blocked_icon"]
+
+
+def test_blocked_complex_foreground_overlapping_ocr_stays_diagnostic(tmp_path: Path) -> None:
+    source = make_png(120, 90, fill=(248, 248, 248), marks=[([40, 28, 32, 20], (20, 20, 20))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[],
+        blocked=[
+            {
+                "id": "blocked_text",
+                "bbox": [40, 28, 32, 20],
+                "source": "symbol_detector",
+                "reasons": ["symbol_color_too_high", "weak_symbol_metrics"],
+                "metrics": {"colorCount": 80, "textureScore": 0.32, "edgeScore": 0.42, "fillRatio": 0.70},
+            }
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "Text", [38, 26, 36, 24])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    diagnostic = only_object(result, "unknown")
+    assert diagnostic["pixelOwner"] == "diagnostic_only"
+    assert diagnostic["replayDecision"] == "skip"
+    assert result["summary"]["rasterIconCount"] == 0
+
+
 def test_symbol_inside_media_is_not_separately_replayed(tmp_path: Path) -> None:
     source = make_textured_png(180, 120, [20, 20, 110, 70])
     m29 = m29_document(

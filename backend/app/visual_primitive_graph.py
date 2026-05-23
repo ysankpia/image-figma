@@ -855,8 +855,14 @@ def score_low_contrast_support_candidate(
         return None
     if fill_metrics.color_count > options.low_contrast_support_max_color_count:
         return None
-    edge_delta = support_edge_delta(pixels, candidate)
-    if edge_delta < options.low_contrast_support_min_edge_delta or edge_delta > options.low_contrast_support_max_edge_delta:
+    boundary_deltas = support_boundary_deltas(pixels, candidate, padding=3, thickness=3)
+    if boundary_deltas is None:
+        return None
+    min_boundary_delta = min(boundary_deltas.values())
+    edge_delta = round(sum(boundary_deltas.values()) / len(boundary_deltas))
+    if min_boundary_delta < options.low_contrast_support_min_edge_delta:
+        return None
+    if edge_delta > options.low_contrast_support_max_edge_delta:
         return None
     evidence_count = len(low_contrast_support_evidence_bboxes(candidate, text_bbox, foreground_bboxes))
     if evidence_count == 0:
@@ -888,6 +894,46 @@ def support_edge_delta(pixels: PngPixels, bbox: list[int]) -> int:
     inner = support_region_metrics(pixels, bbox).mean_rgb
     outer = sample_outer_ring_mean_rgb(pixels, bbox, padding=3, thickness=3)
     return color_distance(inner, outer)
+
+
+def support_boundary_deltas(pixels: PngPixels, bbox: list[int], *, padding: int, thickness: int) -> dict[str, int] | None:
+    if bbox[0] - padding < 0 or bbox[1] - padding < 0:
+        return None
+    if bbox_x2(bbox) + padding > pixels.width or bbox_y2(bbox) + padding > pixels.height:
+        return None
+    if bbox[2] <= 0 or bbox[3] <= 0:
+        return None
+    inner = support_region_metrics(pixels, bbox).mean_rgb
+    x, y, width, height = bbox
+    top = sample_region_mean_rgb(pixels, [x, y - padding, width, thickness])
+    bottom = sample_region_mean_rgb(pixels, [x, y + height + padding - thickness, width, thickness])
+    left = sample_region_mean_rgb(pixels, [x - padding, y, thickness, height])
+    right = sample_region_mean_rgb(pixels, [x + width + padding - thickness, y, thickness, height])
+    return {
+        "top": color_distance(inner, top),
+        "bottom": color_distance(inner, bottom),
+        "left": color_distance(inner, left),
+        "right": color_distance(inner, right),
+    }
+
+
+def sample_region_mean_rgb(pixels: PngPixels, bbox: list[int]) -> tuple[int, int, int]:
+    clamped = bbox_clamp(bbox, pixels.width, pixels.height)
+    if clamped is None:
+        return measure_region(pixels, [0, 0, pixels.width, pixels.height]).mean_rgb
+    x, y, width, height = clamped
+    red = green = blue = count = 0
+    for row_index in range(y, y + height):
+        row = pixels.rows[row_index]
+        for column in range(x, x + width):
+            offset = column * 3
+            red += row[offset]
+            green += row[offset + 1]
+            blue += row[offset + 2]
+            count += 1
+    if count == 0:
+        return measure_region(pixels, clamped).mean_rgb
+    return (round(red / count), round(green / count), round(blue / count))
 
 
 def support_region_metrics(pixels: PngPixels, bbox: list[int]) -> M29PrimitiveMetrics:

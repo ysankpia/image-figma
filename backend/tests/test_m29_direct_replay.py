@@ -160,6 +160,39 @@ def test_m292_document_controls_direct_replay_decisions(tmp_path: Path) -> None:
     assert icon["meta"]["sourceM29NodeIds"] == ["symbol_001", "symbol_002"]
 
 
+def test_m295_recovered_raster_foreground_replays_as_symbol_crop(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(100, 80, fill=(248, 248, 248), marks=[([30, 30, 28, 28], (80, 30, 160))]))
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_recovered_icon", [30, 30, 28, 28], "raster_icon", "raster_icon", "icon_replay"),
+            m292_object("m292_diagnostic", [70, 30, 16, 16], "unknown", "diagnostic_only", "skip"),
+        ],
+    }
+    plan = m295_plan(
+        [
+            m295_item("plan_icon", "m292_recovered_icon", [30, 30, 28, 28], "icon_replay", "m29_direct_symbol"),
+            m295_item("plan_diag", "m292_diagnostic", [70, 30, 16, 16], "diagnostic_only", None),
+        ]
+    )
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    assert count_children(result.dsl, "m29_direct_symbol") == 1
+    assert count_children(result.dsl, "m29_direct_shape") == 0
+    assert result.report["summary"]["skippedReasons"]["diagnostic_only"] == 1
+    symbol = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_symbol")
+    assert symbol["layout"]["width"] == 28
+    assert symbol["meta"]["sourceM295PlanItemId"] == "plan_icon"
+
+
 def test_m292_preserve_raster_text_is_not_erased_from_fallback(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(80, 60, fill=(240, 240, 240), marks=[([20, 20, 18, 8], (0, 0, 0))]))
     original_pixel = source.read_bytes()

@@ -144,6 +144,26 @@ def test_m295_records_cluster_support_without_semantic_role_promotion(tmp_path: 
         assert "Card" not in json.dumps(item)
 
 
+def test_m295_keeps_recovered_raster_foreground_as_icon_replay(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_recovered_icon",
+        m292_document=m292_document(
+            [
+                m292_object("blocked_icon", [24, 24, 36, 36], "raster_icon", "raster_icon", "icon_replay"),
+                m292_object("diagnostic", [80, 24, 20, 20], "unknown", "diagnostic_only", "skip", confidence="low"),
+            ]
+        ),
+        m2931_report=None,
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions["blocked_icon"] == "icon_replay"
+    assert actions["diagnostic"] == "diagnostic_only"
+    assert result.report["summary"]["plannedIconReplayCount"] == 1
+
+
 def test_m295_node_budget_suppresses_low_priority_visible_items(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_budget",

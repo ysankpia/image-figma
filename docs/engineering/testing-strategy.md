@@ -190,6 +190,9 @@ Required coverage:
 - M29.2 only replays stable UI shapes and keeps complex blur/shadow diagnostic-only.
 - M29 low-contrast support regions are detected from physical evidence on light and dark themes, without SearchBar-specific rules.
 - M29.2 consumes `low_contrast_support` as replay-safe shape geometry only after raw M29 records geometry fit evidence; rect/unknown support must not invent radius.
+- M29 low-contrast support regions must have finite outer-ring evidence; page-edge open bands are rejected.
+- M29.2 must route small high-texture/high-color circle or ellipse foreground to raster icon/fallback instead of pure shape replay.
+- M29.2 can recover small blocked foregrounds rejected by symbol metrics as raster icon candidates when they do not overlap OCR or media.
 - M29.2 media regions prevent internal fragments from becoming separate replay layers.
 - OCR text suppresses high-overlap M29 raster primitive.
 - M29 direct consumes M29.2 `replayDecision` when the document is available.
