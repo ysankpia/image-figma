@@ -16,6 +16,8 @@
 - 当前 M29.3.1 region relation graph report 计划：[plans/active/029-3-1-region-relation-graph-report.md](plans/active/029-3-1-region-relation-graph-report.md)
 - 当前 M29.4 stable design cluster 计划：[plans/active/029-4-stable-design-cluster.md](plans/active/029-4-stable-design-cluster.md)
 - 当前 M29.5 replay engine v2 quality plan 计划：[plans/active/029-5-replay-engine-v2-quality-plan.md](plans/active/029-5-replay-engine-v2-quality-plan.md)
+- 当前 M29 实验链路数学合同计划：[plans/active/029-experimental-mathematical-contract.md](plans/active/029-experimental-mathematical-contract.md)
+- 当前 M29 数学推演入门计划：[plans/active/029-math-from-first-principles.md](plans/active/029-math-from-first-principles.md)
 - 当前 M29 direct source support and layer order fix 计划：[plans/active/029-direct-source-support-and-layer-order-fix.md](plans/active/029-direct-source-support-and-layer-order-fix.md)
 - 当前 M29 direct shape physical style preservation 计划：[plans/active/029-direct-shape-physical-style-preservation.md](plans/active/029-direct-shape-physical-style-preservation.md)
 - 当前 M29 shape geometry fit 计划：[plans/active/029-shape-geometry-fit-before-radius-replay.md](plans/active/029-shape-geometry-fit-before-radius-replay.md)
@@ -87,6 +89,8 @@
 - [architecture/renderer.md](architecture/renderer.md)：Image-to-Figma Renderer 边界。
 - [architecture/frontend.md](architecture/frontend.md)：Figma 插件 UI 与 Main。
 - [architecture/backend.md](architecture/backend.md)：后端 API 与处理管线。
+- [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 实验链路的 bbox、ownership、relation、cluster、replay plan 和 direct replay 数学合同。
+- [architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)：面向初中数学基础读者的 M29 bbox、pixelOwner、region relation、cluster 和 replay plan 推演。
 - [architecture/api-contracts.md](architecture/api-contracts.md)：API v0.1 合同。
 - [architecture/data-model.md](architecture/data-model.md)：SQLite 数据模型。
 - [architecture/integrations.md](architecture/integrations.md)：OCR、AI、Figma、存储集成。

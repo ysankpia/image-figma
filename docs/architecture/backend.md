@@ -140,6 +140,8 @@ Raw M29 includes a low-contrast support-region detector for the direct replay pa
 
 M29.3.1 is a read-only pairwise relation report over M29.2 source objects. It does not create visible nodes or modify assets. M29.4 is a read-only stable cluster report over M29.3.1. M29.5 is a read-only replay plan stage over M29.2 + M29.3.1 + M29.4; it feeds `m29_direct_replay` and is the last quality gate before the experiment variant is materialized.
 
+The M29 experiment branch mathematical boundary is documented in [m29-experimental-mathematical-contract.md](m29-experimental-mathematical-contract.md). That document is the source for bbox primitives, pixel ownership, region relation, weak cluster evidence, replay plan ordering, and M29 Direct materialization contracts. M29 remains a pixel topology and ownership experiment; it is not a responsive component compiler, global optimizer, Auto Layout stage, or Figma Component/Instance materializer.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.
