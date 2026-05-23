@@ -117,6 +117,8 @@ M29.3.0 Region Relation Kernel
 
 M29.3.0 是无状态几何 kernel，先定义两个区域之间的 primary set relation 和 secondary geometry relations。M29.2.1 消费这个 kernel，修 copied raster asset、editable text 和 fallback 之间的重复 ownership。M29.3.1 才把所有 source regions 的关系输出成 graph/report。M29.4 只消费这个只读关系图，聚合稳定设计簇报表，不做组件化、不改 DSL、不改可见输出。UI 语义名只能作为弱 role hint，不能成为 M29 真值源。
 
+M29.5 是 M29 direct 左侧实验路径的 replay quality gate。它把 M29.2 ownership、M29.3.1 relation graph 和 M29.4 stable clusters 收束为 `m29_5/replay_plan.json`，再由 `m29_direct_replay` 消费。M29.5 不创建 DSL 节点、不改 assets、不做组件化、不切换默认 `/dsl`。
+
 M29.2.1 的 ownership 层先定义 6 类 owner：
 
 ```text

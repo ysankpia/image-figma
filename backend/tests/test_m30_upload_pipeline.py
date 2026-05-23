@@ -72,6 +72,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m29_2_source_ui_physical_graph",
         "m29_3_relation_graph_report",
         "m29_4_stable_design_cluster",
+        "m29_5_replay_plan",
         "m29_direct_replay",
         "m29_direct_asset_publish",
         "m31_reconstruction",
@@ -92,6 +93,7 @@ def test_upload_m30_preview_completes_and_serves_m30_dsl(client: TestClient, png
         "m29_2_source_ui_physical_graph",
         "m29_3_relation_graph_report",
         "m29_4_stable_design_cluster",
+        "m29_5_replay_plan",
         "m29_direct_replay",
         "m29_direct_asset_publish",
     }
@@ -187,6 +189,7 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert (task_root / "m29_2" / "source_ui_physical_graph_overlay.png").exists()
     assert (task_root / "m29_3" / "region_relation_graph_report.json").exists()
     assert (task_root / "m29_4" / "stable_design_cluster_report.json").exists()
+    assert (task_root / "m29_5" / "replay_plan.json").exists()
     m2931_report = json.loads((task_root / "m29_3" / "region_relation_graph_report.json").read_text(encoding="utf-8"))
     assert m2931_report["schemaName"] == "M2931RegionRelationGraphReport"
     assert m2931_report["summary"]["dslChanged"] is False
@@ -197,6 +200,11 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert m294_report["summary"]["dslChanged"] is False
     assert m294_report["summary"]["assetChanged"] is False
     assert m294_report["summary"]["createdVisibleNodeCount"] == 0
+    m295_report = json.loads((task_root / "m29_5" / "replay_plan.json").read_text(encoding="utf-8"))
+    assert m295_report["schemaName"] == "M295ReplayPlan"
+    assert m295_report["summary"]["dslChanged"] is False
+    assert m295_report["summary"]["assetChanged"] is False
+    assert m295_report["summary"]["createdVisibleNodeCount"] == 0
     assert (task_root / "m29_direct" / "m29_direct_replay_dsl.json").exists()
     assert (task_root / "m29_direct" / "m29_direct_replay_report.json").exists()
     assert (task_root / "m29_0_5" / "refined_visual_objects.json").exists()

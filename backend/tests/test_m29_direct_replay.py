@@ -290,6 +290,125 @@ def test_m292_editable_text_outside_copied_image_asset_is_not_erased_from_asset(
     assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 0
 
 
+def test_m295_replay_plan_controls_visible_nodes(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(245, 245, 245), marks=[([10, 10, 20, 8], (0, 0, 0)), ([50, 10, 20, 8], (0, 0, 0))]))
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_keep", [10, 10, 20, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_keep"]),
+            m292_object("m292_suppress", [50, 10, 20, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_suppress"]),
+        ],
+    }
+    plan = m295_plan(
+        [
+            m295_item("plan_keep", "m292_keep", [10, 10, 20, 8], "text_replay", "m29_direct_text"),
+            m295_item("plan_suppress", "m292_suppress", [50, 10, 20, 8], "suppress_duplicate", None),
+        ]
+    )
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[]),
+        ocr_document=ocr_document([ocr_block("ocr_keep", "KEEP", [10, 10, 20, 8]), ocr_block("ocr_suppress", "DROP", [50, 10, 20, 8])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    assert count_children(result.dsl, "m29_direct_text") == 1
+    text_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_text")
+    assert text_node["content"]["text"] == "KEEP"
+    assert text_node["meta"]["sourceM295PlanItemId"] == "plan_keep"
+    assert text_node["meta"]["m295FinalReplayAction"] == "text_replay"
+    assert result.report["summary"]["skippedReasons"]["suppress_duplicate"] == 1
+    assert result.report["summary"]["m295ReplayPlan"]["plannedVisibleNodeCount"] == 1
+
+
+def test_m295_plan_cleanup_targets_drive_copied_image_asset_erasure(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(245, 245, 245), marks=[([10, 10, 80, 50], (220, 220, 220)), ([30, 25, 20, 8], (0, 0, 0))]))
+    m29_dir = tmp_path / "m29"
+    raw_asset = write_png(m29_dir / "assets" / "images" / "image_001.png", make_png(80, 50, fill=(220, 220, 220), marks=[([20, 15, 20, 8], (0, 0, 0))]))
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [10, 10, 80, 50], asset_path=str(raw_asset.relative_to(m29_dir)))],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_image", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object("m292_text", [30, 25, 20, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ],
+    }
+    plan = m295_plan(
+        [
+            m295_item("plan_image", "m292_image", [10, 10, 80, 50], "image_replay", "m29_direct_image"),
+            m295_item(
+                "plan_text",
+                "m292_text",
+                [30, 25, 20, 8],
+                "text_replay",
+                "m29_direct_text",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "m292_image", "reason": "editable_text_contained_by_media"},
+                ],
+            ),
+        ]
+    )
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "TEXT", [30, 25, 20, 8])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
+    assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] != b"\x00\x00\x00"
+    assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 1
+
+
+def test_m295_plan_without_asset_cleanup_target_does_not_erase_copied_image(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(245, 245, 245), marks=[([10, 10, 80, 50], (220, 220, 220)), ([30, 25, 20, 8], (0, 0, 0))]))
+    m29_dir = tmp_path / "m29"
+    raw_asset = write_png(m29_dir / "assets" / "images" / "image_001.png", make_png(80, 50, fill=(220, 220, 220), marks=[([20, 15, 20, 8], (0, 0, 0))]))
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [10, 10, 80, 50], asset_path=str(raw_asset.relative_to(m29_dir)))],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_image", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object("m292_text", [30, 25, 20, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ],
+    }
+    plan = m295_plan(
+        [
+            m295_item("plan_image", "m292_image", [10, 10, 80, 50], "image_replay", "m29_direct_image"),
+            m295_item("plan_text", "m292_text", [30, 25, 20, 8], "text_replay", "m29_direct_text"),
+        ]
+    )
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "TEXT", [30, 25, 20, 8])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
+    assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] == b"\x00\x00\x00"
+    assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 0
+
+
 def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250, 250), marks: list[tuple[list[int], tuple[int, int, int]]] | None = None) -> PngPixels:
     rows = [bytearray(bytes(fill) * width) for _ in range(height)]
     for bbox, color in marks or []:
@@ -387,6 +506,41 @@ def m292_object(
             "textOverlapRatio": 0.0,
             "mediaContainmentRatio": 0.0,
         },
+        "confidence": "high",
+        "reasons": ["test"],
+        "risks": [],
+    }
+
+
+def m295_plan(items: list[dict]) -> dict:
+    return {
+        "schemaName": "M295ReplayPlan",
+        "schemaVersion": "0.1",
+        "summary": {"plannedVisibleNodeCount": sum(1 for item in items if item["finalReplayAction"] in {"text_replay", "image_replay", "icon_replay", "shape_replay"})},
+        "planItems": items,
+    }
+
+
+def m295_item(
+    item_id: str,
+    source_object_id: str,
+    bbox: list[int],
+    action: str,
+    target_role: str | None,
+    *,
+    cleanup_targets: list[dict] | None = None,
+) -> dict:
+    return {
+        "id": item_id,
+        "sourceObjectId": source_object_id,
+        "bbox": bbox,
+        "finalReplayAction": action,
+        "targetRole": target_role,
+        "pixelOwner": "editable_text" if action == "text_replay" else "preserve_raster",
+        "cleanupTargets": cleanup_targets or [],
+        "suppressedSourceObjectIds": [],
+        "relationEdgeIds": [],
+        "clusterIds": ["cluster_test"],
         "confidence": "high",
         "reasons": ["test"],
         "risks": [],

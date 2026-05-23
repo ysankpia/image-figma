@@ -13,6 +13,7 @@ from .evidence_grounded_dsl_materialization import materialize_evidence_grounded
 from .hierarchy_materialization import M38Options, materialize_m38_hierarchy
 from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .m29_direct_replay import build_m29_direct_replay_dsl
+from .m29_replay_plan import build_m295_replay_plan
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
@@ -53,6 +54,7 @@ class M30PipelinePaths:
     m29_2: Path
     m29_3: Path
     m29_4: Path
+    m29_5: Path
     m29_direct: Path
     m291: Path
     m2902: Path
@@ -160,13 +162,45 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         task_id=task_id,
     )
 
-    update_task(task_id, "m29_direct_replay", 23, "Building M29 direct replay variant.")
+    m294_result = None
+    if m2931_result is not None:
+        update_task(task_id, "m29_4_stable_design_cluster", 24, "Building M29.4 stable design cluster report.")
+        m294_result = run_optional_stage(
+            paths,
+            timings,
+            "m29_4_stable_design_cluster",
+            lambda: extract_m294_stable_design_cluster_report(
+                task_id=task_id,
+                m2931_report=m2931_result.report,
+                output_dir=paths.m29_4,
+            ),
+            task_id=task_id,
+        )
+
+    update_task(task_id, "m29_5_replay_plan", 25, "Building M29.5 replay quality plan.")
+    m295_result = run_optional_stage(
+        paths,
+        timings,
+        "m29_5_replay_plan",
+        lambda: build_m295_replay_plan(
+            task_id=task_id,
+            m292_document=m292_document or {"sourceObjects": []},
+            m2931_report=m2931_result.report if m2931_result is not None else None,
+            m294_report=m294_result.report if m294_result is not None else None,
+            output_dir=paths.m29_5,
+        ),
+        task_id=task_id,
+    )
+
+    update_task(task_id, "m29_direct_replay", 26, "Building M29 direct replay variant.")
     m29_direct_result = run_optional_stage(paths, timings, "m29_direct_replay", lambda: build_m29_direct_replay_dsl(
         source_png=png_data,
         source_image_path=str(upload_path),
         m29_document={**m29_document.to_dict(), "sourceM29NodesJson": str(m29_json)},
         ocr_document=ocr_document.to_dict(),
         m292_document=m292_document,
+        m295_replay_plan=m295_result.report if m295_result is not None else None,
+        extra_warnings=[] if m295_result is not None else ["m29_5_replay_plan_missing_or_failed_fallback_to_m29_2"],
         output_dir=paths.m29_direct,
         task_id=f"{task_id}_m29_direct",
     ), task_id=task_id)
@@ -179,22 +213,8 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             task_id=task_id,
         )
 
-    if m2931_result is not None:
-        update_task(task_id, "m29_4_stable_design_cluster", 24, "Building M29.4 stable design cluster report.")
-        run_optional_stage(
-            paths,
-            timings,
-            "m29_4_stable_design_cluster",
-            lambda: extract_m294_stable_design_cluster_report(
-                task_id=task_id,
-                m2931_report=m2931_result.report,
-                output_dir=paths.m29_4,
-            ),
-            task_id=task_id,
-        )
-
     if state.settings.m31_upload_diagnostics_enabled:
-        update_task(task_id, "m31_reconstruction", 25, "Building M31 reconstruction diagnostics.")
+        update_task(task_id, "m31_reconstruction", 28, "Building M31 reconstruction diagnostics.")
         run_m31_diagnostic_stage(
             task_id=task_id,
             paths=paths,
@@ -694,6 +714,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m29_2=root / "m29_2",
         m29_3=root / "m29_3",
         m29_4=root / "m29_4",
+        m29_5=root / "m29_5",
         m29_direct=root / "m29_direct",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",

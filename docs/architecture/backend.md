@@ -1,6 +1,6 @@
 # 后端架构
 
-后端负责接收 PNG、创建任务、运行 OCR + M29 + M29.2 source ownership + M29 direct experiment variant + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
+后端负责接收 PNG、创建任务、运行 OCR + M29 + M29.2 source ownership + M29.3.1 relation graph + M29.4 stable clusters + M29.5 replay plan + M29 direct experiment variant + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
 
 ## Runtime Surface
 
@@ -35,6 +35,9 @@ receive multipart PNG at /api/upload-m30-preview
 -> OCR
 -> M29 visual primitive graph
 -> M29.2 source-level UI physical graph for direct replay ownership
+-> M29.3.1 source relation graph report
+-> M29.4 stable design cluster report
+-> M29.5 replay quality plan
 -> M29 direct replay experiment variant
 -> copy M29 direct assets to assets/{taskId}/m29_direct and rewrite URLs
 -> M31 reconstruction diagnostics
@@ -130,6 +133,8 @@ M29.2 Source-Level UI Physical Graph is an experiment-branch source ownership ga
 
 M29 Direct Replay is an experiment variant on `experiment/m29-direct-replay`, not the product default. It runs after OCR, raw M29, and optional M29.2 so it can reuse the same evidence. It writes a flat DSL/report under `m29_direct/`, publishes its assets under `/files/assets/{taskId}/m29_direct/`, and is exposed only through `GET /api/tasks/{taskId}/m29-direct-dsl`. The mainline `dsl_results` row still points to `m30/m30_materialized_dsl.json`. M29.2 and M29 direct failures are non-blocking: the stage timing records the failure, the mainline task may still complete, and the variant endpoint returns `M29_DIRECT_DSL_NOT_FOUND` only if the direct variant is unavailable.
 
+M29.3.1 is a read-only pairwise relation report over M29.2 source objects. It does not create visible nodes or modify assets. M29.4 is a read-only stable cluster report over M29.3.1. M29.5 is a read-only replay plan stage over M29.2 + M29.3.1 + M29.4; it feeds `m29_direct_replay` and is the last quality gate before the experiment variant is materialized.
+
 ## Artifact Profiles
 
 `M30_PREVIEW_PROFILE=production` is the default for plugin preview.
@@ -171,6 +176,9 @@ storage/uploads/{taskId}/original.png
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 storage/m30_1_uploads/{taskId}/m29/
 storage/m30_1_uploads/{taskId}/m29_2/
+storage/m30_1_uploads/{taskId}/m29_3/
+storage/m30_1_uploads/{taskId}/m29_4/
+storage/m30_1_uploads/{taskId}/m29_5/
 storage/m30_1_uploads/{taskId}/m29_direct/
 storage/m30_1_uploads/{taskId}/m31/
 storage/m30_1_uploads/{taskId}/m29_1/
@@ -216,6 +224,9 @@ m30_queued
 ocr
 m29
 m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
 m29_direct_replay
 m29_direct_asset_publish
 m31_reconstruction

@@ -22,8 +22,10 @@ v0.1 重点验证：
 - M29/M30 evidence chain 不污染 visible DSL children。
 - 插件默认上传走 `/api/upload-m30-preview`。
 - 插件 compare mode 上传一次后分别拉取 M29 direct variant 和主线 DSL。
+- 插件 compare mode 左侧优先消费 M29.5 replay plan。
 - 本地 M30 image asset URL 可由 renderer fetch。
 - 本地 M29 direct image asset URL 可由 renderer fetch。
+- M29.5 replay plan 可被写出并被 M29 direct replay 消费。
 
 ## DSL Schema
 
@@ -97,9 +99,11 @@ Required backend coverage:
 - `POST /api/upload-m30-preview` accepts PNG and creates a processing task.
 - invalid MIME, invalid PNG, unreadable dimensions, and too-large file are rejected.
 - completed task returns M30 DSL from `m30_materialized_dsl.json`.
+- completed task writes M29.5 replay plan to `m29_5/replay_plan.json`.
 - completed task returns M29 direct experiment DSL from `m29_direct_replay_dsl.json` through `/api/tasks/{taskId}/m29-direct-dsl`.
 - unfinished task returns `DSL_NOT_READY`.
 - missing M29 direct variant returns `M29_DIRECT_DSL_NOT_FOUND`.
+- M29.5 replay plan summary is exposed through `GET /api/tasks/{taskId}/m29-direct-dsl`.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
@@ -192,6 +196,7 @@ Required coverage:
 - fallback erases replayed bboxes without mutating source PNG or M29 assets.
 - node budget prevents flat layer explosion.
 - M29 direct root/base assets use `m29_direct_*` namespace.
+- M29.5 replay plan stage appears in `stage_timings.json` before M29 direct replay.
 - upload pipeline writes `m29_direct_replay` and `m29_direct_asset_publish` timings.
 - upload pipeline writes `m29_direct/m29_direct_replay_dsl.json` and report.
 - `/api/tasks/{taskId}/m29-direct-dsl` returns DSL/report after completion.

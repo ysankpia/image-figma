@@ -38,6 +38,9 @@ M29 Direct Replay compare mode adds two stages to `stage_timings.json`:
 
 ```text
 m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
 m29_direct_replay
 m29_direct_asset_publish
 ```
@@ -92,6 +95,27 @@ maxTotalVisibleNodesExceeded
 m292SourcePhysicalGraph
 ```
 
+M29.5 writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_5/replay_plan.json
+```
+
+Its summary focuses on replay quality:
+
+```text
+plannedVisibleNodeCount
+plannedTextReplayCount
+plannedImageReplayCount
+plannedIconReplayCount
+plannedShapeReplayCount
+suppressedDuplicateCount
+fallbackCleanupTargetCount
+copiedImageAssetCleanupTargetCount
+clusterSupportedPlanItemCount
+nodeBudgetSuppressedCount
+```
+
 The read-only API endpoint is:
 
 ```text
@@ -99,6 +123,8 @@ GET /api/tasks/{taskId}/m29-direct-dsl
 ```
 
 It returns the experimental DSL, report summary, warnings, output report path, and stage timings. If the task is not complete it returns `DSL_NOT_READY`; if the variant is missing it returns `M29_DIRECT_DSL_NOT_FOUND`.
+
+The M29 direct variant may consume M29.5 replay plan evidence when present. If M29.5 fails, the direct replay path can fall back to the current M29.2 direct replay behavior, and the failed M29.5 stage remains visible in `stage_timings.json`.
 
 If `m29_direct_replay` or `m29_direct_asset_publish` fails, the failed stage is visible in `stage_timings.json`. This does not necessarily mean the upload task failed, because M29 direct is non-blocking and the mainline M30/M38/M39 DSL can still complete.
 
