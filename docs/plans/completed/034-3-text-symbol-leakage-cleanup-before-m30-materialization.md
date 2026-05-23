@@ -1,6 +1,6 @@
 # M34.3 Text-Symbol Leakage Cleanup Before M30 Materialization
 
-- 状态：active
+- 状态：completed
 - 日期：2026-05-20
 
 ## Goal

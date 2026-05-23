@@ -1,6 +1,6 @@
 # M30.7 Raster Layer Deduplication For Materialized Media
 
-- 状态：active
+- 状态：completed
 - 日期：2026-05-21
 - 负责人：Codex
 

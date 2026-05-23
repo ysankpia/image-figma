@@ -1,6 +1,6 @@
 # M29.3.1 Region Relation Graph Report
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-23
 - 负责人：未指定
 

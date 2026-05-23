@@ -1,6 +1,6 @@
 # M38 Controlled Hierarchy Materialization
 
-- 状态：active
+- 状态：completed
 - 日期：2026-05-21
 
 ## Goal

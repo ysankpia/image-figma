@@ -1,6 +1,6 @@
 # M37 M31-to-M30 Hierarchy Readiness And Ownership Bridge
 
-- 状态：active
+- 状态：completed
 - 日期：2026-05-20
 
 ## Goal

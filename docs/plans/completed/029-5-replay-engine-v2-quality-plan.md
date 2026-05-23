@@ -1,6 +1,6 @@
 # M29.5 Replay Engine V2: Quality Replay Plan
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-23
 - 负责人：未指定
 

@@ -37,4 +37,5 @@ M30.2.2 has since removed that opt-in recovery path from active source. The envi
 See:
 
 - [030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md](030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md)
-- [../../decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md](../../decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md)
+- [../../completed/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md](../../completed/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md)
+- [../../../decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md](../../../decisions/0048-remove-frozen-pre-m29-legacy-backend-chain.md)

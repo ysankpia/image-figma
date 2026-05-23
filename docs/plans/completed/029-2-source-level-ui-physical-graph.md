@@ -1,6 +1,6 @@
 # M29.2 Source-Level UI Physical Graph
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-22
 - 负责人：未指定
 

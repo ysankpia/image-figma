@@ -1,5 +1,7 @@
 # M29.4 Stable Design Cluster
 
+- 状态：completed
+
 ## Summary
 把 M29.3.1 的只读 pairwise relation report 继续向前收口，产出“稳定设计簇”报表，而不是组件化、语义分类或可见 DSL 变化。输入只吃 `M29.3.1 region_relation_graph_report.json`，输出只写 `m29_4/stable_design_cluster_report.json` 和 stage timing，不改 `/dsl`、不改 Figma 可见输出、不新增 route、不接模型。
 

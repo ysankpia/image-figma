@@ -41,7 +41,16 @@
 
 ## Plan Hygiene
 
-完成的计划移动到 `docs/plans/completed/`。活跃计划留在 `docs/plans/active/`。
+计划状态必须和目录一致：
+
+- `docs/plans/active/` 只存放真实未完成、下一阶段仍可能执行的计划。
+- `docs/plans/completed/` 只存放已经完成并验收过的计划。
+- `docs/plans/archive/superseded/` 只存放已被后续计划或 ADR 替代的计划。
+- `docs/plans/archive/deferred/` 只存放明确暂缓、未来需要重写或重新排期的计划。
+
+`active` 目录不得存放 `completed`、`deferred` 或 `superseded-by-*` 状态文件。计划移动后，必须同步更新对应目录的 `index.md`，并确保 `docs/index.md` 不再把已完成计划列为 Start Here。
+
+证据收口允许根据代码、测试、架构文档或阶段 commit 证明，把旧 active 计划改为 completed；但执行该动作的阶段计划必须列出证据依据，避免凭印象归档。
 
 计划必须记录：
 

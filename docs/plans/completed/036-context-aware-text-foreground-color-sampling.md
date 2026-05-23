@@ -1,6 +1,6 @@
 # M36 Context-Aware Text Foreground Color Sampling
 
-- 状态：active
+- 状态：completed
 - 日期：2026-05-20
 
 ## Goal
