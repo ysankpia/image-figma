@@ -656,6 +656,70 @@ def test_unreliable_shape_and_unsafe_visual_are_skipped(tmp_path: Path) -> None:
     assert {"missing_reliable_fill", "unsafe_text_overlap"} <= reasons
 
 
+def test_source_proven_text_support_shape_materializes_below_text(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(140, 90, fill=(248, 248, 248)))
+    m2905_dir = tmp_path / "m29_0_5"
+    support = shape_candidate("shape_text_support_001", [42, 32, 84, 26], color="#FFE8EB")
+    support["textOverlapRatio"] = 0.42
+    support["risks"] = ["contains_text", "text_overlay_shape"]
+    support["sourceSubtype"] = "text_support_background"
+    support["reasons"] = ["shape_like_member", "text_support_background_region", "stable_local_fill", "contains_text_evidence", "finite_outer_ring"]
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[support],
+        text_members=[text_member("text_member_0001", [54, 38, 60, 14], "#tag")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_shape_candidate") == 1
+    assert count_children(result.dsl, "m30_text_member") == 1
+    roles = [child.get("role") for child in result.dsl["root"]["children"]]
+    assert roles.index("m30_shape_candidate") < roles.index("m30_text_cover")
+    assert roles.index("m30_shape_candidate") < roles.index("m30_text_member")
+    shape_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m30_shape_candidate")
+    assert shape_node["style"]["fill"] == "#FFE8EB"
+    assert shape_node["meta"]["sourceShapeCandidateId"] == "shape_text_support_001"
+    assert not [item for item in result.report.skipped_items if item.id == "shape_text_support_001"]
+
+
+def test_ordinary_overlapping_shape_candidate_remains_unsafe(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_canvas(140, 90, fill=(248, 248, 248)))
+    m2905_dir = tmp_path / "m29_0_5"
+    shape = shape_candidate("shape_plain_overlap_001", [42, 32, 84, 26], color="#FFE8EB")
+    shape["textOverlapRatio"] = 0.42
+    shape["risks"] = ["contains_text", "text_overlay_shape"]
+    m2905 = m2905_document(
+        m2905_dir,
+        visual_assets=[],
+        shape_candidates=[shape],
+        text_members=[text_member("text_member_0001", [54, 38, 60, 14], "#tag")],
+    )
+    m2905_json = write_json(m2905_dir / "refined_visual_objects.json", m2905)
+
+    result = materialize_evidence_grounded_dsl(
+        source_image_path=str(source),
+        m2905_document=m2905,
+        m2905_json_path=str(m2905_json),
+        output_dir=tmp_path / "m30",
+        mode="bootstrap-dsl-from-m29",
+    )
+
+    assert count_children(result.dsl, "m30_shape_candidate") == 0
+    assert count_children(result.dsl, "m30_text_member") == 1
+    skipped = [item for item in result.report.skipped_items if item.id == "shape_plain_overlap_001"]
+    assert skipped
+    assert skipped[0].reason == "unsafe_text_overlap"
+
+
 def test_low_overlap_large_accepted_image_materializes_with_raw_lineage(tmp_path: Path) -> None:
     canvas = make_canvas(420, 320, fill=(240, 240, 240))
     rows = [bytearray(row) for row in canvas.rows]

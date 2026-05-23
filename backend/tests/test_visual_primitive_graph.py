@@ -164,6 +164,94 @@ def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Pa
     assert all(is_protective_shape(node) for node in support)
 
 
+def test_text_support_background_region_is_detected_from_text_only_pill(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rounded_rect(canvas, 42, 32, 84, 26, 13, (255, 232, 235))
+    draw_rect(canvas, 54, 40, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_tag", [54, 38, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_min_edge_delta=5),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [54, 38, 60, 14]))
+    assert support_node.source == "text_support_background_detector"
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"pill", "rounded_rect"}
+    assert support_node.style["fill"] == "#FFE8EB"
+    assert "text_support_background_region" in support_node.reasons
+    assert "finite_outer_ring" in support_node.reasons
+    assert is_protective_shape(support_node)
+
+
+def test_text_support_background_region_is_not_for_plain_page_text(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rect(canvas, 54, 40, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_plain_tag", [54, 38, 60, 14], text="tag", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_region_does_not_swallow_textured_media(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 100, (248, 248, 248))
+    draw_noise_patch(canvas, 24, 20, 126, 60)
+    draw_rect(canvas, 54, 42, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media_tag", [54, 40, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70),
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_region_rejects_accepted_media_overlap(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 160, (248, 248, 248))
+    draw_noise_patch(canvas, 28, 20, 180, 96)
+    draw_rounded_rect(canvas, 58, 50, 84, 26, 13, (255, 232, 235))
+    draw_rect(canvas, 70, 58, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media_nested_tag", [70, 56, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70),
+    )
+
+    assert [node for node in document.nodes if node.type == "image"]
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_rejects_edge_open_band(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rect(canvas, 0, 28, 122, 28, (255, 232, 235))
+    draw_rect(canvas, 18, 36, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_edge_tag", [18, 34, 60, 14], text="tag", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
 def test_low_contrast_support_rect_geometry_does_not_emit_radius(tmp_path: Path) -> None:
     canvas = make_canvas(260, 120, (248, 248, 248))
     draw_rect(canvas, 30, 28, 190, 44, (238, 238, 238))

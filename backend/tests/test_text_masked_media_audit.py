@@ -114,6 +114,40 @@ def test_extract_audit_writes_masks_preview_and_original_crops(tmp_path: Path) -
     assert cropped.width == 34 and cropped.height == 24
 
 
+def test_source_support_shape_enters_media_evidence_with_lineage_reason(tmp_path: Path) -> None:
+    canvas = make_canvas(160, 100, (248, 248, 248))
+    draw_rect(canvas, 30, 30, 84, 26, (255, 232, 235))
+    draw_rect(canvas, 42, 38, 60, 12, (252, 72, 76))
+    support = node("shape_text_support_001", "shape", [30, 30, 84, 26])
+    support["subtype"] = "text_support_background"
+    support["reasons"] = ["text_support_background_region", "stable_local_fill", "contains_text_evidence", "finite_outer_ring"]
+    plain_shape = node("shape_plain_001", "shape", [8, 8, 20, 20])
+    m29 = {
+        "nodes": [support, plain_shape],
+        "blocked": [],
+        "meta": {"counts": {"text": 0, "shape": 2, "image": 0, "symbol": 0, "unknown": 0, "blocked": 0}},
+    }
+
+    document = extract_text_masked_media_audit(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("text_1", [42, 38, 60, 12], text="#tag", source="test", kind="line")],
+        text_source="test",
+        m29_document=m29,
+        m291_document=None,
+        options=TextMaskedMediaAuditOptions(text_padding=0, min_media_like_area=40),
+    )
+
+    support_items = [item for item in document.media_evidence if item.source == "m29_shape"]
+    assert len(support_items) == 1
+    assert support_items[0].decision == "support_shape"
+    assert support_items[0].bbox == [30, 30, 84, 26]
+    assert "text_support_background_region" in support_items[0].reasons
+    assert "sourceSubtype:text_support_background" in support_items[0].reasons
+    assert support_items[0].asset_path is not None
+
+
 def test_text_mask_prevents_text_from_becoming_symbol_in_after_run(tmp_path: Path) -> None:
     canvas = make_canvas(96, 80, (255, 255, 255))
     draw_rect(canvas, 10, 10, 20, 14, (20, 20, 20))

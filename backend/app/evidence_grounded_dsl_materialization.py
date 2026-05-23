@@ -1113,7 +1113,7 @@ def append_shape_nodes(
         if not is_hex_color(color):
             skipped.append(M30SkippedItem(source_id, "m2905_shape_candidate", "missing_reliable_fill", bbox, risks))
             continue
-        if overlap > options.safe_shape_text_overlap_max or any(risk in {"contains_text", "text_overlay_shape", "text_touching_visual", "high_text_overlap"} for risk in risks):
+        if shape_candidate_has_unsafe_text_overlap(item, overlap, risks, options):
             skipped.append(M30SkippedItem(source_id, "m2905_shape_candidate", "unsafe_text_overlap", bbox, risks))
             continue
         node_id = next_unique_id(existing_ids, f"m30_shape_{len(materialized) + 1:04d}")
@@ -1140,6 +1140,27 @@ def append_shape_nodes(
             },
         }
         materialized.append(M30PendingNode(node, M30MaterializedNode(node_id, "shape", source_id, bbox, "medium", ["solid_fill_candidate", "source_evidence_trace"])))
+
+
+def shape_candidate_has_unsafe_text_overlap(item: dict[str, Any], overlap: float, risks: list[str], options: M30Options) -> bool:
+    unsafe_risks = {"contains_text", "text_overlay_shape", "text_touching_visual", "high_text_overlap"}
+    if overlap <= options.safe_shape_text_overlap_max and not any(risk in unsafe_risks for risk in risks):
+        return False
+    if is_source_proven_text_support_shape(item):
+        return False
+    return True
+
+
+def is_source_proven_text_support_shape(item: dict[str, Any]) -> bool:
+    reasons = {str(reason) for reason in item.get("reasons", []) if isinstance(reason, str)}
+    source_subtype = str(item.get("sourceSubtype") or item.get("sourceM29Subtype") or "")
+    return source_subtype in {"text_support_background", "low_contrast_support"} or bool(
+        reasons
+        & {
+            "text_support_background_region",
+            "low_contrast_support_region",
+        }
+    )
 
 
 def append_image_nodes(

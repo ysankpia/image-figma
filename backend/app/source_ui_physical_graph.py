@@ -407,7 +407,7 @@ def classify_shape_objects(
         elif subtype in {"card_background", "container_background", "background", "large_container"}:
             visual_kind = "card_background"
             reasons = ["container_background_shape"]
-        elif subtype in {"search_field_background", "low_contrast_support", "small_rounded_rect", "badge_background", "icon_button_background", "small_ellipse"}:
+        elif subtype in {"search_field_background", "low_contrast_support", "text_support_background", "small_rounded_rect", "badge_background", "icon_button_background", "small_ellipse"}:
             visual_kind = "control_background"
             reasons = ["control_background_shape"]
         else:
@@ -459,6 +459,7 @@ def is_shape_replay_safe(
         "large_container",
         "search_field_background",
         "low_contrast_support",
+        "text_support_background",
         "small_rounded_rect",
         "badge_background",
         "icon_button_background",

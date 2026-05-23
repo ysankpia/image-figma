@@ -275,6 +275,26 @@ def decide_visual_item(id: str, raw: dict[str, Any], bbox: list[int], text_boxes
     has_good_ocr = confidence is not None and confidence >= options.ocr_confidence_min
     has_text_ownership_overlap = ocr_overlap >= options.text_owned_overlap_min and text_covered >= options.text_owned_text_covered_min
 
+    if has_source_support_contract(raw):
+        return make_visual_decision(
+            id,
+            raw,
+            bbox,
+            ownership="shape_owned",
+            decision="candidate",
+            reason_kind="source_support_shape",
+            matched_ids=matched_ids,
+            raw_text_overlap=raw_text_overlap,
+            ocr_overlap=ocr_overlap,
+            text_preview=text_preview,
+            ocr_confidence=confidence,
+            suppressed=False,
+            allow_visual=True,
+            allow_text=False,
+            risks=[],
+            reasons=["source_support_shape_retained"],
+        )
+
     if visual_kind == "mixed_symbol_text_candidate":
         return make_visual_decision(
             id,
@@ -475,8 +495,20 @@ def make_visual_decision(
         allowed_for_text_side=allow_text,
         allowed_for_audit_only=True,
         risks=dedupe_strings(risks),
-        reasons=dedupe_strings([*reasons, f"source_visual_kind_{str(raw.get('visualKind') or 'unknown')}"]),
+        reasons=dedupe_strings([*reasons, *[str(reason) for reason in raw.get("reasons", []) if isinstance(reason, str)], f"source_visual_kind_{str(raw.get('visualKind') or 'unknown')}"]),
         source_lineage=dict(source_lineage) if source_lineage is not None else None,
+    )
+
+
+def has_source_support_contract(raw: dict[str, Any]) -> bool:
+    subtype = str(raw.get("sourceSubtype") or raw.get("sourceM29Subtype") or raw.get("subtype") or "")
+    for reason in raw.get("reasons", []):
+        if not subtype and isinstance(reason, str) and reason.startswith("sourceSubtype:"):
+            subtype = reason.split(":", 1)[1]
+            break
+    reasons = {str(reason) for reason in raw.get("reasons", []) if isinstance(reason, str)}
+    return subtype in {"low_contrast_support", "text_support_background"} or bool(
+        reasons & {"low_contrast_support_region", "text_support_background_region"}
     )
 
 

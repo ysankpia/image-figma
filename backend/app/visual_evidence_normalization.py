@@ -21,6 +21,7 @@ VisualEvidenceSource = Literal[
     "m29_image",
     "m29_unknown",
     "m29_symbol",
+    "m29_shape",
     "m29_blocked",
     "m291_group",
     "after_text_mask_candidate",
@@ -263,6 +264,12 @@ def classify_evidence(
     width, height = bbox[2], bbox[3]
     max_edge = max(width, height)
     aspect = width / max(1, height)
+    if has_source_support_contract(raw):
+        reasons = ["source_support_shape_retained"]
+        source_subtype = source_support_subtype(raw)
+        if source_subtype:
+            reasons.append(f"sourceSubtype:{source_subtype}")
+        return "other_candidate", "candidate", 0.74, reasons, source_lineage
     if text_overlap >= options.text_noise_overlap_threshold or suggested == "likely_text_noise":
         if lineage_is_rejected_text_like(source_lineage):
             rejected = rejected_lineage(source_lineage, "text_like_glyph_sequence")
@@ -306,6 +313,31 @@ def classify_evidence(
     ):
         return "icon_candidate", "candidate", 0.68, ["icon_candidate_promoted", f"from_{source_decision or source}"], source_lineage
     return "other_candidate", "candidate", 0.45, ["other_candidate_retained", f"from_{source_decision or source}"], source_lineage
+
+
+def has_source_support_contract(raw: dict[str, Any]) -> bool:
+    subtype = source_support_subtype(raw)
+    reasons = {
+        str(reason)
+        for key in ("sourceReasons", "reasons")
+        for reason in raw.get(key, [])
+        if isinstance(reason, str)
+    }
+    return subtype in {"low_contrast_support", "text_support_background"} or bool(
+        reasons & {"low_contrast_support_region", "text_support_background_region"}
+    )
+
+
+def source_support_subtype(raw: dict[str, Any]) -> str:
+    subtype = str(raw.get("sourceSubtype") or raw.get("sourceM29Subtype") or raw.get("subtype") or "")
+    if subtype:
+        return subtype
+    for reason in raw.get("reasons", []):
+        if not isinstance(reason, str):
+            continue
+        if reason.startswith("sourceSubtype:"):
+            return reason.split(":", 1)[1]
+    return ""
 
 
 def text_lineage_counter_evidence(
@@ -795,7 +827,7 @@ def build_meta(m2902_audit_json_path: str, media_evidence: list[Any], items: lis
 
 
 def parse_source(value: object) -> VisualEvidenceSource | None:
-    if value in {"m29_image", "m29_unknown", "m29_symbol", "m29_blocked", "m291_group", "after_text_mask_candidate"}:
+    if value in {"m29_image", "m29_unknown", "m29_symbol", "m29_shape", "m29_blocked", "m291_group", "after_text_mask_candidate"}:
         return value  # type: ignore[return-value]
     return None
 

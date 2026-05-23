@@ -35,6 +35,7 @@ M2902Source = Literal[
     "m29_image",
     "m29_unknown",
     "m29_symbol",
+    "m29_shape",
     "m29_blocked",
     "m291_group",
     "after_text_mask_candidate",
@@ -43,6 +44,7 @@ M2902Decision = Literal[
     "accepted_image",
     "image_like_unknown",
     "image_like_symbol",
+    "support_shape",
     "image_like_blocked",
     "symbol_group",
     "text_suppressed_candidate",
@@ -386,6 +388,7 @@ def collect_media_evidence(
         "image": ("m29_image", "accepted_image"),
         "unknown": ("m29_unknown", "image_like_unknown"),
         "symbol": ("m29_symbol", "image_like_symbol"),
+        "shape": ("m29_shape", "support_shape"),
     }
     counters: dict[str, int] = {}
 
@@ -397,6 +400,8 @@ def collect_media_evidence(
         if bbox is None or not bbox_in_bounds(bbox, pixels.width, pixels.height):
             continue
         if node_type == "symbol" and not is_media_like_symbol(node, options):
+            continue
+        if node_type == "shape" and not is_source_support_shape(node):
             continue
         source, decision = source_by_type[node_type]
         evidence.append(
@@ -410,7 +415,7 @@ def collect_media_evidence(
                 text_mask=text_mask,
                 image_mask=image_mask,
                 metrics=parse_metrics(node.get("metrics")) or measure_region(pixels, bbox),
-                reasons=[str(reason) for reason in node.get("reasons", [])],
+                reasons=support_shape_reasons(node),
             )
         )
 
@@ -530,6 +535,7 @@ def export_evidence_asset(
         "m29_image": "accepted_images",
         "m29_unknown": "media_like_unknowns",
         "m29_symbol": "media_like_symbols",
+        "m29_shape": "support_shapes",
         "m29_blocked": "media_like_blocked",
         "m291_group": "symbol_groups",
         "after_text_mask_candidate": "media_like_unknowns",
@@ -556,6 +562,33 @@ def is_media_like_symbol(node: dict[str, Any], options: TextMaskedMediaAuditOpti
     return area >= options.min_media_like_area * 0.5 and (metrics.color_count >= 32 or metrics.texture_score >= 0.18)
 
 
+def is_source_support_shape(node: dict[str, Any]) -> bool:
+    if str(node.get("type") or "") != "shape":
+        return False
+    subtype = str(node.get("subtype") or "")
+    reasons = {str(reason) for reason in node.get("reasons", []) if isinstance(reason, str)}
+    return subtype in {"low_contrast_support", "text_support_background"} or bool(
+        reasons & {"low_contrast_support_region", "text_support_background_region"}
+    )
+
+
+def support_shape_reasons(node: dict[str, Any]) -> list[str]:
+    reasons = [str(reason) for reason in node.get("reasons", []) if isinstance(reason, str)]
+    if is_source_support_shape(node):
+        subtype = str(node.get("subtype") or "")
+        if subtype:
+            reasons.append(f"sourceSubtype:{subtype}")
+    return dedupe_strings(reasons)
+
+
+def dedupe_strings(items: list[str]) -> list[str]:
+    output: list[str] = []
+    for item in items:
+        if item and item not in output:
+            output.append(item)
+    return output
+
+
 def is_media_like_blocked(item: dict[str, Any], options: TextMaskedMediaAuditOptions) -> bool:
     bbox = parse_bbox(item.get("bbox"))
     metrics = parse_metrics(item.get("metrics"))
@@ -573,6 +606,8 @@ def is_media_like_blocked(item: dict[str, Any], options: TextMaskedMediaAuditOpt
 
 
 def suggested_next_action(source: str, decision: str, text_overlap: float, reasons: list[str]) -> str:
+    if source == "m29_shape":
+        return "support_shape_candidate"
     if text_overlap >= 0.35:
         return "likely_text_noise"
     if source == "m29_image":
@@ -659,6 +694,7 @@ def overlay_evidence(pixels: PngPixels, evidence: list[MediaEvidenceItem]) -> by
         "accepted_image": (0, 180, 210),
         "image_like_unknown": (238, 190, 40),
         "image_like_symbol": (0, 200, 90),
+        "support_shape": (0, 122, 255),
         "image_like_blocked": (235, 64, 52),
         "symbol_group": (60, 120, 255),
         "text_suppressed_candidate": (220, 60, 220),
@@ -718,10 +754,11 @@ def preview_sort_key(item: MediaEvidenceItem) -> tuple[int, int, int, int, int, 
     source_rank = {
         "m29_image": 0,
         "m29_unknown": 1,
-        "m29_blocked": 2,
-        "m29_symbol": 3,
-        "m291_group": 4,
-        "after_text_mask_candidate": 5,
+        "m29_shape": 2,
+        "m29_blocked": 3,
+        "m29_symbol": 4,
+        "m291_group": 5,
+        "after_text_mask_candidate": 6,
     }.get(item.source, 9)
     noise_rank = 1 if item.suggested_next_action == "likely_text_noise" else 0
     return (noise_rank, source_rank, -bbox_area(item.bbox), item.bbox[1], item.bbox[0], item.id)
@@ -734,6 +771,7 @@ def preview_border_color(item: MediaEvidenceItem) -> tuple[int, int, int]:
         "accepted_image": (0, 180, 210),
         "image_like_unknown": (238, 190, 40),
         "image_like_symbol": (0, 200, 90),
+        "support_shape": (0, 122, 255),
         "image_like_blocked": (235, 64, 52),
         "symbol_group": (60, 120, 255),
         "text_suppressed_candidate": (220, 60, 220),

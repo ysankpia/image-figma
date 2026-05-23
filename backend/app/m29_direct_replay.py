@@ -516,7 +516,7 @@ def replay_m292_objects(
                 },
                 bbox,
                 replayed,
-                extra_meta=meta,
+                extra_meta={**meta, "sourceM29NodeIds": m292_source_ids(item, "m29NodeIds")},
             )
         else:
             skipped.append(skip_item(object_id, f"m29_2_{visual_kind}_{pixel_owner}", bbox, "unsupported_replay_decision"))
@@ -650,7 +650,7 @@ def replay_m295_plan_items(
                 },
                 bbox,
                 replayed,
-                extra_meta=meta,
+                extra_meta={**meta, "sourceM29NodeIds": m292_source_ids(item, "m29NodeIds")},
             )
         else:
             skipped.append(skip_item(source_object_id, "m29_5_plan_item", bbox, "unsupported_replay_action"))
@@ -939,7 +939,7 @@ def is_simple_shape(node: dict[str, Any]) -> bool:
     reasons = {str(reason) for reason in node.get("reasons", [])}
     color_count = int(metrics.get("colorCount") or 0)
     texture_score = float(metrics.get("textureScore") or 0)
-    return subtype in {"separator", "small_rect", "card_background", "container_background", "small_ellipse", "badge_background", "low_contrast_support"} or (
+    return subtype in {"separator", "small_rect", "card_background", "container_background", "small_ellipse", "badge_background", "low_contrast_support", "text_support_background"} or (
         "solid_fill" in reasons and color_count <= 12 and texture_score <= 0.14
     )
 

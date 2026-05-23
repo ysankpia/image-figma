@@ -146,6 +146,8 @@ class ShapeCandidate:
     id: str
     source_object_id: str
     source_evidence_node_ids: list[str]
+    source_subtype: str | None
+    source_reasons: list[str]
     bbox: list[int]
     asset_use: Literal["shape_candidate"]
     decision: ShapeDecision
@@ -161,6 +163,8 @@ class ShapeCandidate:
             "id": self.id,
             "sourceObjectId": self.source_object_id,
             "sourceEvidenceNodeIds": self.source_evidence_node_ids,
+            "sourceSubtype": self.source_subtype,
+            "sourceReasons": self.source_reasons,
             "bbox": self.bbox,
             "assetUse": self.asset_use,
             "decision": self.decision,
@@ -625,19 +629,26 @@ def refine_visual_member(
     overlap = visual_text_overlap_ratio(bbox, lookups["textBboxes"])
     if visual_kind == "shape_like":
         risks: list[str] = []
-        if overlap > options.visual_asset_text_overlap_max:
+        source_subtype = shape_source_subtype(node, lookups)
+        source_reasons = shape_source_reasons(node, lookups)
+        source_proven_support = source_subtype in {"low_contrast_support", "text_support_background"} or bool(
+            set(source_reasons) & {"low_contrast_support_region", "text_support_background_region"}
+        )
+        if overlap > options.visual_asset_text_overlap_max and not source_proven_support:
             risks.extend(["contains_text", "text_overlay_shape"])
         return ShapeCandidate(
             id=f"shape_{shape_index:04d}",
             source_object_id=object_id,
             source_evidence_node_ids=[node_id],
+            source_subtype=source_subtype,
+            source_reasons=source_reasons,
             bbox=bbox,
             asset_use="shape_candidate",
             decision="candidate" if not risks else "uncertain",
             metrics=metrics,
             color=metrics_color(metrics),
             text_overlap_ratio=overlap,
-            reasons=["shape_like_member"],
+            reasons=dedupe_strings(["shape_like_member", *source_reasons]),
             risks=risks,
             preview_asset_path=export_crop(pixels, output_dir, "shape_candidates", f"shape_{shape_index:04d}", bbox),
         )
@@ -906,6 +917,33 @@ def classify_visual_kind(node: dict[str, Any], bbox: list[int], metrics: M29Prim
     if source_kind == "other_candidate":
         return "shape_like" if metrics is not None and metrics.color_count <= 24 else "unknown_visual"
     return "unknown_visual"
+
+
+def shape_source_subtype(node: dict[str, Any], lookups: dict[str, Any]) -> str | None:
+    source_id = str(node.get("sourceId") or "")
+    source = lookups["m2903ById"].get(source_id) or lookups["m2903BySourceEvidenceId"].get(source_id)
+    for raw in (source, node):
+        if not isinstance(raw, dict):
+            continue
+        value = str(raw.get("sourceM29Subtype") or raw.get("sourceSubtype") or raw.get("subtype") or "")
+        if value:
+            return value
+        for reason in raw.get("reasons", []):
+            if isinstance(reason, str) and reason.startswith("sourceSubtype:"):
+                return reason.split(":", 1)[1]
+    return None
+
+
+def shape_source_reasons(node: dict[str, Any], lookups: dict[str, Any]) -> list[str]:
+    source_id = str(node.get("sourceId") or "")
+    source = lookups["m2903ById"].get(source_id) or lookups["m2903BySourceEvidenceId"].get(source_id)
+    reasons: list[str] = []
+    for raw in (source, node):
+        if not isinstance(raw, dict):
+            continue
+        reasons.extend(str(reason) for reason in raw.get("sourceReasons", []) if isinstance(reason, str))
+        reasons.extend(str(reason) for reason in raw.get("reasons", []) if isinstance(reason, str))
+    return dedupe_strings(reasons)
 
 
 def parse_node_metrics(node: dict[str, Any]) -> M29PrimitiveMetrics | None:

@@ -118,6 +118,56 @@ def test_media_internal_text_records_overlay_without_suppression(tmp_path: Path)
     assert "text_overlay_on_visual" in decision.risks
 
 
+def test_source_support_shape_with_text_overlap_remains_shape_owned(tmp_path: Path) -> None:
+    canvas = make_canvas(140, 90)
+    document = run_extract(
+        tmp_path,
+        canvas,
+        m2903={
+            "items": [
+                visual_item(
+                    "support_1",
+                    "other_candidate",
+                    [30, 30, 84, 26],
+                    text_overlap=0.42,
+                    reasons=["source_support_shape_retained", "text_support_background_region", "sourceSubtype:text_support_background"],
+                )
+            ]
+        },
+        m2902={"textBoxes": [text_box("ocr_1", [42, 38, 60, 12], "#tag")]},
+    )
+
+    decision = next(item for item in document.ownership_decisions if item.source_visual_evidence_item_id == "support_1")
+    assert decision.ownership == "shape_owned"
+    assert decision.ownership_reason_kind == "source_support_shape"
+    assert decision.allowed_for_object_forming_visual_side is True
+    assert decision.allowed_for_text_side is False
+    assert decision.suppressed_as_visual is False
+    assert "text_support_background_region" in decision.reasons
+
+
+def test_source_support_shape_subtype_field_remains_shape_owned(tmp_path: Path) -> None:
+    canvas = make_canvas(140, 90)
+    support = visual_item(
+        "support_field_1",
+        "other_candidate",
+        [30, 30, 84, 26],
+        text_overlap=0.42,
+        reasons=["source_support_shape_retained"],
+    )
+    support["sourceSubtype"] = "text_support_background"
+    document = run_extract(
+        tmp_path,
+        canvas,
+        m2903={"items": [support]},
+        m2902={"textBoxes": [text_box("ocr_1", [42, 38, 60, 12], "#tag")]},
+    )
+
+    decision = next(item for item in document.ownership_decisions if item.source_visual_evidence_item_id == "support_field_1")
+    assert decision.ownership == "shape_owned"
+    assert decision.ownership_reason_kind == "source_support_shape"
+
+
 def test_mixed_symbol_text_candidate_is_audit_only(tmp_path: Path) -> None:
     canvas = make_canvas(120, 90)
     document = run_extract(
@@ -255,7 +305,7 @@ def run_extract(tmp_path: Path, canvas: PngPixels, *, m2903: dict, m2902: dict):
     )
 
 
-def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: float = 0.0, source_lineage: dict | None = None) -> dict:
+def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: float = 0.0, source_lineage: dict | None = None, reasons: list[str] | None = None) -> dict:
     item = {
         "id": id,
         "sourceEvidenceId": id,
@@ -269,7 +319,7 @@ def visual_item(id: str, visual_kind: str, bbox: list[int], *, text_overlap: flo
         "textOverlapRatio": text_overlap,
         "imageOverlapRatio": 0.0,
         "metrics": metrics_to_dict(metrics()),
-        "reasons": ["test"],
+        "reasons": reasons or ["test"],
         "sourceDecision": "test",
         "suggestedNextAction": "review",
     }

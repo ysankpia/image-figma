@@ -515,6 +515,44 @@ def test_m295_low_contrast_support_shape_uses_geometry_fit_radius(tmp_path: Path
     assert shape["meta"]["m29DirectShapeRadius"] == 20
 
 
+def test_m295_text_support_background_shape_uses_geometry_fit_radius(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(180, 100, fill=(248, 248, 248), marks=[([42, 32, 84, 26], (255, 232, 235))]))
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "shape_text_support_001",
+                "shape",
+                [42, 32, 84, 26],
+                subtype="text_support_background",
+                style={"fill": "#FFE8EB"},
+                geometry={"kind": "pill", "confidence": "high", "params": {"radius": 13}, "metrics": {}, "evidence": ["text_support_background_region"]},
+            )
+        ],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [m292_object("m292_text_support", [42, 32, 84, 26], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_text_support_001"])],
+    }
+    plan = m295_plan([m295_item("plan_text_support", "m292_text_support", [42, 32, 84, 26], "shape_replay", "m29_direct_shape")])
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_shape")
+    assert shape["style"]["fill"] == "#FFE8EB"
+    assert shape["style"]["radius"] == 13
+    assert shape["meta"]["sourceM29NodeIds"] == ["shape_text_support_001"]
+    assert shape["meta"]["m29DirectShapeStyleSource"] == "shape_geometry_fit"
+    assert shape["meta"]["m29DirectShapeRadius"] == 13
+
+
 def test_m292_shape_replay_preserves_geometry_fit_radius_without_m295_plan(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(245, 245, 245), marks=[([20, 20, 90, 32], (235, 235, 235))]))
     m29 = m29_document(

@@ -131,6 +131,31 @@ def test_low_contrast_support_shape_replays_as_control_background(tmp_path: Path
     assert shape["sourceEvidence"]["m29NodeIds"] == ["shape_support_001"]
 
 
+def test_text_support_background_shape_replays_as_control_background(tmp_path: Path) -> None:
+    source = make_png(160, 100, fill=(248, 248, 248), marks=[([30, 30, 84, 26], (255, 232, 235))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node("shape_text_support_001", "shape", [30, 30, 84, 26], subtype="text_support_background", metrics={"colorCount": 1, "textureScore": 0.02}),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_tag", "tag", [42, 36, 60, 14])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    text = only_object(result, "editable_ui_text")
+    assert shape["pixelOwner"] == "shape_geometry"
+    assert shape["replayDecision"] == "shape_replay"
+    assert shape["sourceEvidence"]["m29NodeIds"] == ["shape_text_support_001"]
+    assert shape["sourceEvidence"]["textOverlapRatio"] > 0
+    assert text["replayDecision"] == "text_replay"
+
+
 def test_small_textured_circle_shape_replays_as_raster_icon_not_shape(tmp_path: Path) -> None:
     source = make_png(120, 90, fill=(248, 248, 248), marks=[([24, 24, 36, 36], (120, 80, 40))])
     m29 = m29_document(
