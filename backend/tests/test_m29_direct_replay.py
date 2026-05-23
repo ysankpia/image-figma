@@ -185,6 +185,111 @@ def test_m292_preserve_raster_text_is_not_erased_from_fallback(tmp_path: Path) -
     assert result.report["summary"]["fallbackErasedBBoxCount"] == 0
 
 
+def test_m292_editable_text_inside_copied_image_asset_is_erased_from_asset_only(tmp_path: Path) -> None:
+    source_pixels = make_png(
+        120,
+        90,
+        fill=(245, 245, 245),
+        marks=[([10, 10, 80, 50], (220, 220, 220)), ([30, 25, 20, 8], (0, 0, 0))],
+    )
+    source = write_png(tmp_path / "source.png", source_pixels)
+    source_bytes = source.read_bytes()
+    m29_dir = tmp_path / "m29"
+    raw_asset = write_png(m29_dir / "assets" / "images" / "image_001.png", make_png(80, 50, fill=(220, 220, 220), marks=[([20, 15, 20, 8], (0, 0, 0))]))
+    raw_asset_bytes = raw_asset.read_bytes()
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [10, 10, 80, 50], asset_path=str(raw_asset.relative_to(m29_dir)))],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_image", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object("m292_text", [30, 25, 20, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source_bytes,
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "TEXT", [30, 25, 20, 8])]),
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
+    assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] != b"\x00\x00\x00"
+    assert source.read_bytes() == source_bytes
+    assert raw_asset.read_bytes() == raw_asset_bytes
+    assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 1
+
+
+def test_m292_preserved_text_inside_copied_image_asset_is_not_erased(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(245, 245, 245)))
+    m29_dir = tmp_path / "m29"
+    raw_asset = write_png(m29_dir / "assets" / "images" / "image_001.png", make_png(80, 50, fill=(220, 220, 220), marks=[([20, 15, 20, 8], (0, 0, 0))]))
+    raw_asset_bytes = raw_asset.read_bytes()
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [10, 10, 80, 50], asset_path=str(raw_asset.relative_to(m29_dir)))],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_image", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object("m292_art", [30, 25, 20, 8], "preserve_raster_text", "preserve_raster", "preserve_in_parent_raster", ocr_ids=["ocr_art"]),
+        ],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_art", "ART", [30, 25, 20, 8])]),
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
+    assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] == b"\x00\x00\x00"
+    assert raw_asset.read_bytes() == raw_asset_bytes
+    assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 0
+    assert result.report["summary"]["fallbackErasedBBoxCount"] == 1
+
+
+def test_m292_editable_text_outside_copied_image_asset_is_not_erased_from_asset(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(245, 245, 245), marks=[([95, 25, 15, 8], (0, 0, 0))]))
+    m29_dir = tmp_path / "m29"
+    raw_asset = write_png(m29_dir / "assets" / "images" / "image_001.png", make_png(80, 50, fill=(220, 220, 220), marks=[([20, 15, 20, 8], (0, 0, 0))]))
+    raw_asset_bytes = raw_asset.read_bytes()
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [10, 10, 80, 50], asset_path=str(raw_asset.relative_to(m29_dir)))],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 2},
+        "sourceObjects": [
+            m292_object("m292_image", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object("m292_text", [95, 25, 15, 8], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_text", "OUT", [95, 25, 15, 8])]),
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    copied_pixels = copied_image_pixels(result.dsl, tmp_path / "out")
+    assert copied_pixels.rows[17][25 * 3 : 25 * 3 + 3] == b"\x00\x00\x00"
+    assert raw_asset.read_bytes() == raw_asset_bytes
+    assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 0
+
+
 def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250, 250), marks: list[tuple[list[int], tuple[int, int, int]]] | None = None) -> PngPixels:
     rows = [bytearray(bytes(fill) * width) for _ in range(height)]
     for bbox, color in marks or []:
@@ -249,6 +354,13 @@ def ocr_block(block_id: str, text: str, bbox: list[int]) -> dict:
 
 def count_children(dsl: dict, role: str) -> int:
     return sum(1 for child in dsl["root"]["children"] if child.get("role") == role)
+
+
+def copied_image_pixels(dsl: dict, output_dir: Path) -> PngPixels:
+    image_node = next(child for child in dsl["root"]["children"] if child.get("role") == "m29_direct_image")
+    asset_id = image_node["source"]["assetId"]
+    asset = next(item for item in dsl["assets"] if item.get("assetId") == asset_id)
+    return decode_png_pixels((output_dir / asset["url"]).read_bytes())
 
 
 def m292_object(

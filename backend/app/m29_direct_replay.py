@@ -11,6 +11,7 @@ from .evidence_grounded_dsl_materialization import (
     bbox_overlap_ratio,
     layout_from_bbox,
     list_dicts,
+    map_page_bbox_to_asset_pixels,
     next_unique_asset_id,
     next_unique_id,
     sample_outer_bbox_ring_rgb,
@@ -24,6 +25,7 @@ from .png_tools import (
     read_png_metadata,
     rgb_to_hex,
 )
+from .region_relation_kernel import classify_region_relation
 from .text_masked_media_audit import text_boxes_from_ocr_document
 from .visual_primitive_graph import bbox_area, bbox_clamp, bbox_in_bounds, bbox_iou, crop_pixels, measure_region
 
@@ -57,6 +59,10 @@ class ReplayNode:
     kind: str
     source_id: str
     bbox: list[int]
+    role: str | None = None
+    asset_id: str | None = None
+    asset_url: str | None = None
+    replay_decision: str | None = None
 
 
 def build_m29_direct_replay_dsl(
@@ -158,6 +164,8 @@ def build_m29_direct_replay_dsl(
             options=options,
         )
 
+    copied_image_asset_text_erased_count = clean_text_from_copied_image_assets(dsl, output_dir, replayed)
+
     fallback_erased_count = 0
     if options.erase_replayed_bboxes_from_fallback:
         fallback_erased_count = erase_replayed_bboxes_from_fallback(dsl, output_dir, pixels, replayed)
@@ -168,6 +176,7 @@ def build_m29_direct_replay_dsl(
         replayed=replayed,
         skipped=skipped,
         fallback_erased_count=fallback_erased_count,
+        copied_image_asset_text_erased_count=copied_image_asset_text_erased_count,
         options=options,
     )
     if isinstance((m292_document or {}).get("summary"), dict):
@@ -292,7 +301,7 @@ def replay_text_nodes(
             },
         }
         children.append(node)
-        replayed.append(ReplayNode(node_id, "text", source_id, bbox))
+        replayed.append(ReplayNode(node_id, "text", source_id, bbox, role="m29_direct_text", replay_decision="ocr_text_replay"))
 
 
 def replay_m29_nodes(
@@ -426,7 +435,7 @@ def replay_m292_objects(
                     },
                 }
             )
-            replayed.append(ReplayNode(node_id, "text", object_id, bbox))
+            replayed.append(ReplayNode(node_id, "text", object_id, bbox, role="m29_direct_text", replay_decision="text_replay"))
         elif decision == "image_replay" and options.enable_image_replay:
             node = first_m29_node(item, m29_by_id)
             append_image_replay_node(
@@ -549,7 +558,18 @@ def append_image_replay_node(
             },
         }
     )
-    replayed.append(ReplayNode(node_id, str(node.get("type") or "image"), source_id, bbox))
+    replayed.append(
+        ReplayNode(
+            node_id,
+            str(node.get("type") or "image"),
+            source_id,
+            bbox,
+            role=role,
+            asset_id=asset_id,
+            asset_url=relative_posix(output_dir, copied_path),
+            replay_decision=f"{node.get('type')}_replay",
+        )
+    )
 
 
 def append_shape_replay_node(
@@ -587,7 +607,64 @@ def append_shape_replay_node(
         },
     }
     children.append(shape_node)
-    replayed.append(ReplayNode(node_id, "shape", source_id, bbox))
+    replayed.append(ReplayNode(node_id, "shape", source_id, bbox, role="m29_direct_shape", replay_decision="simple_shape_replay"))
+
+
+def clean_text_from_copied_image_assets(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    replayed: list[ReplayNode],
+) -> int:
+    text_nodes = [item for item in replayed if item.role == "m29_direct_text" and item.replay_decision in {"ocr_text_replay", "text_replay"}]
+    image_nodes = [item for item in replayed if item.role == "m29_direct_image" and item.asset_url]
+    if not text_nodes or not image_nodes:
+        return 0
+
+    assets = {
+        str(asset.get("assetId")): asset
+        for asset in list_dicts(dsl.get("assets"))
+        if asset.get("assetId") and asset.get("role") == "m29_direct_image"
+    }
+    erased_count = 0
+    for image_node in image_nodes:
+        if image_node.asset_id and image_node.asset_id not in assets:
+            continue
+        image_path = (output_dir / str(image_node.asset_url)).resolve()
+        if not image_path.exists():
+            continue
+        try:
+            pixels = decode_png_pixels(image_path.read_bytes())
+        except Exception:
+            continue
+
+        scale_x = pixels.width / max(1, image_node.bbox[2])
+        scale_y = pixels.height / max(1, image_node.bbox[3])
+        rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        for text_node in text_nodes:
+            relation = classify_region_relation(text_node.bbox, image_node.bbox)
+            if relation.primary_set_relation not in {"contained_by", "near_equal"}:
+                continue
+            local_bbox = map_page_bbox_to_asset_pixels(text_node.bbox, image_node.bbox, pixels.width, pixels.height, scale_x, scale_y)
+            if local_bbox is None:
+                continue
+            try:
+                fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
+            except Exception:
+                fill = [247, 248, 250]
+            x, y, width, height = local_bbox
+            for row_idx in range(y, y + height):
+                row = rows[row_idx]
+                for col_idx in range(x, x + width):
+                    offset = col_idx * 3
+                    row[offset] = fill[0]
+                    row[offset + 1] = fill[1]
+                    row[offset + 2] = fill[2]
+            modified = True
+            erased_count += 1
+        if modified:
+            image_path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows]))
+    return erased_count
 
 
 def erase_replayed_bboxes_from_fallback(
@@ -637,6 +714,7 @@ def build_summary(
     replayed: list[ReplayNode],
     skipped: list[dict[str, Any]],
     fallback_erased_count: int,
+    copied_image_asset_text_erased_count: int,
     options: M29DirectReplayOptions,
 ) -> dict[str, Any]:
     replay_counts: dict[str, int] = {}
@@ -656,6 +734,7 @@ def build_summary(
         "skippedBlockedCount": skipped_counts.get("blocked_primitive", 0),
         "skippedDuplicateCount": skipped_counts.get("duplicate_bbox", 0),
         "fallbackErasedBBoxCount": fallback_erased_count,
+        "copiedImageAssetTextErasedCount": copied_image_asset_text_erased_count,
         "visibleNodeCount": len(replayed),
         "maxTotalVisibleNodesExceeded": len(replayed) >= options.max_total_visible_nodes and any(item.get("reason") == "node_budget_exceeded" for item in skipped),
         "skippedReasons": skipped_counts,
