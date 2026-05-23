@@ -115,7 +115,7 @@ M29.3.0 Region Relation Kernel
 -> M29 default path decision
 ```
 
-M29.3.0 是无状态几何 kernel，先定义两个区域之间的 primary set relation 和 secondary geometry relations。M29.2.1 消费这个 kernel，修 copied raster asset、editable text 和 fallback 之间的重复 ownership。M29.3.1 才把所有 source regions 的关系输出成 graph/report。M29.4 才从关系图里聚合稳定设计簇。UI 语义名只能作为弱 role hint，不能成为 M29 真值源。
+M29.3.0 是无状态几何 kernel，先定义两个区域之间的 primary set relation 和 secondary geometry relations。M29.2.1 消费这个 kernel，修 copied raster asset、editable text 和 fallback 之间的重复 ownership。M29.3.1 才把所有 source regions 的关系输出成 graph/report。M29.4 只消费这个只读关系图，聚合稳定设计簇报表，不做组件化、不改 DSL、不改可见输出。UI 语义名只能作为弱 role hint，不能成为 M29 真值源。
 
 M29.2.1 的 ownership 层先定义 6 类 owner：
 

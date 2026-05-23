@@ -17,6 +17,7 @@ from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
 from .region_relation_graph_report import extract_m2931_region_relation_graph_report
+from .stable_design_cluster import extract_m294_stable_design_cluster_report
 from .source_ui_physical_graph import extract_source_ui_physical_graph
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
@@ -51,6 +52,7 @@ class M30PipelinePaths:
     m29: Path
     m29_2: Path
     m29_3: Path
+    m29_4: Path
     m29_direct: Path
     m291: Path
     m2902: Path
@@ -146,7 +148,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     )
 
     update_task(task_id, "m29_3_relation_graph_report", 22, "Building M29.3.1 source relation graph report.")
-    run_optional_stage(
+    m2931_result = run_optional_stage(
         paths,
         timings,
         "m29_3_relation_graph_report",
@@ -158,7 +160,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         task_id=task_id,
     )
 
-    update_task(task_id, "m29_direct_replay", 22, "Building M29 direct replay variant.")
+    update_task(task_id, "m29_direct_replay", 23, "Building M29 direct replay variant.")
     m29_direct_result = run_optional_stage(paths, timings, "m29_direct_replay", lambda: build_m29_direct_replay_dsl(
         source_png=png_data,
         source_image_path=str(upload_path),
@@ -177,8 +179,22 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             task_id=task_id,
         )
 
+    if m2931_result is not None:
+        update_task(task_id, "m29_4_stable_design_cluster", 24, "Building M29.4 stable design cluster report.")
+        run_optional_stage(
+            paths,
+            timings,
+            "m29_4_stable_design_cluster",
+            lambda: extract_m294_stable_design_cluster_report(
+                task_id=task_id,
+                m2931_report=m2931_result.report,
+                output_dir=paths.m29_4,
+            ),
+            task_id=task_id,
+        )
+
     if state.settings.m31_upload_diagnostics_enabled:
-        update_task(task_id, "m31_reconstruction", 24, "Building M31 reconstruction diagnostics.")
+        update_task(task_id, "m31_reconstruction", 25, "Building M31 reconstruction diagnostics.")
         run_m31_diagnostic_stage(
             task_id=task_id,
             paths=paths,
@@ -677,6 +693,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m29=root / "m29",
         m29_2=root / "m29_2",
         m29_3=root / "m29_3",
+        m29_4=root / "m29_4",
         m29_direct=root / "m29_direct",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",

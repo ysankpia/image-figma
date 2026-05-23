@@ -14,6 +14,7 @@
 - 当前 M29.2.1 pixel ownership consistency 计划：[plans/active/029-2-1-pixel-ownership-consistency.md](plans/active/029-2-1-pixel-ownership-consistency.md)
 - 当前 M29.3.0 region relation kernel 计划：[plans/active/029-3-0-region-relation-kernel.md](plans/active/029-3-0-region-relation-kernel.md)
 - 当前 M29.3.1 region relation graph report 计划：[plans/active/029-3-1-region-relation-graph-report.md](plans/active/029-3-1-region-relation-graph-report.md)
+- 当前 M29.4 stable design cluster 计划：[plans/active/029-4-stable-design-cluster.md](plans/active/029-4-stable-design-cluster.md)
 - 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
 - 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
 - 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)
