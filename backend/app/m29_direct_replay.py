@@ -1042,20 +1042,17 @@ def sampled_shape_fill(pixels: PngPixels, bbox: list[int]) -> str:
 
 def build_shape_replay_style(pixels: PngPixels, bbox: list[int], source_node: dict[str, Any] | None, m292_object: dict[str, Any] | None = None) -> dict[str, Any]:
     style: dict[str, Any] = {"fill": sampled_shape_fill(pixels, bbox)}
-    source_style = source_node.get("style") if isinstance(source_node, dict) and isinstance(source_node.get("style"), dict) else {}
-    raw_radius = numeric_radius(source_style.get("radius"))
-    source_subtype = str(source_node.get("subtype") or "") if isinstance(source_node, dict) else ""
     style_source = "sampled_fill_only"
     radius: int | None = None
+    geometry = source_node.get("geometry") if isinstance(source_node, dict) and isinstance(source_node.get("geometry"), dict) else {}
+    geometry_kind = str(geometry.get("kind") or "")
+    geometry_confidence = str(geometry.get("confidence") or "")
+    geometry_params = geometry.get("params") if isinstance(geometry.get("params"), dict) else {}
+    geometry_radius = numeric_radius(geometry_params.get("radius"))
 
-    if source_subtype == "low_contrast_support":
-        support = clamp_radius(round(min(bbox[2], bbox[3]) / 2), bbox)
-        radius = max(raw_radius or 0, support)
-        radius = clamp_radius(radius, bbox)
-        style_source = "low_contrast_support_estimate"
-    elif raw_radius is not None:
-        radius = clamp_radius(raw_radius, bbox)
-        style_source = "raw_m29_shape_style"
+    if geometry_kind in {"rounded_rect", "pill", "circle", "ellipse"} and geometry_confidence != "low" and geometry_radius is not None:
+        radius = clamp_radius(geometry_radius, bbox)
+        style_source = "shape_geometry_fit"
 
     if radius is not None:
         style["radius"] = radius

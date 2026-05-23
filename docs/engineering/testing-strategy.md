@@ -104,7 +104,7 @@ Required backend coverage:
 - unfinished task returns `DSL_NOT_READY`.
 - missing M29 direct variant returns `M29_DIRECT_DSL_NOT_FOUND`.
 - M29.5 replay plan summary is exposed through `GET /api/tasks/{taskId}/m29-direct-dsl`.
-- M29 Direct shape replay preserves raw M29 shape `style.radius` evidence on the left compare variant.
+- M29 Direct shape replay preserves radius only when raw M29 `geometry` fit proves a rounded/pill/circle/ellipse shape; bbox-derived half-height radius is not accepted as style truth.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.
@@ -189,7 +189,7 @@ Required coverage:
 - M29.2 merges adjacent symbol fragments into one `raster_icon`.
 - M29.2 only replays stable UI shapes and keeps complex blur/shadow diagnostic-only.
 - M29 low-contrast support regions are detected from physical evidence on light and dark themes, without SearchBar-specific rules.
-- M29.2 consumes `low_contrast_support` as replay-safe shape geometry.
+- M29.2 consumes `low_contrast_support` as replay-safe shape geometry only after raw M29 records geometry fit evidence; rect/unknown support must not invent radius.
 - M29.2 media regions prevent internal fragments from becoming separate replay layers.
 - OCR text suppresses high-overlap M29 raster primitive.
 - M29 direct consumes M29.2 `replayDecision` when the document is available.

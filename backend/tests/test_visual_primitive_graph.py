@@ -140,8 +140,9 @@ def test_low_confidence_image_stays_unknown_without_protection(tmp_path: Path) -
 
 def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Path) -> None:
     canvas = make_canvas(260, 120, (248, 248, 248))
-    draw_rect(canvas, 30, 28, 190, 44, (238, 238, 238))
+    draw_rounded_rect(canvas, 30, 28, 190, 44, 22, (238, 238, 238))
     draw_circle(canvas, 48, 50, 5, (120, 120, 120))
+    draw_circle(canvas, 204, 50, 5, (120, 120, 120))
     draw_rect(canvas, 68, 44, 64, 12, (70, 70, 70))
 
     document = extract_m29_visual_primitive_graph(
@@ -154,10 +155,35 @@ def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Pa
 
     support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
     assert support
-    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]) and node.bbox[2] <= 160)
-    assert support_node.style["radius"] == min(support_node.bbox[2], support_node.bbox[3]) // 2
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]))
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"rounded_rect", "pill"}
+    assert support_node.geometry["confidence"] in {"high", "medium"}
+    assert support_node.style["radius"] == support_node.geometry["params"]["radius"]
     assert any("contains_text_evidence" in node.reasons for node in support)
     assert all(is_protective_shape(node) for node in support)
+
+
+def test_low_contrast_support_rect_geometry_does_not_emit_radius(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rect(canvas, 30, 0, 190, 44, (238, 238, 238))
+    draw_circle(canvas, 48, 22, 5, (120, 120, 120))
+    draw_rect(canvas, 68, 16, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 14, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 14, 64, 18]))
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"rect", "unknown"}
+    assert "radius" not in (support_node.style or {})
 
 
 def test_low_contrast_support_region_is_detected_on_dark_theme(tmp_path: Path) -> None:
@@ -178,6 +204,31 @@ def test_low_contrast_support_region_is_detected_on_dark_theme(tmp_path: Path) -
     support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
     assert support
     assert any(bbox_contains(node.bbox, [68, 42, 64, 18]) and node.metrics.brightness < 80 for node in support)
+
+
+def test_connected_component_geometry_distinguishes_circle_and_ellipse(tmp_path: Path) -> None:
+    circle_canvas = make_canvas(80, 80, (255, 255, 255))
+    draw_circle(circle_canvas, 30, 30, 12, (30, 30, 30))
+    circle_doc = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(circle_canvas),
+        source_image="circle.png",
+        output_dir=tmp_path / "circle",
+    )
+    circle_shape = next(node for node in circle_doc.nodes if node.type == "shape" and node.subtype in {"badge_background", "small_ellipse"})
+
+    ellipse_canvas = make_canvas(120, 80, (255, 255, 255))
+    draw_ellipse(ellipse_canvas, 56, 34, 24, 12, (30, 30, 30))
+    ellipse_doc = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(ellipse_canvas),
+        source_image="ellipse.png",
+        output_dir=tmp_path / "ellipse",
+    )
+    ellipse_shape = next(node for node in ellipse_doc.nodes if node.type == "shape" and node.subtype in {"badge_background", "small_ellipse"})
+
+    assert circle_shape.geometry is not None
+    assert circle_shape.geometry["kind"] == "circle"
+    assert ellipse_shape.geometry is not None
+    assert ellipse_shape.geometry["kind"] == "ellipse"
 
 
 def test_low_contrast_support_region_is_not_for_plain_page_background(tmp_path: Path) -> None:
@@ -404,6 +455,31 @@ def draw_circle(canvas: PngPixels, cx: int, cy: int, radius: int, color: tuple[i
     for row_index in range(max(0, cy - radius), min(canvas.height, cy + radius + 1)):
         for column in range(max(0, cx - radius), min(canvas.width, cx + radius + 1)):
             if (column - cx) * (column - cx) + (row_index - cy) * (row_index - cy) <= radius * radius:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
+
+
+def draw_ellipse(canvas: PngPixels, cx: int, cy: int, rx: int, ry: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    for row_index in range(max(0, cy - ry), min(canvas.height, cy + ry + 1)):
+        for column in range(max(0, cx - rx), min(canvas.width, cx + rx + 1)):
+            if ((column - cx) * (column - cx)) / max(1, rx * rx) + ((row_index - cy) * (row_index - cy)) / max(1, ry * ry) <= 1:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
+
+
+def draw_rounded_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, radius: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    radius = max(0, min(radius, min(width, height) // 2))
+    for row_index in range(y, min(canvas.height, y + height)):
+        for column in range(x, min(canvas.width, x + width)):
+            local_x = column - x
+            local_y = row_index - y
+            cx = radius if local_x < radius else width - radius - 1 if local_x >= width - radius else local_x
+            cy = radius if local_y < radius else height - radius - 1 if local_y >= height - radius else local_y
+            if (local_x - cx) * (local_x - cx) + (local_y - cy) * (local_y - cy) <= radius * radius:
                 rows[row_index][column * 3 : column * 3 + 3] = color_bytes
     canvas.rows[:] = [bytes(row) for row in rows]
 
