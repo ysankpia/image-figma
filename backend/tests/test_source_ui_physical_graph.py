@@ -161,6 +161,37 @@ def test_small_textured_circle_shape_replays_as_raster_icon_not_shape(tmp_path: 
     assert not [item for item in result["sourceObjects"] if item["pixelOwner"] == "shape_geometry"]
 
 
+def test_geometry_circle_fit_does_not_override_complex_foreground_ownership(tmp_path: Path) -> None:
+    source = make_png(120, 90, fill=(248, 248, 248), marks=[([24, 24, 36, 36], (120, 80, 40))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "shape_circle_fit",
+                "shape",
+                [24, 24, 36, 36],
+                subtype="small_ellipse",
+                metrics={"colorCount": 96, "textureScore": 0.26, "edgeScore": 0.34, "fillRatio": 0.76},
+                geometry={"kind": "circle", "confidence": "high", "params": {"radius": 18}, "metrics": {"fitError": 0.02}, "evidence": ["mask_fit"]},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    icon = only_object(result, "raster_icon")
+    assert icon["pixelOwner"] == "raster_icon"
+    assert icon["replayDecision"] == "icon_replay"
+    assert icon["sourceEvidence"]["m29NodeIds"] == ["shape_circle_fit"]
+    assert "small_textured_foreground_shape" in icon["reasons"]
+    assert not [item for item in result["sourceObjects"] if item["pixelOwner"] == "shape_geometry"]
+
+
 def test_low_texture_badge_shape_still_replays_as_shape(tmp_path: Path) -> None:
     source = make_png(120, 90, fill=(248, 248, 248), marks=[([24, 24, 36, 20], (235, 235, 235))])
     m29 = m29_document(
@@ -350,8 +381,9 @@ def m29_node(
     *,
     subtype: str | None = None,
     metrics: dict | None = None,
+    geometry: dict | None = None,
 ) -> dict:
-    return {
+    node = {
         "id": node_id,
         "type": node_type,
         "subtype": subtype or ("separator" if node_type == "shape" else "icon_candidate"),
@@ -371,6 +403,9 @@ def m29_node(
             "meanRgb": (metrics or {}).get("meanRgb", [0, 0, 0]),
         },
     }
+    if geometry is not None:
+        node["geometry"] = geometry
+    return node
 
 
 def ocr_document(blocks: list[dict]) -> dict:

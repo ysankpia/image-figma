@@ -18,6 +18,7 @@
 - 当前 M29.5 replay engine v2 quality plan 计划：[plans/active/029-5-replay-engine-v2-quality-plan.md](plans/active/029-5-replay-engine-v2-quality-plan.md)
 - 当前 M29 实验链路数学合同计划：[plans/active/029-experimental-mathematical-contract.md](plans/active/029-experimental-mathematical-contract.md)
 - 当前 M29 数学推演入门计划：[plans/active/029-math-from-first-principles.md](plans/active/029-math-from-first-principles.md)
+- 当前 M29 contract regression matrix 计划：[plans/active/029-contract-regression-matrix.md](plans/active/029-contract-regression-matrix.md)
 - 当前 M29 direct source support and layer order fix 计划：[plans/active/029-direct-source-support-and-layer-order-fix.md](plans/active/029-direct-source-support-and-layer-order-fix.md)
 - 当前 M29 direct shape physical style preservation 计划：[plans/active/029-direct-shape-physical-style-preservation.md](plans/active/029-direct-shape-physical-style-preservation.md)
 - 当前 M29 shape geometry fit 计划：[plans/active/029-shape-geometry-fit-before-radius-replay.md](plans/active/029-shape-geometry-fit-before-radius-replay.md)
@@ -102,6 +103,7 @@
 
 - [engineering/coding-standards.md](engineering/coding-standards.md)
 - [engineering/testing-strategy.md](engineering/testing-strategy.md)
+- [engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - [engineering/definition-of-done.md](engineering/definition-of-done.md)
 - [engineering/dependency-policy.md](engineering/dependency-policy.md)
 - [engineering/browser-validation.md](engineering/browser-validation.md)

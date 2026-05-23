@@ -175,6 +175,8 @@ It must cover low-overlap accepted image materialization, high-overlap/risk/miss
 
 ## M29 Direct Replay Compare Mode
 
+M29 direct replay contract coverage is tracked in [m29-contract-regression-matrix.md](m29-contract-regression-matrix.md). New M29 direct, ownership, relation, cluster, replay plan, or cleanup changes must either map to an existing matrix case or add a new case before implementation.
+
 Focused command:
 
 ```bash

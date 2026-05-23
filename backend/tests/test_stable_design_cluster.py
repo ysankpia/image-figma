@@ -101,6 +101,32 @@ def test_m294_repeated_local_subgraph_scores_repeatability(tmp_path: Path) -> No
     assert cluster["stabilityScore"] >= 0.55
 
 
+def test_m294_media_text_pair_remains_background_anchor_not_media_text_component(tmp_path: Path) -> None:
+    result = extract_m294_stable_design_cluster_report(
+        task_id="task_media_text",
+        m2931_report=m2931_report(
+            [
+                m2931_node("media", [0, 0, 100, 80], pixel_owner="preserve_raster", replay_decision="image_replay", visual_kind="media_region"),
+                m2931_node("text", [10, 10, 40, 14], pixel_owner="editable_text", replay_decision="text_replay", visual_kind="editable_ui_text"),
+            ],
+            [
+                m2931_edge("media", "text", "overlaps", ["near"]),
+            ],
+        ),
+        output_dir=tmp_path / "m29_4",
+    )
+
+    cluster = result.report["clusters"][0]
+    assert cluster["clusterPattern"] == "containment_anchor_subgraph"
+    assert cluster["roleHint"] == "background_anchor_like"
+    assert cluster["roleHint"] != "media_text_group_like"
+    assert result.report["summary"]["dslChanged"] is False
+    assert result.report["summary"]["assetChanged"] is False
+    assert result.report["summary"]["createdVisibleNodeCount"] == 0
+    assert result.report["summary"]["componentChanged"] is False
+    assert "media_text_group_like" not in json.dumps(result.report)
+
+
 def test_m294_invalid_inputs_are_skipped_and_report_stays_deterministic(tmp_path: Path) -> None:
     m2931 = m2931_report(
         [
