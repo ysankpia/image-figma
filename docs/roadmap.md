@@ -214,23 +214,29 @@ component = template + slots + instances + overrides
 
 3. M29.3.1 v1 relation graph 范围
 
-   0070 已定义基础关系：
+   M29.3.1 v1 已收口为只读 pairwise relation graph report。它消费 M29.2 `sourceObjects`，使用 M29.3.0 `classify_region_relation(...)` 输出全量 pairwise edges，并写入：
+
+   ```text
+   storage/m30_1_uploads/{taskId}/m29_3/region_relation_graph_report.json
+   ```
+
+   v1 输出以下关系：
 
    ```text
    near_equal
    contains
    contained_by
    overlaps
-   near
    disjoint
-   ```
-
-   后续需要决定 v1 是否加入：
-
-   ```text
+   near
    aligned
    above / below / left_of / right_of
    same_size
+   ```
+
+   v1 不输出聚合关系，也不推导组件或 role hint。以下关系留到 M29.4 或之后，必须建立在稳定 relation graph 证据之上：
+
+   ```text
    same_gap
    repeated
    similar_color

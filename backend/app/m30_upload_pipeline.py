@@ -16,6 +16,7 @@ from .m29_direct_replay import build_m29_direct_replay_dsl
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
 from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
+from .region_relation_graph_report import extract_m2931_region_relation_graph_report
 from .source_ui_physical_graph import extract_source_ui_physical_graph
 from .state import state
 from .symbol_fragment_grouping import extract_m291_symbol_fragment_grouping
@@ -49,6 +50,7 @@ class M30PipelinePaths:
     ocr: Path
     m29: Path
     m29_2: Path
+    m29_3: Path
     m29_direct: Path
     m291: Path
     m2902: Path
@@ -139,6 +141,19 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             m29_document=m29_document.to_dict(),
             ocr_document=ocr_document.to_dict(),
             output_dir=paths.m29_2,
+        ),
+        task_id=task_id,
+    )
+
+    update_task(task_id, "m29_3_relation_graph_report", 22, "Building M29.3.1 source relation graph report.")
+    run_optional_stage(
+        paths,
+        timings,
+        "m29_3_relation_graph_report",
+        lambda: extract_m2931_region_relation_graph_report(
+            task_id=task_id,
+            m292_document=m292_document or {"sourceObjects": []},
+            output_dir=paths.m29_3,
         ),
         task_id=task_id,
     )
@@ -661,6 +676,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         ocr=root / "ocr",
         m29=root / "m29",
         m29_2=root / "m29_2",
+        m29_3=root / "m29_3",
         m29_direct=root / "m29_direct",
         m291=root / "m29_1",
         m2902=root / "m29_0_2",
