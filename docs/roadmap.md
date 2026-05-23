@@ -10,10 +10,10 @@
 当前路线不是“先组件化”，也不是“继续给每张样图打补丁”。正确主线是：
 
 ```text
-像素证据
+像素拓扑与归属
 -> 可见图层
--> 安全层级
--> 可信 unit
+-> 通用关系图
+-> 稳定设计簇
 -> layout semantics
 -> component/instance
 ```
@@ -22,9 +22,26 @@
 
 ```text
 PNG 像素是输入真相源。
-M29/M30/M31/M37/M38/M39 产物是证据链和中间结构。
+M29 的第一职责是把扁平 PNG 拆成像素集合、集合关系和唯一 owner。
+M30/M31/M37/M38/M39 产物是证据链和中间结构。
 模型、Figma MCP、UIC/Codia schema 都只能提供候选或参考，不能直接成为内部真值源。
 ```
+
+M29 的根不是 UI component detector。它不应该先输出 SearchBar、ProductCard、BottomNav 或 Banner。M29 的根是 pixel topology graph：
+
+```text
+node = bbox / mask / metrics / source evidence
+edge = disjoint / overlaps / contains / contained_by / near_equal / near / aligned / repeated / protects / conflicts
+owner = editable_text / raster_media / raster_icon / shape_geometry / fallback_only / diagnostic_only
+```
+
+硬不变量：
+
+```text
+同一块 source foreground evidence pixel / replay foreground pixel 只能有一个 replay owner。
+```
+
+这条不变量优先级高于所有下游 grouping、unit promotion、layout semantics 和 componentization。它不禁止 Figma layer bbox 重叠；背景 shape 可以和 child text/image/icon 在空间上重叠，因为它们拥有不同 source evidence。
 
 ## Active Branch Experiment
 
@@ -86,6 +103,163 @@ M29.2 的第一性原则：
 - UI 背景/分割线才作为 shape geometry replay。
 - fallback 只擦除已安全 replay 的 bbox。
 - 不接模型、不做单点 hack、不替换主线 `/dsl`。
+
+M29.2 之后的直接后续路线：
+
+```text
+M29.3.0 Region Relation Kernel
+-> M29.2.1 Pixel Ownership Consistency
+-> M29.3.1 Region Relation Graph Report
+-> M29.4 Stable Design Cluster
+-> M29.5 Replay Engine V2
+-> M29 default path decision
+```
+
+M29.3.0 是无状态几何 kernel，先定义两个区域之间的 primary set relation 和 secondary geometry relations。M29.2.1 消费这个 kernel，修 copied raster asset、editable text 和 fallback 之间的重复 ownership。M29.3.1 才把所有 source regions 的关系输出成 graph/report。M29.4 才从关系图里聚合稳定设计簇。UI 语义名只能作为弱 role hint，不能成为 M29 真值源。
+
+M29.2.1 的 ownership 层先定义 6 类 owner：
+
+```text
+editable_text
+raster_media
+raster_icon
+shape_geometry
+fallback_only
+diagnostic_only
+```
+
+owner 不使用全局静态优先级。普通 UI text 可以赢过 copied raster asset；media 内部艺术字/海报字必须留在 raster_media。fallback 不是竞争 owner，只是安全层；cleanup 只能跟随 replay-safe ownership。
+
+editable_text ownership 还必须满足 cleanup feasibility。如果文字位于高纹理/渐变 media 内部，而当前只能做 solid-fill cleanup 并会留下明显补丁，则第一版必须 preserve_in_parent_raster。
+
+M29.3.0 的第一块不是 cluster，而是定义两个区域之间的基础关系 kernel：
+
+```text
+relation(A, B) -> {
+  primarySetRelation,
+  secondaryGeometryRelations
+}
+```
+
+其中 `A` 和 `B` 都是 `[x, y, width, height]`。`primarySetRelation` 负责高中数学里的集合关系：
+
+```text
+near_equal
+contains
+contained_by
+overlaps
+disjoint
+```
+
+`secondaryGeometryRelations` 负责空间和方向关系：
+
+```text
+near
+left_of / right_of / above / below
+aligned_left / aligned_center_x / aligned_right
+aligned_top / aligned_center_y / aligned_bottom
+same_width / same_height / same_size
+```
+
+第一版只用 bbox 几何，先固定面积、交集、包含比例、近似重合、方向/对齐和判断顺序。`near_threshold` 必须 relative、thin-aware、capped：不能被 1px 细线短边拖垮，也不能因为长分割线产生无限吸附距离。这个 kernel 稳定之后，才能往 ownership、relation graph、cluster 和 component candidate 走。
+
+组件化不是最后的像素去重。组件化必须建立在 M29.3/M29.4 的集合关系图和稳定设计簇之上：
+
+```text
+primitive = pixel set
+relation = set relation + geometry relation + appearance relation
+cluster = local stable relation subgraph
+component candidate = repeated near-isomorphic cluster graph
+component = template + slots + instances + overrides
+```
+
+因此 component/instance 阶段只能在 slot matching 可解释、实例差异可作为 override 保留之后执行。相同像素、相同文本、相同 UI 名字都不能单独构成组件真值源。
+
+组件候选还必须保留方向和 layout flow。横向 `icon left_of text` 和纵向 `icon above text` 不能因为 child type 相同而被合并成同一个 component template。
+
+### Deferred Contracts After M29.2.1/M29.3/M29.4
+
+以下问题先进入路线图，不在当前讨论阶段展开。等 M29.3.0 relation kernel、M29.2.1 pixel ownership consistency、M29.3.1 generic relation graph 和 M29.4 stable design cluster 这些块完成并有 Figma Compare 证据后，再逐项打开。
+
+1. Source region 最小数据结构
+
+   需要定义每个 region 的必备字段，例如：
+
+   ```text
+   id
+   bbox
+   sourceKind
+   sourceIds
+   metrics
+   text?
+   assetPath?
+   confidence
+   relations?
+   owner?
+   replayDecision?
+   ```
+
+2. M29.2.1 第一版执行边界
+
+   需要决定第一版是否只修：
+
+   ```text
+   text inside copied media asset cleanup
+   fallback follows replay-safe cleanup
+   preserve_raster_text 不擦
+   source PNG / raw M29 asset 不改
+   ```
+
+   还是同步处理 icon fragment ownership。默认倾向先窄后宽。
+
+3. M29.3.1 v1 relation graph 范围
+
+   0070 已定义基础关系：
+
+   ```text
+   near_equal
+   contains
+   contained_by
+   overlaps
+   near
+   disjoint
+   ```
+
+   后续需要决定 v1 是否加入：
+
+   ```text
+   aligned
+   above / below / left_of / right_of
+   same_size
+   same_gap
+   repeated
+   similar_color
+   ```
+
+4. Source physical graph semantic leakage cleanup
+
+   当前实现中如果 source-level physical graph 输出 `card_background`、`control_background` 这类 UI semantic visualKind，后续 M29.3.0/M29.2.1 实现阶段需要迁移为物理命名，例如：
+
+   ```text
+   large_container_geometry
+   small_container_geometry
+   thin_line_geometry
+   ```
+
+   这属于 implementation cleanup，不在当前文档审定阶段修改代码。
+
+5. M29 Direct 默认 draft path 切换标准
+
+   等 M29.2.1/M29.3/M29.4 有结果后，再定义 M29 Direct 从 compare 左侧实验变成默认 draft path 的硬指标，例如：
+
+   ```text
+   普通文字可编辑率
+   明显重影数量
+   visible node 数量
+   asset 加载失败数
+   fallback cleanup 错误数
+   Figma Compare 人工通过样本数
+   ```
 
 ## Direction Change
 
