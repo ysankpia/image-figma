@@ -734,7 +734,7 @@ def detect_low_contrast_support_regions(
                 layer_hint="container",
                 reasons=reasons,
                 metrics=metrics,
-                style={"fill": rgb_to_hex(tuple(fill)), "radius": rough_radius(candidate)},
+                style={"fill": rgb_to_hex(tuple(fill)), "radius": support_radius(candidate)},
             )
         )
     return candidates
@@ -1561,6 +1561,10 @@ def pad_bbox(bbox: list[int], padding: int) -> list[int]:
 
 def rough_radius(bbox: list[int]) -> int:
     return max(0, min(bbox[2], bbox[3]) // 8)
+
+
+def support_radius(bbox: list[int]) -> int:
+    return max(0, min(bbox[2], bbox[3]) // 2)
 
 
 def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> int:

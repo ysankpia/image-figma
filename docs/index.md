@@ -17,6 +17,7 @@
 - 当前 M29.4 stable design cluster 计划：[plans/active/029-4-stable-design-cluster.md](plans/active/029-4-stable-design-cluster.md)
 - 当前 M29.5 replay engine v2 quality plan 计划：[plans/active/029-5-replay-engine-v2-quality-plan.md](plans/active/029-5-replay-engine-v2-quality-plan.md)
 - 当前 M29 direct source support and layer order fix 计划：[plans/active/029-direct-source-support-and-layer-order-fix.md](plans/active/029-direct-source-support-and-layer-order-fix.md)
+- 当前 M29 direct shape physical style preservation 计划：[plans/active/029-direct-shape-physical-style-preservation.md](plans/active/029-direct-shape-physical-style-preservation.md)
 - 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
 - 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
 - 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)

@@ -39,6 +39,7 @@ receive multipart PNG at /api/upload-m30-preview
 -> M29.4 stable design cluster report
 -> M29.5 replay quality plan
 -> M29 direct replay experiment variant
+   (shape replay preserves raw M29 physical radius evidence on the direct variant only)
 -> copy M29 direct assets to assets/{taskId}/m29_direct and rewrite URLs
 -> M31 reconstruction diagnostics
 -> M29.1 symbol fragment grouping

@@ -411,6 +411,99 @@ def test_m295_plan_without_asset_cleanup_target_does_not_erase_copied_image(tmp_
     assert result.report["summary"]["copiedImageAssetTextErasedCount"] == 0
 
 
+def test_m295_shape_replay_preserves_raw_m29_radius(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(245, 245, 245), marks=[([20, 20, 90, 32], (235, 235, 235))]))
+    m29 = m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 90, 32], style={"fill": "#EEEEEE", "radius": 7})])
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [m292_object("m292_shape", [20, 20, 90, 32], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])],
+    }
+    plan = m295_plan([m295_item("plan_shape", "m292_shape", [20, 20, 90, 32], "shape_replay", "m29_direct_shape")])
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_shape")
+    assert shape["style"]["radius"] == 7
+    assert shape["meta"]["m29DirectShapeStyleSource"] == "raw_m29_shape_style"
+    assert shape["meta"]["m29DirectShapeRadius"] == 7
+
+
+def test_m295_low_contrast_support_shape_uses_half_height_radius(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(180, 100, fill=(248, 248, 248), marks=[([30, 30, 120, 40], (238, 238, 238))]))
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("shape_support_001", "shape", [30, 30, 120, 40], subtype="low_contrast_support", style={"fill": "#EEEEEE", "radius": 5})],
+    )
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [m292_object("m292_support", [30, 30, 120, 40], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_support_001"])],
+    }
+    plan = m295_plan([m295_item("plan_support", "m292_support", [30, 30, 120, 40], "shape_replay", "m29_direct_shape")])
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_shape")
+    assert shape["style"]["radius"] == 20
+    assert shape["meta"]["m29DirectShapeStyleSource"] == "low_contrast_support_estimate"
+    assert shape["meta"]["m29DirectShapeRadius"] == 20
+
+
+def test_m292_shape_replay_preserves_radius_without_m295_plan(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(245, 245, 245), marks=[([20, 20, 90, 32], (235, 235, 235))]))
+    m29 = m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 90, 32], style={"fill": "#EEEEEE", "radius": 6})])
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [m292_object("m292_shape", [20, 20, 90, 32], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_shape")
+    assert shape["style"]["radius"] == 6
+    assert shape["meta"]["m29DirectShapeStyleSource"] == "raw_m29_shape_style"
+
+
+def test_shape_replay_without_raw_radius_does_not_invent_radius(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(245, 245, 245), marks=[([20, 20, 90, 32], (235, 235, 235))]))
+    m29 = m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 90, 32])])
+    m292 = {
+        "summary": {"sourceObjectCount": 1},
+        "sourceObjects": [m292_object("m292_shape", [20, 20, 90, 32], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])],
+    }
+
+    result = build_m29_direct_replay_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29,
+        m292_document=m292,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_direct_shape")
+    assert "radius" not in shape["style"]
+    assert shape["meta"]["m29DirectShapeStyleSource"] == "sampled_fill_only"
+
+
 def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250, 250), marks: list[tuple[list[int], tuple[int, int, int]]] | None = None) -> PngPixels:
     rows = [bytearray(bytes(fill) * width) for _ in range(height)]
     for bbox, color in marks or []:
@@ -445,11 +538,11 @@ def m29_document(tmp_path: Path, *, nodes: list[dict], blocked: list[dict] | Non
     }
 
 
-def m29_node(node_id: str, node_type: str, bbox: list[int], *, asset_path: str | None = None, style: dict | None = None) -> dict:
+def m29_node(node_id: str, node_type: str, bbox: list[int], *, asset_path: str | None = None, style: dict | None = None, subtype: str | None = None) -> dict:
     data = {
         "id": node_id,
         "type": node_type,
-        "subtype": "separator" if node_type == "shape" else "icon_candidate",
+        "subtype": subtype or ("separator" if node_type == "shape" else "icon_candidate"),
         "bbox": bbox,
         "confidence": 0.9,
         "source": f"{node_type}_detector",

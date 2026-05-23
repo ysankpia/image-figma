@@ -504,13 +504,14 @@ def replay_m292_objects(
                 replay_source_id=object_id,
             )
         elif decision == "shape_replay" and options.enable_simple_shape_replay:
+            source_node = first_m29_node(item, m29_by_id)
             append_shape_replay_node(
                 children,
                 existing_ids,
                 {
                     "id": object_id,
                     "type": "shape",
-                    "style": {"fill": sampled_shape_fill(pixels, bbox)},
+                    "style": build_shape_replay_style(pixels, bbox, source_node, item),
                     "subtype": visual_kind,
                 },
                 bbox,
@@ -637,13 +638,14 @@ def replay_m295_plan_items(
                 replay_source_id=source_object_id,
             )
         elif action == "shape_replay" and options.enable_simple_shape_replay:
+            source_node = first_m29_node(item, m29_by_id)
             append_shape_replay_node(
                 children,
                 existing_ids,
                 {
                     "id": source_object_id,
                     "type": "shape",
-                    "style": {"fill": sampled_shape_fill(pixels, bbox)},
+                    "style": build_shape_replay_style(pixels, bbox, source_node, item),
                     "subtype": str(item.get("visualKind") or ""),
                 },
                 bbox,
@@ -749,6 +751,7 @@ def append_shape_replay_node(
 ) -> None:
     source_id = str(node.get("id") or "unknown_shape")
     style = node.get("style") if isinstance(node.get("style"), dict) else {}
+    style_meta = style.get("meta") if isinstance(style.get("meta"), dict) else {}
     node_id = next_unique_id(existing_ids, f"m29_direct_shape_{len([item for item in replayed if item.kind == 'shape']) + 1:04d}")
     shape_node = {
         "id": node_id,
@@ -769,6 +772,7 @@ def append_shape_replay_node(
             "sourceBBox": bbox,
             "replayDecision": "simple_shape_replay",
             "replayReasons": ["simple_shape"],
+            **style_meta,
             **(extra_meta or {}),
         },
     }
@@ -935,7 +939,7 @@ def is_simple_shape(node: dict[str, Any]) -> bool:
     reasons = {str(reason) for reason in node.get("reasons", [])}
     color_count = int(metrics.get("colorCount") or 0)
     texture_score = float(metrics.get("textureScore") or 0)
-    return subtype in {"separator", "small_rect", "card_background", "container_background", "small_ellipse", "badge_background"} or (
+    return subtype in {"separator", "small_rect", "card_background", "container_background", "small_ellipse", "badge_background", "low_contrast_support"} or (
         "solid_fill" in reasons and color_count <= 12 and texture_score <= 0.14
     )
 
@@ -1034,6 +1038,44 @@ def first_ocr_box(item: dict[str, Any], by_id: dict[str, Any]) -> Any | None:
 def sampled_shape_fill(pixels: PngPixels, bbox: list[int]) -> str:
     metrics = measure_region(pixels, bbox)
     return rgb_to_hex(list(metrics.mean_rgb))
+
+
+def build_shape_replay_style(pixels: PngPixels, bbox: list[int], source_node: dict[str, Any] | None, m292_object: dict[str, Any] | None = None) -> dict[str, Any]:
+    style: dict[str, Any] = {"fill": sampled_shape_fill(pixels, bbox)}
+    source_style = source_node.get("style") if isinstance(source_node, dict) and isinstance(source_node.get("style"), dict) else {}
+    raw_radius = numeric_radius(source_style.get("radius"))
+    source_subtype = str(source_node.get("subtype") or "") if isinstance(source_node, dict) else ""
+    style_source = "sampled_fill_only"
+    radius: int | None = None
+
+    if source_subtype == "low_contrast_support":
+        support = clamp_radius(round(min(bbox[2], bbox[3]) / 2), bbox)
+        radius = max(raw_radius or 0, support)
+        radius = clamp_radius(radius, bbox)
+        style_source = "low_contrast_support_estimate"
+    elif raw_radius is not None:
+        radius = clamp_radius(raw_radius, bbox)
+        style_source = "raw_m29_shape_style"
+
+    if radius is not None:
+        style["radius"] = radius
+    style["meta"] = {
+        "m29DirectShapeStyleSource": style_source,
+        **({"m29DirectShapeRadius": radius} if radius is not None else {}),
+    }
+    return style
+
+
+def numeric_radius(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < 0:
+        return None
+    return round(value)
+
+
+def clamp_radius(radius: int, bbox: list[int]) -> int:
+    return max(0, min(radius, min(bbox[2], bbox[3]) // 2))
 
 
 def resolve_m29_dir(m29_document: dict[str, Any]) -> Path | None:

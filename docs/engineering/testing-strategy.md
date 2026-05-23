@@ -104,6 +104,7 @@ Required backend coverage:
 - unfinished task returns `DSL_NOT_READY`.
 - missing M29 direct variant returns `M29_DIRECT_DSL_NOT_FOUND`.
 - M29.5 replay plan summary is exposed through `GET /api/tasks/{taskId}/m29-direct-dsl`.
+- M29 Direct shape replay preserves raw M29 shape `style.radius` evidence on the left compare variant.
 - `GET /api/tasks/{taskId}/m30-materialization` returns report summary and stage timings.
 - M30 materialization report returns text editability decisions and preserved graphic text items.
 - `GET /api/tasks/{taskId}/m31-reconstruction` returns reconstruction summary and stage timings.

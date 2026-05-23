@@ -154,7 +154,8 @@ def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Pa
 
     support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
     assert support
-    assert any(bbox_contains(node.bbox, [68, 42, 64, 18]) and node.bbox[2] <= 160 for node in support)
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]) and node.bbox[2] <= 160)
+    assert support_node.style["radius"] == min(support_node.bbox[2], support_node.bbox[3]) // 2
     assert any("contains_text_evidence" in node.reasons for node in support)
     assert all(is_protective_shape(node) for node in support)
 
