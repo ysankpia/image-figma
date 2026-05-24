@@ -19,6 +19,7 @@ Plugin upload
 -> M29 layout energy report
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
+-> M29 design token report
 -> DSL v0.1
 -> Renderer
 ```
@@ -53,6 +54,7 @@ run M29 sibling group candidate report
 run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
+run M29 design token report
 publish M29 assets
 write task status and stage timings
 ```
@@ -65,7 +67,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -371,6 +373,38 @@ validation.py: report schema and permission-only invariant checks
 ```
 
 这个 package 只报告未来 Auto Layout 尝试许可，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
+
+### M29 Design Tokens
+
+`backend/app/design_token_report/` 是 M29 materialization 之后、asset publish 之前的 report-only single-page token candidate surface。它消费：
+
+```text
+M29 plan-driven DSL
+M29 materialization report
+M29.5 replay plan
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_design_tokens/design_token_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: result type
+traversal.py: visible DSL element traversal and child group collection
+colors.py: hex color candidate collection
+text_styles.py: text style candidate collection
+radius.py: radius candidate collection
+spacing.py: same-parent positive gap candidate collection
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and read-only invariant checks
+```
+
+这个 package 只报告单页 token candidates，不改 DSL，不绑定 Figma variables，不做多页 token merge，不被 Renderer 或 Figma 消费。
 
 ### Historical M29 Audit Packages
 

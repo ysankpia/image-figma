@@ -67,6 +67,7 @@ def test_upload_preview_completes_and_serves_m29_plan_driven_dsl(client: TestCli
         "m29_layout_energy",
         "m29_auto_layout_permission",
         "m29_materialization",
+        "m29_design_tokens",
         "m29_asset_publish",
     }
     assert "m29_direct_replay" not in stages
@@ -114,6 +115,7 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert (task_root / "m29_auto_layout_permission" / "auto_layout_permission_report.json").exists()
     assert (task_root / "materialized_design" / "design.dsl.json").exists()
     assert (task_root / "materialized_design" / "materialization_report.json").exists()
+    assert (task_root / "m29_design_tokens" / "design_token_report.json").exists()
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:

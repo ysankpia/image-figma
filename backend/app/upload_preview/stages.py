@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..auto_layout_permission_report import extract_m29_auto_layout_permission_report
+from ..design_token_report import extract_m29_design_token_report
 from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..layout_energy_report import extract_m29_layout_energy_report
@@ -214,4 +215,21 @@ def run_materialization_stage(
         extra_warnings=[],
         output_dir=paths.materialized_design,
         task_id=task_id,
+    )
+
+
+def run_m29_design_token_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    dsl: dict[str, Any],
+    materialization_report: dict[str, Any],
+    m295_report: dict[str, Any],
+):
+    return extract_m29_design_token_report(
+        task_id=task_id,
+        dsl=dsl,
+        materialization_report=materialization_report,
+        m295_report=m295_report,
+        output_dir=paths.m29_design_tokens,
     )

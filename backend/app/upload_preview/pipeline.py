@@ -19,6 +19,7 @@ from .stages import (
     run_m29_layout_energy_stage,
     run_m29_ownership_conservation_stage,
     run_m29_sibling_group_candidate_stage,
+    run_m29_design_token_stage,
     run_m29_visual_primitive_stage,
     run_materialization_stage,
     run_ocr,
@@ -202,6 +203,20 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             m29_json=m29_json,
             ocr_document=ocr_document,
             m292_document=m292_document,
+            m295_report=m295_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_design_tokens", 94, "Extracting M29 single-page design token report.")
+    run_stage(
+        paths,
+        timings,
+        "m29_design_tokens",
+        lambda: run_m29_design_token_stage(
+            task_id=task_id,
+            paths=paths,
+            dsl=materialized_design_result.dsl,
+            materialization_report=materialized_design_result.report,
             m295_report=m295_result.report,
         ),
     )
