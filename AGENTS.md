@@ -25,6 +25,7 @@ Figma Plugin
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
+-> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
@@ -115,6 +116,6 @@ PRs or handoffs should state the changed surface, linked plan/bug/ADR, validatio
 
 Do not restore removed M29 Direct compare, legacy M30 materialization product paths, M31-M39/M39.1 runtime, routes, environment variables, or ONNX proposer. When old ADRs, completed plans, or legacy drafts mention those paths, treat them as historical background only.
 
-M29.4 weak cluster, M29 hierarchy candidates, M29 sibling group candidates, and M29 layout energy are evidence only; they do not grant Group, Frame, Auto Layout, Figma Component/Instance, or materialization permission. M29.5 replay plan is the only source for materialization order, node budget, dedupe, and cleanup authorization. The M29 plan-driven materializer executes the plan only; it must not reclassify owners or add cleanup authorization.
+M29.4 weak cluster, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, and M29 Auto Layout permission reports are evidence/permission surfaces only; they do not create Group, Frame, Auto Layout, Figma Component/Instance, or materialization output. M29.5 replay plan is the only source for materialization order, node budget, dedupe, and cleanup authorization. The M29 plan-driven materializer executes the plan only; it must not reclassify owners or add cleanup authorization.
 
 Source ownership defects must be fixed in raw M29 or M29.2. Do not patch them in the materializer, Renderer, or plugin with color, copy, theme, industry, filename, or fixed-bbox special cases. Root/page background must come from source PNG sampling; do not restore a fixed light default to hide fallback-off failures.

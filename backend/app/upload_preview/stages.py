@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..auto_layout_permission_report import extract_m29_auto_layout_permission_report
 from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..layout_energy_report import extract_m29_layout_energy_report
@@ -175,6 +176,19 @@ def run_m29_layout_energy_stage(
         hierarchy_report=hierarchy_report,
         sibling_group_report=sibling_group_report,
         output_dir=paths.m29_layout_energy,
+    )
+
+
+def run_m29_auto_layout_permission_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    layout_energy_report: dict[str, Any],
+):
+    return extract_m29_auto_layout_permission_report(
+        task_id=task_id,
+        layout_energy_report=layout_energy_report,
+        output_dir=paths.m29_auto_layout_permission,
     )
 
 

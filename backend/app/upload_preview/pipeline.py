@@ -14,6 +14,7 @@ from .stages import (
     run_m2931_relation_stage,
     run_m294_cluster_stage,
     run_m295_replay_plan_stage,
+    run_m29_auto_layout_permission_stage,
     run_m29_hierarchy_candidate_stage,
     run_m29_layout_energy_stage,
     run_m29_ownership_conservation_stage,
@@ -162,7 +163,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_layout_energy", 37, "Computing M29 layout energy report.")
-    run_stage(
+    layout_energy_result = run_stage(
         paths,
         timings,
         "m29_layout_energy",
@@ -172,6 +173,18 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             m295_report=m295_result.report,
             hierarchy_report=hierarchy_result.report,
             sibling_group_report=sibling_group_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_auto_layout_permission", 40, "Building M29 Auto Layout permission report.")
+    run_stage(
+        paths,
+        timings,
+        "m29_auto_layout_permission",
+        lambda: run_m29_auto_layout_permission_stage(
+            task_id=task_id,
+            paths=paths,
+            layout_energy_report=layout_energy_result.report,
         ),
     )
 

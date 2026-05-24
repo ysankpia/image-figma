@@ -229,6 +229,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "hierarchyCandidateReport": root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json",
         "siblingGroupCandidateReport": root / "m29_sibling_groups" / "sibling_group_candidate_report.json",
         "layoutEnergyReport": root / "m29_layout_energy" / "layout_energy_report.json",
+        "autoLayoutPermissionReport": root / "m29_auto_layout_permission" / "auto_layout_permission_report.json",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -242,6 +243,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "hierarchyCandidates", artifact_paths["hierarchyCandidateReport"])
     load_summary(record, "siblingGroups", artifact_paths["siblingGroupCandidateReport"])
     load_summary(record, "layoutEnergy", artifact_paths["layoutEnergyReport"])
+    load_summary(record, "autoLayoutPermission", artifact_paths["autoLayoutPermissionReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
 
 
@@ -274,6 +276,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_visible_overlap_conflicts = 0
     total_sibling_group_candidates = 0
     total_layout_energy_candidates = 0
+    total_auto_layout_allow_candidates = 0
     for record in records:
         if record.get("status") != "completed":
             failed += 1
@@ -284,6 +287,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         total_sibling_group_candidates += int(sibling_summary.get("siblingGroupCandidateCount") or 0)
         layout_summary = record.get("summaries", {}).get("layoutEnergy", {})
         total_layout_energy_candidates += int(layout_summary.get("layoutEnergyCandidateCount") or 0)
+        auto_layout_summary = record.get("summaries", {}).get("autoLayoutPermission", {})
+        total_auto_layout_allow_candidates += int(auto_layout_summary.get("allowCandidateCount") or 0)
         conflict_type_counts = ownership_summary.get("conflictTypeCounts", {})
         if isinstance(conflict_type_counts, dict):
             for key, value in conflict_type_counts.items():
@@ -298,6 +303,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalVisibleOwnershipOverlapConflicts": total_visible_overlap_conflicts,
         "totalSiblingGroupCandidateCount": total_sibling_group_candidates,
         "totalLayoutEnergyCandidateCount": total_layout_energy_candidates,
+        "totalAutoLayoutAllowCandidateCount": total_auto_layout_allow_candidates,
         "ownershipConflictTypeCounts": dict(sorted(conflict_counts.items())),
     }
 

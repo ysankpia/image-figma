@@ -50,6 +50,7 @@ receive multipart PNG
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
+-> M29 Auto Layout permission report
 -> M29 plan-driven DSL materialization
 -> publish M29 assets
 -> save dsl_results path to materialized_design/design.dsl.json
@@ -126,6 +127,14 @@ storage/upload_previews/{taskId}/m29_layout_energy/layout_energy_report.json
 ```
 
 这个阶段同样是 report-only：不创建 Auto Layout，不创建 Group/Frame，不改变 replay plan，不写 DSL，也不是 materializer 的输入。
+
+M29 Auto Layout permission report 位于 layout energy 之后、materializer 之前。它读取 layout energy report，写出未来 Auto Layout 尝试许可报告：
+
+```text
+storage/upload_previews/{taskId}/m29_auto_layout_permission/auto_layout_permission_report.json
+```
+
+这个阶段是 permission-only：不创建 Auto Layout，不创建 Group/Frame，不改变 replay plan，不写 DSL，也不是 materializer 的输入。
 
 ## M29 Plan-Driven Materialization
 
@@ -219,6 +228,7 @@ storage/upload_previews/{taskId}/m29_ownership_conservation/
 storage/upload_previews/{taskId}/m29_hierarchy_candidates/
 storage/upload_previews/{taskId}/m29_sibling_groups/
 storage/upload_previews/{taskId}/m29_layout_energy/
+storage/upload_previews/{taskId}/m29_auto_layout_permission/
 storage/upload_previews/{taskId}/materialized_design/
 storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
@@ -250,6 +260,7 @@ m29_ownership_conservation
 m29_hierarchy_candidates
 m29_sibling_groups
 m29_layout_energy
+m29_auto_layout_permission
 m29_materialization
 m29_asset_publish
 m29_completed

@@ -17,6 +17,7 @@ Plugin upload
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
+-> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -50,6 +51,7 @@ run M29 ownership conservation report
 run M29 hierarchy candidate report
 run M29 sibling group candidate report
 run M29 layout energy report
+run M29 Auto Layout permission report
 run M29 plan-driven materialization
 publish M29 assets
 write task status and stage timings
@@ -63,7 +65,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -342,6 +344,33 @@ validation.py: report schema and read-only invariant checks
 ```
 
 这个 package 只报告候选 layout model 和 energy，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
+
+### M29 Auto Layout Permission
+
+`backend/app/auto_layout_permission_report/` 是 M29 layout energy 之后、materialization 之前的 permission-only surface。它消费：
+
+```text
+M29 layout energy report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_auto_layout_permission/auto_layout_permission_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: permission report extraction orchestration and JSON write
+types.py: supported layout model constants, options, and result type
+normalization.py: layout energy candidate normalization
+permission.py: allow/defer/reject decision logic and recommended axis mapping
+report.py: summary counts and permission-only invariant fields
+validation.py: report schema and permission-only invariant checks
+```
+
+这个 package 只报告未来 Auto Layout 尝试许可，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
 
 ### Historical M29 Audit Packages
 
