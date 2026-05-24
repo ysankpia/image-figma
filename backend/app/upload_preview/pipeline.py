@@ -21,6 +21,7 @@ from .stages import (
     run_m29_ownership_conservation_stage,
     run_m29_sibling_group_candidate_stage,
     run_m29_design_token_stage,
+    run_m29_dsl_visual_comparison_stage,
     run_m29_visual_primitive_stage,
     run_materialization_stage,
     run_ocr,
@@ -205,6 +206,10 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             ocr_document=ocr_document,
             m292_document=m292_document,
             m295_report=m295_result.report,
+            hierarchy_report=hierarchy_result.report,
+            sibling_group_report=sibling_group_result.report,
+            layout_energy_report=layout_energy_result.report,
+            auto_layout_permission_report=auto_layout_permission_result.report,
         ),
     )
 
@@ -242,6 +247,19 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
 
     update_task(task_id, "m29_asset_publish", 96, "Publishing M29 assets.")
     run_stage(paths, timings, "m29_asset_publish", lambda: publish_m29_assets(task_id, paths.materialized_design, materialized_design_result.dsl, image))
+
+    update_task(task_id, "m29_dsl_visual_comparison", 97, "Rendering final DSL comparison artifacts.")
+    run_stage(
+        paths,
+        timings,
+        "m29_dsl_visual_comparison",
+        lambda: run_m29_dsl_visual_comparison_stage(
+            task_id=task_id,
+            png_data=png_data,
+            paths=paths,
+            dsl=materialized_design_result.dsl,
+        ),
+    )
 
     output_dsl = paths.materialized_design / "design.dsl.json"
     output_dsl.write_text(json.dumps(materialized_design_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")

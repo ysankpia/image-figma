@@ -285,7 +285,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and read-only invariant checks
 ```
 
-这个 package 只报告候选父子结构，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
+这个 package 只报告候选父子结构，不改 replay plan，不直接创建 Group/Frame/Auto Layout。C-stage materializer 可以把它作为透明 controlled structure group 的证据来源，但不能借此重判 owner、改变 visible replay order 或创建 Auto Layout。
 
 ### M29 Sibling Group Candidates
 
@@ -316,7 +316,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and read-only invariant checks
 ```
 
-这个 package 只报告候选兄弟组，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
+这个 package 只报告候选兄弟组，不改 replay plan，不直接创建 Group/Frame/Auto Layout。C-stage materializer 可以把高置信、低风险、root-level contiguous 的候选包成透明 controlled structure group。
 
 ### M29 Layout Energy
 
@@ -347,7 +347,7 @@ report.py: summary counts, internal-field stripping, and report-only invariant f
 validation.py: report schema and read-only invariant checks
 ```
 
-这个 package 只报告候选 layout model 和 energy，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
+这个 package 只报告候选 layout model 和 energy，不创建 Auto Layout，不改 replay plan。C-stage materializer 只可把它作为 group materialization 的附加准入证据；本阶段仍不创建真实 Auto Layout。
 
 ### M29 Auto Layout Permission
 
@@ -374,7 +374,7 @@ report.py: summary counts and permission-only invariant fields
 validation.py: report schema and permission-only invariant checks
 ```
 
-这个 package 只报告未来 Auto Layout 尝试许可，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
+这个 package 只报告未来 Auto Layout 尝试许可，不创建 Auto Layout，不改 replay plan。C-stage materializer 可以消费 `allow_candidate` 作为 transparent group 的附加 confidence，但不得创建 Figma Auto Layout。
 
 ### M29 Design Tokens
 
@@ -440,6 +440,33 @@ validation.py: report schema and read-only invariant checks
 ```
 
 这个 package 只报告 quality/repair-cost，不改 DSL，不阻断 upload-preview，不创建任何 Figma 结构，不被 Renderer 或 Figma 消费。
+
+### M29 DSL Visual Comparison
+
+`backend/app/dsl_visual_comparison/` 是 C-stage upload-preview artifact surface。它消费：
+
+```text
+source PNG
+final materialized DSL after asset publish
+published local assets
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_dsl_visual_comparison/dsl_visual_comparison_report.json
+storage/upload_previews/{taskId}/m29_dsl_visual_comparison/dsl_render.png
+storage/upload_previews/{taskId}/m29_dsl_visual_comparison/source_diff.png
+```
+
+模块边界：
+
+```text
+pipeline.py: DSL render/diff orchestration, report write, summary metrics
+render.py: standard-library approximate DSL rasterization for image/shape/text/group/frame
+```
+
+这个 package 不改 DSL，不参与 Figma rendering。它给 `/Users/luhui/Downloads/m29` batch validation 提供最终 DSL 与原图的可审计视觉差异指标。
 
 ### Historical M29 Audit Packages
 

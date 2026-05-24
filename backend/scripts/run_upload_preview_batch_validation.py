@@ -232,6 +232,9 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "autoLayoutPermissionReport": root / "m29_auto_layout_permission" / "auto_layout_permission_report.json",
         "designTokenReport": root / "m29_design_tokens" / "design_token_report.json",
         "bStageQualityReport": root / "m29_b_stage_quality" / "b_stage_quality_report.json",
+        "dslVisualComparisonReport": root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json",
+        "dslRenderPng": root / "m29_dsl_visual_comparison" / "dsl_render.png",
+        "sourceDiffPng": root / "m29_dsl_visual_comparison" / "source_diff.png",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -248,6 +251,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "autoLayoutPermission", artifact_paths["autoLayoutPermissionReport"])
     load_summary(record, "designTokens", artifact_paths["designTokenReport"])
     load_summary(record, "bStageQuality", artifact_paths["bStageQualityReport"])
+    load_summary(record, "dslVisualComparison", artifact_paths["dslVisualComparisonReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
 
 
@@ -283,6 +287,10 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_auto_layout_allow_candidates = 0
     total_design_token_candidates = 0
     total_b_stage_repair_cost = 0
+    total_controlled_structure_groups = 0
+    total_dsl_visual_mean_error = 0.0
+    dsl_visual_count = 0
+    max_dsl_visual_changed_pixel_ratio10 = 0.0
     for record in records:
         if record.get("status") != "completed":
             failed += 1
@@ -302,6 +310,16 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         )
         b_stage_summary = record.get("summaries", {}).get("bStageQuality", {})
         total_b_stage_repair_cost += int(b_stage_summary.get("repairCost") or 0)
+        materialization_summary = record.get("summaries", {}).get("materialization", {})
+        total_controlled_structure_groups += int(materialization_summary.get("controlledStructureGroupCount") or 0)
+        dsl_visual_summary = record.get("summaries", {}).get("dslVisualComparison", {})
+        if dsl_visual_summary:
+            total_dsl_visual_mean_error += float(dsl_visual_summary.get("normalizedMeanAbsError") or 0.0)
+            max_dsl_visual_changed_pixel_ratio10 = max(
+                max_dsl_visual_changed_pixel_ratio10,
+                float(dsl_visual_summary.get("changedPixelRatio10") or 0.0),
+            )
+            dsl_visual_count += 1
         conflict_type_counts = ownership_summary.get("conflictTypeCounts", {})
         if isinstance(conflict_type_counts, dict):
             for key, value in conflict_type_counts.items():
@@ -319,6 +337,9 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalAutoLayoutAllowCandidateCount": total_auto_layout_allow_candidates,
         "totalDesignTokenCandidateCount": total_design_token_candidates,
         "totalBStageRepairCost": total_b_stage_repair_cost,
+        "totalControlledStructureGroupCount": total_controlled_structure_groups,
+        "averageDslVisualNormalizedMeanAbsError": round(total_dsl_visual_mean_error / max(1, dsl_visual_count), 6),
+        "maxDslVisualChangedPixelRatio10": round(max_dsl_visual_changed_pixel_ratio10, 6),
         "ownershipConflictTypeCounts": dict(sorted(conflict_counts.items())),
     }
 

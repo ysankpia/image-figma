@@ -250,6 +250,7 @@ storage/upload_previews/{taskId}/m29_auto_layout_permission/
 storage/upload_previews/{taskId}/materialized_design/
 storage/upload_previews/{taskId}/m29_design_tokens/
 storage/upload_previews/{taskId}/m29_b_stage_quality/
+storage/upload_previews/{taskId}/m29_dsl_visual_comparison/
 storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
 ```
@@ -285,6 +286,7 @@ m29_materialization
 m29_design_tokens
 m29_b_stage_quality
 m29_asset_publish
+m29_dsl_visual_comparison
 m29_completed
 ```
 

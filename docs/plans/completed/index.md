@@ -27,6 +27,7 @@
 - [Backend Large Module No-Behavior Split Program](029-backend-large-module-no-behavior-split.md) — `completed`
 - [M29 Contract Regression Matrix](029-contract-regression-matrix.md) — `completed`
 - [M29 B-Stage Report And Permission Program](044-m29-b-stage-report-and-permission-program.md) — `completed`
+- [M29 C-Stage Controlled Structure Materialization](053-m29-c-stage-controlled-structure-materialization.md) — `completed`
 - [M29 Direct Replay Experiment](029-direct-replay-experiment.md) — `completed`
 - [M29 Direct Replay Figma Compare Mode](029-direct-replay-figma-compare-mode.md) — `completed`
 - [M29 Direct Shape Physical Style Preservation](029-direct-shape-physical-style-preservation.md) — `completed`

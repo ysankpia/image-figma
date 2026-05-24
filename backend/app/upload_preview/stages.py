@@ -8,6 +8,7 @@ from typing import Any
 from ..auto_layout_permission_report import extract_m29_auto_layout_permission_report
 from ..b_stage_quality_report import extract_m29_b_stage_quality_report
 from ..design_token_report import extract_m29_design_token_report
+from ..dsl_visual_comparison import extract_dsl_visual_comparison
 from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..layout_energy_report import extract_m29_layout_energy_report
@@ -205,6 +206,10 @@ def run_materialization_stage(
     ocr_document: Any,
     m292_document: dict[str, Any],
     m295_report: dict[str, Any],
+    hierarchy_report: dict[str, Any] | None = None,
+    sibling_group_report: dict[str, Any] | None = None,
+    layout_energy_report: dict[str, Any] | None = None,
+    auto_layout_permission_report: dict[str, Any] | None = None,
 ):
     return build_plan_driven_dsl(
         source_png=png_data,
@@ -213,6 +218,10 @@ def run_materialization_stage(
         ocr_document=ocr_document.to_dict(),
         m292_document=m292_document,
         m295_replay_plan=m295_report,
+        hierarchy_report=hierarchy_report,
+        sibling_group_report=sibling_group_report,
+        layout_energy_report=layout_energy_report,
+        auto_layout_permission_report=auto_layout_permission_report,
         extra_warnings=[],
         output_dir=paths.materialized_design,
         task_id=task_id,
@@ -258,4 +267,21 @@ def run_m29_b_stage_quality_stage(
         design_token_report=design_token_report,
         materialization_report=materialization_report,
         output_dir=paths.m29_b_stage_quality,
+    )
+
+
+def run_m29_dsl_visual_comparison_stage(
+    *,
+    task_id: str,
+    png_data: bytes,
+    paths: UploadPreviewPaths,
+    dsl: dict[str, Any],
+):
+    return extract_dsl_visual_comparison(
+        task_id=task_id,
+        source_png=png_data,
+        dsl=dsl,
+        materialized_design_dir=paths.materialized_design,
+        public_assets_dir=state.storage.assets_dir,
+        output_dir=paths.m29_dsl_visual_comparison,
     )

@@ -226,6 +226,120 @@ def test_shape_replay_samples_missing_fill_from_source_pixels(tmp_path: Path) ->
     assert shape["style"]["fill"] != "#F7F8FA"
 
 
+def test_controlled_structure_materialization_groups_contiguous_high_confidence_members(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(248, 248, 248), marks=[([20, 20, 40, 20], (235, 235, 235)), ([70, 20, 40, 20], (20, 20, 20))]))
+    m292 = m292_document(
+        [
+            m292_object("shape", [20, 20, 40, 20], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"]),
+            m292_object("text", [70, 20, 40, 20], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ]
+    )
+    plan = m295_plan(
+        [
+            m295_item("plan_shape", "shape", [20, 20, 40, 20], "shape_replay", "m29_shape"),
+            m295_item("plan_text", "text", [70, 20, 40, 20], "text_replay", "m29_text"),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 40, 20])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        ocr_document=ocr_document([ocr_block("ocr_text", "Label", [70, 20, 40, 20])]),
+        sibling_group_report=sibling_group_report(
+            [
+                sibling_group(
+                    "m29_sibling_group_0001",
+                    ["shape", "text"],
+                    [20, 20, 90, 20],
+                    score=0.91,
+                    confidence="high",
+                )
+            ]
+        ),
+        layout_energy_report=layout_energy_report([layout_energy_candidate("m29_sibling_group_0001", ["shape", "text"], [20, 20, 90, 20])]),
+        auto_layout_permission_report=auto_layout_permission_report([auto_layout_permission("m29_sibling_group_0001", ["shape", "text"], [20, 20, 90, 20])]),
+        output_dir=tmp_path / "out",
+    )
+
+    group = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_controlled_structure_group")
+    assert group["style"]["fill"] is None
+    assert group["meta"]["autoLayoutCreated"] is False
+    assert group["layout"] == {"x": 20, "y": 20, "width": 90, "height": 20}
+    assert [child["role"] for child in group["children"]] == ["m29_shape", "m29_text"]
+    assert group["children"][0]["layout"]["x"] == 0
+    assert group["children"][1]["layout"]["x"] == 50
+    assert result.report["summary"]["controlledStructureGroupCount"] == 1
+    assert result.report["summary"]["controlledStructureMaterializationChanged"] is True
+    assert result.report["controlledStructureMaterialization"]["summary"]["acceptedGroupCount"] == 1
+
+
+def test_controlled_structure_materialization_keeps_flat_output_without_reports(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(248, 248, 248), marks=[([20, 20, 40, 20], (235, 235, 235)), ([70, 20, 40, 20], (20, 20, 20))]))
+    m292 = m292_document(
+        [
+            m292_object("shape", [20, 20, 40, 20], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"]),
+            m292_object("text", [70, 20, 40, 20], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 40, 20])]),
+        m292_document=m292,
+        m295_replay_plan=m295_plan(
+            [
+                m295_item("plan_shape", "shape", [20, 20, 40, 20], "shape_replay", "m29_shape"),
+                m295_item("plan_text", "text", [70, 20, 40, 20], "text_replay", "m29_text"),
+            ]
+        ),
+        ocr_document=ocr_document([ocr_block("ocr_text", "Label", [70, 20, 40, 20])]),
+        output_dir=tmp_path / "out",
+    )
+
+    assert not any(child.get("role") == "m29_controlled_structure_group" for child in result.dsl["root"]["children"])
+    assert result.report["summary"]["controlledStructureGroupCount"] == 0
+
+
+def test_controlled_structure_materialization_rejects_non_contiguous_members(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(180, 90, fill=(248, 248, 248), marks=[([20, 20, 30, 20], (235, 235, 235)), ([70, 20, 30, 20], (210, 210, 210)), ([120, 20, 30, 20], (0, 0, 0))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object("shape_a", [20, 20, 30, 20], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"]),
+            m292_object("shape_b", [70, 20, 30, 20], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_002"]),
+            m292_object("text", [120, 20, 30, 20], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ]
+    )
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 30, 20]), m29_node("shape_002", "shape", [70, 20, 30, 20])]),
+        m292_document=m292,
+        m295_replay_plan=m295_plan(
+            [
+                m295_item("plan_shape_a", "shape_a", [20, 20, 30, 20], "shape_replay", "m29_shape"),
+                m295_item("plan_shape_b", "shape_b", [70, 20, 30, 20], "shape_replay", "m29_shape"),
+                m295_item("plan_text", "text", [120, 20, 30, 20], "text_replay", "m29_text"),
+            ]
+        ),
+        ocr_document=ocr_document([ocr_block("ocr_text", "C", [120, 20, 30, 20])]),
+        sibling_group_report=sibling_group_report([sibling_group("m29_sibling_group_0001", ["shape_a", "text"], [20, 20, 130, 20], score=0.92, confidence="high")]),
+        layout_energy_report=layout_energy_report([layout_energy_candidate("m29_sibling_group_0001", ["shape_a", "text"], [20, 20, 130, 20])]),
+        auto_layout_permission_report=auto_layout_permission_report([auto_layout_permission("m29_sibling_group_0001", ["shape_a", "text"], [20, 20, 130, 20])]),
+        output_dir=tmp_path / "out",
+    )
+
+    assert result.report["summary"]["controlledStructureGroupCount"] == 0
+    rejected = result.report["controlledStructureMaterialization"]["rejectedGroups"]
+    assert rejected[0]["reason"] == "member_z_order_not_contiguous"
+
+
 def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250, 250), marks: list[tuple[list[int], tuple[int, int, int]]] | None = None) -> PngPixels:
     rows = [bytearray(bytes(fill) * width) for _ in range(height)]
     for bbox, color in marks or []:
@@ -365,3 +479,83 @@ def copied_image_pixels(dsl: dict, output_dir: Path) -> PngPixels:
     asset_id = image_node["source"]["assetId"]
     asset = next(item for item in dsl["assets"] if item.get("assetId") == asset_id)
     return decode_png_pixels((output_dir / asset["url"]).read_bytes())
+
+
+def sibling_group_report(groups: list[dict]) -> dict:
+    return {
+        "schemaName": "M29SiblingGroupCandidateReport",
+        "schemaVersion": "0.1",
+        "summary": {"siblingGroupCandidateCount": len(groups)},
+        "siblingGroupCandidates": groups,
+    }
+
+
+def sibling_group(group_id: str, members: list[str], bbox: list[int], *, score: float, confidence: str) -> dict:
+    return {
+        "id": group_id,
+        "source": "relation_component",
+        "groupPattern": "row_like",
+        "memberSourceObjectIds": members,
+        "memberPlanItemIds": [f"plan_{member}" for member in members],
+        "memberFinalReplayActions": ["shape_replay" if "shape" in member else "text_replay" for member in members],
+        "edgeIds": ["edge_001"],
+        "bbox": bbox,
+        "score": score,
+        "confidence": confidence,
+        "metrics": {"memberCount": len(members)},
+        "reasons": ["test_sibling_group"],
+        "risks": [],
+    }
+
+
+def layout_energy_report(candidates: list[dict]) -> dict:
+    return {
+        "schemaName": "M29LayoutEnergyReport",
+        "schemaVersion": "0.1",
+        "summary": {"layoutEnergyCandidateCount": len(candidates)},
+        "layoutEnergyCandidates": candidates,
+    }
+
+
+def layout_energy_candidate(source_candidate_id: str, members: list[str], bbox: list[int]) -> dict:
+    return {
+        "id": f"{source_candidate_id}_energy",
+        "subjectId": "m29_layout_subject_0001",
+        "subjectType": "sibling_group",
+        "sourceCandidateId": source_candidate_id,
+        "bestModel": "row",
+        "confidence": "high",
+        "energy": 0.12,
+        "memberSourceObjectIds": members,
+        "bbox": bbox,
+        "risks": [],
+    }
+
+
+def auto_layout_permission_report(items: list[dict]) -> dict:
+    return {
+        "schemaName": "M29AutoLayoutPermissionReport",
+        "schemaVersion": "0.1",
+        "summary": {"permissionItemCount": len(items), "allowCandidateCount": len(items)},
+        "permissionItems": items,
+    }
+
+
+def auto_layout_permission(source_candidate_id: str, members: list[str], bbox: list[int]) -> dict:
+    return {
+        "id": f"{source_candidate_id}_permission",
+        "layoutEnergyCandidateId": f"{source_candidate_id}_energy",
+        "subjectId": "m29_layout_subject_0001",
+        "subjectType": "sibling_group",
+        "sourceCandidateId": source_candidate_id,
+        "permission": "allow_candidate",
+        "recommendedModel": "row",
+        "recommendedAxis": "horizontal",
+        "energy": 0.12,
+        "confidence": "high",
+        "threshold": 0.32,
+        "memberSourceObjectIds": members,
+        "bbox": bbox,
+        "reasons": ["test_permission"],
+        "risks": [],
+    }

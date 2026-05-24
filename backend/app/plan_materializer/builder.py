@@ -14,6 +14,7 @@ from .background import apply_source_background
 from .cleanup import clean_text_from_copied_image_assets, erase_replayed_bboxes_from_fallback
 from .replay import replay_m295_plan_items
 from .report import build_summary
+from .structure import materialize_controlled_structure_groups
 from .types import PlanMaterializerOptions, PlanMaterializerResult, ReplayNode
 
 
@@ -26,6 +27,10 @@ def build_plan_driven_dsl(
     ocr_document: dict[str, Any] | None = None,
     m292_document: dict[str, Any] | None = None,
     m295_replay_plan: dict[str, Any] | None = None,
+    hierarchy_report: dict[str, Any] | None = None,
+    sibling_group_report: dict[str, Any] | None = None,
+    layout_energy_report: dict[str, Any] | None = None,
+    auto_layout_permission_report: dict[str, Any] | None = None,
     extra_warnings: list[str] | None = None,
     options: PlanMaterializerOptions | None = None,
     task_id: str = "materialized_design",
@@ -108,6 +113,17 @@ def build_plan_driven_dsl(
     if options.erase_replayed_bboxes_from_fallback:
         fallback_erased_count = erase_replayed_bboxes_from_fallback(dsl, output_dir, pixels, replayed, plan_items=m295_plan_items)
 
+    structure_report = materialize_controlled_structure_groups(
+        dsl=dsl,
+        replayed=replayed,
+        existing_ids=existing_ids,
+        hierarchy_report=hierarchy_report,
+        sibling_group_report=sibling_group_report,
+        layout_energy_report=layout_energy_report,
+        auto_layout_permission_report=auto_layout_permission_report,
+        options=options,
+    )
+
     summary = build_summary(
         m29_document=m29_document,
         ocr_count=len(ocr_boxes),
@@ -116,6 +132,7 @@ def build_plan_driven_dsl(
         fallback_erased_count=fallback_erased_count,
         copied_image_asset_text_erased_count=copied_image_asset_text_erased_count,
         options=options,
+        structure_report=structure_report,
     )
     if isinstance((m292_document or {}).get("summary"), dict):
         summary["m292SourcePhysicalGraph"] = dict(m292_document["summary"])
@@ -127,6 +144,7 @@ def build_plan_driven_dsl(
         "sourceImage": source_image_path,
         "summary": summary,
         "options": options.to_dict(),
+        "controlledStructureMaterialization": structure_report,
         "replayedNodes": [asdict(item) for item in replayed],
         "skippedItems": skipped,
         "warnings": warnings,

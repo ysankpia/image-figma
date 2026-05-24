@@ -44,10 +44,10 @@ def test_current_upload_surface_returns_m29_plan_driven_dsl(client: TestClient, 
     assert dsl.status_code == 200
     body = dsl.json()["data"]["dsl"]
     assert "m29_plan_driven_materialization" in body["meta"]["qualityFlags"]
-    assert any(child.get("role") == "fallback_region" for child in body["root"]["children"])
-    assert any(child.get("role") == "m29_text" for child in body["root"]["children"])
+    assert has_role(body, "fallback_region")
+    assert has_role(body, "m29_text")
     removed_text_role = "m" + "30_text_member"
-    assert not any(child.get("role") == removed_text_role for child in body["root"]["children"])
+    assert not has_role(body, removed_text_role)
 
     report = client.get(f"/api/tasks/{task_id}/materialization")
     assert report.status_code == 200
@@ -71,3 +71,12 @@ def test_upload_preview_rejects_invalid_uploads(client: TestClient) -> None:
     )
     assert large.status_code == 413
     assert large.json()["error"]["code"] == "FILE_TOO_LARGE"
+
+
+def has_role(dsl: dict, role: str) -> bool:
+    def visit(node: dict) -> bool:
+        if node.get("role") == role:
+            return True
+        return any(visit(child) for child in node.get("children", []) if isinstance(child, dict))
+
+    return visit(dsl["root"])

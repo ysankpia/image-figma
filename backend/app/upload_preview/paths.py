@@ -22,6 +22,7 @@ class UploadPreviewPaths:
     m29_auto_layout_permission: Path
     m29_design_tokens: Path
     m29_b_stage_quality: Path
+    m29_dsl_visual_comparison: Path
     materialized_design: Path
 
 
@@ -42,5 +43,6 @@ def pipeline_paths(task_id: str) -> UploadPreviewPaths:
         m29_auto_layout_permission=root / "m29_auto_layout_permission",
         m29_design_tokens=root / "m29_design_tokens",
         m29_b_stage_quality=root / "m29_b_stage_quality",
+        m29_dsl_visual_comparison=root / "m29_dsl_visual_comparison",
         materialized_design=root / "materialized_design",
     )

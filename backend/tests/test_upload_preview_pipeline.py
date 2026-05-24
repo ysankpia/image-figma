@@ -70,6 +70,7 @@ def test_upload_preview_completes_and_serves_m29_plan_driven_dsl(client: TestCli
         "m29_design_tokens",
         "m29_b_stage_quality",
         "m29_asset_publish",
+        "m29_dsl_visual_comparison",
     }
     assert "m29_direct_replay" not in stages
     removed_materialization_stage = "m" + "30_materialization"
@@ -118,6 +119,9 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert (task_root / "materialized_design" / "materialization_report.json").exists()
     assert (task_root / "m29_design_tokens" / "design_token_report.json").exists()
     assert (task_root / "m29_b_stage_quality" / "b_stage_quality_report.json").exists()
+    assert (task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").exists()
+    assert (task_root / "m29_dsl_visual_comparison" / "dsl_render.png").exists()
+    assert (task_root / "m29_dsl_visual_comparison" / "source_diff.png").exists()
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -233,7 +237,12 @@ def test_upload_preview_samples_dark_source_background(client: TestClient) -> No
 
 
 def has_role(dsl: dict, role: str) -> bool:
-    return any(child.get("role") == role for child in dsl["root"]["children"] if isinstance(child, dict))
+    def visit(node: dict) -> bool:
+        if node.get("role") == role:
+            return True
+        return any(visit(child) for child in node.get("children", []) if isinstance(child, dict))
+
+    return visit(dsl["root"])
 
 
 def make_png(width: int, height: int) -> bytes:

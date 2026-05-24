@@ -10,8 +10,14 @@ class PlanMaterializerOptions:
     enable_image_replay: bool = True
     enable_symbol_replay: bool = True
     enable_simple_shape_replay: bool = True
+    enable_controlled_structure_materialization: bool = True
     erase_replayed_bboxes_from_fallback: bool = True
     max_total_visible_nodes: int = 260
+    max_controlled_groups: int = 24
+    controlled_group_min_members: int = 2
+    controlled_group_max_members: int = 16
+    controlled_group_min_score: float = 0.74
+    controlled_group_max_area_ratio: float = 0.55
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

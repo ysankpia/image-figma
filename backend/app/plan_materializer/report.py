@@ -15,6 +15,7 @@ def build_summary(
     fallback_erased_count: int,
     copied_image_asset_text_erased_count: int,
     options: PlanMaterializerOptions,
+    structure_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     replay_counts: dict[str, int] = {}
     for item in replayed:
@@ -23,6 +24,7 @@ def build_summary(
     for item in skipped:
         reason = str(item.get("reason") or "unknown")
         skipped_counts[reason] = skipped_counts.get(reason, 0) + 1
+    structure_summary = structure_report.get("summary", {}) if isinstance(structure_report, dict) and isinstance(structure_report.get("summary"), dict) else {}
     return {
         "m29NodeCount": len(list_dicts(m29_document.get("nodes"))),
         "ocrTextCount": ocr_count,
@@ -35,6 +37,10 @@ def build_summary(
         "fallbackErasedBBoxCount": fallback_erased_count,
         "copiedImageAssetTextErasedCount": copied_image_asset_text_erased_count,
         "visibleNodeCount": len(replayed),
+        "controlledStructureGroupCount": int(structure_summary.get("acceptedGroupCount") or 0),
+        "controlledStructureRejectedGroupCount": int(structure_summary.get("rejectedGroupCount") or 0),
+        "controlledStructureMaterializationChanged": bool(structure_summary.get("materializationChanged")),
+        "autoLayoutCreated": bool(structure_summary.get("autoLayoutCreated")),
         "maxTotalVisibleNodesExceeded": len(replayed) >= options.max_total_visible_nodes and any(item.get("reason") == "node_budget_exceeded" for item in skipped),
         "skippedReasons": skipped_counts,
     }

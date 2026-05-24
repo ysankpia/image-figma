@@ -76,6 +76,8 @@ missing: 当前没有有效测试；下一阶段必须补。
 | M29-CR-062 | Upload Pipeline / Report Artifact | upload-preview production profile | `m29_design_tokens` stage timing 存在，report artifact 存在，DSL/materialization response shape 不变 | design token report 缺失、阻断正常 materialization、或被 Renderer/Figma 消费 | covered | `test_upload_preview_pipeline.py::test_upload_preview_completes_and_serves_m29_plan_driven_dsl`, `test_upload_preview_pipeline.py::test_upload_preview_uses_production_artifact_profile_by_default` |
 | M29-CR-063 | B-Stage Quality Report | B-stage reports + materialization report | 输出 report-only `qualitySummary`、`riskSummary`、`repairCost`，并保持 `dslChanged=false`、`blockingUpload=false`、`reportOnly=true` | 因诊断风险阻断 upload-preview、改 DSL、创建 Figma 结构 | covered | `test_b_stage_quality_report.py::test_b_stage_quality_report_empty_is_report_only`, `test_b_stage_quality_report.py::test_ownership_conflict_penalizes_quality_and_repair_cost`, `test_b_stage_quality_report.py::test_deferred_permission_adds_repair_cost`, `test_b_stage_quality_report.py::test_design_token_summary_counts_candidates_and_coverage`, `test_b_stage_quality_report.py::test_missing_tokens_create_small_token_gap_cost`, `test_b_stage_quality_report.py::test_materialization_warnings_and_skips_add_cost` |
 | M29-CR-064 | Upload Pipeline / Report Artifact | upload-preview production profile | `m29_b_stage_quality` stage timing 存在，report artifact 存在，DSL/materialization response shape 不变 | quality report 缺失、阻断正常 materialization、或被 Renderer/Figma 消费 | covered | `test_upload_preview_pipeline.py::test_upload_preview_completes_and_serves_m29_plan_driven_dsl`, `test_upload_preview_pipeline.py::test_upload_preview_uses_production_artifact_profile_by_default` |
+| M29-CR-065 | C-Stage Controlled Structure Materialization | high-confidence sibling/hierarchy candidates with already replayed contiguous visible nodes | materializer creates transparent `m29_controlled_structure_group` nodes, keeps child nodes and localizes child layout, and does not create Auto Layout/Component/Variant/Vector | grouping non-contiguous nodes, losing visible replay nodes, creating Auto Layout, or reclassifying owners | covered | `test_m29_plan_materializer.py::test_controlled_structure_materialization_groups_contiguous_high_confidence_members`, `test_m29_plan_materializer.py::test_controlled_structure_materialization_rejects_non_contiguous_members` |
+| M29-CR-066 | C-Stage DSL Visual Comparison | upload-preview production profile after asset publish | `m29_dsl_visual_comparison` stage timing exists and emits `dsl_visual_comparison_report.json`, `dsl_render.png`, and `source_diff.png` | final DSL cannot be compared to source image, visual diff artifact missing, or comparison blocks normal DSL output | covered | `test_upload_preview_pipeline.py::test_upload_preview_completes_and_serves_m29_plan_driven_dsl`, `test_upload_preview_pipeline.py::test_upload_preview_uses_production_artifact_profile_by_default` |
 
 ## Review Rule
 
@@ -85,7 +87,7 @@ missing: 当前没有有效测试；下一阶段必须补。
 改动影响哪些 Case ID？
 现有 pytest 是否覆盖？
 如果没有覆盖，是否先补 test？
-是否仍保持 M29.4 report-only、M29.5 plan-only、materializer 只消费 plan？
+是否仍保持 M29.5 plan-only for visible replay/cleanup？如果 materializer 消费 C-stage structural reports，是否只创建 transparent controlled groups around already replayed nodes？
 如果涉及 ownership conservation，是否仍保持 report-only 且不影响 DSL/assets/materialization？
 ```
 
