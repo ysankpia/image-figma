@@ -331,13 +331,15 @@ backend/app/config.py
 backend/app/database.py
 backend/app/state.py
 backend/app/storage.py
-backend/app/png_tools.py
+backend/app/png_tools/
 backend/app/ocr.py
 backend/app/ocr_baidu.py
 backend/app/errors.py
 ```
 
 这些文件不应承载 M29 业务规则。新增 owner、relation、shape replay 或 materialization 策略时，优先放回对应 M29 contract layer。
+
+`backend/app/png_tools/` 是标准库 PNG 支持包，只负责 metadata、decode、encode、crop/fill、background/foreground sampling 和 small geometry helpers；它不承载 source ownership 或 replay policy。
 
 ## Removed Runtime Boundary
 

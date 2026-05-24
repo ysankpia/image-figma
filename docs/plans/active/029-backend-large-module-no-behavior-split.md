@@ -38,7 +38,7 @@
 5. Completed: split `text_masked_media_audit` into a same-name package.
 6. Completed: split `text_visual_ownership_gate` into a same-name package.
 7. Completed: split `visual_evidence_normalization` into a same-name package.
-8. Split `png_tools` into a same-name package.
+8. Completed: split `png_tools` into a same-name package.
 9. Split `source_ui_physical_graph` into a same-name package.
 10. Move this plan to completed and update completed plan index.
 
@@ -53,6 +53,7 @@ Each implementation phase must preserve the original public import surface via p
 - 2026-05-24: Phase 5 split `backend/app/text_masked_media_audit.py` into `backend/app/text_masked_media_audit/` with public import compatibility preserved, including `text_boxes_from_ocr_document`. Focused regression passed: `cd backend && uv run pytest tests/test_text_masked_media_audit.py -q`.
 - 2026-05-24: Phase 6 split `backend/app/text_visual_ownership_gate.py` into `backend/app/text_visual_ownership_gate/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_text_visual_ownership_gate.py -q`. Three-phase backend regression passed: `cd backend && uv run pytest -q`.
 - 2026-05-24: Phase 7 split `backend/app/visual_evidence_normalization.py` into `backend/app/visual_evidence_normalization/` with public import compatibility preserved, including `parse_bbox` and `parse_metrics`. Focused regression passed: `cd backend && uv run pytest tests/test_visual_evidence_normalization.py -q`. Import-dependent regression passed: `cd backend && uv run pytest tests/test_visual_evidence_normalization.py tests/test_visual_object_candidate_audit.py tests/test_text_aware_visual_object_refinement.py tests/test_text_visual_ownership_gate.py -q`.
+- 2026-05-24: Phase 8 split `backend/app/png_tools.py` into `backend/app/png_tools/` with public import compatibility preserved for PNG metadata, decode, encode, crop, sampling, and geometry helpers. Focused regression passed: `cd backend && uv run pytest tests/test_png_tools.py -q`.
 
 ## Acceptance
 
