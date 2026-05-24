@@ -56,8 +56,6 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv("OCR_PROVIDER", "baidu_ppocrv5")
     monkeypatch.setenv("M30_PREVIEW_PROFILE", "development")
-    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "false")
-    monkeypatch.setenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "true")
     monkeypatch.setenv("OCR_TEXT_EDITABILITY_ENABLED", "false")
     monkeypatch.setenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", "false")
     monkeypatch.setenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "false")
@@ -69,23 +67,12 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED", "false")
     monkeypatch.setenv("M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED", "false")
     monkeypatch.setenv("M30_COMPOSITE_MEDIA_MIN_AREA", "65432")
-    monkeypatch.setenv("M39_CONTENT_CHROME_CLASSIFICATION_ENABLED", "false")
-    monkeypatch.setenv("M39_ONNX_PROPOSER_ENABLED", "false")
-    monkeypatch.setenv("M39_ONNX_MODEL_PATH", str(tmp_path / "model.onnx"))
-    monkeypatch.setenv("M39_1_UNIT_STRUCTURE_READINESS_ENABLED", "false")
-    monkeypatch.setenv("M39_1_ONNX_UNIT_PROPOSER_ENABLED", "false")
-    monkeypatch.setenv("M39_1_ONNX_MODEL_PATH", str(tmp_path / "unit-model.onnx"))
-    monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "false")
-    monkeypatch.setenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "true")
-    monkeypatch.setenv("M38_HIERARCHY_MAX_CONTAINERS", "3")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
 
     settings = config.get_settings()
 
     assert settings.ocr_provider == "baidu_ppocrv5"
     assert settings.m30_preview_profile == "development"
-    assert settings.m31_upload_diagnostics_enabled is False
-    assert settings.m31_upload_diagnostics_strict is True
     assert settings.ocr_text_editability_enabled is False
     assert settings.ocr_graphic_text_preserve_enabled is False
     assert settings.ocr_text_symbol_leakage_cleanup_enabled is False
@@ -97,15 +84,6 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.m30_image_asset_text_erasure_enabled is False
     assert settings.m30_composite_media_materialization_enabled is False
     assert settings.m30_composite_media_min_area == 65432
-    assert settings.m39_content_chrome_classification_enabled is False
-    assert settings.m39_onnx_proposer_enabled is False
-    assert settings.m39_onnx_model_path == tmp_path / "model.onnx"
-    assert settings.m39_1_unit_structure_readiness_enabled is False
-    assert settings.m39_1_onnx_unit_proposer_enabled is False
-    assert settings.m39_1_onnx_model_path == tmp_path / "unit-model.onnx"
-    assert settings.m38_hierarchy_materialization_enabled is False
-    assert settings.m38_hierarchy_materialization_strict is True
-    assert settings.m38_hierarchy_max_containers == 3
 
 
 def test_parse_bool_supports_common_env_values() -> None:

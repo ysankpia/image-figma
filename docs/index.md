@@ -13,7 +13,7 @@
 - M29 入门数学推演：[architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：[plans/active/039-1-1-unit-candidate-quality-gate.md](plans/active/039-1-1-unit-candidate-quality-gate.md)
+- 当前 active plan：[plans/active/](plans/active/) 当前为空；下一阶段开始前再写入新的 active 计划。
 
 ## By Task Type
 
@@ -69,6 +69,7 @@
 - 已替代计划：[plans/archive/superseded/index.md](plans/archive/superseded/index.md)
 - 已暂缓计划：[plans/archive/deferred/index.md](plans/archive/deferred/index.md)
 - Pre-M29 历史实验计划归档：[plans/archive/pre_m29/](plans/archive/pre_m29/)
+- ADR 是历史决策记录，不等于全部仍是 active runtime。M31-M39/M39.1 相关 ADR 当前仅作历史追溯。
 - ADR 模板：[decisions/adr-template.md](decisions/adr-template.md)
 - Monorepo 初始化决策：[decisions/0003-initialize-pnpm-monorepo.md](decisions/0003-initialize-pnpm-monorepo.md)
 - Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)

@@ -14,15 +14,17 @@ Plugin upload
 -> M29.4 weak cluster
 -> M29.5 replay plan
 -> M29 Direct compare variant
+-> legacy M29.0.x bridge
 -> M30 materialization
--> M31-M39 downstream diagnostics/materialization gates
 -> DSL v0.1
 -> Renderer
 ```
 
+M31-M39/M39.1 downstream experiments and ONNX proposer have been pruned from active backend runtime.
+
 ## Runtime Entry Surface
 
-`backend/app/main.py` 只装配当前 route modules：
+`backend/app/main.py` 装配当前 route modules：
 
 ```text
 backend/app/routes/health.py
@@ -31,7 +33,7 @@ backend/app/routes/tasks.py
 backend/app/routes/assets.py
 ```
 
-当前产品上传入口是 `POST /api/upload-m30-preview`。旧 `POST /api/upload` 和旧 M8-M28 debug endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
+当前产品上传入口是 `POST /api/upload-m30-preview`。旧 `POST /api/upload`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
 
 ## Pipeline Orchestrator
 
@@ -43,15 +45,13 @@ save source PNG
 run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
 run M29 Direct compare variant
-run M31 diagnostics
-run M29.0.x lineage/object refinement stages
+run M29.1 and M29.0.x legacy bridge stages
 run M30 materialization
 publish M30 and M29 Direct assets
-run M39/M37/M38/M39.1 downstream gates
 write task status and stage timings
 ```
 
-这个文件现在偏长。后续代码瘦身应优先做无行为变更拆分，例如把 artifact publishing、optional stage wrappers、pipeline path construction 和 task status error handling 拆出，但不能顺手改 stage order 或 runtime contract。
+这个文件仍偏长。后续代码瘦身应优先做无行为变更拆分，例如把 artifact publishing、optional stage wrappers、pipeline path construction 和 task status error handling 拆出。不要顺手改 stage order 或 runtime contract。
 
 ## Source Truth Layer
 
@@ -83,9 +83,9 @@ document validation
 
 拆分不能改变 primitive IDs、metrics、geometry contract、support detector gates、asset paths 或 output JSON shape。
 
-### M29.0.x Lineage And Object Refinement
+### Legacy M29.0.x Bridge
 
-这些文件仍在 M30 materialization 前运行，作用是保留和筛选 raw M29 evidence，不是新的 source truth：
+这些文件仍在 M30 materialization 前运行，作用是保留和筛选 raw M29 evidence。它们是 `/dsl` 迁移期 bridge，不是新的 source truth：
 
 ```text
 backend/app/symbol_fragment_grouping.py
@@ -96,16 +96,15 @@ backend/app/visual_object_candidate_audit.py
 backend/app/text_aware_visual_object_refinement.py
 ```
 
-部分 audit 文件存在但不在当前 upload pipeline 默认路径中：
+`backend/app/mixed_symbol_text_conflict_audit.py` 仍保留，但当前只因 M30 materialization 复用 `find_forbidden_contract_terms`。不要把它当成 upload pipeline stage。
+
+已删除的 legacy audit modules：
 
 ```text
-backend/app/mixed_symbol_text_conflict_audit.py
-backend/app/residual_mixed_boundary_review.py
-backend/app/member_boundary_quality_audit.py
-backend/app/pre_ocr_symbol_lineage_audit.py
+pre-OCR symbol lineage audit
+member boundary quality audit
+residual mixed boundary review
 ```
-
-读取这些文件时要先确认是否由 `m30_upload_pipeline.py` 调用，不能因为文件存在就当成 active runtime stage。
 
 ## M29 Contract Layer
 
@@ -192,7 +191,7 @@ source-proven support shape materialization
 accepted image materialization
 composite media materialization
 copied media asset text cleanup
-fallback erasure for authorized materialized nodes
+fallback erasure for materialized nodes
 M30 report
 ```
 
@@ -209,29 +208,20 @@ DSL node helpers
 
 拆分不能新增 bbox、不能重写 M29 JSON、不能放宽 ordinary unsafe shape/text overlap，也不能把 M29.4 weak cluster 当组件权限。
 
-## Downstream Structure And Audit
+## Removed Downstream Boundary
 
-这些文件在 M30 后运行，不能反向决定 M29 owner：
-
-```text
-backend/app/reconstruction_ui_tree.py
-backend/app/content_chrome_classification.py
-backend/app/hierarchy_readiness.py
-backend/app/hierarchy_materialization.py
-backend/app/unit_structure_readiness.py
-```
-
-职责边界：
+这些 downstream modules 已从 active backend runtime 删除：
 
 ```text
-M31 reconstruction tree: diagnostics and fallback unit organization
-M39 content/chrome classification: labels M30 nodes as chrome/content
-M37 hierarchy readiness: audits safe direct-match hierarchy candidates
-M38 controlled hierarchy materialization: creates safe transparent group containers
-M39.1 unit structure readiness: report-only candidate audit
+reconstruction UI tree
+hierarchy readiness
+hierarchy materialization
+content/chrome classification
+unit structure readiness
+ONNX box proposer
 ```
 
-当前唯一 active plan 是 M39.1.1 Unit Candidate Quality Gate。它要先把 candidate quality fields 补齐，再谈 promotion、layout semantics 或 component/instance extraction。
+相关 ADR 和 completed plans 只说明历史尝试。后续若重新做 hierarchy、unit、component 或 Codia adapter，需要从当前 M29 source truth 重新建计划和测试合同。
 
 ## Platform, API, Storage
 
@@ -252,16 +242,14 @@ backend/app/errors.py
 
 ## Legacy Diagnostic Boundary
 
-M20-M28、旧 icon/slice/provider harness、visual provider benchmark 和 mask proposal experiments 已经降级为历史证据或 ADR 背景。当前 backend active runtime 不应依赖它们提供 source ownership。
+M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask proposal experiments 和已删除 downstream structure experiments 已经降级为历史证据或 ADR 背景。当前 backend active runtime 不应依赖它们提供 source ownership。
 
 保留历史文档的目的只有两个：
 
 ```text
-追溯为什么从旧 icon/slice/provider route 转向 M29 pixel topology
-避免后续重复把 provider proposal 当 source truth
+追溯为什么从旧 icon/slice/provider/downstream route 转向 M29 pixel topology
+避免后续重复把 provider proposal 或 weak downstream grouping 当 source truth
 ```
-
-如果需要重新评估这些历史方向，必须先写新计划，明确它们只是 proposal/evidence，不得绕过 M29/M30 合同。
 
 ## Next Refactor Direction
 

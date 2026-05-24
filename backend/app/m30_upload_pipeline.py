@@ -10,13 +10,10 @@ from typing import Any, Literal
 
 from .database import json_dumps
 from .evidence_grounded_dsl_materialization import materialize_evidence_grounded_dsl, M30Options
-from .hierarchy_materialization import M38Options, materialize_m38_hierarchy
-from .hierarchy_readiness import extract_m37_hierarchy_readiness
 from .m29_direct_replay import build_m29_direct_replay_dsl
 from .m29_replay_plan import build_m295_replay_plan
 from .ocr import extract_ocr
 from .png_tools import PngMetadata, read_png_metadata
-from .reconstruction_ui_tree import extract_m31_reconstruction_ui_tree
 from .region_relation_graph_report import extract_m2931_region_relation_graph_report
 from .stable_design_cluster import extract_m294_stable_design_cluster_report
 from .source_ui_physical_graph import extract_source_ui_physical_graph
@@ -28,7 +25,6 @@ from .text_aware_visual_object_refinement import (
 )
 from .text_masked_media_audit import extract_text_masked_media_audit, text_boxes_from_ocr_document
 from .text_visual_ownership_gate import extract_text_visual_ownership_gate
-from .unit_structure_readiness import M391Options, audit_unit_structure_readiness
 from .visual_evidence_normalization import extract_visual_evidence_normalization
 from .visual_object_candidate_audit import (
     M2904SourceExpansionRefs,
@@ -62,12 +58,7 @@ class M30PipelinePaths:
     m2907: Path
     m2904: Path
     m2905: Path
-    m31: Path
     m30: Path
-    m37: Path
-    m38: Path
-    m39: Path
-    m39_1: Path
 
 
 @dataclass(frozen=True)
@@ -213,21 +204,6 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
             task_id=task_id,
         )
 
-    if state.settings.m31_upload_diagnostics_enabled:
-        update_task(task_id, "m31_reconstruction", 28, "Building M31 reconstruction diagnostics.")
-        run_m31_diagnostic_stage(
-            task_id=task_id,
-            paths=paths,
-            timings=timings,
-            upload_path=upload_path,
-            png_data=png_data,
-            ocr_document=ocr_document.to_dict(),
-            ocr_json=paths.ocr / "ocr.json",
-            m29_document=m29_document.to_dict(),
-            m29_json=m29_json,
-            policy=policy,
-        )
-
     update_task(task_id, "m29_1", 30, "Running M29.1 symbol grouping.")
     m291_document = run_stage(paths, timings, "m29_1", lambda: extract_m291_symbol_fragment_grouping(
         m29_document=m29_document.to_dict(),
@@ -357,86 +333,8 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     update_task(task_id, "m30_asset_publish", 96, "Publishing M30 assets.")
     run_stage(paths, timings, "m30_asset_publish", lambda: publish_m30_assets(task_id, paths.m30, m30_result.dsl, image))
 
-    if state.settings.m39_content_chrome_classification_enabled:
-        update_task(task_id, "m39_boundary_classification", 97, "Running M39 boundary classification.")
-        from .content_chrome_classification import M39Options, classify_content_chrome
-
-        run_stage(
-            paths,
-            timings,
-            "m39_boundary_classification",
-            lambda: classify_content_chrome(
-                dsl=m30_result.dsl,
-                task_id=task_id,
-                output_dir=paths.m39,
-                source_image_path=upload_path,
-                options=M39Options(
-                    onnx_proposer_enabled=state.settings.m39_onnx_proposer_enabled,
-                    onnx_model_path=state.settings.m39_onnx_model_path,
-                ),
-            ),
-        )
-
     output_dsl = paths.m30 / "m30_materialized_dsl.json"
     output_dsl.write_text(json.dumps(m30_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    m31_tree = paths.m31 / "m31_reconstruction_tree.json"
-    m31_report = paths.m31 / "m31_reconstruction_tree_report.json"
-    m30_report = paths.m30 / "m30_materialization_report.json"
-    m37_report = paths.m37 / "m37_hierarchy_readiness_report.json"
-    if m31_tree.exists() and m31_report.exists() and m30_report.exists():
-        update_task(task_id, "m37_hierarchy_readiness", 98, "Auditing M37 hierarchy readiness.")
-        run_optional_stage(
-            paths,
-            timings,
-            "m37_hierarchy_readiness",
-            lambda: extract_m37_hierarchy_readiness(
-                m31_tree_path=str(m31_tree),
-                m31_report_path=str(m31_report),
-                m30_dsl_path=str(output_dsl),
-                m30_report_path=str(m30_report),
-                output_dir=paths.m37,
-            ),
-            task_id=task_id,
-        )
-
-    if state.settings.m38_hierarchy_materialization_enabled and m37_report.exists():
-        update_task(task_id, "m38_hierarchy_materialization", 99, "Materializing M38 hierarchy containers.")
-        run_m38_hierarchy_materialization_stage(
-            task_id=task_id,
-            paths=paths,
-            timings=timings,
-            output_dsl=output_dsl,
-            m37_report=m37_report,
-        )
-
-    if state.settings.m39_1_unit_structure_readiness_enabled and m31_tree.exists() and m31_report.exists():
-        update_task(task_id, "m39_1_unit_structure_readiness_audit", 99, "Auditing M39.1 unit structure readiness.")
-        run_optional_stage(
-            paths,
-            timings,
-            "m39_1_unit_structure_readiness_audit",
-            lambda: audit_unit_structure_readiness(
-                task_id=task_id,
-                m30_dsl_path=str(output_dsl),
-                m31_tree_path=str(m31_tree),
-                m31_report_path=str(m31_report),
-                m37_report_path=str(m37_report) if m37_report.exists() else None,
-                m38_report_path=str(paths.m38 / "hierarchy_materialization_report.json")
-                if (paths.m38 / "hierarchy_materialization_report.json").exists()
-                else None,
-                m39_report_path=str(paths.m39 / "m39_boundary_classification_report.json")
-                if (paths.m39 / "m39_boundary_classification_report.json").exists()
-                else None,
-                output_dir=paths.m39_1,
-                source_image_path=upload_path,
-                options=M391Options(
-                    onnx_unit_proposer_enabled=state.settings.m39_1_onnx_unit_proposer_enabled,
-                    onnx_model_path=state.settings.m39_1_onnx_model_path,
-                ),
-            ),
-            task_id=task_id,
-        )
 
     now = datetime.now(UTC).isoformat()
     state.database.insert_dsl_result(
@@ -485,67 +383,6 @@ def run_ocr(task_id: str, image: PngMetadata, upload_path: Path, output_dir: Pat
         message = document.error["message"] if document.error else "OCR extraction failed."
         raise M30UploadPipelineError("ocr", code, message)
     return document
-
-
-def run_m31_diagnostic_stage(
-    *,
-    task_id: str,
-    paths: M30PipelinePaths,
-    timings: list[StageTiming],
-    upload_path: Path,
-    png_data: bytes,
-    ocr_document: dict[str, Any],
-    ocr_json: Path,
-    m29_document: dict[str, Any],
-    m29_json: Path,
-    policy: M30ArtifactPolicy,
-) -> None:
-    action = lambda: extract_m31_reconstruction_ui_tree(
-        source_image_path=str(upload_path),
-        ocr_document=ocr_document,
-        ocr_json_path=str(ocr_json),
-        m29_document=m29_document,
-        m29_nodes_json_path=str(m29_json),
-        output_dir=paths.m31,
-        profile=policy.profile,
-        png_data=png_data,
-    )
-    if state.settings.m31_upload_diagnostics_strict:
-        try:
-            run_stage(paths, timings, "m31_reconstruction", action)
-        except M30UploadPipelineError:
-            raise
-        except Exception as error:
-            raise M30UploadPipelineError("m31_reconstruction", error.__class__.__name__, str(error)) from error
-        return
-    run_optional_stage(paths, timings, "m31_reconstruction", action, task_id=task_id)
-
-
-def run_m38_hierarchy_materialization_stage(
-    *,
-    task_id: str,
-    paths: M30PipelinePaths,
-    timings: list[StageTiming],
-    output_dsl: Path,
-    m37_report: Path,
-) -> None:
-    action = lambda: materialize_m38_hierarchy(
-        m30_dsl_path=str(output_dsl),
-        m37_report_path=str(m37_report),
-        output_dir=paths.m38,
-        flat_dsl_output_path=str(paths.m30 / "m30_materialized_dsl_flat.json"),
-        final_dsl_output_path=str(output_dsl),
-        options=M38Options(max_containers=state.settings.m38_hierarchy_max_containers),
-    )
-    if state.settings.m38_hierarchy_materialization_strict:
-        try:
-            run_stage(paths, timings, "m38_hierarchy_materialization", action)
-        except M30UploadPipelineError:
-            raise
-        except Exception as error:
-            raise M30UploadPipelineError("m38_hierarchy_materialization", error.__class__.__name__, str(error)) from error
-        return
-    run_optional_stage(paths, timings, "m38_hierarchy_materialization", action, task_id=task_id)
 
 
 def publish_m30_assets(task_id: str, m30_dir: Path, dsl: dict[str, Any], image: PngMetadata) -> None:
@@ -722,12 +559,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m2907=root / "m29_0_7",
         m2904=root / "m29_0_4",
         m2905=root / "m29_0_5",
-        m31=root / "m31",
         m30=root / "m30",
-        m37=root / "m37",
-        m38=root / "m38",
-        m39=root / "m39",
-        m39_1=root / "m39_1",
     )
 
 

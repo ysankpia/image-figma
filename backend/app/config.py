@@ -24,8 +24,6 @@ class Settings:
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
     m30_preview_profile: str = "production"
-    m31_upload_diagnostics_enabled: bool = True
-    m31_upload_diagnostics_strict: bool = False
     ocr_text_editability_enabled: bool = True
     ocr_graphic_text_preserve_enabled: bool = True
     ocr_max_rotation_angle: float = 3.0
@@ -40,15 +38,6 @@ class Settings:
     m30_image_asset_text_erasure_enabled: bool = True
     m30_composite_media_materialization_enabled: bool = True
     m30_composite_media_min_area: int = 50000
-    m39_content_chrome_classification_enabled: bool = True
-    m39_onnx_proposer_enabled: bool = True
-    m39_onnx_model_path: Path = Path("/Volumes/WorkDrive/Models/model_fp16.onnx")
-    m39_1_unit_structure_readiness_enabled: bool = True
-    m39_1_onnx_unit_proposer_enabled: bool = True
-    m39_1_onnx_model_path: Path = Path("/Volumes/WorkDrive/Models/model_fp16.onnx")
-    m38_hierarchy_materialization_enabled: bool = True
-    m38_hierarchy_materialization_strict: bool = False
-    m38_hierarchy_max_containers: int = 8
 
 
 def get_settings() -> Settings:
@@ -74,8 +63,6 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         m30_preview_profile=parse_m30_preview_profile(os.getenv("M30_PREVIEW_PROFILE", "production")),
-        m31_upload_diagnostics_enabled=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_ENABLED", "true"), default=True),
-        m31_upload_diagnostics_strict=parse_bool(os.getenv("M31_UPLOAD_DIAGNOSTICS_STRICT", "false"), default=False),
         ocr_text_editability_enabled=parse_bool(os.getenv("OCR_TEXT_EDITABILITY_ENABLED", "true"), default=True),
         ocr_graphic_text_preserve_enabled=parse_bool(
             os.getenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", os.getenv("OCR_ARTISTIC_TEXT_FILTER_ENABLED", "true")),
@@ -93,25 +80,6 @@ def get_settings() -> Settings:
         m30_image_asset_text_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED", "true"), default=True),
         m30_composite_media_materialization_enabled=parse_bool(os.getenv("M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED", "true"), default=True),
         m30_composite_media_min_area=max(0, int(os.getenv("M30_COMPOSITE_MEDIA_MIN_AREA", "50000"))),
-        m39_content_chrome_classification_enabled=parse_bool(
-            os.getenv("M39_CONTENT_CHROME_CLASSIFICATION_ENABLED", "true"),
-            default=True,
-        ),
-        m39_onnx_proposer_enabled=parse_bool(os.getenv("M39_ONNX_PROPOSER_ENABLED", "true"), default=True),
-        m39_onnx_model_path=Path(
-            os.getenv("M39_ONNX_MODEL_PATH", "/Volumes/WorkDrive/Models/model_fp16.onnx")
-        ).expanduser(),
-        m39_1_unit_structure_readiness_enabled=parse_bool(
-            os.getenv("M39_1_UNIT_STRUCTURE_READINESS_ENABLED", "true"),
-            default=True,
-        ),
-        m39_1_onnx_unit_proposer_enabled=parse_bool(os.getenv("M39_1_ONNX_UNIT_PROPOSER_ENABLED", "true"), default=True),
-        m39_1_onnx_model_path=Path(
-            os.getenv("M39_1_ONNX_MODEL_PATH", "/Volumes/WorkDrive/Models/model_fp16.onnx")
-        ).expanduser(),
-        m38_hierarchy_materialization_enabled=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_ENABLED", "true"), default=True),
-        m38_hierarchy_materialization_strict=parse_bool(os.getenv("M38_HIERARCHY_MATERIALIZATION_STRICT", "false"), default=False),
-        m38_hierarchy_max_containers=max(0, int(os.getenv("M38_HIERARCHY_MAX_CONTAINERS", "8"))),
     )
 
 

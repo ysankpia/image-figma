@@ -31,7 +31,6 @@ def run_batch(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"batch root not found: {batch_root}")
     image_documents = []
     m2905_by_image = {}
-    m2906_by_image = {}
     for image_dir in sorted(path for path in batch_root.glob("image_*") if path.is_dir()):
         source = resolve_batch_source(image_dir, input_root)
         print(f"== {image_dir.name} == {source}")
@@ -40,9 +39,7 @@ def run_batch(args: argparse.Namespace) -> int:
         image_documents.append((image_dir.name, document))
         if m2905_json := resolve_optional_json(args.m2905_output, image_dir, "m29_0_5", "refined_visual_objects.json", required=False):
             m2905_by_image[image_dir.name] = load_json(m2905_json) or {}
-        if m2906_json := resolve_optional_json(args.m2906_output, image_dir, "m29_0_6", "member_boundary_quality_audit.json", required=False):
-            m2906_by_image[image_dir.name] = load_json(m2906_json) or {}
-    build_batch_summary(image_documents, batch_root, m2905_by_image=m2905_by_image, m2906_by_image=m2906_by_image)
+    build_batch_summary(image_documents, batch_root, m2905_by_image=m2905_by_image)
     print(f"Wrote {batch_root / 'm29_1_3_batch_summary.json'}")
     print(f"Wrote {batch_root / 'm29_1_3_batch_summary.csv'}")
     return 0
@@ -57,7 +54,6 @@ def run_single(args: argparse.Namespace, m29_output: Path, *, explicit_input: st
     m2903_json = resolve_optional_json(args.m2903_output, m29_output, "m29_0_3", "visual_evidence.json", required=True)
     m2907_json = resolve_optional_json(args.m2907_output, m29_output, "m29_0_7", "text_visual_ownership_gate.json", required=False)
     m291_json = resolve_optional_json(args.m291_output, m29_output, "m29_1", "group_nodes.json", required=False)
-    m2911_json = resolve_optional_json(args.m2911_output, m29_output, "m29_1_1", "pre_ocr_symbol_lineage_audit.json", required=False)
     m2902_json = resolve_optional_json(args.m2902_output, m29_output, "m29_0_2", "text_masked_media_audit.json", required=False)
     output_dir = resolve_output_dir(m29_output / "m29_1_3", overwrite=args.overwrite)
     document = extract_mixed_symbol_text_conflict_audit(
@@ -70,8 +66,8 @@ def run_single(args: argparse.Namespace, m29_output: Path, *, explicit_input: st
         m2907_ownership_json_path=str(m2907_json) if m2907_json else None,
         m291_document=load_json(m291_json),
         m291_group_nodes_json_path=str(m291_json) if m291_json else None,
-        m2911_document=load_json(m2911_json),
-        m2911_lineage_audit_json_path=str(m2911_json) if m2911_json else None,
+        m2911_document=None,
+        m2911_lineage_audit_json_path=None,
         m2902_document=load_json(m2902_json),
         m2902_audit_json_path=str(m2902_json) if m2902_json else None,
         options=M2913Options(
@@ -105,10 +101,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m2903-output", default="")
     parser.add_argument("--m2907-output", default="")
     parser.add_argument("--m291-output", default="")
-    parser.add_argument("--m2911-output", default="")
     parser.add_argument("--m2902-output", default="")
     parser.add_argument("--m2905-output", default="")
-    parser.add_argument("--m2906-output", default="")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--full-ocr-coverage-min", type=float, default=M2913Options.full_ocr_coverage_min)
     parser.add_argument("--partial-ocr-overlap-min", type=float, default=M2913Options.partial_ocr_overlap_min)

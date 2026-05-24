@@ -32,8 +32,8 @@ Figma Plugin
 -> M29.4 weak structural cluster report
 -> M29.5 replay plan
 -> M29 Direct compare variant
+-> legacy M29.0.x bridge
 -> M30 evidence-grounded DSL materialization
--> M31/M37/M38/M39 downstream diagnostics/materialization gates
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
 -> Figma Canvas
@@ -45,11 +45,13 @@ M30 是 materialization consumer。它只能消费已经通过 M29/source 合同
 
 M29 Direct 是 compare/experiment variant。它通过 `GET /api/tasks/{taskId}/m29-direct-dsl` 暴露，不替代主线 `/api/tasks/{taskId}/dsl`。
 
-M31-M39 是 downstream structure、audit、diagnostic 或 controlled materialization 层。它们可以审计、组织、标记、保护或有限分组 M30 输出，但不能反向修改 raw M29/M29.2 的 source ownership。
+M29.0.x + M30 是迁移期 legacy `/dsl` bridge。它保留当前插件默认 DSL 出口，但不是新的 source truth。后续若要转正 M29.5 plan-driven materialization，必须单独开阶段，不能在本阶段偷偷改 `/dsl` 行为。
+
+M31/M37/M38/M39/M39.1 和 ONNX proposer 已从当前 backend runtime 剪除。相关 ADR、completed plan 和 git 历史只作为历史证据，不得当成 active stage、当前 API、当前 env 或新的主链事实来源。
 
 ## Legacy 边界
 
-M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/provider harness 只作为历史证据和 ADR 背景保留。它们不得重新进入当前 upload/replay 的 source truth，也不得绕过 M29 owner/relation/replay 合同。
+M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/provider harness、M31-M39 downstream experiments 只作为历史证据和 ADR 背景保留。它们不得重新进入当前 upload/replay 的 source truth，也不得绕过 M29 owner/relation/replay 合同。
 
 旧 M8-M28 debug endpoints 和 pre-M29 upload chain 已被 M30.2.2 移出 active runtime。不要通过环境变量、兼容 route 或旧诊断链路把它们恢复成产品路径。
 
@@ -95,6 +97,7 @@ M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/pro
 - M29.4 cluster 始终是 weak structural evidence。`row_like`、`column_like`、`background_anchor_like`、`repeated_item_like` 不提供组件化、Auto Layout、Figma Component/Instance 或 materialization 权限。
 - M29.5 replay plan 是 M29 Direct 前的最后质量门。可见层顺序、去重、node budget、cleanup 授权必须由 plan 控制。
 - M30 只能 materialize trusted M29 evidence。它不创建新 bbox，不重写 raw M29 JSON，不把 future cluster/semantic hint 当组件真值。
+- 不要恢复已删除的 M31/M37/M38/M39/M39.1 runtime、routes、env 或 ONNX proposer，除非新计划明确证明它们仍服务当前 M29 source truth，并重新建立测试合同。
 - AI/OCR/视觉 provider 输出不能直接成为 DSL 权威，必须经过 M29/M30 合同、质量门禁和校验。
 - 上传主链路默认返回 M30 DSL；M29 Direct 只作为 compare variant。
 - 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。

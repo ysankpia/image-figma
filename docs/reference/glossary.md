@@ -30,11 +30,11 @@ Figma 插件主线程，负责调用 API、获取 DSL、调用 Renderer、操作
 
 ## Reconstruction UI Tree
 
-M31 引入的组织层。它把 M29 primitive evidence 重新挂到 page、group、reconstruction unit 和 review bucket 中，用来验证 ownership 和可回退重建边界。
+历史 M31 引入的组织层。它曾把 M29 primitive evidence 重新挂到 page、group、reconstruction unit 和 review bucket 中，用来验证 ownership 和可回退重建边界。M31 已从当前 backend runtime 删除。
 
 ## Reconstruction Unit
 
-可作为整体回退、整体裁切和后续重合成验证的最小施工单元。每个 M31 reconstruction unit 必须有 bbox、children、source refs、reconstruction mode 和 fallback crop。
+历史 M31 概念，可作为整体回退、整体裁切和后续重合成验证的最小施工单元。当前 runtime 不再生成 reconstruction unit。
 
 ## Original Reference
 

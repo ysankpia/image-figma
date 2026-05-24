@@ -1,7 +1,8 @@
 # M39.1.1 Unit Candidate Quality Gate
 
-- 状态：active
+- 状态：deferred
 - 创建日期：2026-05-22
+- 暂缓原因：M29 backend downstream pruning 已从当前 runtime 删除 M39.1 unit structure readiness audit；本计划只保留为历史候选，不能作为当前 active work 执行。
 - 负责人：未指定
 
 ## Goal

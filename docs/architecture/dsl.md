@@ -9,11 +9,9 @@ M29 trusted evidence
 -> Figma nodes
 ```
 
-OCR、M29 evidence、audit reports 和 storage artifacts 都不是 Renderer 输入。Renderer 只消费 DSL。
+OCR、M29 evidence、M29 Direct reports、M30 reports 和 storage artifacts 都不是 Renderer 输入。Renderer 只消费 DSL。
 
-M31 Reconstruction UI Tree 也不是 Renderer 输入。它是 M29 后面的诊断组织层，用来验证 primitive ownership、reconstruction unit fallback 和后续 layer recovery 的可行性。M31 不改 DSL schema。
-
-M37 Hierarchy Readiness 也不是 Renderer 输入。它只审计 M31 reconstruction units 与 M30 visible DSL nodes 之间的可映射性，为后续 nested DSL 实验准备 ownership bridge；M37 不生成 frame、不移动节点、不改变 DSL v0.1 输出。
+历史 downstream reports 也不是 Renderer 输入。M31/M37/M38/M39/M39.1 已从当前 backend runtime 移除；它们不改变 DSL schema，也不应被当作当前 DSL producer。
 
 ## Top-Level Shape
 
@@ -147,15 +145,7 @@ m30_visual_asset
 m30_composite_media_asset
 ```
 
-M39 may add `meta.boundaryClassification` to materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes:
-
-```json
-{
-  "boundaryClassification": "content"
-}
-```
-
-This is a hierarchy-safety label only. It is not a renderer instruction, does not create nodes, does not move nodes, and does not apply to `fallback_region` or `original_reference`.
+Historical M39 `meta.boundaryClassification` labels are no longer emitted by current backend runtime. Renderer must ignore unknown `meta` fields and must not depend on this historical label.
 
 ### Text
 

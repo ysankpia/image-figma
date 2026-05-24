@@ -200,7 +200,7 @@ def run_audit(
         m291_document=m291_document,
         m291_group_nodes_json_path="/tmp/m29_1/group_nodes.json" if m291_document else None,
         m2911_document=m2911_document,
-        m2911_lineage_audit_json_path="/tmp/m29_1_1/pre_ocr_symbol_lineage_audit.json" if m2911_document else None,
+        m2911_lineage_audit_json_path="/tmp/m29_1_1/lineage_audit.json" if m2911_document else None,
     )
 
 
