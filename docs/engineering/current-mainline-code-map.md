@@ -169,6 +169,27 @@ m29_image
 m29_symbol
 ```
 
+### Historical M29 Audit Packages
+
+Some pre-mainline M29 audit modules remain in the repository as regression harnesses and evidence contracts. They are not active product API routes, but their public imports stay stable for tests and archival validation.
+
+`backend/app/text_aware_visual_object_refinement/` contains the M29.0.5 text-aware visual object refinement harness:
+
+```text
+pipeline.py: extraction entry and lookup assembly
+types.py: M29.0.5 document/options/refined object dataclasses
+refinement.py: source object refinement orchestration
+members.py: member-level visual/text/unresolved conversion
+decisions.py: object decision/risk/reason helpers
+classification.py: visual kind and source shape classification helpers
+geometry.py: text-overlap, bbox union, dedupe, and count helpers
+artifacts.py: crops, overlays, preview sheet helpers
+report.py: JSON/Markdown/meta outputs
+validation.py: document and PNG artifact validation
+```
+
+`app.text_aware_visual_object_refinement` continues to export the historical public API, including `extract_text_aware_visual_object_refinement`, `validate_text_aware_visual_object_refinement_document`, and the M29.0.5 dataclasses.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:

@@ -31,7 +31,7 @@
 
 ## Steps
 
-1. Split `text_aware_visual_object_refinement` into a same-name package.
+1. Completed: split `text_aware_visual_object_refinement` into a same-name package.
 2. Split `visual_object_candidate_audit` into a same-name package.
 3. Split `symbol_fragment_grouping` into a same-name package.
 4. Split remaining `visual_primitive_graph` responsibilities into `visual_primitive/`.
@@ -43,6 +43,10 @@
 10. Move this plan to completed and update completed plan index.
 
 Each implementation phase must preserve the original public import surface via package `__init__.py` or compatibility re-exports.
+
+## Phase Log
+
+- 2026-05-24: Phase 1 split `backend/app/text_aware_visual_object_refinement.py` into `backend/app/text_aware_visual_object_refinement/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_text_aware_visual_object_refinement.py -q`.
 
 ## Acceptance
 
