@@ -15,7 +15,7 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：[plans/active/](plans/active/) 当前为空；下一阶段开始前再写入新的 active 计划。
+- 当前 active plan：[plans/active/044-m29-b-stage-report-and-permission-program.md](plans/active/044-m29-b-stage-report-and-permission-program.md) 和 [plans/active/045-m29-5-visible-replay-overlap-suppression.md](plans/active/045-m29-5-visible-replay-overlap-suppression.md)。
 
 ## By Task Type
 
