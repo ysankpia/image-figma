@@ -249,6 +249,23 @@ validation.py: document, meta, unique-id, and PNG artifact validation
 
 `app.text_visual_ownership_gate` continues to export the historical public API, including `extract_text_visual_ownership_gate`, `validate_text_visual_ownership_gate_document`, and the M29.0.7 dataclasses.
 
+`backend/app/visual_evidence_normalization/` contains the M29.0.3 visual evidence normalization harness:
+
+```text
+pipeline.py: extraction entry and normalized item assembly
+types.py: M29.0.3 options/item/debug/document dataclasses
+classification.py: evidence bucket decision logic
+lineage.py: M29.1 lineage lookup, normalization, rejection, and bbox matching
+text_overlap.py: OCR overlap, token, and counter-evidence helpers
+parsing.py: source/bbox/metrics parsing and item id/confidence helpers
+groups.py: visual kind, decision, and region grouping summary
+artifacts.py: crop export, overlays, preview sheet helpers
+report.py: JSON/Markdown/meta outputs
+validation.py: document and PNG artifact validation
+```
+
+`app.visual_evidence_normalization` continues to export the historical public API. `parse_bbox` and `parse_metrics` remain compatibility exports used by older M29 audit packages.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:
