@@ -234,6 +234,21 @@ validation.py: document and PNG artifact validation
 
 `app.text_masked_media_audit` continues to export the historical public API. `text_boxes_from_ocr_document` remains a current-mainline dependency for upload preview and plan materialization.
 
+`backend/app/text_visual_ownership_gate/` contains the M29.0.7 text/visual ownership routing harness:
+
+```text
+pipeline.py: extraction entry and document assembly
+types.py: M29.0.7 options/decision/debug/document dataclasses
+decision.py: text-box and visual-item ownership decisions
+overlap.py: text-union overlap math
+routing.py: routing views and audit rows
+artifacts.py: ownership examples, overlays, preview sheet helpers
+report.py: JSON/Markdown outputs
+validation.py: document, meta, unique-id, and PNG artifact validation
+```
+
+`app.text_visual_ownership_gate` continues to export the historical public API, including `extract_text_visual_ownership_gate`, `validate_text_visual_ownership_gate_document`, and the M29.0.7 dataclasses.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:
