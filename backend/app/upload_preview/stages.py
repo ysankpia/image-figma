@@ -7,6 +7,7 @@ from typing import Any
 
 from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
+from ..layout_energy_report import extract_m29_layout_energy_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
 from ..plan_materializer import build_plan_driven_dsl
@@ -157,6 +158,23 @@ def run_m29_sibling_group_candidate_stage(
         m295_report=m295_report,
         hierarchy_report=hierarchy_report,
         output_dir=paths.m29_sibling_groups,
+    )
+
+
+def run_m29_layout_energy_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m295_report: dict[str, Any],
+    hierarchy_report: dict[str, Any],
+    sibling_group_report: dict[str, Any],
+):
+    return extract_m29_layout_energy_report(
+        task_id=task_id,
+        m295_report=m295_report,
+        hierarchy_report=hierarchy_report,
+        sibling_group_report=sibling_group_report,
+        output_dir=paths.m29_layout_energy,
     )
 
 

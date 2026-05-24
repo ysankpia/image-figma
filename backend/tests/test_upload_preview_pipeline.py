@@ -64,6 +64,7 @@ def test_upload_preview_completes_and_serves_m29_plan_driven_dsl(client: TestCli
         "m29_ownership_conservation",
         "m29_hierarchy_candidates",
         "m29_sibling_groups",
+        "m29_layout_energy",
         "m29_materialization",
         "m29_asset_publish",
     }
@@ -108,6 +109,7 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert (task_root / "m29_ownership_conservation" / "ownership_conservation_report.json").exists()
     assert (task_root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json").exists()
     assert (task_root / "m29_sibling_groups" / "sibling_group_candidate_report.json").exists()
+    assert (task_root / "m29_layout_energy" / "layout_energy_report.json").exists()
     assert (task_root / "materialized_design" / "design.dsl.json").exists()
     assert (task_root / "materialized_design" / "materialization_report.json").exists()
 

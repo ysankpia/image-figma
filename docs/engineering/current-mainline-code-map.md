@@ -16,6 +16,7 @@ Plugin upload
 -> M29 ownership conservation report
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
+-> M29 layout energy report
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -48,6 +49,7 @@ run M29/M29.2/M29.3/M29.4/M29.5
 run M29 ownership conservation report
 run M29 hierarchy candidate report
 run M29 sibling group candidate report
+run M29 layout energy report
 run M29 plan-driven materialization
 publish M29 assets
 write task status and stage timings
@@ -61,7 +63,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/materialization stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -309,6 +311,37 @@ validation.py: report schema and read-only invariant checks
 ```
 
 这个 package 只报告候选兄弟组，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
+
+### M29 Layout Energy
+
+`backend/app/layout_energy_report/` 是 M29.5 之后、materialization 之前的 report-only layout evidence surface。它消费：
+
+```text
+M29.5 replay plan
+M29 hierarchy candidate report
+M29 sibling group candidate report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_layout_energy/layout_energy_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: visible action constants, layout model constants, and result type
+normalization.py: M29.5 plan item, sibling group, and hierarchy selected-parent normalization
+subjects.py: sibling-group and hierarchy-children layout subject construction
+geometry.py: bbox, gap, overlap, variance, and track helpers
+energy.py: row/column/grid/overlay/absolute energy scoring
+report.py: summary counts, internal-field stripping, and report-only invariant fields
+validation.py: report schema and read-only invariant checks
+```
+
+这个 package 只报告候选 layout model 和 energy，不创建 Auto Layout，不创建 Group/Frame，不改 replay plan，不被 materializer 消费。
 
 ### Historical M29 Audit Packages
 
