@@ -172,7 +172,7 @@ geometry.py: bbox/member overlap and deterministic sort helpers
 
 ### M29.5 Replay Plan
 
-`backend/app/m29_replay_plan.py` 是正式 materialization 前的质量门。它负责：
+`backend/app/m29_replay_plan/` 是正式 materialization 前的质量门。它负责：
 
 ```text
 map M29.2 replay decisions to final plan actions
@@ -191,6 +191,21 @@ m29_text
 m29_shape
 m29_image
 m29_symbol
+```
+
+模块边界：
+
+```text
+pipeline.py: M29.5 replay plan orchestration and JSON write
+types.py: options/result and replay action/target role Literal contracts
+normalization.py: M29.2 source object normalization
+lookups.py: M29.3 edge and M29.4 cluster lookup construction
+decisions.py: replay action mapping, target role, duplicate priority
+cleanup.py: fallback and copied-image asset cleanup authorization
+budget.py: visible node budget suppression and duplicate plan items
+report.py: reasons and summary construction
+validation.py: report schema and read-only invariant checks
+utils.py: stable sort and ordered dedupe helpers
 ```
 
 ### Historical M29 Audit Packages
