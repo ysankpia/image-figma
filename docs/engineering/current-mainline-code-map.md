@@ -207,6 +207,24 @@ validation.py: document and PNG artifact validation
 
 `app.visual_object_candidate_audit` continues to export the historical public API, including `extract_visual_object_candidate_audit`, `validate_visual_object_candidate_audit_document`, and the M29.0.4 dataclasses.
 
+`backend/app/symbol_fragment_grouping/` contains the M29.1 symbol fragment grouping harness:
+
+```text
+pipeline.py: extraction entry and document assembly
+types.py: M29.1 options/candidate/edge/group/audit dataclasses
+candidates.py: M29 symbol and eligible blocked-fragment candidate collection
+lineage.py: candidate/group/interactive-shape source lineage helpers
+edges.py: fragment neighbor edge scoring and hard boundary checks
+groups.py: accepted/uncertain/rejected symbol group construction
+icon_button.py: interactive shape plus foreground symbol grouping
+assets.py: accepted group crop export and asset audit
+artifacts.py: JSON/Markdown outputs, overlays, preview sheet helpers
+geometry.py: bbox, container, interaction, merge, and confidence helpers
+validation.py: M29.1 document and artifact validation
+```
+
+`app.symbol_fragment_grouping` continues to export the historical public API, including `extract_m291_symbol_fragment_grouping`, `validate_m291_document`, and the M29.1 dataclasses.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:

@@ -33,7 +33,7 @@
 
 1. Completed: split `text_aware_visual_object_refinement` into a same-name package.
 2. Completed: split `visual_object_candidate_audit` into a same-name package.
-3. Split `symbol_fragment_grouping` into a same-name package.
+3. Completed: split `symbol_fragment_grouping` into a same-name package.
 4. Split remaining `visual_primitive_graph` responsibilities into `visual_primitive/`.
 5. Split `text_masked_media_audit` into a same-name package.
 6. Split `text_visual_ownership_gate` into a same-name package.
@@ -48,6 +48,7 @@ Each implementation phase must preserve the original public import surface via p
 
 - 2026-05-24: Phase 1 split `backend/app/text_aware_visual_object_refinement.py` into `backend/app/text_aware_visual_object_refinement/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_text_aware_visual_object_refinement.py -q`.
 - 2026-05-24: Phase 2 split `backend/app/visual_object_candidate_audit.py` into `backend/app/visual_object_candidate_audit/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_visual_object_candidate_audit.py -q`.
+- 2026-05-24: Phase 3 split `backend/app/symbol_fragment_grouping.py` into `backend/app/symbol_fragment_grouping/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_symbol_fragment_grouping.py -q`.
 
 ## Acceptance
 
