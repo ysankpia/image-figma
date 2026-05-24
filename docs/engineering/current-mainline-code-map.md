@@ -144,7 +144,7 @@ size similarity
 
 ### M29.4 Weak Cluster
 
-`backend/app/stable_design_cluster.py` 从 relation graph 产出 weak structural evidence：
+`backend/app/stable_design_cluster/` 从 relation graph 产出 weak structural evidence：
 
 ```text
 row_like
@@ -154,6 +154,21 @@ repeated_item_like
 ```
 
 这些 cluster 是 report-only evidence，不给组件化、Auto Layout、Figma Component/Instance 或 materialization 权限。
+
+模块边界：
+
+```text
+pipeline.py: M29.4 report orchestration and JSON write
+types.py: options/result and relation/cluster Literal contracts
+normalization.py: M29.3 relation graph node/edge normalization
+candidates.py: motif connected-component candidate generation
+motifs.py: edge motif classification and weak role hints
+clusters.py: cluster acceptance, dedupe, stable IDs
+scoring.py: stability/repeatability/risk scoring helpers
+report.py: summary construction
+validation.py: report schema and read-only invariant checks
+geometry.py: bbox/member overlap and deterministic sort helpers
+```
 
 ### M29.5 Replay Plan
 
