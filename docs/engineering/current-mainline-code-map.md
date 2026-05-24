@@ -95,7 +95,7 @@ final nodes.json write
 
 ### M29.2 Ownership
 
-`backend/app/source_ui_physical_graph.py` 负责把 raw M29/OCR/source pixels 转成 source objects：
+`backend/app/source_ui_physical_graph/` 负责把 raw M29/OCR/source pixels 转成 source objects：
 
 ```text
 visualKind
@@ -108,6 +108,21 @@ physical metrics
 这是 source ownership gate。修文字支撑背景、深色 UI raster/media 丢失、复杂头像/图表/照片被误画成 shape 等问题时，应从 raw M29 detector 或 M29.2 owner contract 修起，不能在 materializer/Renderer/plugin 按文字内容、颜色或主题伪造。
 
 M29.2 当前也负责把有物理证据的大型复杂 image-like unknown 恢复为 `media_region` / `preserve_raster` / `image_replay`，为 fallback-off 场景提供 raster/media preservation。
+
+模块边界：
+
+```text
+pipeline.py: M29.2 extraction orchestration and JSON write
+types.py: M29.2 source object/options/type contracts
+media.py: media/image-like source object classification
+text.py: OCR text editability and preserve-raster text classification
+icons.py: symbol fragment cluster to raster icon ownership
+shapes.py: shape replay safety and foreground-shape routing
+unknowns.py: diagnostic unknown routing
+blocked.py: recoverable blocked foreground routing
+dedupe.py: source object priority dedupe and stable rename
+artifacts.py: summary, overlay, bbox parsing, local background confidence
+```
 
 ### M29.3 Relation
 
@@ -375,8 +390,7 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 
 代码瘦身应单独开阶段，且默认先做无行为变更拆分。优先顺序：
 
-1. `visual_primitive_graph.py`：继续按 support detectors、detectors、artifact writers 拆分；基础 types/bbox/mask/metrics/pixels、geometry fit 和 component evidence layer 已在 `visual_primitive/`。
-2. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
-3. `upload_preview/`：继续保持薄编排；后续如需调整 stage 顺序必须单独开行为阶段。
+1. `upload_preview/`：继续保持薄编排；后续如需调整 stage 顺序必须单独开行为阶段。
+2. 若继续瘦身 M29 主链，优先针对已有 domain package 内仍接近压力线的职责模块开单独 no-behavior phase，不做跨领域 helper consolidation。
 
 每次拆分都必须先有 focused tests，且 diff 应证明 output contract 不变。

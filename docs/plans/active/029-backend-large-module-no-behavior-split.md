@@ -39,7 +39,7 @@
 6. Completed: split `text_visual_ownership_gate` into a same-name package.
 7. Completed: split `visual_evidence_normalization` into a same-name package.
 8. Completed: split `png_tools` into a same-name package.
-9. Split `source_ui_physical_graph` into a same-name package.
+9. Completed: split `source_ui_physical_graph` into a same-name package.
 10. Move this plan to completed and update completed plan index.
 
 Each implementation phase must preserve the original public import surface via package `__init__.py` or compatibility re-exports.
@@ -54,6 +54,7 @@ Each implementation phase must preserve the original public import surface via p
 - 2026-05-24: Phase 6 split `backend/app/text_visual_ownership_gate.py` into `backend/app/text_visual_ownership_gate/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_text_visual_ownership_gate.py -q`. Three-phase backend regression passed: `cd backend && uv run pytest -q`.
 - 2026-05-24: Phase 7 split `backend/app/visual_evidence_normalization.py` into `backend/app/visual_evidence_normalization/` with public import compatibility preserved, including `parse_bbox` and `parse_metrics`. Focused regression passed: `cd backend && uv run pytest tests/test_visual_evidence_normalization.py -q`. Import-dependent regression passed: `cd backend && uv run pytest tests/test_visual_evidence_normalization.py tests/test_visual_object_candidate_audit.py tests/test_text_aware_visual_object_refinement.py tests/test_text_visual_ownership_gate.py -q`.
 - 2026-05-24: Phase 8 split `backend/app/png_tools.py` into `backend/app/png_tools/` with public import compatibility preserved for PNG metadata, decode, encode, crop, sampling, and geometry helpers. Focused regression passed: `cd backend && uv run pytest tests/test_png_tools.py -q`.
+- 2026-05-24: Phase 9 split `backend/app/source_ui_physical_graph.py` into `backend/app/source_ui_physical_graph/` with public import compatibility preserved for M29.2 extraction, source object types, classifiers, dedupe, and artifact helpers. Focused regression passed: `cd backend && uv run pytest tests/test_source_ui_physical_graph.py -q`.
 
 ## Acceptance
 
