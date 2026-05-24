@@ -143,8 +143,8 @@ def test_m29_materialization_failure_blocks_mainline_output(tmp_path: Path, monk
             sys.modules.pop(module_name)
 
     main = importlib.import_module("app.main")
-    pipeline = importlib.import_module("app.upload_preview_pipeline")
-    monkeypatch.setattr(pipeline, "build_plan_driven_dsl", fail_m29_materialization)
+    stages = importlib.import_module("app.upload_preview.stages")
+    monkeypatch.setattr(stages, "build_plan_driven_dsl", fail_m29_materialization)
     with TestClient(main.create_app()) as local_client:
         upload = local_client.post("/api/upload-preview", files={"file": png_file})
         assert upload.status_code == 200

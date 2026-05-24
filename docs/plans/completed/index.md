@@ -36,6 +36,7 @@
 - [M29 Product Surface Naming Cleanup](029-product-surface-naming-cleanup.md) — `completed`
 - [M29 Shape Geometry Fit Before Radius Replay](029-shape-geometry-fit-before-radius-replay.md) — `completed`
 - [M29 Text Support Background Source Contract](029-text-support-background-source-contract.md) — `completed`
+- [M29 Upload Preview Pipeline No-Behavior Split](029-upload-preview-pipeline-no-behavior-split.md) — `completed`
 - [M29 Visual Primitive Graph Harness](029-visual-primitive-graph-harness.md) — `completed`
 - [M30.1 Plugin M29-to-M30 Upload Pipeline Preview](030-1-plugin-m29-to-m30-upload-pipeline-preview.md) — `completed`
 - [M30.2.2 Remove Frozen Pre-M29 Legacy Backend Chain](030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md) — `completed`

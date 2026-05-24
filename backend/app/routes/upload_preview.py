@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, BackgroundTasks, File, UploadFile, status
 
 from ..errors import ApiError, success_response
-from ..upload_preview_pipeline import run_upload_preview_pipeline
+from ..upload_preview import run_upload_preview_pipeline
 from ..png_tools import is_png, read_png_metadata
 from ..state import state
 

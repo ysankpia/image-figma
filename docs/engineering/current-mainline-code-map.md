@@ -6,7 +6,7 @@
 
 ```text
 Plugin upload
--> backend/app/upload_preview_pipeline.py
+-> backend/app/upload_preview/
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 ownership
@@ -35,7 +35,7 @@ backend/app/routes/assets.py
 
 ## Pipeline Orchestrator
 
-`backend/app/upload_preview_pipeline.py` 是当前后端主编排文件。它负责：
+`backend/app/upload_preview/` 是当前后端主编排 package。它负责：
 
 ```text
 validate upload
@@ -47,7 +47,19 @@ publish M29 assets
 write task status and stage timings
 ```
 
-这个文件只负责编排，不承载 owner、relation、cleanup 授权或 materialization 策略。
+模块边界：
+
+```text
+pipeline.py: upload preview 主编排顺序
+types.py: pipeline error/profile/artifact policy 类型
+paths.py: upload preview storage path layout
+timings.py: stage timing record/write logic
+task_state.py: task status/error/completion writes
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/materialization stage wrappers
+assets.py: M29 materialized assets publish
+```
+
+这些模块不承载 owner、relation、cleanup 授权或 materialization 策略。
 
 ## Source Truth Layer
 
@@ -258,6 +270,6 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 
 1. `visual_primitive_graph.py`：按 bbox/mask math、support detectors、geometry fit、detectors、artifact writers 拆分。
 2. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
-3. `upload_preview_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分。
+3. `upload_preview/`：继续保持薄编排；后续如需调整 stage 顺序必须单独开行为阶段。
 
 每次拆分都必须先有 focused tests，且 diff 应证明 output contract 不变。
