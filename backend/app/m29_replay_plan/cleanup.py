@@ -56,7 +56,16 @@ def text_is_contained_by_media(text_id: str, media_id: str, edge: dict[str, Any]
     if primary == "near_equal":
         return True
     if left == text_id and right == media_id:
-        return primary == "contained_by"
+        return primary == "contained_by" or text_overlap_ratio(edge, text_on_left=True) >= 0.20
     if left == media_id and right == text_id:
-        return primary == "contains"
+        return primary == "contains" or text_overlap_ratio(edge, text_on_left=False) >= 0.20
     return False
+
+
+def text_overlap_ratio(edge: dict[str, Any], *, text_on_left: bool) -> float:
+    metrics = edge.get("metrics") if isinstance(edge.get("metrics"), dict) else {}
+    key = "leftInRightRatio" if text_on_left else "rightInLeftRatio"
+    try:
+        return float(metrics.get(key) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0

@@ -147,7 +147,7 @@ def detect_invalid_cleanup_claims(
 
 def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_lookup: dict[frozenset[str], dict[str, Any]]) -> bool:
     actions = {left["finalReplayAction"], right["finalReplayAction"]}
-    if "shape_replay" in actions and actions & {"text_replay", "icon_replay"}:
+    if "shape_replay" in actions and actions & {"text_replay", "icon_replay", "image_replay"}:
         return True
     if actions == {"image_replay", "text_replay"}:
         text = left if left["finalReplayAction"] == "text_replay" else right

@@ -183,6 +183,7 @@ sort visible replay order
 enforce node budget
 authorize fallback cleanup
 authorize copied image asset cleanup
+apply visible ownership overlap suppression
 record risk and cluster support
 ```
 
@@ -204,7 +205,7 @@ normalization.py: M29.2 source object normalization
 lookups.py: M29.3 edge and M29.4 cluster lookup construction
 decisions.py: replay action mapping, target role, duplicate priority
 cleanup.py: fallback and copied-image asset cleanup authorization
-overlap.py: same-owner visible replay overlap suppression
+overlap.py: visible replay overlap suppression for duplicate media, text, icon, and shape owners
 budget.py: visible node budget suppression and duplicate plan items
 report.py: reasons and summary construction
 validation.py: report schema and read-only invariant checks

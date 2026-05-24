@@ -71,3 +71,4 @@
 - [Docs Current M29 Mainline Cleanup](041-docs-current-mainline-cleanup.md) — `completed`
 - [M29 Pixel Ownership Conservation Report](043-pixel-ownership-conservation-report.md) — `completed`
 - [M29.5 Visible Replay Overlap Suppression](045-m29-5-visible-replay-overlap-suppression.md) — `completed`
+- [M29.5 Visible Replay Overlap Batch Hardening](046-m29-5-visible-replay-overlap-batch-hardening.md) — `completed`

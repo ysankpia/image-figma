@@ -40,31 +40,49 @@ def suppress_visible_overlap_duplicates(
 
 
 def overlap_priority_sort_key(item: dict[str, Any]) -> tuple[int, int, int, str]:
-    action_rank = {"shape_replay": 0, "icon_replay": 1, "image_replay": 2, "text_replay": 3}.get(item["finalReplayAction"], 9)
+    action_rank = {"image_replay": 0, "text_replay": 1, "shape_replay": 2, "icon_replay": 3}.get(item["finalReplayAction"], 9)
     confidence_rank = {"high": 0, "medium": 1, "low": 2}.get(item["confidence"], 2)
     return action_rank, confidence_rank, -bbox_area(item["bbox"]), item["sourceObjectId"]
 
 
 def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any], edge: dict[str, Any] | None) -> bool:
-    if left["finalReplayAction"] != right["finalReplayAction"]:
-        return False
-    if left["finalReplayAction"] not in {"icon_replay", "shape_replay"}:
-        return False
-    if left["pixelOwner"] != right["pixelOwner"]:
-        return False
+    left_action = left["finalReplayAction"]
+    right_action = right["finalReplayAction"]
+    actions = {left_action, right_action}
     if str((edge or {}).get("primarySetRelation") or "") == "near_equal":
-        return True
+        return left_action == right_action or right_action == lower_priority_overlap_action(left_action, right_action)
     left_area = bbox_area(left["bbox"])
     right_area = bbox_area(right["bbox"])
     intersection = intersection_area(left["bbox"], right["bbox"])
     if intersection <= 0 or min(left_area, right_area) <= 0:
         return False
     containment_ratio = intersection / min(left_area, right_area)
-    if containment_ratio >= 0.92:
-        return True
-    if left["finalReplayAction"] == "shape_replay":
-        return containment_ratio >= 0.25 and str((edge or {}).get("primarySetRelation") or "") in {"contains", "contained_by", "overlaps"}
-    return containment_ratio >= 0.20 and str((edge or {}).get("primarySetRelation") or "") in {"contains", "contained_by", "overlaps"}
+    primary = str((edge or {}).get("primarySetRelation") or "")
+    if primary not in {"contains", "contained_by", "overlaps"}:
+        return False
+    if left_action == right_action:
+        if left["pixelOwner"] != right["pixelOwner"]:
+            return False
+        if left_action in {"icon_replay", "shape_replay"}:
+            threshold = 0.20 if left_action == "icon_replay" else 0.20
+            return containment_ratio >= threshold
+        if left_action == "image_replay":
+            return containment_ratio >= 0.35 or (primary in {"contains", "contained_by"} and containment_ratio >= 0.20)
+        if left_action == "text_replay":
+            return containment_ratio >= 0.20
+        return False
+    if actions == {"image_replay", "icon_replay"}:
+        return left_action == "image_replay" and containment_ratio >= 0.20
+    if actions == {"text_replay", "icon_replay"}:
+        return left_action == "text_replay" and containment_ratio >= 0.25
+    return False
+
+
+def lower_priority_overlap_action(left_action: str, right_action: str) -> str:
+    rank = {"image_replay": 0, "text_replay": 1, "shape_replay": 2, "icon_replay": 3}
+    if rank.get(left_action, 99) <= rank.get(right_action, 99):
+        return right_action
+    return left_action
 
 
 def suppress_visible_overlap_item(item: dict[str, Any], edge_id: str) -> dict[str, Any]:

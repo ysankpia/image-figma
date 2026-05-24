@@ -175,6 +175,115 @@ def test_m295_suppresses_same_shape_high_overlap_without_suppressing_text_backgr
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
 
 
+def test_m295_adds_copied_cleanup_for_text_overlapping_media(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_text_media_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 60], "media_region", "preserve_raster", "image_replay"),
+                m292_object("text", [80, 50, 30, 12], "editable_ui_text", "editable_text", "text_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "text"],
+            [edge("media_text", "media", "text", "overlaps", [], metrics={"leftInRightRatio": 0.1, "rightInLeftRatio": 0.55})],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    text_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "text")
+    assert {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "editable_text_contained_by_media"} in text_item[
+        "cleanupTargets"
+    ]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
+
+
+def test_m295_suppresses_nested_media_duplicate(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_nested_media",
+        m292_document=m292_document(
+            [
+                m292_object("media_outer", [0, 0, 300, 180], "media_region", "preserve_raster", "image_replay"),
+                m292_object("media_inner", [20, 20, 120, 100], "media_region", "preserve_raster", "image_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media_outer", "media_inner"],
+            [edge("media_nested", "media_outer", "media_inner", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media_outer": "image_replay", "media_inner": "suppress_duplicate"}
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
+def test_m295_suppresses_overlapping_media_duplicate(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_overlapping_media",
+        m292_document=m292_document(
+            [
+                m292_object("media_large", [0, 0, 300, 200], "media_region", "preserve_raster", "image_replay"),
+                m292_object("media_overlap", [220, 120, 120, 90], "media_region", "preserve_raster", "image_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media_large", "media_overlap"],
+            [edge("media_overlap", "media_large", "media_overlap", "overlaps", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media_large": "image_replay", "media_overlap": "suppress_duplicate"}
+
+
+def test_m295_suppresses_small_overlapping_text_duplicate(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_text_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("title", [57, 88, 158, 27], "editable_ui_text", "editable_text", "text_replay"),
+                m292_object("text_fragment", [38, 96, 25, 13], "editable_ui_text", "editable_text", "text_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["title", "text_fragment"],
+            [edge("text_overlap", "title", "text_fragment", "overlaps", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"title": "text_replay", "text_fragment": "suppress_duplicate"}
+
+
+def test_m295_suppresses_icon_overlapping_text_owner(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_text_icon_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("label", [20, 20, 80, 24], "editable_ui_text", "editable_text", "text_replay"),
+                m292_object("icon", [22, 22, 60, 20], "raster_icon", "raster_icon", "icon_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["label", "icon"],
+            [edge("text_icon", "label", "icon", "overlaps", [], metrics={"leftInRightRatio": 0.625, "rightInLeftRatio": 1.0})],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"label": "text_replay", "icon": "suppress_duplicate"}
+
+
 def test_m295_records_cluster_support_without_semantic_role_promotion(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_cluster",
@@ -303,14 +412,14 @@ def m2931_report(node_ids: list[str], edges: list[dict]) -> dict:
     }
 
 
-def edge(edge_id: str, left: str, right: str, primary: str, secondary: list[str]) -> dict:
+def edge(edge_id: str, left: str, right: str, primary: str, secondary: list[str], *, metrics: dict | None = None) -> dict:
     return {
         "edgeId": edge_id,
         "leftObjectId": left,
         "rightObjectId": right,
         "primarySetRelation": primary,
         "secondaryGeometryRelations": secondary,
-        "metrics": {},
+        "metrics": metrics or {},
     }
 
 

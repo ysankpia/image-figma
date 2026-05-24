@@ -114,6 +114,34 @@ def test_copied_image_cleanup_is_explainable_for_text_contained_by_media(tmp_pat
     assert report["summary"]["conflictCount"] == 0
 
 
+def test_copied_image_cleanup_is_explainable_for_text_overlapping_media(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 100, 60], "media_region", "preserve_raster", "image_replay"),
+            m292_object("text", [80, 50, 30, 12], "editable_ui_text", "editable_text", "text_replay"),
+        ],
+        edges=[edge("edge_media_text", "media", "text", "overlaps", metrics={"leftInRightRatio": 0.1, "rightInLeftRatio": 0.55})],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 100, 60], "image_replay", "m29_image"),
+            plan_item(
+                "plan_text",
+                "text",
+                [80, 50, 30, 12],
+                "text_replay",
+                "m29_text",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "editable_text_contained_by_media"},
+                ],
+            ),
+        ],
+    )
+
+    assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 1}
+    assert report["summary"]["conflictCount"] == 0
+
+
 def test_missing_copied_image_cleanup_is_reported_without_changing_plan(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,
@@ -170,6 +198,23 @@ def test_shape_behind_text_overlap_is_explainable_background_foreground_overlap(
         plan_items=[
             plan_item("plan_shape", "shape", [0, 0, 100, 60], "shape_replay", "m29_shape"),
             plan_item("plan_text", "text", [20, 20, 30, 10], "text_replay", "m29_text"),
+        ],
+    )
+
+    assert report["summary"]["conflictCount"] == 0
+
+
+def test_shape_behind_image_overlap_is_explainable_background_foreground_overlap(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("shape", [0, 0, 100, 60], "control_background", "shape_geometry", "shape_replay"),
+            m292_object("media", [20, 20, 30, 20], "media_region", "preserve_raster", "image_replay"),
+        ],
+        edges=[edge("edge_shape_media", "shape", "media", "overlaps", metrics={"leftInRightRatio": 0.1, "rightInLeftRatio": 0.8})],
+        plan_items=[
+            plan_item("plan_shape", "shape", [0, 0, 100, 60], "shape_replay", "m29_shape"),
+            plan_item("plan_media", "media", [20, 20, 30, 20], "image_replay", "m29_image"),
         ],
     )
 
@@ -259,14 +304,14 @@ def m2931_report(edges: list[dict]) -> dict:
     }
 
 
-def edge(edge_id: str, left: str, right: str, primary: str) -> dict:
+def edge(edge_id: str, left: str, right: str, primary: str, *, metrics: dict | None = None) -> dict:
     return {
         "edgeId": edge_id,
         "leftObjectId": left,
         "rightObjectId": right,
         "primarySetRelation": primary,
         "secondaryGeometryRelations": [],
-        "metrics": {},
+        "metrics": metrics or {},
     }
 
 
