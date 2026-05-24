@@ -16,6 +16,7 @@ from .stages import (
     run_m295_replay_plan_stage,
     run_m29_hierarchy_candidate_stage,
     run_m29_ownership_conservation_stage,
+    run_m29_sibling_group_candidate_stage,
     run_m29_visual_primitive_stage,
     run_materialization_stage,
     run_ocr,
@@ -131,7 +132,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_hierarchy_candidates", 31, "Building M29 hierarchy candidate report.")
-    run_stage(
+    hierarchy_result = run_stage(
         paths,
         timings,
         "m29_hierarchy_candidates",
@@ -141,6 +142,21 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             m292_document=m292_document,
             m2931_report=m2931_result.report,
             m295_report=m295_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_sibling_groups", 34, "Building M29 sibling group candidate report.")
+    run_stage(
+        paths,
+        timings,
+        "m29_sibling_groups",
+        lambda: run_m29_sibling_group_candidate_stage(
+            task_id=task_id,
+            paths=paths,
+            m2931_report=m2931_result.report,
+            m294_report=m294_result.report,
+            m295_report=m295_result.report,
+            hierarchy_report=hierarchy_result.report,
         ),
     )
 

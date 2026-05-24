@@ -227,6 +227,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "materializationReport": root / "materialized_design" / "materialization_report.json",
         "ownershipConservationReport": root / "m29_ownership_conservation" / "ownership_conservation_report.json",
         "hierarchyCandidateReport": root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json",
+        "siblingGroupCandidateReport": root / "m29_sibling_groups" / "sibling_group_candidate_report.json",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -238,6 +239,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "materialization", artifact_paths["materializationReport"])
     load_summary(record, "ownershipConservation", artifact_paths["ownershipConservationReport"])
     load_summary(record, "hierarchyCandidates", artifact_paths["hierarchyCandidateReport"])
+    load_summary(record, "siblingGroups", artifact_paths["siblingGroupCandidateReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
 
 
@@ -268,12 +270,15 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     missing_artifacts = 0
     total_visible_claims = 0
     total_visible_overlap_conflicts = 0
+    total_sibling_group_candidates = 0
     for record in records:
         if record.get("status") != "completed":
             failed += 1
         missing_artifacts += sum(1 for error in record.get("errors", []) if error.get("type") == "missing_artifact")
         ownership_summary = record.get("summaries", {}).get("ownershipConservation", {})
         total_visible_claims += int(ownership_summary.get("visibleReplayClaimCount") or 0)
+        sibling_summary = record.get("summaries", {}).get("siblingGroups", {})
+        total_sibling_group_candidates += int(sibling_summary.get("siblingGroupCandidateCount") or 0)
         conflict_type_counts = ownership_summary.get("conflictTypeCounts", {})
         if isinstance(conflict_type_counts, dict):
             for key, value in conflict_type_counts.items():
@@ -286,6 +291,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "missingArtifactCount": missing_artifacts,
         "totalVisibleReplayClaimCount": total_visible_claims,
         "totalVisibleOwnershipOverlapConflicts": total_visible_overlap_conflicts,
+        "totalSiblingGroupCandidateCount": total_sibling_group_candidates,
         "ownershipConflictTypeCounts": dict(sorted(conflict_counts.items())),
     }
 

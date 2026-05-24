@@ -17,6 +17,7 @@ class UploadPreviewPaths:
     m29_5: Path
     m29_ownership_conservation: Path
     m29_hierarchy_candidates: Path
+    m29_sibling_groups: Path
     materialized_design: Path
 
 
@@ -32,5 +33,6 @@ def pipeline_paths(task_id: str) -> UploadPreviewPaths:
         m29_5=root / "m29_5",
         m29_ownership_conservation=root / "m29_ownership_conservation",
         m29_hierarchy_candidates=root / "m29_hierarchy_candidates",
+        m29_sibling_groups=root / "m29_sibling_groups",
         materialized_design=root / "materialized_design",
     )

@@ -12,6 +12,7 @@ from ..ocr import extract_ocr
 from ..plan_materializer import build_plan_driven_dsl
 from ..png_tools import PngMetadata
 from ..region_relation_graph_report import extract_m2931_region_relation_graph_report
+from ..sibling_group_candidate_report import extract_m29_sibling_group_candidate_report
 from ..source_ui_physical_graph import extract_source_ui_physical_graph
 from ..stable_design_cluster import extract_m294_stable_design_cluster_report
 from ..state import state
@@ -137,6 +138,25 @@ def run_m29_hierarchy_candidate_stage(
         m2931_report=m2931_report,
         m295_report=m295_report,
         output_dir=paths.m29_hierarchy_candidates,
+    )
+
+
+def run_m29_sibling_group_candidate_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m2931_report: dict[str, Any],
+    m294_report: dict[str, Any],
+    m295_report: dict[str, Any],
+    hierarchy_report: dict[str, Any],
+):
+    return extract_m29_sibling_group_candidate_report(
+        task_id=task_id,
+        m2931_report=m2931_report,
+        m294_report=m294_report,
+        m295_report=m295_report,
+        hierarchy_report=hierarchy_report,
+        output_dir=paths.m29_sibling_groups,
     )
 
 

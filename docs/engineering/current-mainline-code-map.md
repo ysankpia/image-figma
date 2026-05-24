@@ -15,6 +15,7 @@ Plugin upload
 -> M29.5 replay plan
 -> M29 ownership conservation report
 -> M29 hierarchy candidate report
+-> M29 sibling group candidate report
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -46,6 +47,7 @@ run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
 run M29 ownership conservation report
 run M29 hierarchy candidate report
+run M29 sibling group candidate report
 run M29 plan-driven materialization
 publish M29 assets
 write task status and stage timings
@@ -59,7 +61,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/materialization stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -276,6 +278,37 @@ validation.py: report schema and read-only invariant checks
 ```
 
 这个 package 只报告候选父子结构，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
+
+### M29 Sibling Group Candidates
+
+`backend/app/sibling_group_candidate_report/` 是 M29.5 之后、materialization 之前的 report-only sibling-group evidence surface。它消费：
+
+```text
+M29.3.1 relation graph
+M29.4 weak structural clusters
+M29.5 replay plan
+M29 hierarchy candidate report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_sibling_groups/sibling_group_candidate_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: visible action constants, structural cluster role hints, and result type
+normalization.py: M29.3 edge, M29.4 cluster, M29.5 plan item, and hierarchy selected-parent normalization
+geometry.py: group bbox union and deterministic sort helpers
+candidates.py: cluster-backed and relation-backed sibling group candidate construction
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and read-only invariant checks
+```
+
+这个 package 只报告候选兄弟组，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
 
 ### Historical M29 Audit Packages
 

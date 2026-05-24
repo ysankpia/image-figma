@@ -48,6 +48,7 @@ receive multipart PNG
 -> M29.5 replay quality plan
 -> M29 ownership conservation report
 -> M29 hierarchy candidate report
+-> M29 sibling group candidate report
 -> M29 plan-driven DSL materialization
 -> publish M29 assets
 -> save dsl_results path to materialized_design/design.dsl.json
@@ -105,6 +106,14 @@ M29 hierarchy candidate report 位于 ownership conservation 之后、materializ
 
 ```text
 storage/upload_previews/{taskId}/m29_hierarchy_candidates/hierarchy_candidate_report.json
+```
+
+这个阶段同样是 report-only：不创建 Group/Frame，不改变 replay plan，不写 DSL，不授权 Auto Layout，也不是 materializer 的输入。
+
+M29 sibling group candidate report 位于 hierarchy candidates 之后、materializer 之前。它读取 M29.3.1 relation graph、M29.4 weak clusters、M29.5 replay plan 和 hierarchy candidates，写出兄弟组候选报告：
+
+```text
+storage/upload_previews/{taskId}/m29_sibling_groups/sibling_group_candidate_report.json
 ```
 
 这个阶段同样是 report-only：不创建 Group/Frame，不改变 replay plan，不写 DSL，不授权 Auto Layout，也不是 materializer 的输入。
@@ -199,6 +208,7 @@ storage/upload_previews/{taskId}/m29_4/
 storage/upload_previews/{taskId}/m29_5/
 storage/upload_previews/{taskId}/m29_ownership_conservation/
 storage/upload_previews/{taskId}/m29_hierarchy_candidates/
+storage/upload_previews/{taskId}/m29_sibling_groups/
 storage/upload_previews/{taskId}/materialized_design/
 storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
@@ -228,6 +238,7 @@ m29_4_stable_design_cluster
 m29_5_replay_plan
 m29_ownership_conservation
 m29_hierarchy_candidates
+m29_sibling_groups
 m29_materialization
 m29_asset_publish
 m29_completed

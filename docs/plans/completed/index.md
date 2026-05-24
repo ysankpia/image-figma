@@ -73,3 +73,4 @@
 - [M29.5 Visible Replay Overlap Suppression](045-m29-5-visible-replay-overlap-suppression.md) — `completed`
 - [M29.5 Visible Replay Overlap Batch Hardening](046-m29-5-visible-replay-overlap-batch-hardening.md) — `completed`
 - [M29 Hierarchy Candidate Report](047-m29-hierarchy-candidate-report.md) — `completed`
+- [M29 Sibling Group Candidate Report](048-m29-sibling-group-candidate-report.md) — `completed`
