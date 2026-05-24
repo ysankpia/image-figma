@@ -35,7 +35,7 @@
 2. Completed: split `visual_object_candidate_audit` into a same-name package.
 3. Completed: split `symbol_fragment_grouping` into a same-name package.
 4. Completed: split remaining `visual_primitive_graph` responsibilities into `visual_primitive/`.
-5. Split `text_masked_media_audit` into a same-name package.
+5. Completed: split `text_masked_media_audit` into a same-name package.
 6. Split `text_visual_ownership_gate` into a same-name package.
 7. Split `visual_evidence_normalization` into a same-name package.
 8. Split `png_tools` into a same-name package.
@@ -50,6 +50,7 @@ Each implementation phase must preserve the original public import surface via p
 - 2026-05-24: Phase 2 split `backend/app/visual_object_candidate_audit.py` into `backend/app/visual_object_candidate_audit/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_visual_object_candidate_audit.py -q`.
 - 2026-05-24: Phase 3 split `backend/app/symbol_fragment_grouping.py` into `backend/app/symbol_fragment_grouping/` with public import compatibility preserved. Focused regression passed: `cd backend && uv run pytest tests/test_symbol_fragment_grouping.py -q`.
 - 2026-05-24: Phase 4 split remaining raw M29 detector/support/relation/artifact/validation responsibilities into `backend/app/visual_primitive/`, leaving `backend/app/visual_primitive_graph.py` as a thin orchestration and compatibility entry. Focused regression passed: `cd backend && uv run pytest tests/test_visual_primitive_graph.py -q`. High-risk mainline regression passed: `cd backend && uv run pytest tests/test_visual_primitive_graph.py tests/test_source_ui_physical_graph.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q`.
+- 2026-05-24: Phase 5 split `backend/app/text_masked_media_audit.py` into `backend/app/text_masked_media_audit/` with public import compatibility preserved, including `text_boxes_from_ocr_document`. Focused regression passed: `cd backend && uv run pytest tests/test_text_masked_media_audit.py -q`.
 
 ## Acceptance
 

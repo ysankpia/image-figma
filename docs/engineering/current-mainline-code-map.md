@@ -219,6 +219,21 @@ validation.py: M29.1 document and artifact validation
 
 `app.symbol_fragment_grouping` continues to export the historical public API, including `extract_m291_symbol_fragment_grouping`, `validate_m291_document`, and the M29.1 dataclasses.
 
+`backend/app/text_masked_media_audit/` contains the M29.0.2 text-masked media audit harness and OCR text-box adapter:
+
+```text
+pipeline.py: extraction entry, before/after raw M29 runs, document assembly
+types.py: M29.0.2 options/region/evidence/debug/document dataclasses
+ocr_text.py: OCR payload to `M29TextBox` conversion
+regions.py: default regions, text suppression, bbox/metrics parsing, count extraction
+evidence.py: media evidence collection from M29, M29.1, blocked, and text-suppressed outputs
+artifacts.py: text mask, before/after overlays, evidence overlay, preview sheet helpers
+report.py: JSON/Markdown/meta outputs
+validation.py: document and PNG artifact validation
+```
+
+`app.text_masked_media_audit` continues to export the historical public API. `text_boxes_from_ocr_document` remains a current-mainline dependency for upload preview and plan materialization.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:
