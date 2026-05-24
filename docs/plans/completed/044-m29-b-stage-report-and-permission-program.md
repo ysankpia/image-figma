@@ -1,6 +1,6 @@
 # M29 B-Stage Report And Permission Program
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-25
 - 负责人：未指定
 
@@ -173,3 +173,54 @@ uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/
 - 每个 phase 有独立 completed plan 和 commit。
 - 当前 product mainline 仍是 M29 plan-driven flat materialization。
 - B 阶段完成后才重新评估 Component Isomorphism、Variant、Vectorization 和 Figma Component/Instance。
+
+## Result
+
+B 阶段已按 phase 完成并独立提交：
+
+```text
+046 M29.5 visible replay overlap batch hardening
+047 M29 hierarchy candidate report
+048 M29 sibling group candidate report
+049 M29 layout energy report
+050 M29 Auto Layout permission report
+051 M29 design token report
+052 M29 B-stage quality report
+```
+
+当前新增能力仍全部保持 report-only / permission-only：
+
+```text
+ownership conservation: diagnostic-only
+hierarchy candidates: candidate-proposal
+sibling group candidates: candidate-proposal
+layout energy: candidate-proposal
+Auto Layout permission: permission-only
+design tokens: candidate-proposal
+B-stage quality: diagnostic-only
+```
+
+最终 batch ledger：
+
+```text
+backend/tmp/validation/upload_preview_batch_20260525_043029/upload_preview_batch_validation.json
+```
+
+最终 batch 结果：
+
+```text
+inputCount=15
+completedTaskCount=15
+failedTaskCount=0
+missingArtifactCount=0
+totalVisibleReplayClaimCount=1762
+totalVisibleOwnershipOverlapConflicts=0
+totalSiblingGroupCandidateCount=354
+totalLayoutEnergyCandidateCount=427
+totalAutoLayoutAllowCandidateCount=344
+totalDesignTokenCandidateCount=2218
+totalBStageRepairCost=789
+qualityScoreAverage=0.869
+```
+
+没有进入 Component Isomorphism、Variant、Vectorization 或 Figma Component/Instance；这些仍是下一阶段评估项。

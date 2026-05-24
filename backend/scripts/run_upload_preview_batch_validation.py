@@ -231,6 +231,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "layoutEnergyReport": root / "m29_layout_energy" / "layout_energy_report.json",
         "autoLayoutPermissionReport": root / "m29_auto_layout_permission" / "auto_layout_permission_report.json",
         "designTokenReport": root / "m29_design_tokens" / "design_token_report.json",
+        "bStageQualityReport": root / "m29_b_stage_quality" / "b_stage_quality_report.json",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -246,6 +247,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "layoutEnergy", artifact_paths["layoutEnergyReport"])
     load_summary(record, "autoLayoutPermission", artifact_paths["autoLayoutPermissionReport"])
     load_summary(record, "designTokens", artifact_paths["designTokenReport"])
+    load_summary(record, "bStageQuality", artifact_paths["bStageQualityReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
 
 
@@ -280,6 +282,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_layout_energy_candidates = 0
     total_auto_layout_allow_candidates = 0
     total_design_token_candidates = 0
+    total_b_stage_repair_cost = 0
     for record in records:
         if record.get("status") != "completed":
             failed += 1
@@ -297,6 +300,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             int(design_token_summary.get(key) or 0)
             for key in ["colorTokenCount", "textStyleTokenCount", "radiusTokenCount", "spacingTokenCount"]
         )
+        b_stage_summary = record.get("summaries", {}).get("bStageQuality", {})
+        total_b_stage_repair_cost += int(b_stage_summary.get("repairCost") or 0)
         conflict_type_counts = ownership_summary.get("conflictTypeCounts", {})
         if isinstance(conflict_type_counts, dict):
             for key, value in conflict_type_counts.items():
@@ -313,6 +318,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalLayoutEnergyCandidateCount": total_layout_energy_candidates,
         "totalAutoLayoutAllowCandidateCount": total_auto_layout_allow_candidates,
         "totalDesignTokenCandidateCount": total_design_token_candidates,
+        "totalBStageRepairCost": total_b_stage_repair_cost,
         "ownershipConflictTypeCounts": dict(sorted(conflict_counts.items())),
     }
 

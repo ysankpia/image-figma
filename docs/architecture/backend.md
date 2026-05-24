@@ -53,6 +53,7 @@ receive multipart PNG
 -> M29 Auto Layout permission report
 -> M29 plan-driven DSL materialization
 -> M29 design token report
+-> M29 B-stage quality report
 -> publish M29 assets
 -> save dsl_results path to materialized_design/design.dsl.json
 -> mark task completed stage=m29_completed
@@ -144,6 +145,14 @@ storage/upload_previews/{taskId}/m29_design_tokens/design_token_report.json
 ```
 
 这个阶段是 report-only：不改 DSL，不绑定 Figma variables，不做多页设计系统合并，不改变 materializer 输出，也不是 Renderer 或 Figma 的输入。
+
+M29 B-stage quality report 位于 design token report 之后、asset publish 之前。它读取 B 阶段 report 和 materialization report，写出质量、风险和 repair-cost 汇总：
+
+```text
+storage/upload_previews/{taskId}/m29_b_stage_quality/b_stage_quality_report.json
+```
+
+这个阶段是 report-only：不改 DSL，不阻断 upload-preview，不创建任何 Figma 结构，也不是 Renderer 或 Figma 的输入。
 
 ## M29 Plan-Driven Materialization
 
@@ -240,6 +249,7 @@ storage/upload_previews/{taskId}/m29_layout_energy/
 storage/upload_previews/{taskId}/m29_auto_layout_permission/
 storage/upload_previews/{taskId}/materialized_design/
 storage/upload_previews/{taskId}/m29_design_tokens/
+storage/upload_previews/{taskId}/m29_b_stage_quality/
 storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
 ```
@@ -273,6 +283,7 @@ m29_layout_energy
 m29_auto_layout_permission
 m29_materialization
 m29_design_tokens
+m29_b_stage_quality
 m29_asset_publish
 m29_completed
 ```

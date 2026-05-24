@@ -15,6 +15,7 @@ from .stages import (
     run_m294_cluster_stage,
     run_m295_replay_plan_stage,
     run_m29_auto_layout_permission_stage,
+    run_m29_b_stage_quality_stage,
     run_m29_hierarchy_candidate_stage,
     run_m29_layout_energy_stage,
     run_m29_ownership_conservation_stage,
@@ -121,7 +122,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_ownership_conservation", 28, "Checking M29 ownership conservation.")
-    run_stage(
+    ownership_result = run_stage(
         paths,
         timings,
         "m29_ownership_conservation",
@@ -178,7 +179,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_auto_layout_permission", 40, "Building M29 Auto Layout permission report.")
-    run_stage(
+    auto_layout_permission_result = run_stage(
         paths,
         timings,
         "m29_auto_layout_permission",
@@ -208,7 +209,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_design_tokens", 94, "Extracting M29 single-page design token report.")
-    run_stage(
+    design_token_result = run_stage(
         paths,
         timings,
         "m29_design_tokens",
@@ -218,6 +219,24 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             dsl=materialized_design_result.dsl,
             materialization_report=materialized_design_result.report,
             m295_report=m295_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_b_stage_quality", 95, "Summarizing M29 B-stage quality.")
+    run_stage(
+        paths,
+        timings,
+        "m29_b_stage_quality",
+        lambda: run_m29_b_stage_quality_stage(
+            task_id=task_id,
+            paths=paths,
+            ownership_report=ownership_result.report,
+            hierarchy_report=hierarchy_result.report,
+            sibling_group_report=sibling_group_result.report,
+            layout_energy_report=layout_energy_result.report,
+            auto_layout_permission_report=auto_layout_permission_result.report,
+            design_token_report=design_token_result.report,
+            materialization_report=materialized_design_result.report,
         ),
     )
 

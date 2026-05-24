@@ -20,6 +20,7 @@ Plugin upload
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> M29 design token report
+-> M29 B-stage quality report
 -> DSL v0.1
 -> Renderer
 ```
@@ -55,6 +56,7 @@ run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
 run M29 design token report
+run M29 B-stage quality report
 publish M29 assets
 write task status and stage timings
 ```
@@ -67,7 +69,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -405,6 +407,39 @@ validation.py: report schema and read-only invariant checks
 ```
 
 这个 package 只报告单页 token candidates，不改 DSL，不绑定 Figma variables，不做多页 token merge，不被 Renderer 或 Figma 消费。
+
+### M29 B-Stage Quality
+
+`backend/app/b_stage_quality_report/` 是 B 阶段 report-only quality summary surface。它消费：
+
+```text
+M29 ownership conservation report
+M29 hierarchy candidate report
+M29 sibling group candidate report
+M29 layout energy report
+M29 Auto Layout permission report
+M29 design token report
+M29 materialization report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_b_stage_quality/b_stage_quality_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: result type
+summary.py: safe summary and warning extraction helpers
+quality.py: quality score, risk summary, repair-cost, and maturity summary
+report.py: top-level summary fields and report-only invariant fields
+validation.py: report schema and read-only invariant checks
+```
+
+这个 package 只报告 quality/repair-cost，不改 DSL，不阻断 upload-preview，不创建任何 Figma 结构，不被 Renderer 或 Figma 消费。
 
 ### Historical M29 Audit Packages
 
