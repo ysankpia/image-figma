@@ -190,6 +190,23 @@ validation.py: document and PNG artifact validation
 
 `app.text_aware_visual_object_refinement` continues to export the historical public API, including `extract_text_aware_visual_object_refinement`, `validate_text_aware_visual_object_refinement_document`, and the M29.0.5 dataclasses.
 
+`backend/app/visual_object_candidate_audit/` contains the M29.0.4 generic visual object candidate audit harness:
+
+```text
+pipeline.py: extraction entry and document assembly
+types.py: M29.0.4 document/options/evidence/object/set dataclasses
+evidence.py: M29.0.3 and M29.0.2 evidence node ingestion plus ownership routing
+edges.py: candidate pair generation and evidence edge scoring
+candidates.py: visual/text object candidate construction and dedupe
+sets.py: row/repeated set candidate construction
+geometry.py: bbox, alignment, text, count, and dedupe helpers
+artifacts.py: object crops, overlays, preview sheet helpers
+report.py: JSON/Markdown/meta outputs
+validation.py: document and PNG artifact validation
+```
+
+`app.visual_object_candidate_audit` continues to export the historical public API, including `extract_visual_object_candidate_audit`, `validate_visual_object_candidate_audit_document`, and the M29.0.4 dataclasses.
+
 ## M29 Plan Materialization
 
 `backend/app/plan_materializer/` is the current formal DSL producer. It consumes:
