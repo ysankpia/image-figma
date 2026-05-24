@@ -15,14 +15,17 @@
 - `043-pixel-ownership-conservation-report.md`
 - `backend/app/ownership_conservation/`
 - 真实上传 `task_ed8387636f80` 已验证 report artifact 生成。
+- `045-m29-5-visible-replay-overlap-suppression.md`
 
-该真实上传暴露当前最先要修的事实：
+初始真实上传暴露的第一项修复事实：
 
 ```text
 ownership_conservation_report.conflictTypeCounts.visible_ownership_overlap = 9
 ```
 
 冲突集中在同类 `raster_icon/raster_icon` 和 `control_background/control_background` visible replay overlap。它们属于 M29.5 replay owner 去重缺口，不应在 materializer、Renderer 或 plugin 层修。
+
+Phase 1 已把单图 `visible_ownership_overlap` 从 9 降到 0。但单图不再作为后续阶段的充分验收。后续每个 phase 必须使用 `/Users/luhui/Downloads/m29` 下全部 15 张 PNG 做 batch upload validation。
 
 ## Scope
 
@@ -135,15 +138,22 @@ git diff --check
 每个 phase 完成后必须：
 
 1. 重启 backend。
-2. 使用真实 PNG 上传验证。默认复用本地样本：
+2. 使用全部真实样本上传验证：
 
 ```text
-backend/storage/uploads/task_ed8387636f80/original.png
+/Users/luhui/Downloads/m29/*.png
 ```
 
-3. 检查 task completed、stage timings、phase artifact、materialization report。
-4. 若新增 report 暴露本阶段应修问题，先修完再提交。
-5. 独立提交。
+3. 首选命令：
+
+```bash
+cd backend
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/m29
+```
+
+4. 检查 batch ledger、每个 task completed、stage timings、phase artifact、materialization report。
+5. 若新增 report 暴露本阶段应修问题，先修完再提交。
+6. 独立提交。
 
 ## Stop Conditions
 
@@ -153,6 +163,7 @@ backend/storage/uploads/task_ed8387636f80/original.png
 - `/api/upload-preview` 无法完成。
 - `/api/tasks/{taskId}/dsl` 无法返回。
 - materialized DSL 或 asset response shape 被本阶段改变。
+- batch validation 中任意样本 task failed 或缺少必备 artifact。
 - focused/backend tests 出现和本阶段相关的失败且无法在当前边界内修复。
 - 需要进入 Component/Variant/Vectorization/Figma materialization 权限时。
 
@@ -162,4 +173,3 @@ backend/storage/uploads/task_ed8387636f80/original.png
 - 每个 phase 有独立 completed plan 和 commit。
 - 当前 product mainline 仍是 M29 plan-driven flat materialization。
 - B 阶段完成后才重新评估 Component Isomorphism、Variant、Vectorization 和 Figma Component/Instance。
-
