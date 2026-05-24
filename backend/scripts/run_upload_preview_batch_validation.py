@@ -226,6 +226,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "dsl": root / "materialized_design" / "design.dsl.json",
         "materializationReport": root / "materialized_design" / "materialization_report.json",
         "ownershipConservationReport": root / "m29_ownership_conservation" / "ownership_conservation_report.json",
+        "hierarchyCandidateReport": root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -236,6 +237,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "stageTimings", artifact_paths["stageTimings"])
     load_summary(record, "materialization", artifact_paths["materializationReport"])
     load_summary(record, "ownershipConservation", artifact_paths["ownershipConservationReport"])
+    load_summary(record, "hierarchyCandidates", artifact_paths["hierarchyCandidateReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
 
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..m29_replay_plan import build_m295_replay_plan
+from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
 from ..plan_materializer import build_plan_driven_dsl
@@ -119,6 +120,23 @@ def run_m29_ownership_conservation_stage(
         m2931_report=m2931_report,
         m295_report=m295_report,
         output_dir=paths.m29_ownership_conservation,
+    )
+
+
+def run_m29_hierarchy_candidate_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m292_document: dict[str, Any],
+    m2931_report: dict[str, Any],
+    m295_report: dict[str, Any],
+):
+    return extract_m29_hierarchy_candidate_report(
+        task_id=task_id,
+        m292_document=m292_document,
+        m2931_report=m2931_report,
+        m295_report=m295_report,
+        output_dir=paths.m29_hierarchy_candidates,
     )
 
 

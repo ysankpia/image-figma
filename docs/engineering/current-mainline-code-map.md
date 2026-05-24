@@ -14,6 +14,7 @@ Plugin upload
 -> M29.4 weak cluster
 -> M29.5 replay plan
 -> M29 ownership conservation report
+-> M29 hierarchy candidate report
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -44,6 +45,7 @@ save source PNG
 run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
 run M29 ownership conservation report
+run M29 hierarchy candidate report
 run M29 plan-driven materialization
 publish M29 assets
 write task status and stage timings
@@ -57,7 +59,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/materialization stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -243,6 +245,37 @@ validation.py: report schema and report-only invariant checks
 ```
 
 这个 package 只报告风险，不改变任何输入对象。它不创建 DSL nodes，不改 M29.5 plan，不授权 cleanup，不被 materializer 消费。
+
+### M29 Hierarchy Candidates
+
+`backend/app/hierarchy_candidate_report/` 是 M29.5 之后、materialization 之前的 report-only hierarchy evidence surface。它消费：
+
+```text
+M29.2 source objects
+M29.3.1 relation graph
+M29.5 replay plan
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_hierarchy_candidates/hierarchy_candidate_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: visible/non-visible action constants and result type
+normalization.py: M29.2 source object, M29.3 edge, and M29.5 plan item normalization
+relations.py: relation lookup and child-in-parent metric helpers
+geometry.py: bbox area, containment, oversize, and padding imbalance helpers
+candidates.py: container candidate, parent candidate, and best-parent selection
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and read-only invariant checks
+```
+
+这个 package 只报告候选父子结构，不创建 Group/Frame/Auto Layout，不改 replay plan，不被 materializer 消费。
 
 ### Historical M29 Audit Packages
 
