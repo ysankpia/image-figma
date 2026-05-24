@@ -39,6 +39,7 @@
 - [M29 Raw Geometry Fit No-Behavior Split](029-raw-m29-geometry-fit-no-behavior-split.md) — `completed`
 - [M29 Raw Geometry/Mask No-Behavior Split](029-raw-m29-geometry-mask-no-behavior-split.md) — `completed`
 - [M29 Shape Geometry Fit Before Radius Replay](029-shape-geometry-fit-before-radius-replay.md) — `completed`
+- [M29.4 Stable Design Cluster No-Behavior Split](029-stable-design-cluster-no-behavior-split.md) — `completed`
 - [M29 Text Support Background Source Contract](029-text-support-background-source-contract.md) — `completed`
 - [M29 Upload Preview Pipeline No-Behavior Split](029-upload-preview-pipeline-no-behavior-split.md) — `completed`
 - [M29 Visual Primitive Graph Harness](029-visual-primitive-graph-harness.md) — `completed`
