@@ -8,8 +8,7 @@ v0.1 只做能定位问题的日志和 artifact，不做完整监控平台。
 
 ```text
 storage/m30_1_uploads/{taskId}/stage_timings.json
-GET /api/tasks/{taskId}/m29-direct-dsl
-GET /api/tasks/{taskId}/m30-materialization
+GET /api/tasks/{taskId}/m29-materialization
 ```
 
 `stage_timings.json` 记录每个 stage 的开始时间、结束时间、耗时、状态、错误码和错误消息。
@@ -23,21 +22,21 @@ m29_2_source_ui_physical_graph
 m29_3_relation_graph_report
 m29_4_stable_design_cluster
 m29_5_replay_plan
-m29_direct_replay
-m29_direct_asset_publish
-m29_1
-m29_0_2
-m29_0_3
-m29_0_7
-m29_0_4
-m29_0_5
-m30_materialization
-m30_asset_publish
+m29_materialization
+m29_asset_publish
 ```
 
-M31/M37/M38/M39/M39.1 stage timings are historical and should not appear in new upload tasks.
+M29 Direct、M29.0.x、M30、M31/M37/M38/M39/M39.1 stage timings are historical and should not appear in new upload tasks.
 
-## M29 Direct Diagnostics
+## M29 Source Diagnostics
+
+M29 writes:
+
+```text
+storage/m30_1_uploads/{taskId}/m29/nodes.json
+```
+
+In development profile, raw M29 may also write overlays and preview sheets.
 
 M29.2 writes:
 
@@ -62,7 +61,7 @@ dslChanged
 assetChanged
 ```
 
-Each source object records `visualKind`, `pixelOwner`, `replayDecision`, `sourceEvidence`, `confidence`, `reasons`, and `risks`. If M29 Direct renders ordinary UI text as raster or turns art text into generic text, inspect this report before changing M30, renderer, or plugin behavior.
+Each source object records `visualKind`, `pixelOwner`, `replayDecision`, `sourceEvidence`, `confidence`, `reasons`, and `risks`. If current output renders ordinary UI text as raster, loses a media block, or redraws a complex foreground as a flat shape, inspect this report before changing the materializer, renderer, or plugin behavior.
 
 M29.3.1 writes:
 
@@ -97,13 +96,17 @@ clusterSupportedPlanItemCount
 nodeBudgetSuppressedCount
 ```
 
-M29 Direct writes:
+## M29 Materialization Diagnostics
+
+M29 plan-driven materializer writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
-storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_report.json
-storage/assets/{taskId}/m29_direct/*
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialization_report.json
+storage/assets/{taskId}/m29/*
 ```
+
+`GET /api/tasks/{taskId}/m29-materialization` returns the same report plus stage timings.
 
 The report summary includes:
 
@@ -114,66 +117,33 @@ replayedTextCount
 replayedImageCount
 replayedSymbolCount
 replayedShapeCount
-skippedBlockedCount
-skippedDuplicateCount
 fallbackErasedBBoxCount
+copiedImageAssetTextErasedCount
 visibleNodeCount
 maxTotalVisibleNodesExceeded
 m292SourcePhysicalGraph
+m295ReplayPlan
 ```
 
-If `m29_direct_replay` or `m29_direct_asset_publish` fails, the failed stage remains visible in `stage_timings.json`. This does not necessarily fail the upload task because M29 Direct is a non-blocking compare variant.
-
-## M30 Diagnostics
-
-`GET /api/tasks/{taskId}/m30-materialization` returns the M30 report plus the same stage timings.
-
-M30 text editability diagnostics:
+If fallback-off output collapses to a wrong background, inspect:
 
 ```text
-textEditabilityDecisions
-preservedGraphicTextItems
-reviewTextItems
-summary.editableTextCount
-summary.preservedGraphicTextCount
-summary.reviewTextCount
-summary.textEditabilityReasonCounts
-```
-
-These fields answer why an OCR/M29 text evidence item became editable text or remained in raster fallback.
-
-M30 text-symbol leakage diagnostics:
-
-```text
-textSymbolLeakageDecisions
-summary.trimmedTextSymbolLeakageCount
-summary.reviewTextSymbolLeakageCount
-summary.textSymbolLeakageReasonCounts
-```
-
-M30 foreground sampling diagnostics:
-
-```text
-text node meta.textForegroundColorSource
-summary.sampledTextForegroundCount
-summary.defaultContrastTextForegroundCount
-summary.defaultTextColorFallbackCount
-```
-
-M30 image/composite media diagnostics:
-
-```text
-summary.materializedAcceptedImageCount
-summary.materializedCompositeMediaCount
-summary.cleanedMaterializedImageAssetCount
-summary.erasedTextFromMaterializedImageAssetCount
-summary.skippedCompositeMediaCount
-materializedImageNodes[]
+dsl.page.background.value
+dsl.root.style.fill
+fallback asset pixels
+replayedImageCount
+replayedShapeCount
 skippedItems[]
-warnings[]
 ```
 
-If a large product or banner image is not draggable, inspect `skippedItems[]` before changing M29 detection. If editable text shows a ghost after dragging, inspect `cleanedMaterializedImageAssetCount` and warnings starting with `m30_image_asset_text_erasure_`.
+If dragging editable text reveals baked duplicate text inside a copied media asset, inspect:
+
+```text
+m295ReplayPlan.copiedImageAssetCleanupTargetCount
+summary.copiedImageAssetTextErasedCount
+replayedNodes[]
+planItems[].cleanupTargets
+```
 
 ## Logs
 
@@ -199,4 +169,4 @@ Renderer warning 至少包含：
 
 ## Historical Diagnostics
 
-M8-M28、M31-M39/M39.1 和 ONNX proposer 的历史日志字段只在 ADR、completed plans、git history 或旧本地 storage 中有意义。当前 backend runtime 不再生成这些 reports，也不提供对应 diagnostic endpoints。
+M8-M28、M29 Direct、M29.0.x、M30、M31-M39/M39.1 和 ONNX proposer 的历史日志字段只在 ADR、completed plans、git history 或旧本地 storage 中有意义。当前 backend runtime 不再生成这些 reports，也不提供对应 diagnostic endpoints。

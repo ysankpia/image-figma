@@ -318,6 +318,36 @@ def test_symbol_inside_media_is_not_separately_replayed(tmp_path: Path) -> None:
     assert not [obj for obj in result["sourceObjects"] if obj["sourceEvidence"]["m29NodeIds"] == ["symbol_inside"]]
 
 
+def test_large_image_like_unknown_becomes_preserved_media_region(tmp_path: Path) -> None:
+    source = make_textured_png(240, 180, [20, 20, 170, 120])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_chart_like",
+                "unknown",
+                [20, 20, 170, 120],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 70, "textureScore": 0.24, "edgeScore": 0.33},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    media = only_object(result, "media_region")
+    assert media["pixelOwner"] == "preserve_raster"
+    assert media["replayDecision"] == "image_replay"
+    assert media["sourceEvidence"]["m29NodeIds"] == ["unknown_chart_like"]
+    assert "large_image_like_region" in media["reasons"]
+    assert "low_confidence_media_region" in media["risks"]
+
+
 def test_high_iou_duplicate_keeps_higher_priority_candidate(tmp_path: Path) -> None:
     source = make_png(140, 100)
     m29 = m29_document(

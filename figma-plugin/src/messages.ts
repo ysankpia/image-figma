@@ -6,18 +6,12 @@ export type PluginToMainMessage =
       mimeType: "image/png";
       bytes: ArrayBuffer | Uint8Array | number[];
     }
-  | {
-      type: "render-uploaded-png-compare";
-      fileName: string;
-      mimeType: "image/png";
-      bytes: ArrayBuffer | Uint8Array | number[];
-    }
   | { type: "render-sample" }
   | { type: "cancel" };
 
 export type MainToPluginMessage =
   | { type: "plugin-state"; state: PluginState }
-  | { type: "render-started"; source: "upload" | "upload_compare" | "sample" }
+  | { type: "render-started"; source: "upload" | "sample" }
   | {
       type: "render-succeeded";
       renderedElementCount: number;

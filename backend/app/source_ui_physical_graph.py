@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .evidence_grounded_dsl_materialization import bbox_overlap_ratio, sample_outer_bbox_ring_rgb
+from .m29_materialization_utils import bbox_overlap_ratio, sample_outer_bbox_ring_rgb
 from .png_tools import (
     PngPixels,
     UnsupportedPngCropError,
@@ -63,6 +63,7 @@ class M292SourcePhysicalOptions:
     media_color_threshold: int = 24
     media_texture_threshold: float = 0.16
     media_text_overlap_preserve_threshold: float = 0.55
+    media_min_color_or_texture_area: int = 20000
     icon_max_area: int = 12000
     icon_cluster_gap: int = 8
     raster_foreground_max_edge: int = 128
@@ -172,7 +173,19 @@ def detect_media_objects(
             continue
         metrics = measure_region(pixels, bbox)
         text_overlap = max((bbox_overlap_ratio(box.bbox, bbox) for box in ocr_boxes), default=0.0)
-        if str(node.get("type") or "") == "image" or (
+        node_type = str(node.get("type") or "")
+        subtype = str(node.get("subtype") or "")
+        low_confidence_media = (
+            node_type == "unknown"
+            and subtype == "image_like_low_confidence"
+            and bbox_area(bbox) >= options.media_min_color_or_texture_area
+            and (
+                metrics.color_count >= options.media_color_threshold
+                or metrics.texture_score >= options.media_texture_threshold
+                or float(getattr(metrics, "edge_score", 0.0)) >= options.textured_foreground_edge_threshold
+            )
+        )
+        if node_type == "image" or low_confidence_media or (
             bbox_area(bbox) >= options.min_media_area
             and metrics.color_count >= options.media_color_threshold
             and metrics.texture_score >= options.media_texture_threshold
@@ -188,9 +201,12 @@ def detect_media_objects(
                     local_bg_confidence=local_background_confidence(pixels, bbox),
                     text_overlap=text_overlap,
                     media_containment=1.0,
-                    confidence="high" if str(node.get("type") or "") == "image" else "medium",
-                    reasons=["m29_image_region"] if str(node.get("type") or "") == "image" else ["large_textured_region"],
-                    risks=["contains_internal_text"] if text_overlap >= options.media_text_overlap_preserve_threshold else [],
+                    confidence="high" if node_type == "image" else "medium",
+                    reasons=["m29_image_region"] if node_type == "image" else ["large_image_like_region"],
+                    risks=unique_strings([
+                        *(["contains_internal_text"] if text_overlap >= options.media_text_overlap_preserve_threshold else []),
+                        *(["low_confidence_media_region"] if low_confidence_media else []),
+                    ]),
                 )
             )
     return objects

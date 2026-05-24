@@ -40,7 +40,7 @@
 - [architecture/renderer.md](architecture/renderer.md)：Image-to-Figma Renderer 边界。
 - [architecture/frontend.md](architecture/frontend.md)：Figma 插件 UI 与 Main。
 - [architecture/backend.md](architecture/backend.md)：后端 API 与处理管线。
-- [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 实验链路的 bbox、ownership、relation、cluster、replay plan 和 direct replay 数学合同。
+- [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 主链的 bbox、ownership、relation、cluster、replay plan 和 plan-driven materialization 数学合同。
 - [architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)：面向初中数学基础读者的 M29 bbox、pixelOwner、region relation、cluster 和 replay plan 推演。
 - [architecture/api-contracts.md](architecture/api-contracts.md)：API v0.1 合同。
 - [architecture/data-model.md](architecture/data-model.md)：SQLite 数据模型。

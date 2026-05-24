@@ -2,7 +2,9 @@
 
 FastAPI backend for the current Image-to-Figma preview pipeline.
 
-Current product runtime:
+## Current Runtime
+
+The product runtime is M29 plan-driven:
 
 ```text
 Figma plugin
@@ -13,25 +15,23 @@ Figma plugin
 -> M29.3 relation graph
 -> M29.4 weak structural evidence
 -> M29.5 replay plan
--> M29 Direct Replay compare variant
--> legacy M29.0.x bridge
--> M30 materialized DSL
+-> M29 plan-driven materialized DSL
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer writes Figma nodes
 ```
 
-The frozen pre-M29 upload chain has been removed from runtime source. M31-M39/M39.1 downstream experiments and ONNX proposer have also been pruned from backend runtime. Their old ADRs and completed plans are historical records, not active API or pipeline facts.
+`/api/upload-m30-preview` keeps its historical route name for plugin compatibility. It no longer means the legacy M30 materializer is the product source of truth.
 
-On `experiment/m29-direct-replay`, each upload task also writes an experimental M29 Direct variant for side-by-side Figma comparison. It uses the same OCR and raw M29 evidence, runs M29.2-M29.5, writes `m29_direct/m29_direct_replay_dsl.json`, publishes assets under `/files/assets/{taskId}/m29_direct/`, and is available through `GET /api/tasks/{taskId}/m29-direct-dsl`. It does not replace the mainline `/dsl` result. M29 Direct failures are non-blocking; the mainline task can still complete and the variant endpoint then returns `M29_DIRECT_DSL_NOT_FOUND` if the direct variant is unavailable.
-
-M30 remains the current default `/dsl` bridge. It materializes safe text, shapes, images, and composite media into DSL layers, then deduplicates raster pixels that would otherwise be drawn twice. Editable text remains a top layer; if it sits inside a copied media asset, M30.7 erases that text bbox from the copied asset only. M29.0.5 source assets are never modified.
+The frozen pre-M29 upload chain, M29 Direct compare product endpoint, legacy M30 materialization product path, M31-M39/M39.1 downstream experiments, and ONNX proposer are not active backend runtime.
 
 ## Run
 
 ```bash
 uv sync
-M30_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+M29_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+`M30_PREVIEW_PROFILE` is accepted only as a backward-compatible alias for `M29_PREVIEW_PROFILE`.
 
 ## Test
 
@@ -49,8 +49,7 @@ uv run pytest \
   tests/test_region_relation_graph_report.py \
   tests/test_stable_design_cluster.py \
   tests/test_m29_replay_plan.py \
-  tests/test_m29_direct_replay.py \
-  tests/test_evidence_grounded_dsl_materialization.py \
+  tests/test_m29_plan_materializer.py \
   tests/test_m30_upload_pipeline.py \
   tests/test_routes_tasks.py \
   tests/test_config_env.py \
@@ -66,38 +65,39 @@ GET  /api/health
 POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
-GET  /api/tasks/{taskId}/m29-direct-dsl
-GET  /api/tasks/{taskId}/m30-materialization
+GET  /api/tasks/{taskId}/m29-materialization
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
 ```
 
-`/api/upload-m30-preview` validates a PNG, stores it at `storage/uploads/{taskId}/original.png`, creates a `processing` task, and runs the preview pipeline in a FastAPI background task.
-
-On success, the task reaches:
-
-```text
-status = completed
-stage = m30_completed
-progress = 100
-```
-
-`GET /api/tasks/{taskId}/dsl` returns `storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json`.
-
-`GET /api/tasks/{taskId}/m29-direct-dsl` returns the experiment variant from `storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json` plus report summary, warnings, output report path, and stage timings. It is used by plugin `Generate Compare`; it is not the default product DSL.
-
-`GET /api/tasks/{taskId}/m30-materialization` returns the M30 report summary, warnings, skipped items, output DSL path, optional debug preview path, and `stage_timings.json`.
-
-The removed routes below are not current API:
+Removed product routes:
 
 ```text
 POST /api/upload
+GET /api/tasks/{taskId}/m29-direct-dsl
+GET /api/tasks/{taskId}/m30-materialization
 GET /api/tasks/{taskId}/m31-reconstruction
 GET /api/tasks/{taskId}/m39-boundary-classification
 GET /api/tasks/{taskId}/m39-1-unit-structure-readiness
 old M8-M28 debug endpoints
 ```
+
+On success, the task reaches:
+
+```text
+status = completed
+stage = m29_completed
+progress = 100
+```
+
+`GET /api/tasks/{taskId}/dsl` returns:
+
+```text
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+```
+
+`GET /api/tasks/{taskId}/m29-materialization` returns the M29 materialization report summary, warnings, skipped items, replayed nodes, output paths, and `stage_timings.json`.
 
 ## Current Pipeline
 
@@ -110,19 +110,24 @@ OCR
 -> M29.3 relation graph report
 -> M29.4 stable design cluster report
 -> M29.5 replay plan
--> M29 Direct replay variant
--> publish M29 Direct assets under /files/assets/{taskId}/m29_direct/
--> M29.1 symbol fragment grouping
--> M29.0.2 text-masked media audit
--> M29.0.3 visual evidence normalization with lineage
--> M29.0.7 text/visual ownership gate
--> M29.0.4 visual object candidate audit with ownership routing
--> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization
--> publish M30 image assets under /files/assets/{taskId}/m30/
+-> M29 plan-driven materialization
+-> publish M29 image assets under /files/assets/{taskId}/m29/
 ```
 
-It deliberately does not run old pre-M29 diagnostic stages, removed M31-M39 downstream stages, fallback masking, Auto Layout, Figma Components, SVG/vectorization, or icon recovery.
+It deliberately does not run:
+
+```text
+M29 Direct compare replay
+M29.0.x legacy bridge
+M30 legacy materializer
+old pre-M29 diagnostic stages
+removed M31-M39 downstream stages
+fallback masking experiments
+Auto Layout
+Figma Components
+SVG/vectorization
+icon recovery
+```
 
 ## OCR
 
@@ -140,29 +145,22 @@ BAIDU_PADDLE_OCR_TOKEN=... \
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-In the preview pipeline, OCR is required evidence. If the configured OCR provider fails, the task is marked `failed`; the backend does not create a fake completed M30 DSL.
+In the preview pipeline, OCR is required evidence. If the configured OCR provider fails, the task is marked `failed`; the backend does not create a fake completed DSL.
 
-Baidu OCR polygon metadata is kept as evidence:
-
-```text
-OCRBlock.meta.angle
-OCRBlock.meta.polygon
-```
-
-## M30 Preview Profile
+## M29 Preview Profile
 
 ```bash
-M30_PREVIEW_PROFILE=production   # default plugin preview runtime
-M30_PREVIEW_PROFILE=development  # full diagnostics for local debugging
+M29_PREVIEW_PROFILE=production   # default plugin preview runtime
+M29_PREVIEW_PROFILE=development  # full raw M29 diagnostics for local debugging
 ```
 
-`production` keeps OCR JSON, structured M29/M29.0.x/M30 JSON, M29.0.5 formal visual assets needed by M30, M29 Direct artifacts when available, published renderer assets, M30 DSL/report, and `stage_timings.json`. It skips overlays, preview sheets, review/contact sheets, and M30 preview PNGs.
+`production` keeps OCR JSON, structured M29/M29.2/M29.3/M29.4/M29.5 JSON, M29 materialized DSL/report, published renderer assets, and `stage_timings.json`. It skips raw M29 overlays and preview sheets where possible.
 
-`development` preserves full diagnostic output. Single-stage M29/M30 scripts still default to development-style output through their own function defaults.
+`development` preserves raw M29 diagnostic output such as overlays and preview sheet. The profile affects artifacts only; it does not change ownership, replay decisions, DSL schema, or Renderer behavior.
 
-## M29 Direct
+## M29 Contract Chain
 
-M29 Direct is protected by the M29 contract chain:
+M29 source truth is protected by:
 
 ```text
 raw M29
@@ -170,41 +168,32 @@ raw M29
 -> M29.3 region relation
 -> M29.4 weak cluster
 -> M29.5 replay plan
--> M29 Direct materialization
+-> M29 plan-driven materializer
 ```
 
-M29.2 classifies source pixel ownership into editable text, preserved raster text, media, raster icons, stable UI shapes, and diagnostic-only objects. M29.5 decides visible replay actions, deduplication, ordering, node budget, and cleanup authorization. M29.4 remains weak structural evidence; it does not grant component, Auto Layout, or Figma Component/Instance permission.
+M29.2 classifies source pixel ownership into editable text, preserved raster text, media, raster icons, stable UI shapes, and diagnostic-only objects. M29.5 decides visible replay actions, deduplication, ordering, node budget, fallback cleanup, and copied raster/media asset cleanup authorization. M29.4 remains weak structural evidence; it does not grant component, Auto Layout, or Figma Component/Instance permission.
 
-## M30 Materialization
+## Materialization
 
-M30 is the bridge from trusted M29.0.5 evidence into existing DSL v0.1. It consumes:
+`backend/app/m29_plan_materializer.py` is the formal DSL producer. It:
+
+- requires an M29.5 replay plan.
+- starts from deterministic fallback DSL.
+- samples root/page background from source PNG instead of using a fixed light background.
+- appends only plan-approved visible actions.
+- writes `m29_text`, `m29_shape`, `m29_image`, and `m29_symbol` roles.
+- executes fallback erasure only when the plan item has a `fallback` cleanup target.
+- executes copied image asset text cleanup only when the plan item has a `copied_image_asset` cleanup target.
+
+It does not:
 
 ```text
-textMembers
-shapeCandidates
-safe visualAssets
-composite media candidates
+run a separate text editability classifier
+invent new bbox
+derive support backgrounds from text padding
+special-case dark mode, a screenshot, a color, a language, or a business category
+promote M29.4 clusters into components
 ```
-
-It does not consume mixed/future/audit-only evidence as visible DSL children. Those references may appear only in reports or DSL meta.
-
-Safe visual assets are emitted as DSL `image` nodes, not `icon` nodes, because the current renderer does not implement an `icon` DSL type for this path.
-
-M30 text materialization has an explicit editability decision:
-
-```text
-editable_text
-graphic_text_preserve_in_fallback
-review_text
-```
-
-Only `editable_text` creates a visible `m30_text_member`. `graphic_text_preserve_in_fallback` and `review_text` stay in fallback and are reported; they are not included in fallback pixel erasure.
-
-M30 samples `style.color` for each emitted editable text node from source pixels. If no foreground pixels are available, it falls back to black or white based on background brightness. If sampling fails, it uses the configured default text color and records that fallback in node meta/report summary.
-
-M30.6 allows only large `assetUse=image_asset` entries from M29.0.5 to become `m30_visual_asset` DSL image nodes when their text overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node.
-
-M30.7 keeps independent media layers clean. It fills editable text bboxes inside copied `m30_visual_asset`/`m30_composite_media_asset` PNGs with sampled local background, so dragging the text does not reveal baked duplicate text underneath. It also materializes large `decision=partially_separated` objects with `combinedAssetPath` as `m30_composite_media_asset`.
 
 ## Storage
 
@@ -230,35 +219,27 @@ storage/m30_1_uploads/{taskId}/m29_2/
 storage/m30_1_uploads/{taskId}/m29_3/
 storage/m30_1_uploads/{taskId}/m29_4/
 storage/m30_1_uploads/{taskId}/m29_5/
-storage/m30_1_uploads/{taskId}/m29_direct/
-storage/m30_1_uploads/{taskId}/m29_1/
-storage/m30_1_uploads/{taskId}/m29_0_2/
-storage/m30_1_uploads/{taskId}/m29_0_3/
-storage/m30_1_uploads/{taskId}/m29_0_7/
-storage/m30_1_uploads/{taskId}/m29_0_4/
-storage/m30_1_uploads/{taskId}/m29_0_5/
-storage/m30_1_uploads/{taskId}/m30/
+storage/m30_1_uploads/{taskId}/m29_materialized/
 storage/m30_1_uploads/{taskId}/stage_timings.json
 ```
 
 Renderer-fetchable image assets are published to:
 
 ```text
-storage/assets/{taskId}/m30/
-storage/assets/{taskId}/m29_direct/
-http://localhost:8000/files/assets/{taskId}/m30/...
-http://localhost:8000/files/assets/{taskId}/m29_direct/...
+storage/assets/{taskId}/m29/
+http://localhost:8000/files/assets/{taskId}/m29/...
 ```
 
 ## Removed Legacy Surface
 
-M30.2.2 permanently removed the frozen pre-M29 backend chain from active source. M29 backend downstream pruning removed the later downstream structure experiments. History remains in git, old ADRs, completed plans, and `docs/reference/legacy/`.
-
-Do not restore these as product paths without a new plan and tests:
+History remains in git, old ADRs, completed plans, and `docs/reference/legacy/`. Do not restore these as product paths without a new plan and tests:
 
 ```text
 POST /api/upload
 old M8-M28 task debug endpoints
+M29 Direct compare endpoint
+M29.0.x legacy bridge
+M30 materializer product path
 M31 reconstruction diagnostics
 M37 hierarchy readiness
 M38 hierarchy materialization

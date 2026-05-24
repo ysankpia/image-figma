@@ -4,7 +4,7 @@ Figma 插件分为 UI 和 Main 两层。
 
 ## Plugin UI
 
-M5 当前 Plugin UI 使用静态 `ui.html`、内联 CSS/JS 和 TypeScript Main。这个选择来自现有已审核 Figma 插件的壳子经验，目的是先用最少移动部件打通 UI -> Main -> Backend -> Renderer -> Figma Canvas。
+Plugin UI 使用静态 `ui.html`、内联 CSS/JS 和 TypeScript Main。这个选择来自现有已审核 Figma 插件的壳子经验，目的是先用最少移动部件打通 UI -> Main -> Backend -> Renderer -> Figma Canvas。
 
 React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览、进度、错误恢复和设置页变复杂，再单独评估是否引入 React/Vite。
 
@@ -13,7 +13,6 @@ React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览
 - 上传 PNG。
 - 显示文件信息。
 - 触发开始生成。
-- 触发 M29 direct/mainline 并排对比生成。
 - 显示进度。
 - 显示完成或失败。
 - 保留 sample DSL 生成作为开发备用入口。
@@ -26,6 +25,7 @@ React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览
 - AI 分析。
 - 图片裁切。
 - DSL 生成。
+- 在 UI 中选择 M29/M30/compare 路线。
 
 ## Plugin Main
 
@@ -36,14 +36,14 @@ Plugin Main 运行在 Figma 插件主线程。
 - 接收 UI 消息。
 - 调用后端 API。
 - 轮询任务状态。
-- 获取 DSL。
+- 获取正式 DSL。
 - 调用 Renderer。
 - 使用 Figma Plugin API 创建图层。
 - 返回结果给 UI。
 
 ## Views
 
-M5 当前静态工具面板：
+当前静态工具面板：
 
 - `Choose PNG`。
 - `Generate from PNG`。
@@ -63,61 +63,29 @@ M5 当前静态工具面板：
 
 ## Message Flow
 
-M3 当前流：
+Sample 开发备用流：
 
 ```text
-UI clicks Generate sample design
+UI clicks Sample
 -> Main receives render-sample
 -> Main loads bundled mobile-home DSL
 -> Main calls Renderer
 -> Main reports success, warnings, or failure
 ```
 
-后续接入后端后的完整流：
+当前正式上传流：
 
 ```text
 UI selects PNG
+-> UI clicks Generate from PNG
 -> Main uploads PNG to /api/upload-m30-preview
--> Main polls task
--> Main fetches DSL
+-> Main polls /api/tasks/{taskId}
+-> Main fetches /api/tasks/{taskId}/dsl
 -> Main calls Renderer
 -> Main reports done or error
 ```
 
-M5 保留开发备用流：
-
-```text
-UI clicks Sample
--> Main loads bundled mobile-home DSL
--> Main calls Renderer
-```
-
-M9 没有改插件协议。历史上插件不调用内部 debug endpoints，也不展示 AI/OCR/primitive/patch 内部结果。
-
-M30.1 changes the default upload endpoint, not the renderer contract. `render-uploaded-png` calls `/api/upload-m30-preview`, waits for the task to finish, then fetches `/api/tasks/{taskId}/dsl`. The returned DSL is `m30_materialized_dsl.json`.
-
-M30.2.2 removed legacy `/api/upload`; the plugin has no legacy upload fallback.
-
-M29 Direct Replay compare mode adds an experiment-only flow:
-
-```text
-UI clicks Generate Compare
--> Main uploads PNG once to /api/upload-m30-preview
--> Main polls task
--> Main fetches /api/tasks/{taskId}/m29-direct-dsl
--> Main fetches /api/tasks/{taskId}/dsl
--> Main renders M29 Direct Replay at x=0
--> Main renders Current Mainline at x=page.width+80
-```
-
-The default `Generate from PNG` flow remains unchanged and renders only `/api/tasks/{taskId}/dsl`.
-
-Compare root names:
-
-```text
-M29 Direct Replay / {filename}
-Current Mainline / {filename}
-```
+`/api/upload-m30-preview` 是历史命名。当前它返回 M29 plan-driven DSL，不再返回 legacy M30 DSL，也不再提供 M29 Direct compare 双画布路径。
 
 ## User Language
 
@@ -128,6 +96,7 @@ Current Mainline / {filename}
 - 不显示 DSL。
 - 不显示模型调用。
 - 不显示质量评分。
+- 不显示 M29/M30/Direct/compare 路线选择。
 
 用户只需要看到：
 

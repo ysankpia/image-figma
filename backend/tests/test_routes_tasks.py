@@ -1,72 +1,49 @@
 from __future__ import annotations
 
-import json
 import importlib
+import json
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
 
-def test_m29_direct_dsl_route_returns_variant(client: TestClient) -> None:
+def test_m29_materialization_route_returns_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m29_direct"
+    task_id = "task_route_m29_materialization"
     now = datetime.now(UTC).isoformat()
     insert_task(state, task_id, status="completed", now=now)
     task_root = state.settings.storage_root / "m30_1_uploads" / task_id
-    variant_dir = task_root / "m29_direct"
-    variant_dir.mkdir(parents=True, exist_ok=True)
-    dsl = {
-        "version": "0.1",
-        "taskId": f"{task_id}_m29_direct",
-        "page": {"width": 100, "height": 80},
-        "assets": [],
-        "root": {"id": "root", "type": "frame", "role": "screen", "layout": {"x": 0, "y": 0, "width": 100, "height": 80}, "children": []},
-        "meta": {"m29DirectReplay": True},
-    }
-    (variant_dir / "m29_direct_replay_dsl.json").write_text(json.dumps(dsl), encoding="utf-8")
-    (variant_dir / "m29_direct_replay_report.json").write_text(json.dumps({"summary": {"visibleNodeCount": 0}, "warnings": []}), encoding="utf-8")
+    report_dir = task_root / "m29_materialized"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "m29_materialized_dsl.json").write_text(json.dumps({"version": "0.1"}), encoding="utf-8")
+    (report_dir / "m29_materialization_report.json").write_text(
+        json.dumps({"summary": {"visibleNodeCount": 2}, "warnings": [], "skippedItems": [], "replayedNodes": []}),
+        encoding="utf-8",
+    )
     (task_root / "stage_timings.json").write_text(
-        json.dumps(
-            {
-                "schemaName": "M3011StageTimings",
-                "stages": [{"stage": "m29_direct_asset_publish", "status": "completed"}],
-            }
-        ),
+        json.dumps({"schemaName": "M3011StageTimings", "stages": [{"stage": "m29_materialization", "status": "completed"}]}),
         encoding="utf-8",
     )
 
-    response = client.get(f"/api/tasks/{task_id}/m29-direct-dsl")
+    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["dsl"]["meta"]["m29DirectReplay"] is True
-    assert data["report"]["summary"]["visibleNodeCount"] == 0
-    assert str(data["report"]["outputReport"]).endswith("m29_direct_replay_report.json")
-    assert data["report"]["stageTimings"]["schemaName"] == "M3011StageTimings"
+    assert data["summary"]["visibleNodeCount"] == 2
+    assert str(data["outputReport"]).endswith("m29_materialization_report.json")
+    assert data["stageTimings"]["schemaName"] == "M3011StageTimings"
 
 
-def test_m29_direct_dsl_route_waits_for_completion(client: TestClient) -> None:
+def test_m29_materialization_route_missing_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m29_direct_processing"
-    now = datetime.now(UTC).isoformat()
-    insert_task(state, task_id, status="processing", now=now)
-
-    response = client.get(f"/api/tasks/{task_id}/m29-direct-dsl")
-
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "DSL_NOT_READY"
-
-
-def test_m29_direct_dsl_route_missing_variant(client: TestClient) -> None:
-    state = importlib.import_module("app.state").state
-    task_id = "task_route_m29_direct_missing"
+    task_id = "task_route_m29_materialization_missing"
     now = datetime.now(UTC).isoformat()
     insert_task(state, task_id, status="completed", now=now)
 
-    response = client.get(f"/api/tasks/{task_id}/m29-direct-dsl")
+    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "M29_DIRECT_DSL_NOT_FOUND"
+    assert response.json()["error"]["code"] == "M29_MATERIALIZATION_NOT_FOUND"
 
 
 def insert_task(state, task_id: str, *, status: str, now: str) -> None:
@@ -77,8 +54,8 @@ def insert_task(state, task_id: str, *, status: str, now: str) -> None:
         {
             "id": task_id,
             "status": status,
-            "stage": "m30_completed" if status == "completed" else "m29_direct_replay",
-            "progress": 100 if status == "completed" else 22,
+            "stage": "m29_completed" if status == "completed" else "m29_materialization",
+            "progress": 100 if status == "completed" else 92,
             "message": "done" if status == "completed" else "processing",
             "original_filename": "input.png",
             "mime_type": "image/png",

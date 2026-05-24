@@ -99,7 +99,7 @@ def test_m295_editable_text_inside_media_declares_fallback_and_asset_cleanup(tmp
     assert text_item["finalReplayAction"] == "text_replay"
     assert {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"} in text_item["cleanupTargets"]
     assert {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "editable_text_contained_by_media"} in text_item["cleanupTargets"]
-    assert result.report["summary"]["fallbackCleanupTargetCount"] == 1
+    assert result.report["summary"]["fallbackCleanupTargetCount"] == 2
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
 
 
@@ -139,7 +139,7 @@ def test_m295_records_cluster_support_without_semantic_role_promotion(tmp_path: 
     assert result.report["summary"]["clusterSupportedPlanItemCount"] == 2
     for item in result.report["planItems"]:
         assert item["clusterIds"] == ["cluster_row"]
-        assert item["targetRole"] in {"m29_direct_text", "m29_direct_symbol"}
+        assert item["targetRole"] in {"m29_text", "m29_symbol"}
         assert "SearchBar" not in json.dumps(item)
         assert "Card" not in json.dumps(item)
 

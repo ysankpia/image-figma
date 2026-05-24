@@ -13,14 +13,14 @@ Plugin upload
 -> M29.3 relation
 -> M29.4 weak cluster
 -> M29.5 replay plan
--> M29 Direct compare variant
--> legacy M29.0.x bridge
--> M30 materialization
+-> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
 ```
 
-M31-M39/M39.1 downstream experiments and ONNX proposer have been pruned from active backend runtime.
+The route and orchestrator still contain `m30` in names for historical compatibility. Current runtime semantics are M29 mainline.
+
+M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and ONNX proposer have been pruned from active backend runtime.
 
 ## Runtime Entry Surface
 
@@ -33,7 +33,7 @@ backend/app/routes/tasks.py
 backend/app/routes/assets.py
 ```
 
-当前产品上传入口是 `POST /api/upload-m30-preview`。旧 `POST /api/upload`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
+当前产品上传入口是 `POST /api/upload-m30-preview`。旧 `POST /api/upload`、`GET /api/tasks/{taskId}/m29-direct-dsl`、`GET /api/tasks/{taskId}/m30-materialization`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
 
 ## Pipeline Orchestrator
 
@@ -44,14 +44,12 @@ validate upload
 save source PNG
 run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
-run M29 Direct compare variant
-run M29.1 and M29.0.x legacy bridge stages
-run M30 materialization
-publish M30 and M29 Direct assets
+run M29 plan-driven materialization
+publish M29 assets
 write task status and stage timings
 ```
 
-这个文件仍偏长。后续代码瘦身应优先做无行为变更拆分，例如把 artifact publishing、optional stage wrappers、pipeline path construction 和 task status error handling 拆出。不要顺手改 stage order 或 runtime contract。
+这个文件名仍是历史命名。后续若重命名，应单独开极小阶段处理 import、route、tests 和 docs；不要和算法改动混做。
 
 ## Source Truth Layer
 
@@ -83,31 +81,6 @@ document validation
 
 拆分不能改变 primitive IDs、metrics、geometry contract、support detector gates、asset paths 或 output JSON shape。
 
-### Legacy M29.0.x Bridge
-
-这些文件仍在 M30 materialization 前运行，作用是保留和筛选 raw M29 evidence。它们是 `/dsl` 迁移期 bridge，不是新的 source truth：
-
-```text
-backend/app/symbol_fragment_grouping.py
-backend/app/text_masked_media_audit.py
-backend/app/visual_evidence_normalization.py
-backend/app/text_visual_ownership_gate.py
-backend/app/visual_object_candidate_audit.py
-backend/app/text_aware_visual_object_refinement.py
-```
-
-`backend/app/mixed_symbol_text_conflict_audit.py` 仍保留，但当前只因 M30 materialization 复用 `find_forbidden_contract_terms`。不要把它当成 upload pipeline stage。
-
-已删除的 legacy audit modules：
-
-```text
-pre-OCR symbol lineage audit
-member boundary quality audit
-residual mixed boundary review
-```
-
-## M29 Contract Layer
-
 ### M29.2 Ownership
 
 `backend/app/source_ui_physical_graph.py` 负责把 raw M29/OCR/source pixels 转成 source objects：
@@ -120,7 +93,9 @@ source lineage
 physical metrics
 ```
 
-这是 source ownership gate。修 `#日本旅行`、`#北京探店` 这类文字支撑背景丢失问题时，应从 raw M29 detector 或 M29.2 owner contract 修起，不能在 M30/Renderer/plugin 按文字内容或样式伪造。
+这是 source ownership gate。修文字支撑背景、深色 UI raster/media 丢失、复杂头像/图表/照片被误画成 shape 等问题时，应从 raw M29 detector 或 M29.2 owner contract 修起，不能在 materializer/Renderer/plugin 按文字内容、颜色或主题伪造。
+
+M29.2 当前也负责把有物理证据的大型复杂 image-like unknown 恢复为 `media_region` / `preserve_raster` / `image_replay`，为 fallback-off 场景提供 raster/media preservation。
 
 ### M29.3 Relation
 
@@ -155,7 +130,7 @@ repeated_item_like
 
 ### M29.5 Replay Plan
 
-`backend/app/m29_replay_plan.py` 是 M29 Direct 前的质量门。它负责：
+`backend/app/m29_replay_plan.py` 是正式 materialization 前的质量门。它负责：
 
 ```text
 map M29.2 replay decisions to final plan actions
@@ -167,61 +142,58 @@ authorize copied image asset cleanup
 record risk and cluster support
 ```
 
-M29.5 只写 plan，不创建 DSL visible nodes。
-
-## M29 Direct Compare Variant
-
-`backend/app/m29_direct_replay.py` 消费 raw M29、M29.2 和 M29.5 replay plan，生成 compare variant DSL：
+M29.5 只写 plan，不创建 DSL visible nodes。Plan target roles are:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
-storage/assets/{taskId}/m29_direct/
+m29_text
+m29_shape
+m29_image
+m29_symbol
 ```
 
-它只服务 `GET /api/tasks/{taskId}/m29-direct-dsl`。M29 Direct 失败不能阻断主线 `/api/tasks/{taskId}/dsl`。
+## M29 Plan Materialization
 
-## M30 Materialization
-
-`backend/app/evidence_grounded_dsl_materialization.py` 把可信 M29/M29.0.x evidence 转成当前主线 DSL。它负责：
+`backend/app/m29_plan_materializer.py` is the current formal DSL producer. It consumes:
 
 ```text
-editable text materialization
-graphic text preserve decision
-source-proven support shape materialization
-accepted image materialization
-composite media materialization
-copied media asset text cleanup
-fallback erasure for materialized nodes
-M30 report
+source PNG
+OCR
+raw M29 nodes
+M29.2 source objects
+M29.5 replay plan
 ```
 
-它现在也是长文件。后续可按 materializer policy 拆分：
+It creates:
 
 ```text
-text decision/materialization
-shape candidate materialization
-image/composite media materialization
-raster cleanup
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialization_report.json
+storage/m30_1_uploads/{taskId}/m29_materialized/assets/
+```
+
+It owns:
+
+```text
+source background sampling
+visible node append from M29.5 plan
+source-proven shape fill/radius replay
+raster/media/icon crop or asset copy
+plan-authorized fallback cleanup
+plan-authorized copied image asset text cleanup
 report building
-DSL node helpers
 ```
 
-拆分不能新增 bbox、不能重写 M29 JSON、不能放宽 ordinary unsafe shape/text overlap，也不能把 M29.4 weak cluster 当组件权限。
-
-## Removed Downstream Boundary
-
-这些 downstream modules 已从 active backend runtime 删除：
+It must not own:
 
 ```text
-reconstruction UI tree
-hierarchy readiness
-hierarchy materialization
-content/chrome classification
-unit structure readiness
-ONNX box proposer
+text editability classification
+contains/overlap cleanup authorization
+new bbox generation
+semantic component inference
+theme/color/text-specific patching
 ```
 
-相关 ADR 和 completed plans 只说明历史尝试。后续若重新做 hierarchy、unit、component 或 Codia adapter，需要从当前 M29 source truth 重新建计划和测试合同。
+`backend/app/m29_materialization_utils.py` contains neutral helpers shared by M29.2 and the materializer. Keep it free of source ownership policy.
 
 ## Platform, API, Storage
 
@@ -238,7 +210,26 @@ backend/app/ocr_baidu.py
 backend/app/errors.py
 ```
 
-这些文件不应承载 M29/M30 业务规则。新增 owner、relation、shape replay 或 materialization 策略时，优先放回对应 M29/M30 contract layer。
+这些文件不应承载 M29 业务规则。新增 owner、relation、shape replay 或 materialization 策略时，优先放回对应 M29 contract layer。
+
+## Removed Runtime Boundary
+
+These modules or product paths have been removed from active backend runtime:
+
+```text
+M29 Direct compare replay
+legacy M30 evidence-grounded materialization
+mixed symbol/text M30 guard
+M29.0.x legacy bridge
+reconstruction UI tree
+hierarchy readiness
+hierarchy materialization
+content/chrome classification
+unit structure readiness
+ONNX box proposer
+```
+
+相关 ADR 和 completed plans 只说明历史尝试。后续若重新做 hierarchy、unit、component 或 Codia adapter，需要从当前 M29 source truth 重新建计划和测试合同。
 
 ## Legacy Diagnostic Boundary
 
@@ -253,11 +244,11 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 
 ## Next Refactor Direction
 
-代码瘦身应单独开阶段，且默认只做无行为变更拆分。优先顺序：
+代码瘦身应单独开阶段，且默认先做无行为变更拆分。优先顺序：
 
 1. `visual_primitive_graph.py`：按 bbox/mask math、support detectors、geometry fit、detectors、artifact writers 拆分。
-2. `evidence_grounded_dsl_materialization.py`：按 text/shape/image/cleanup/report policy 拆分。
-3. `m30_upload_pipeline.py`：按 orchestration、artifact publish、optional stages、task state/error handling 拆分。
-4. `m29_direct_replay.py`：按 plan consumption、node appenders、asset cleanup、fallback cleanup 拆分。
+2. `m29_plan_materializer.py`：按 plan consumption、node appenders、asset cleanup、fallback cleanup、report policy 拆分。
+3. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
+4. `m30_upload_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分或在独立阶段重命名。
 
 每次拆分都必须先有 focused tests，且 diff 应证明 output contract 不变。

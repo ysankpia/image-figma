@@ -1,8 +1,8 @@
-# M29 实验链路数学合同
+# M29 数学合同
 
-本文档描述 `experiment/m29-direct-replay` 分支中 M29 实验链路当前真正实现的数学合同。它不是愿景稿，也不是把模型输出包装成架构事实。若需要从初中数学起步理解这些公式为什么存在，先读 [M29 数学推演：从一个矩形框开始](m29-math-from-first-principles.md)。
+本文档描述 M29 plan-driven 主链当前真正实现的数学合同。它不是愿景稿，也不是把模型输出包装成架构事实。若需要从初中数学起步理解这些公式为什么存在，先读 [M29 数学推演：从一个矩形框开始](m29-math-from-first-principles.md)。
 
-核心结论很简单：外部模型说“东修一块、西修一块的根因是底层数学合同没定清楚”，这个判断有一半是对的。对的部分是：本链路确实需要把 bbox、pixel owner、set relation、cluster 和 replay action 定成显式合同，否则阈值会到处漂。不对的部分是：本地代码现在并没有全局二次规划、响应式组件编译、React/Tailwind 生成、Auto Layout 或 Figma Component/Instance。M29 当前是一个像素拓扑、ownership 和 direct replay 质量门禁实验。
+核心结论很简单：外部模型说“东修一块、西修一块的根因是底层数学合同没定清楚”，这个判断有一半是对的。对的部分是：本链路确实需要把 bbox、pixel owner、set relation、cluster 和 replay action 定成显式合同，否则阈值会到处漂。不对的部分是：本地代码现在并没有全局二次规划、响应式组件编译、React/Tailwind 生成、Auto Layout 或 Figma Component/Instance。M29 当前是一个像素拓扑、ownership、replay plan 和 plan-driven materialization 主链。
 
 ## 0. 非目标
 
@@ -12,14 +12,14 @@
 - 不把双栏、瀑布流、卡片、导航栏编译成组件。
 - 不求解全局布局优化问题。
 - 不创建 Figma Component/Instance。
-- 不改变主线 `/api/tasks/{taskId}/dsl`。
+- 不绕过 M29.5 plan 去改变 `/api/tasks/{taskId}/dsl`。
 - 不把 M29.4 cluster role hint 当成真实层级或组件。
 
 这点必须先钉死。否则所有讨论都会滑到错误抽象层：把“物理证据可重放”误当成“语义组件已恢复”。
 
 ## 1. 源对象链
 
-当前实验链路的事实来源按顺序是：
+当前主链的事实来源按顺序是：
 
 ```text
 source PNG pixels P
@@ -29,7 +29,7 @@ M29.2 source UI physical graph O292
 M29.3.1 pairwise relation graph R2931
 M29.4 stable design cluster report C294
 M29.5 replay plan Q295
-M29 Direct Replay DSL D29direct
+M29 plan-driven DSL D29
 ```
 
 对应代码入口：
@@ -41,10 +41,10 @@ backend/app/region_relation_kernel.py
 backend/app/region_relation_graph_report.py
 backend/app/stable_design_cluster.py
 backend/app/m29_replay_plan.py
-backend/app/m29_direct_replay.py
+backend/app/m29_plan_materializer.py
 ```
 
-真正 materialize 可见节点的只有 M29 Direct Replay。M29.3.1、M29.4、M29.5 都是 report 或 plan，不直接写 DSL visible node。
+真正 materialize 可见节点的是 M29 plan-driven materializer。M29.3.1、M29.4、M29.5 都是 report 或 plan，不直接写 DSL visible node。
 
 ## 2. 坐标与基本几何
 
@@ -763,7 +763,7 @@ not renderer input
 
 ## 10. M29.5 Replay Plan
 
-M29.5 是 direct replay 前的 quality gate。它仍然不创建可见节点。
+M29.5 是正式 materialization 前的 quality gate。它仍然不创建可见节点。
 
 action mapping：
 
@@ -793,10 +793,10 @@ else:
 target role：
 
 ```text
-text_replay -> m29_direct_text
-image_replay -> m29_direct_image
-icon_replay -> m29_direct_symbol
-shape_replay -> m29_direct_shape
+text_replay -> m29_text
+image_replay -> m29_image
+icon_replay -> m29_symbol
+shape_replay -> m29_shape
 ```
 
 near-equal duplicate suppression：
@@ -875,26 +875,24 @@ risk += node_budget_exceeded
 shape, image, icon, text, preserve, fallback_only, diagnostic_only, suppress_duplicate
 ```
 
-这个排序就是 direct replay 的物理 z-order 基础：
+这个排序就是 plan-driven materialization 的物理 z-order 基础：
 
 ```text
 shape/support/background -> image -> icon -> text
 ```
 
-## 11. M29 Direct Replay
+## 11. M29 Plan-Driven Materialization
 
-M29 Direct Replay 是实验 DSL materializer。选择输入源：
+M29 plan-driven materializer 是正式 DSL producer。它要求 M29.5 plan 存在：
 
 ```text
 if M29.5 plan exists and M29.2 objects exist:
   replay M29.5 plan
-elif M29.2 objects exist:
-  replay M29.2 objects
 else:
-  fallback to raw M29 + OCR replay path
+  fail materialization
 ```
 
-它从 deterministic fallback DSL 开始，然后追加实验节点：
+它从 deterministic fallback DSL 开始，然后追加 plan-approved 节点：
 
 ```text
 base = deterministic full-image fallback
@@ -905,7 +903,7 @@ children += accepted replay nodes
 
 ```text
 type = text
-role = m29_direct_text
+role = m29_text
 layout = bbox
 content.text = OCR text
 style.color = sampledForeground(P, bbox)
@@ -916,7 +914,7 @@ style.fontSize = estimated from bbox
 
 ```text
 type = image
-role = m29_direct_image or m29_direct_symbol
+role = m29_image or m29_symbol
 asset = existing raw asset if available and forceCrop=false
      else crop(P, bbox)
 layout = bbox
@@ -927,7 +925,7 @@ shape：
 
 ```text
 type = shape
-role = m29_direct_shape
+role = m29_shape
 fill = sampled source fill
 radius = raw geometry radius only if permitted by geometry contract
 layout = bbox
@@ -937,10 +935,7 @@ copied image asset text cleanup：
 
 ```text
 for each text replay T and copied image I:
-  if M29.5 plan exists:
-    cleanup only if plan has copied_image_asset target from T to I
-  else:
-    cleanup if primarySetRelation(T,I) in {contained_by, near_equal}
+  cleanup only if plan has copied_image_asset target from T to I
 
   localBBox = mapPageBBoxToAssetPixels(T.bbox, I.bbox, assetSize)
   fill localBBox with sampleOuterBBoxRingRgb(assetPixels, localBBox)
@@ -951,6 +946,7 @@ fallback cleanup：
 ```text
 if eraseReplayedBboxesFromFallback:
   for each replayed visible node N:
+    only if plan has fallback cleanup target for N.sourceObjectId
     bbox = clamp(N.bbox, fallbackSize)
     fill bbox in fallback with sampleOuterBBoxRingRgb(sourcePixels, bbox)
 ```
@@ -987,11 +983,11 @@ Figma Component/Instance materialization
 Auto Layout
 ```
 
-M29.4 只是 structural cluster report；M29.5 只是 replay plan；M29 Direct 只是 flat DSL replay variant。把这些说成组件化或响应式编译，是事实错误。
+M29.4 只是 structural cluster report；M29.5 只是 replay plan；M29 plan-driven materializer 只是 flat DSL replay producer。把这些说成组件化或响应式编译，是事实错误。
 
 ### 该怎么吸收它的建议
 
-全局优化不是现在就塞进 M29 Direct 的补丁。正确顺序是：
+全局优化不是现在就塞进 M29 materializer 的补丁。正确顺序是：
 
 ```text
 1. 冻结 source object 和 pixel ownership 合同。
@@ -1085,7 +1081,7 @@ tests/test_region_relation_kernel.py
 tests/test_region_relation_graph_report.py
 tests/test_stable_design_cluster.py
 tests/test_m29_replay_plan.py
-tests/test_m29_direct_replay.py
+tests/test_m29_plan_materializer.py
 tests/test_m30_upload_pipeline.py
 ```
 
@@ -1111,8 +1107,8 @@ M29 当前的正确抽象不是“AI 看懂页面并生成组件”，而是：
 给每个证据分配 replay owner；
 用纯 bbox relation 解释对象关系；
 用弱 cluster report 收集结构线索；
-用 replay plan 控制哪些证据能进入实验 DSL；
-最后只在 M29 Direct 分支 materialize flat replay nodes。
+用 replay plan 控制哪些证据能进入正式 DSL；
+最后由 M29 plan-driven materializer materialize flat replay nodes。
 ```
 
 所以用户怀疑的方向是对的：如果不把这些数学合同写清楚，工程一定会继续局部修补。但下一步不是盲目上全局优化器，而是先把当前 M29 的 source truth、owner、relation、cluster、plan、materialization 边界钉死。本文档就是这个边界。

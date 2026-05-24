@@ -1,6 +1,6 @@
 # M29 数学推演：从一个矩形框开始
 
-这份文档给只学过初中数学、但能理解工程问题的人读。它不替代 [M29 实验链路数学合同](m29-experimental-mathematical-contract.md)。那份合同回答“代码现在怎么算”；本文回答“为什么要这么算”。
+这份文档给只学过初中数学、但能理解工程问题的人读。它不替代 [M29 数学合同](m29-experimental-mathematical-contract.md)。那份合同回答“代码现在怎么算”；本文回答“为什么要这么算”。
 
 全文只用最基础的东西：坐标、加减乘除、面积、比例。目的不是证明 M29 已经数学完备，而是把当前 M29 的正确抽象讲清楚：
 
@@ -9,13 +9,13 @@
 再判断这些证据归谁所有；
 再判断对象之间的几何关系；
 再收集弱结构线索；
-最后才决定哪些东西能画进 M29 Direct 实验 DSL。
+最后才决定哪些东西能画进正式 DSL。
 ```
 
 本文里的内容分三类：
 
 ```text
-当前代码已经实现：本地 M29 实验链路里已经有的合同或行为。
+当前代码已经实现：本地 M29 主链里已经有的合同或行为。
 当前只是启发式阈值：工程上可用，但不是数学定理。
 未来可以升级：方向合理，但现在没有实现。
 ```
@@ -780,7 +780,7 @@ text_replay 只有在 relation/plan 允许时，才能擦 copied image asset 里
 ```text
 M29.5 不创建 visible node。
 M29.5 只输出 plan。
-M29 Direct Replay 消费 plan 后才 materialize flat DSL nodes。
+M29 plan-driven materializer 消费 plan 后才 materialize flat DSL nodes。
 ```
 
 ## 10. 为什么现在不能直接上全局优化
@@ -822,7 +822,7 @@ pixel ownership conservation:
   让每个源像素都有明确 owner，避免重复拥有或错误擦除。
 ```
 
-但这些现在不是 M29 Direct 的当前事实。当前 M29 正确顺序是：
+但这些现在不是 M29 materializer 的当前事实。当前 M29 正确顺序是：
 
 ```text
 先稳 source object。

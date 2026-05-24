@@ -312,7 +312,6 @@
 
       <footer class="actions">
         <button id="renderButton" class="button button-primary" type="button" disabled>Generate from PNG</button>
-        <button id="compareButton" class="button button-secondary button-compare" type="button" disabled>Generate Compare</button>
         <button id="sampleButton" class="button button-secondary button-dev" type="button">Sample</button>
         <button id="closeButton" class="button button-secondary" type="button">Close</button>
       </footer>
@@ -320,7 +319,6 @@
 
     <script>
       const renderButton = document.getElementById("renderButton");
-      const compareButton = document.getElementById("compareButton");
       const sampleButton = document.getElementById("sampleButton");
       const closeButton = document.getElementById("closeButton");
       const fileInput = document.getElementById("fileInput");
@@ -380,28 +378,6 @@
         }
       });
 
-      compareButton.addEventListener("click", async () => {
-        if (!selectedFile) {
-          setStatus("Failed", "Choose a PNG file first.", "error");
-          return;
-        }
-        updateButtons(true);
-        setStatus("Uploading", "Uploading PNG.", "normal");
-        setWarnings([]);
-        try {
-          const bytes = await selectedFile.arrayBuffer();
-          postPluginMessage({
-            type: "render-uploaded-png-compare",
-            fileName: selectedFile.name,
-            mimeType: "image/png",
-            bytes
-          });
-        } catch (error) {
-          updateButtons(false);
-          setStatus("Failed", error instanceof Error ? error.message : "Could not read PNG file.", "error");
-        }
-      });
-
       sampleButton.addEventListener("click", () => {
         updateButtons(true);
         setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
@@ -427,8 +403,6 @@
           updateButtons(true);
           if (message.source === "upload") {
             setStatus("Uploading", "Uploading PNG.", "normal");
-          } else if (message.source === "upload_compare") {
-            setStatus("Uploading", "Uploading PNG for comparison.", "normal");
           } else {
             setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
           }
@@ -501,7 +475,6 @@
 
       function updateButtons(isBusy) {
         renderButton.disabled = isBusy || !selectedFile;
-        compareButton.disabled = isBusy || !selectedFile;
         sampleButton.disabled = isBusy;
         chooseFileButton.disabled = isBusy;
       }
@@ -523,14 +496,11 @@
         if (message.message === "Uploading PNG.") {
           return "Uploading";
         }
-        if (message.message === "Processing uploaded PNG." || message.message === "Fetching generated design.") {
+        if (message.message === "Processing uploaded PNG." || message.message === "Fetching generated design." || message.message === "Fetching M29 plan-driven design.") {
           return "Processing";
         }
         if (message.message === "Writing design to Figma.") {
           return "Writing to Figma";
-        }
-        if (message.message === "Writing comparison to Figma.") {
-          return "Writing comparison";
         }
         if (message.message === "Writing sample design to Figma.") {
           return "Rendering";

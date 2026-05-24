@@ -1,18 +1,18 @@
 # API Contracts
 
-API v0.1 serves the current single-image preview path:
+API v0.1 serves the current single-image M29 plan-driven preview path:
 
 ```text
 PNG upload
 -> OCR
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
--> M29 Direct compare variant
--> legacy M29.0.x bridge
--> M30 DSL v0.1
+-> M29 plan-driven DSL v0.1
 -> Figma Renderer
 ```
 
-M31/M37/M38/M39/M39.1 downstream diagnostic endpoints have been removed from current runtime.
+`POST /api/upload-m30-preview` keeps a historical route name for plugin compatibility. Runtime semantics are M29 mainline.
+
+M29 Direct compare, legacy M30 materialization diagnostics, M31/M37/M38/M39/M39.1 downstream diagnostics, and old M8-M28 debug endpoints have been removed from current runtime.
 
 ## Contract Ownership
 
@@ -66,7 +66,7 @@ time
 
 ### `POST /api/upload-m30-preview`
 
-Plugin default upload endpoint.
+Plugin default upload endpoint. The path name is historical; the task it creates runs the M29 plan-driven pipeline.
 
 Request:
 
@@ -90,7 +90,7 @@ Immediate success response:
   "data": {
     "taskId": "task_abc",
     "status": "processing",
-    "stage": "m30_queued",
+    "stage": "m29_queued",
     "progress": 1,
     "file": {
       "filename": "upload.png",
@@ -103,9 +103,7 @@ Immediate success response:
 }
 ```
 
-The endpoint creates a task and runs the current M29/M30 pipeline in a background task. It does not run the removed pre-M29 chain or removed downstream M31-M39 stages.
-
-On `experiment/m29-direct-replay`, the same task also writes an experimental M29 Direct Replay variant. This variant is not saved in `dsl_results` and does not replace the mainline DSL endpoint.
+The endpoint creates a task and runs the current M29 pipeline in a background task. It does not run the removed pre-M29 chain, removed M29 Direct compare path, removed legacy M30 product materializer, or removed downstream M31-M39 stages.
 
 ### `GET /api/tasks/{taskId}`
 
@@ -117,9 +115,9 @@ Returns task status:
   "data": {
     "taskId": "task_abc",
     "status": "processing",
-    "stage": "m29_0_4",
-    "progress": 74,
-    "message": "Building visual object candidates."
+    "stage": "m29_5_replay_plan",
+    "progress": 25,
+    "message": "Building M29.5 replay quality plan."
   }
 }
 ```
@@ -132,6 +130,21 @@ completed
 failed
 ```
 
+Current stage values:
+
+```text
+m29_queued
+ocr
+m29
+m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
+m29_materialization
+m29_asset_publish
+m29_completed
+```
+
 ### `GET /api/tasks/{taskId}/dsl`
 
 Returns the generated DSL only after the task is completed.
@@ -139,67 +152,46 @@ Returns the generated DSL only after the task is completed.
 Current preview DSL file:
 
 ```text
-storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
 ```
 
 The DSL must:
 
-- preserve fallback.
-- include M30 materialization metadata.
+- preserve fallback and hidden original reference.
+- include M29 plan-driven materialization metadata.
 - use visible `text`, `shape`, and `image` nodes only.
+- use M29 roles such as `m29_text`, `m29_shape`, `m29_image`, and `m29_symbol`.
 - never emit visible mixed/future/audit-only evidence.
-- never emit DSL `icon` type from the M30 upload path.
+- never infer Auto Layout or Figma Component/Instance.
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`.
 
-### `GET /api/tasks/{taskId}/m29-direct-dsl`
+### `GET /api/tasks/{taskId}/m29-materialization`
 
-Returns the experimental M29 Direct Replay variant only after the task is completed.
-
-Response data:
-
-```json
-{
-  "dsl": {},
-  "report": {
-    "summary": {},
-    "warnings": [],
-    "outputReport": "/abs/path/m29_direct_replay_report.json",
-    "stageTimings": {}
-  }
-}
-```
-
-Variant files:
-
-```text
-storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_dsl.json
-storage/m30_1_uploads/{taskId}/m29_direct/m29_direct_replay_report.json
-storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph.json
-storage/m30_1_uploads/{taskId}/m29_5/replay_plan.json
-```
-
-If the task is not completed, the endpoint returns `DSL_NOT_READY`. If the variant does not exist, or if `m29_direct_asset_publish` did not complete, it returns `M29_DIRECT_DSL_NOT_FOUND`.
-
-This endpoint is for Figma compare mode and route experiments only. It does not change `/api/tasks/{taskId}/dsl`.
-
-### `GET /api/tasks/{taskId}/m30-materialization`
-
-Returns M30 materialization diagnostics:
+Returns M29 plan-driven materialization diagnostics:
 
 ```text
 summary
 warnings
 skippedItems
-textEditabilityDecisions
-preservedGraphicTextItems
-reviewTextItems
-debugPreviewPath
+replayedNodes
 outputDsl
+outputReport
 stageTimings
 ```
 
 This endpoint is read-only and is not required by the Figma renderer.
+
+The report answers:
+
+```text
+which M29.5 plan items were replayed
+which items were skipped
+how many text/shape/image/icon nodes were created
+whether fallback cleanup executed
+whether copied raster/media asset cleanup executed
+which source objects and plan items authorized cleanup
+```
 
 ### `GET /api/assets/{assetId}`
 
@@ -220,7 +212,7 @@ GET /files/uploads/*
 GET /files/assets/*
 ```
 
-M30 and M29 Direct image assets referenced by the renderer must be fetchable through `/files/assets/...`.
+M29 materialized image assets referenced by the renderer must be fetchable through `/files/assets/...`.
 
 ## Removed Endpoints
 
@@ -228,6 +220,8 @@ These routes are historical and must not be treated as current runtime contracts
 
 ```text
 POST /api/upload
+GET /api/tasks/{taskId}/m29-direct-dsl
+GET /api/tasks/{taskId}/m30-materialization
 GET /api/tasks/{taskId}/m31-reconstruction
 GET /api/tasks/{taskId}/m39-boundary-classification
 GET /api/tasks/{taskId}/m39-1-unit-structure-readiness

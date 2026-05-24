@@ -19,7 +19,7 @@ ReplayAction = Literal[
     "fallback_only",
     "diagnostic_only",
 ]
-TargetRole = Literal["m29_direct_text", "m29_direct_image", "m29_direct_symbol", "m29_direct_shape"]
+TargetRole = Literal["m29_text", "m29_image", "m29_symbol", "m29_shape"]
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ def build_m295_replay_plan(
         target_role = target_role_for_action(action)
         cluster_ids = cluster_lookup.get(item["id"], [])
         relation_edge_ids = sorted(set(duplicate_edges + contained_media_edge_ids(item, source_objects, edge_lookup)))
-        cleanup_targets = cleanup_targets_for(item, source_objects, edge_lookup) if action == "text_replay" else []
+        cleanup_targets = cleanup_targets_for(item, source_objects, edge_lookup) if action in {"text_replay", "image_replay", "icon_replay", "shape_replay"} else []
         plan_item = {
             "id": "",
             "sourceObjectId": item["id"],
@@ -216,10 +216,10 @@ def replay_action_for(item: dict[str, Any]) -> ReplayAction:
 
 def target_role_for_action(action: ReplayAction) -> TargetRole | None:
     return {
-        "text_replay": "m29_direct_text",
-        "image_replay": "m29_direct_image",
-        "icon_replay": "m29_direct_symbol",
-        "shape_replay": "m29_direct_shape",
+        "text_replay": "m29_text",
+        "image_replay": "m29_image",
+        "icon_replay": "m29_symbol",
+        "shape_replay": "m29_shape",
     }.get(action)
 
 
@@ -268,6 +268,8 @@ def cleanup_targets_for(
     edge_lookup: dict[frozenset[str], dict[str, Any]],
 ) -> list[dict[str, Any]]:
     targets = [{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}]
+    if item["replayDecision"] != "text_replay":
+        return targets
     for other in source_objects:
         if other["id"] == item["id"]:
             continue

@@ -13,14 +13,14 @@
 ## 项目边界
 
 - 项目名：Image-to-Figma Design。
-- 当前状态：M29/M30 主链收口阶段。当前 source truth 主链是 raw M29 primitive graph -> M29.2 source ownership -> M29.3 region relation -> M29.4 weak cluster -> M29.5 replay plan -> M29 Direct compare / M30 materialization。
+- 当前状态：M29 plan-driven 主链收口完成。M29 是当前产品 source truth，`/api/tasks/{taskId}/dsl` 返回 M29.5 replay plan 驱动的 DSL。
 - 项目类型：`multi-end-frontend`。
 - 一期目标：单张 PNG 上传后生成 DSL v0.1，并由 Figma Renderer 写入可编辑 Figma 设计稿。
 - 一期硬边界：不做代码生成、Figma Component/Instance、Auto Layout、批量上传、账号、支付、额度、质量看板、多模型平台。
 
 ## 当前主链
 
-当前产品入口是 Figma 插件上传 PNG 到后端的 M30 preview path：
+当前产品入口仍是历史命名的 `/api/upload-m30-preview`。这个 endpoint 名字为兼容插件保留，运行语义已经是 M29 mainline：
 
 ```text
 Figma Plugin
@@ -31,9 +31,7 @@ Figma Plugin
 -> M29.3 relation graph
 -> M29.4 weak structural cluster report
 -> M29.5 replay plan
--> M29 Direct compare variant
--> legacy M29.0.x bridge
--> M30 evidence-grounded DSL materialization
+-> M29 plan-driven materializer
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
 -> Figma Canvas
@@ -41,19 +39,15 @@ Figma Plugin
 
 M29 是 source truth 层。它负责从 PNG/OCR/source evidence 中固定 bbox、mask、pixel ownership、region relation、weak cluster evidence 和 replay plan。
 
-M30 是 materialization consumer。它只能消费已经通过 M29/source 合同的证据，把可信 text、shape、image/composite media 转成 DSL v0.1；不能反向决定 M29 owner。
+M29 plan-driven materializer 是当前唯一正式 DSL producer。它只消费 M29.5 plan 里的 `finalReplayAction`、`pixelOwner`、`cleanupTargets`、bbox、source lineage 和 asset evidence；它不重新判断 owner，不按文字、颜色、主题、行业或具体截图做样式补丁。
 
-M29 Direct 是 compare/experiment variant。它通过 `GET /api/tasks/{taskId}/m29-direct-dsl` 暴露，不替代主线 `/api/tasks/{taskId}/dsl`。
-
-M29.0.x + M30 是迁移期 legacy `/dsl` bridge。它保留当前插件默认 DSL 出口，但不是新的 source truth。后续若要转正 M29.5 plan-driven materialization，必须单独开阶段，不能在本阶段偷偷改 `/dsl` 行为。
-
-M31/M37/M38/M39/M39.1 和 ONNX proposer 已从当前 backend runtime 剪除。相关 ADR、completed plan 和 git 历史只作为历史证据，不得当成 active stage、当前 API、当前 env 或新的主链事实来源。
+M30 legacy materializer、M29 Direct compare endpoint 和插件 compare UI 已从当前产品路径下线。M29.0.x、M30、M31-M39/M39.1、ONNX proposer、SAM2/perception/icon/slice/provider harness 的 ADR 和 completed plans 只作为历史追溯，不得当成 active runtime。
 
 ## Legacy 边界
 
-M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/provider harness、M31-M39 downstream experiments 只作为历史证据和 ADR 背景保留。它们不得重新进入当前 upload/replay 的 source truth，也不得绕过 M29 owner/relation/replay 合同。
+旧 M8-M28 debug endpoints、pre-M29 upload chain、M29.0.x bridge、M30 evidence-grounded materialization、M29 Direct compare、M31-M39 downstream experiments 和 ONNX proposer 不属于当前产品主链。不要通过环境变量、兼容 route、插件按钮或旧脚本把它们恢复成产品路径。
 
-旧 M8-M28 debug endpoints 和 pre-M29 upload chain 已被 M30.2.2 移出 active runtime。不要通过环境变量、兼容 route 或旧诊断链路把它们恢复成产品路径。
+可以复用旧代码里的中性工具能力，例如 PNG 读写、bbox 工具、asset copy、cleanup 执行机制。但 source truth、owner 分配、cleanup 授权和 visible node 订单必须回到 M29.2/M29.5 合同。
 
 ## 任务路由
 
@@ -90,16 +84,17 @@ M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/pro
 - 先保持 DSL -> Figma 稳定，再逐步增强 PNG -> DSL。
 - 保持模块边界清楚，不把后端识别、Renderer 和插件 UI 混在一起。
 - 优先小而稳定的实现，不为未来功能提前加抽象。
-- 复杂区域优先 fallback，不能让局部失败拖垮整页生成。
-- 修复 source ownership 问题必须从 raw M29 / M29.2 source 合同修起；禁止在 M30、Renderer 或 plugin 里按文字内容、颜色名、中文语义或样式补丁伪造结果。
+- 复杂区域优先由 source-owned raster/media/fallback 保全，不能让局部失败拖垮整页生成。
+- 修复 source ownership 问题必须从 raw M29 / M29.2 source 合同修起；禁止在 materializer、Renderer 或 plugin 里按文字内容、颜色名、中文语义、主题或样式补丁伪造结果。
 - `pixelOwner` 和 `replayDecision` 是回放权限门，不是视觉猜测标签。看不懂、算不准、无法证明 cleanup 安全的对象，应保留在 raster/fallback/report，而不是勉强画成 editable node。
 - M29.3 relation kernel 必须保持纯 bbox/geometry 逻辑；不要在下游业务文件里再写一套 contains/near/duplicate 规则。
 - M29.4 cluster 始终是 weak structural evidence。`row_like`、`column_like`、`background_anchor_like`、`repeated_item_like` 不提供组件化、Auto Layout、Figma Component/Instance 或 materialization 权限。
-- M29.5 replay plan 是 M29 Direct 前的最后质量门。可见层顺序、去重、node budget、cleanup 授权必须由 plan 控制。
-- M30 只能 materialize trusted M29 evidence。它不创建新 bbox，不重写 raw M29 JSON，不把 future cluster/semantic hint 当组件真值。
-- 不要恢复已删除的 M31/M37/M38/M39/M39.1 runtime、routes、env 或 ONNX proposer，除非新计划明确证明它们仍服务当前 M29 source truth，并重新建立测试合同。
-- AI/OCR/视觉 provider 输出不能直接成为 DSL 权威，必须经过 M29/M30 合同、质量门禁和校验。
-- 上传主链路默认返回 M30 DSL；M29 Direct 只作为 compare variant。
+- M29.5 replay plan 是正式 materialization 前的最后质量门。可见层顺序、去重、node budget、fallback cleanup 和 copied raster/media asset cleanup 授权必须由 plan 控制。
+- M29 plan-driven materializer 只能执行 plan，不得新增 cleanup 授权，不得重新判断 owner，不得把 M29.4 weak cluster 当组件权限。
+- root/page 背景必须来自 source PNG 的边缘或全局样本；禁止恢复固定浅色默认背景来掩盖 fallback-off 问题。
+- 不要恢复已删除的 M29 Direct/M30 product path、M31/M37/M38/M39/M39.1 runtime、routes、env 或 ONNX proposer，除非新计划证明它们服务当前 M29 source truth，并重新建立测试合同。
+- AI/OCR/视觉 provider 输出不能直接成为 DSL 权威，必须经过 M29 source ownership、relation、replay plan 和校验。
+- 上传主链路默认返回 M29 plan-driven DSL。
 - 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。
 
 ## 验证要求
@@ -109,7 +104,7 @@ M20-M28、SAM2 相关实验、perception provider benchmark、旧 icon/slice/pro
 - 后端 API 变更必须有接口级验证。
 - 插件 UI 或浏览器可见行为变更必须做本地可视化验证。
 - Bug 修复必须有回归保护；无法自动化时必须在 bug 记录里说明。
-- M29 owner/relation/replay/cleanup 改动必须先映射到 [docs/engineering/m29-contract-regression-matrix.md](docs/engineering/m29-contract-regression-matrix.md)，没有覆盖就先补测试。
+- M29 owner/relation/replay/materialization/cleanup 改动必须先映射到 [docs/engineering/m29-contract-regression-matrix.md](docs/engineering/m29-contract-regression-matrix.md)，没有覆盖就先补测试。
 
 ## 阶段提交规则
 

@@ -23,21 +23,7 @@ class Settings:
     baidu_paddle_ocr_model: str = "PP-OCRv5"
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
-    m30_preview_profile: str = "production"
-    ocr_text_editability_enabled: bool = True
-    ocr_graphic_text_preserve_enabled: bool = True
-    ocr_max_rotation_angle: float = 3.0
-    ocr_max_background_texture: float = 0.45
-    ocr_max_background_color_count: int = 32
-    ocr_text_symbol_leakage_cleanup_enabled: bool = True
-    m30_shape_erasure_enabled: bool = True
-    m30_image_erasure_enabled: bool = True
-    m30_accepted_image_materialization_enabled: bool = True
-    m30_accepted_image_max_text_overlap: float = 0.02
-    m30_accepted_image_min_area: int = 20000
-    m30_image_asset_text_erasure_enabled: bool = True
-    m30_composite_media_materialization_enabled: bool = True
-    m30_composite_media_min_area: int = 50000
+    m29_preview_profile: str = "production"
 
 
 def get_settings() -> Settings:
@@ -62,24 +48,7 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_model=os.getenv("BAIDU_PADDLE_OCR_MODEL", "PP-OCRv5").strip() or "PP-OCRv5",
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
-        m30_preview_profile=parse_m30_preview_profile(os.getenv("M30_PREVIEW_PROFILE", "production")),
-        ocr_text_editability_enabled=parse_bool(os.getenv("OCR_TEXT_EDITABILITY_ENABLED", "true"), default=True),
-        ocr_graphic_text_preserve_enabled=parse_bool(
-            os.getenv("OCR_GRAPHIC_TEXT_PRESERVE_ENABLED", os.getenv("OCR_ARTISTIC_TEXT_FILTER_ENABLED", "true")),
-            default=True,
-        ),
-        ocr_max_rotation_angle=float(os.getenv("OCR_MAX_ROTATION_ANGLE", "3.0")),
-        ocr_max_background_texture=float(os.getenv("OCR_MAX_BACKGROUND_TEXTURE", "0.45")),
-        ocr_max_background_color_count=int(os.getenv("OCR_MAX_BACKGROUND_COLOR_COUNT", "32")),
-        ocr_text_symbol_leakage_cleanup_enabled=parse_bool(os.getenv("OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED", "true"), default=True),
-        m30_shape_erasure_enabled=parse_bool(os.getenv("M30_SHAPE_ERASURE_ENABLED", "true"), default=True),
-        m30_image_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ERASURE_ENABLED", "true"), default=True),
-        m30_accepted_image_materialization_enabled=parse_bool(os.getenv("M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED", "true"), default=True),
-        m30_accepted_image_max_text_overlap=float(os.getenv("M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP", "0.02")),
-        m30_accepted_image_min_area=max(0, int(os.getenv("M30_ACCEPTED_IMAGE_MIN_AREA", "20000"))),
-        m30_image_asset_text_erasure_enabled=parse_bool(os.getenv("M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED", "true"), default=True),
-        m30_composite_media_materialization_enabled=parse_bool(os.getenv("M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED", "true"), default=True),
-        m30_composite_media_min_area=max(0, int(os.getenv("M30_COMPOSITE_MEDIA_MIN_AREA", "50000"))),
+        m29_preview_profile=parse_m29_preview_profile(os.getenv("M29_PREVIEW_PROFILE", os.getenv("M30_PREVIEW_PROFILE", "production"))),
     )
 
 
@@ -123,7 +92,7 @@ def parse_csv(value: str) -> list[str]:
     return [item for item in items if item]
 
 
-def parse_m30_preview_profile(value: str) -> str:
+def parse_m29_preview_profile(value: str) -> str:
     profile = value.strip().lower() or "production"
     if profile not in {"production", "development"}:
         return "production"
