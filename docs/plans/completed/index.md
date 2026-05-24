@@ -24,6 +24,7 @@
 - [M29.4 Stable Design Cluster](029-4-stable-design-cluster.md) — `completed`
 - [M29.5 Replay Engine V2: Quality Replay Plan](029-5-replay-engine-v2-quality-plan.md) — `completed`
 - [M29 Backend Downstream Pruning](029-backend-downstream-pruning.md) — `completed`
+- [Backend Large Module No-Behavior Split Program](029-backend-large-module-no-behavior-split.md) — `completed`
 - [M29 Contract Regression Matrix](029-contract-regression-matrix.md) — `completed`
 - [M29 Direct Replay Experiment](029-direct-replay-experiment.md) — `completed`
 - [M29 Direct Replay Figma Compare Mode](029-direct-replay-figma-compare-mode.md) — `completed`
