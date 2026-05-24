@@ -65,7 +65,7 @@ assets.py: M29 materialized assets publish
 
 ### Raw M29 Primitive Graph
 
-Raw M29 的基础数学层已拆到 `backend/app/visual_primitive/`：
+Raw M29 的领域实现已拆到 `backend/app/visual_primitive/`：
 
 ```text
 types.py: raw M29 dataclasses and Literal contracts
@@ -75,26 +75,20 @@ metrics.py: region metrics, color distance, numeric clamps
 pixels.py: pixel crop, region/ring sampling, debug rectangle drawing
 geometry.py: shape geometry fit, support occupancy fit, radius/layer hint helpers
 components.py: text exclusion mask, foreground mask, connected components, image protection mask
+detectors.py: text/shape/image/symbol/blocked primitive detector logic
+support.py: low-contrast and text-support background detector orchestration
+support_scoring.py: support bbox search, scoring, and boundary delta helpers
+relations.py: containment relation construction and stable source ordering
+artifacts.py: node asset export, overlays, preview sheet helpers
+validation.py: M29 document, blocked context, artifact validation, and meta
 ```
 
-`backend/app/visual_primitive_graph.py` 仍是兼容入口和 detector orchestration 文件，继续导出 `extract_m29_visual_primitive_graph` 以及历史调用方依赖的 M29 类型和基础函数。它负责：
+`backend/app/visual_primitive_graph.py` 仍是兼容入口和 thin orchestration 文件，继续导出 `extract_m29_visual_primitive_graph` 以及历史调用方依赖的 M29 类型和函数。它负责：
 
 ```text
-source PNG pixel measurement
-OCR text bbox ingestion
-text / shape / image / symbol / unknown primitive nodes
-low_contrast_support detection
-text_support_background detection
-source assets and overlays
-```
-
-后续拆分应继续围绕真实边界进行：
-
-```text
-support background detectors
-primitive detectors
-asset/export/debug artifact writers
-document validation
+source PNG read/decode
+stage ordering across text, foreground, component, detector, relation, asset, debug, validation steps
+final nodes.json write
 ```
 
 拆分不能改变 primitive IDs、metrics、geometry contract、support detector gates、asset paths 或 output JSON shape。
