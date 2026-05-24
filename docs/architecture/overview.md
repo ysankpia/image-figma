@@ -1,17 +1,6 @@
 # 架构总览
 
-Image-to-Figma Design v0.1 是一个多端协作系统。
-
-当前阶段路线以 [../roadmap.md](../roadmap.md) 为准。后续结构化顺序固定为：
-
-```text
-M39.1.1 Unit Candidate Quality Gate
--> M39.2 Unit Promotion
--> M40 Layout Semantics
--> M41 Component / Instance Extraction
-```
-
-不要在 M39.1.1 前直接实现 M40/M41，也不要为单个黑条、搜索框或轮播图写特化规则。
+Image-to-Figma Design v0.1 是一个多端协作系统。当前架构重点已经收口到 M29 source truth 和 M29 plan-driven materialization，不再把 M30 legacy bridge、M29 Direct compare 或 M31-M39 downstream experiments 当作 active runtime。
 
 ## System Summary
 
@@ -21,21 +10,13 @@ M39.1.1 Unit Candidate Quality Gate
 Figma Plugin UI
 -> Figma Plugin Main
 -> Backend API
--> OCR + M29 + M31 diagnostics + M30 Processing Pipeline
+-> OCR
+-> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
+-> M29 plan-driven DSL materialization
 -> DSL v0.1
 -> Image-to-Figma Renderer
 -> Figma Canvas
 ```
-
-M31 是当前新增的诊断组织层，M31.1 会随上传链路生成诊断产物，但不改变 DSL/Renderer/Figma 可见输出：
-
-```text
-source PNG + OCR JSON + M29 nodes.json
--> M31 Reconstruction UI Tree
--> reconstruction units with fallback crops
-```
-
-它的作用是把 M29 的碎 primitive evidence 组织成可回退的 reconstruction units，为后续 M32/M33/M34 服务。
 
 项目分类为 `multi-end-frontend`，因为它包含：
 
@@ -66,7 +47,7 @@ docs/
 - 数据：SQLite。
 - 存储：本地文件存储。
 - OCR：fake provider 或百度 PP-OCRv5 异步 provider。
-- Evidence pipeline：M29/M30 Python modules。
+- Evidence pipeline：M29 Python modules。
 
 ## Major Modules
 
@@ -74,10 +55,9 @@ docs/
 - Plugin Main：调用 API、轮询任务、获取 DSL、调用 Renderer、操作 Figma API。
 - DSL Schema：定义后端和 Renderer 的稳定合同。
 - Renderer：把 DSL 转成 Figma 节点。
-- Backend API：上传、任务状态、DSL、M30/M31 report、资产、健康检查。
-- Processing Pipeline：OCR、M29 evidence、M31 diagnostics、M30 DSL materialization。
-- M31 Reconstruction UI Tree：上传旁路诊断，把 M29 primitive refs 组织成 reconstruction units。
-- Storage：原图、M29/M30 evidence JSON、M30 DSL/report、发布给 renderer 的 image assets、错误日志。
+- Backend API：上传、任务状态、DSL、M29 materialization report、资产、健康检查。
+- Processing Pipeline：OCR、M29 source truth chain、M29.5 replay plan、M29 plan-driven DSL materialization。
+- Storage：原图、M29 evidence JSON、M29 DSL/report、发布给 renderer 的 image assets、错误日志。
 
 ## Module Boundaries
 
@@ -85,22 +65,31 @@ Renderer 只消费 DSL，不做 OCR、M29、图片裁切、质量评分、Auto L
 
 后端只生成 DSL 和资产，不操作 Figma 画布。
 
-插件 UI 不理解 OCR、M29、M30 内部细节，只展示上传、进度、完成和失败。
+插件 UI 不理解 OCR、M29 内部细节，只展示上传、进度、完成和失败。
 
-DSL 是 Renderer 的唯一输入合同。M29 evidence 和 OCR 是后端内部证据，不是未经 M30 materialization 的 Renderer 输入。
+DSL 是 Renderer 的唯一输入合同。M29 evidence 和 OCR 是后端内部证据，不是未经 materialization 的 Renderer 输入。
 
-M31 tree 也不是 Renderer 输入。它是 evidence organization 层，用来验证 primitive ownership、unit fallback coverage 和后续 layer recovery 的可行性。
+M29 是 source truth 层，负责 bbox、pixel ownership、region relation、weak cluster evidence 和 replay plan。M29.4 的 cluster 只是 weak structural evidence，不提供组件化、Auto Layout、Figma Component/Instance 或 visible materialization 权限。
 
-OCR text 是证据，不等于可编辑 Figma text layer。M34.1 后，OCR/M29/M31 保留图形化文字证据，M30 materialization 通过 text editability decision 决定：
-
-```text
-editable_text -> 生成 m30_text_member
-graphic_text_preserve_in_fallback -> 保留在 fallback，不生成 text layer
-review_text -> 保留在 report，不生成 text layer
-```
-
-这个决策不改变 DSL schema，也不让 Renderer 读取 OCR/M29/M31 内部证据。
+M29 plan-driven materializer 是当前正式 DSL producer。它只消费 M29.5 plan，不重新判断 owner，不按主题、颜色、截图、文案或行业特化，不把 weak cluster 转成组件。
 
 ## Removed Legacy Path
 
-M30.2.2 removed the frozen pre-M29 backend upload chain from active source. `POST /api/upload`, old task debug endpoints, and the old M8-M28 runtime modules are historical only. Keep their old ADRs and archived docs for traceability, but do not treat them as current architecture.
+M30.2.2 removed the frozen pre-M29 backend upload chain from active source. Later pruning removed M31-M39/M39.1 runtime, routes, env, tests, and ONNX proposer. This stage also removed the M29 Direct compare product endpoint and legacy M30 materialization product path. Their ADRs, completed plans, old storage artifacts, and git history remain for traceability only.
+
+Do not treat the following as current architecture:
+
+```text
+POST /api/upload
+GET /api/tasks/{taskId}/m29-direct-dsl
+GET /api/tasks/{taskId}/m30-materialization
+old M8-M28 debug endpoints
+M29.0.x legacy bridge as product source truth
+M30 evidence-grounded materializer as product source truth
+M31 reconstruction diagnostics
+M37 hierarchy readiness
+M38 hierarchy materialization
+M39 content/chrome classification
+M39.1 unit structure readiness
+ONNX proposer
+```

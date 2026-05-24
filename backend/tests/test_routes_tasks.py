@@ -1,90 +1,69 @@
 from __future__ import annotations
 
-import json
 import importlib
+import json
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
 
-def test_m39_1_unit_structure_readiness_route_returns_report(client: TestClient) -> None:
+def test_m29_materialization_route_returns_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m391"
+    task_id = "task_route_m29_materialization"
     now = datetime.now(UTC).isoformat()
-    upload_path = state.storage.upload_path(task_id)
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
-    upload_path.write_bytes(b"not-used")
-    state.database.insert_task(
-        {
-            "id": task_id,
-            "status": "completed",
-            "stage": "m30_completed",
-            "progress": 100,
-            "message": "done",
-            "original_filename": "input.png",
-            "mime_type": "image/png",
-            "file_size": 8,
-            "upload_path": str(upload_path),
-            "created_at": now,
-            "updated_at": now,
-            "completed_at": now,
-            "failed_at": None,
-        }
-    )
+    insert_task(state, task_id, status="completed", now=now)
     task_root = state.settings.storage_root / "m30_1_uploads" / task_id
-    report_path = task_root / "m39_1" / "unit_structure_readiness_report.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(
-        json.dumps(
-            {
-                "summary": {"candidateUnitCount": 1},
-                "warnings": [],
-                "modelSkippedReason": "missing_model",
-                "candidateUnits": [{"candidateId": "m391_candidate_0001"}],
-                "promotionHints": [],
-            }
-        ),
+    report_dir = task_root / "m29_materialized"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "m29_materialized_dsl.json").write_text(json.dumps({"version": "0.1"}), encoding="utf-8")
+    (report_dir / "m29_materialization_report.json").write_text(
+        json.dumps({"summary": {"visibleNodeCount": 2}, "warnings": [], "skippedItems": [], "replayedNodes": []}),
         encoding="utf-8",
     )
-    (task_root / "stage_timings.json").write_text(json.dumps({"schemaName": "M3011StageTimings", "stages": []}), encoding="utf-8")
+    (task_root / "stage_timings.json").write_text(
+        json.dumps({"schemaName": "M3011StageTimings", "stages": [{"stage": "m29_materialization", "status": "completed"}]}),
+        encoding="utf-8",
+    )
 
-    response = client.get(f"/api/tasks/{task_id}/m39-1-unit-structure-readiness")
+    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["summary"]["candidateUnitCount"] == 1
-    assert data["modelSkippedReason"] == "missing_model"
-    assert data["candidateUnits"] == [{"candidateId": "m391_candidate_0001"}]
-    assert str(data["outputReport"]).endswith("unit_structure_readiness_report.json")
+    assert data["summary"]["visibleNodeCount"] == 2
+    assert str(data["outputReport"]).endswith("m29_materialization_report.json")
     assert data["stageTimings"]["schemaName"] == "M3011StageTimings"
 
 
-def test_m39_1_unit_structure_readiness_route_missing_report(client: TestClient) -> None:
+def test_m29_materialization_route_missing_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m391_missing"
+    task_id = "task_route_m29_materialization_missing"
     now = datetime.now(UTC).isoformat()
+    insert_task(state, task_id, status="completed", now=now)
+
+    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "M29_MATERIALIZATION_NOT_FOUND"
+
+
+def insert_task(state, task_id: str, *, status: str, now: str) -> None:
     upload_path = state.storage.upload_path(task_id)
     upload_path.parent.mkdir(parents=True, exist_ok=True)
     upload_path.write_bytes(b"not-used")
     state.database.insert_task(
         {
             "id": task_id,
-            "status": "completed",
-            "stage": "m30_completed",
-            "progress": 100,
-            "message": "done",
+            "status": status,
+            "stage": "m29_completed" if status == "completed" else "m29_materialization",
+            "progress": 100 if status == "completed" else 92,
+            "message": "done" if status == "completed" else "processing",
             "original_filename": "input.png",
             "mime_type": "image/png",
             "file_size": 8,
             "upload_path": str(upload_path),
             "created_at": now,
             "updated_at": now,
-            "completed_at": now,
+            "completed_at": now if status == "completed" else None,
             "failed_at": None,
         }
     )
-
-    response = client.get(f"/api/tasks/{task_id}/m39-1-unit-structure-readiness")
-
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "M39_1_UNIT_STRUCTURE_READINESS_NOT_FOUND"

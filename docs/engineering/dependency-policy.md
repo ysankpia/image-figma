@@ -62,18 +62,14 @@ M8 当前只有可选 OpenAI provider：
 
 M10 OCR provider 默认仍是 `fake`，可选 `baidu_ppocrv5` 通过 HTTP 调用百度 AI Studio PP-OCRv5 异步 API。
 
-当前不引入本地 OCR 重依赖：
+当前不引入本地 OCR / proposal 重依赖：
 
 - 不引入 `paddleocr`。
 - 不引入 `paddlepaddle`。
 - 不引入 `rapidocr`。
 - 不引入 `onnxruntime`。
 
-M39 content/chrome classification can optionally use a local ONNX proposer, but it must not add main dependencies:
-
-- `numpy`、`Pillow`、`onnxruntime` are imported dynamically inside the optional proposer path only.
-- Missing dependencies, missing model file, unexpected output shape, or inference failure must downgrade to rule-only classification.
-- The model output is only a candidate proposal and never bypasses geometry safety rules or becomes DSL truth.
+M39/ONNX proposer 已从当前 backend runtime 删除。不要为了恢复历史 downstream experiment 把 `numpy`、`Pillow`、`onnxruntime` 加回主依赖。若未来重新评估模型 proposer，必须先写新计划，证明它只提供 proposal evidence，不能绕过 M29 source truth。
 
 M26 perception benchmark 的 OpenCV/SAM2/UIED 依赖是可选实验依赖，不进入主 dependencies：
 

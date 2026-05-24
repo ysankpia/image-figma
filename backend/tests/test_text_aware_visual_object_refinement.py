@@ -180,6 +180,42 @@ def test_shape_like_member_becomes_shape_candidate_even_with_text_overlay(tmp_pa
     assert not document.shape_candidates[0].preview_asset_path.startswith("assets/visual_assets/")
 
 
+def test_text_support_background_shape_candidate_preserves_source_contract(tmp_path: Path) -> None:
+    canvas = make_canvas(160, 100)
+    shape_metrics = metrics(color_count=2, texture_score=0.02, edge_score=0.03, fill_ratio=0.88)
+    m2904, m2903, m2902 = fixture_docs(
+        objects=[object_candidate("voc_001", "visual_text_pair", [10, 10, 86, 28], [member("evidence_0001", [10, 10, 84, 26], "visual"), member("evidence_0002", [22, 16, 60, 12], "text")])],
+        evidence=[
+            evidence_node(
+                "evidence_0001",
+                "m2903_visual_evidence",
+                "visual_1",
+                [10, 10, 84, 26],
+                "visual",
+                "other_candidate",
+                metrics_value=shape_metrics,
+                source_subtype="text_support_background",
+                source_reasons=["text_support_background_region", "stable_local_fill", "contains_text_evidence", "finite_outer_ring"],
+            ),
+            evidence_node("evidence_0002", "m2902_text_box", "text_1", [22, 16, 60, 12], "text", None, text="#tag"),
+        ],
+        m2903_items=[visual_item("visual_1", "other_candidate", [10, 10, 84, 26], metrics_value=shape_metrics)],
+        text_boxes=[text_box("text_1", [22, 16, 60, 12], "#tag")],
+    )
+
+    document = run_extract(tmp_path, canvas, m2904, m2903, m2902)
+
+    assert len(document.shape_candidates) == 1
+    support = document.shape_candidates[0]
+    assert support.decision == "candidate"
+    assert support.risks == []
+    assert support.source_subtype == "text_support_background"
+    assert "text_support_background_region" in support.reasons
+    serialized = support.to_dict()
+    assert serialized["sourceSubtype"] == "text_support_background"
+    assert "text_support_background_region" in serialized["sourceReasons"]
+
+
 def test_icon_candidate_with_shape_like_metrics_remains_icon_asset(tmp_path: Path) -> None:
     canvas = make_canvas(160, 100)
     shape_metrics = metrics(color_count=8, texture_score=0.04, edge_score=0.05, fill_ratio=0.92)
@@ -424,8 +460,10 @@ def evidence_node(
     text: str | None = None,
     risks: list[str] | None = None,
     metrics_value: M29PrimitiveMetrics | None = None,
+    source_subtype: str | None = None,
+    source_reasons: list[str] | None = None,
 ) -> dict:
-    return {
+    item = {
         "id": id,
         "source": source,
         "sourceId": source_id,
@@ -440,6 +478,11 @@ def evidence_node(
         "risks": risks or [],
         "reasons": ["test"],
     }
+    if source_subtype is not None:
+        item["sourceSubtype"] = source_subtype
+    if source_reasons is not None:
+        item["sourceReasons"] = source_reasons
+    return item
 
 
 def visual_item(id: str, visual_kind: str, bbox: list[int], *, metrics_value: M29PrimitiveMetrics | None = None) -> dict:

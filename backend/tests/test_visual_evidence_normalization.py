@@ -133,6 +133,41 @@ def test_high_overlap_without_lineage_stays_text_noise(tmp_path: Path) -> None:
     assert document.items[0].decision == "noise"
 
 
+def test_source_support_shape_survives_high_text_overlap(tmp_path: Path) -> None:
+    canvas = make_canvas(140, 90, (248, 248, 248))
+    draw_rect(canvas, 30, 30, 84, 26, (255, 232, 235))
+    m2902 = {
+        "mediaEvidence": [
+            evidence(
+                "m29_shape_001",
+                "m29_shape",
+                "support_shape",
+                [30, 30, 84, 26],
+                "support_shape_candidate",
+                0.42,
+                reasons=["text_support_background_region", "sourceSubtype:text_support_background"],
+            ),
+            evidence("m29_symbol_001", "m29_symbol", "image_like_symbol", [20, 64, 42, 12], "likely_text_noise", 0.9),
+        ]
+    }
+
+    document = extract_visual_evidence_normalization(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        m2902_document=m2902,
+        m2902_audit_json_path="/tmp/m29_0_2/text_masked_media_audit.json",
+        output_dir=tmp_path,
+    )
+
+    support = next(item for item in document.items if item.source_evidence_id == "m29_shape_001")
+    assert support.source == "m29_shape"
+    assert support.visual_kind == "other_candidate"
+    assert support.decision == "candidate"
+    assert "source_support_shape_retained" in support.reasons
+    noise = next(item for item in document.items if item.source_evidence_id == "m29_symbol_001")
+    assert noise.visual_kind == "text_noise"
+
+
 def test_baseline_without_lineage_ignores_text_rejected_gate_even_with_text_boxes(tmp_path: Path) -> None:
     canvas = make_canvas(100, 100, (255, 255, 255))
     draw_rect(canvas, 10, 70, 30, 12, (20, 20, 20))
@@ -479,6 +514,8 @@ def evidence(
     bbox: list[int],
     action: str,
     text_overlap: float,
+    *,
+    reasons: list[str] | None = None,
 ) -> dict:
     return {
         "id": id,
@@ -489,7 +526,7 @@ def evidence(
         "textOverlapRatio": text_overlap,
         "imageOverlapRatio": 0.0,
         "metrics": metrics_to_dict(metrics()),
-        "reasons": ["test"],
+        "reasons": reasons or ["test"],
         "suggestedNextAction": action,
     }
 

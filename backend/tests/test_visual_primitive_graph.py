@@ -138,6 +138,240 @@ def test_low_confidence_image_stays_unknown_without_protection(tmp_path: Path) -
     assert document.meta["counts"]["image"] == 0
 
 
+def test_low_contrast_support_region_is_detected_from_text_evidence(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rounded_rect(canvas, 30, 28, 190, 44, 22, (238, 238, 238))
+    draw_circle(canvas, 48, 50, 5, (120, 120, 120))
+    draw_circle(canvas, 204, 50, 5, (120, 120, 120))
+    draw_rect(canvas, 68, 44, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]))
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"rounded_rect", "pill"}
+    assert support_node.geometry["confidence"] in {"high", "medium"}
+    assert support_node.style["radius"] == support_node.geometry["params"]["radius"]
+    assert any("contains_text_evidence" in node.reasons for node in support)
+    assert all(is_protective_shape(node) for node in support)
+
+
+def test_text_support_background_region_is_detected_from_text_only_pill(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rounded_rect(canvas, 42, 32, 84, 26, 13, (255, 232, 235))
+    draw_rect(canvas, 54, 40, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_tag", [54, 38, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_min_edge_delta=5),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [54, 38, 60, 14]))
+    assert support_node.source == "text_support_background_detector"
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"pill", "rounded_rect"}
+    assert support_node.style["fill"] == "#FFE8EB"
+    assert "text_support_background_region" in support_node.reasons
+    assert "finite_outer_ring" in support_node.reasons
+    assert is_protective_shape(support_node)
+
+
+def test_text_support_background_region_is_not_for_plain_page_text(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rect(canvas, 54, 40, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_plain_tag", [54, 38, 60, 14], text="tag", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_region_does_not_swallow_textured_media(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 100, (248, 248, 248))
+    draw_noise_patch(canvas, 24, 20, 126, 60)
+    draw_rect(canvas, 54, 42, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media_tag", [54, 40, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70),
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_region_rejects_accepted_media_overlap(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 160, (248, 248, 248))
+    draw_noise_patch(canvas, 28, 20, 180, 96)
+    draw_rounded_rect(canvas, 58, 50, 84, 26, 13, (255, 232, 235))
+    draw_rect(canvas, 70, 58, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media_nested_tag", [70, 56, 60, 14], text="tag", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70),
+    )
+
+    assert [node for node in document.nodes if node.type == "image"]
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_text_support_background_rejects_edge_open_band(tmp_path: Path) -> None:
+    canvas = make_canvas(180, 90, (248, 248, 248))
+    draw_rect(canvas, 0, 28, 122, 28, (255, 232, 235))
+    draw_rect(canvas, 18, 36, 60, 10, (252, 72, 76))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_edge_tag", [18, 34, 60, 14], text="tag", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+
+
+def test_low_contrast_support_rect_geometry_does_not_emit_radius(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rect(canvas, 30, 28, 190, 44, (238, 238, 238))
+    draw_circle(canvas, 48, 50, 5, (120, 120, 120))
+    draw_circle(canvas, 204, 50, 5, (120, 120, 120))
+    draw_rect(canvas, 68, 44, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [68, 42, 64, 18]))
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"rect", "unknown"}
+    assert "radius" not in (support_node.style or {})
+
+
+def test_low_contrast_support_rejects_top_edge_open_band(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (248, 248, 248))
+    draw_rect(canvas, 20, 0, 220, 46, (238, 238, 238))
+    draw_circle(canvas, 38, 23, 5, (120, 120, 120))
+    draw_circle(canvas, 224, 23, 5, (120, 120, 120))
+    draw_rect(canvas, 60, 17, 72, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_top", [60, 15, 72, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    assert not [
+        node
+        for node in document.nodes
+        if node.type == "shape" and node.subtype == "low_contrast_support" and bbox_contains(node.bbox, [60, 15, 72, 18])
+    ]
+
+
+def test_low_contrast_support_region_is_detected_on_dark_theme(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 120, (18, 18, 20))
+    draw_rect(canvas, 30, 28, 190, 44, (25, 25, 28))
+    draw_circle(canvas, 48, 50, 5, (155, 155, 160))
+    draw_circle(canvas, 204, 50, 5, (155, 155, 160))
+    draw_rect(canvas, 68, 44, 64, 12, (225, 225, 228))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_query", [68, 42, 64, 18], text="Query", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(low_contrast_support_max_area_ratio=0.35),
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+    assert support
+    assert any(bbox_contains(node.bbox, [68, 42, 64, 18]) and node.metrics.brightness < 80 for node in support)
+
+
+def test_connected_component_geometry_distinguishes_circle_and_ellipse(tmp_path: Path) -> None:
+    circle_canvas = make_canvas(80, 80, (255, 255, 255))
+    draw_circle(circle_canvas, 30, 30, 12, (30, 30, 30))
+    circle_doc = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(circle_canvas),
+        source_image="circle.png",
+        output_dir=tmp_path / "circle",
+    )
+    circle_shape = next(node for node in circle_doc.nodes if node.type == "shape" and node.subtype in {"badge_background", "small_ellipse"})
+
+    ellipse_canvas = make_canvas(120, 80, (255, 255, 255))
+    draw_ellipse(ellipse_canvas, 56, 34, 24, 12, (30, 30, 30))
+    ellipse_doc = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(ellipse_canvas),
+        source_image="ellipse.png",
+        output_dir=tmp_path / "ellipse",
+    )
+    ellipse_shape = next(node for node in ellipse_doc.nodes if node.type == "shape" and node.subtype in {"badge_background", "small_ellipse"})
+
+    assert circle_shape.geometry is not None
+    assert circle_shape.geometry["kind"] == "circle"
+    assert ellipse_shape.geometry is not None
+    assert ellipse_shape.geometry["kind"] == "ellipse"
+
+
+def test_low_contrast_support_region_is_not_for_plain_page_background(tmp_path: Path) -> None:
+    canvas = make_canvas(220, 120, (248, 248, 248))
+    draw_rect(canvas, 58, 42, 64, 12, (70, 70, 70))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_plain", [58, 40, 64, 18], text="Plain", source="test", kind="line")],
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+
+
+def test_low_contrast_support_region_does_not_swallow_textured_media(tmp_path: Path) -> None:
+    canvas = make_canvas(260, 140, (248, 248, 248))
+    draw_noise_patch(canvas, 20, 20, 200, 80)
+    draw_rect(canvas, 58, 48, 72, 14, (250, 250, 250))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_media", [58, 46, 72, 18], text="Media", source="test", kind="line")],
+        options=M29VisualPrimitiveOptions(min_image_area=800, image_accept_threshold=0.70, low_contrast_support_max_area_ratio=0.35),
+    )
+
+    assert not [node for node in document.nodes if node.type == "shape" and node.subtype == "low_contrast_support"]
+
+
 def test_image_protection_blocks_internal_fragments(tmp_path: Path) -> None:
     canvas = make_canvas(100, 100, (255, 255, 255))
     draw_noise_patch(canvas, 10, 10, 60, 60)
@@ -332,6 +566,31 @@ def draw_circle(canvas: PngPixels, cx: int, cy: int, radius: int, color: tuple[i
     for row_index in range(max(0, cy - radius), min(canvas.height, cy + radius + 1)):
         for column in range(max(0, cx - radius), min(canvas.width, cx + radius + 1)):
             if (column - cx) * (column - cx) + (row_index - cy) * (row_index - cy) <= radius * radius:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
+
+
+def draw_ellipse(canvas: PngPixels, cx: int, cy: int, rx: int, ry: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    for row_index in range(max(0, cy - ry), min(canvas.height, cy + ry + 1)):
+        for column in range(max(0, cx - rx), min(canvas.width, cx + rx + 1)):
+            if ((column - cx) * (column - cx)) / max(1, rx * rx) + ((row_index - cy) * (row_index - cy)) / max(1, ry * ry) <= 1:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
+
+
+def draw_rounded_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, radius: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    radius = max(0, min(radius, min(width, height) // 2))
+    for row_index in range(y, min(canvas.height, y + height)):
+        for column in range(x, min(canvas.width, x + width)):
+            local_x = column - x
+            local_y = row_index - y
+            cx = radius if local_x < radius else width - radius - 1 if local_x >= width - radius else local_x
+            cy = radius if local_y < radius else height - radius - 1 if local_y >= height - radius else local_y
+            if (local_x - cx) * (local_x - cx) + (local_y - cy) * (local_y - cy) <= radius * radius:
                 rows[row_index][column * 3 : column * 3 + 3] = color_bytes
     canvas.rows[:] = [bytes(row) for row in rows]
 

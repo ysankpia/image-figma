@@ -1,146 +1,159 @@
 # 后端架构
 
-后端负责接收 PNG、创建任务、运行 OCR + M29 + M31 diagnostics + M30、保存 DSL 和资产，并通过 API 提供给 Figma 插件。
+后端负责接收单张 PNG、运行 OCR 与 M29 证据链、保存 DSL/资产，并通过 API 提供给 Figma 插件。当前阶段已经把产品主链收口为 M29 plan-driven materialization；旧 M30 materializer、M29 Direct compare、M31-M39/M39.1 downstream experiments 不再是 backend runtime。
 
 ## Runtime Surface
 
-当前默认运行面只有：
+当前运行面：
 
 ```text
 GET  /api/health
 POST /api/upload-m30-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
-GET  /api/tasks/{taskId}/m30-materialization
-GET  /api/tasks/{taskId}/m31-reconstruction
-GET  /api/tasks/{taskId}/m39-boundary-classification
-GET  /api/tasks/{taskId}/m39-1-unit-structure-readiness
+GET  /api/tasks/{taskId}/m29-materialization
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
 ```
 
-`POST /api/upload` 和旧 M8-M28 debug endpoints 已在 M30.2.2 移除。后端不再提供环境变量复活旧路径。
+`POST /api/upload-m30-preview` 是历史命名的兼容入口。它当前运行 M29 mainline，不运行 legacy M30 product path。
+
+已移除的接口不再通过环境变量复活，包括：
+
+```text
+POST /api/upload
+GET /api/tasks/{taskId}/m29-direct-dsl
+GET /api/tasks/{taskId}/m30-materialization
+GET /api/tasks/{taskId}/m31-reconstruction
+GET /api/tasks/{taskId}/m39-boundary-classification
+GET /api/tasks/{taskId}/m39-1-unit-structure-readiness
+old M8-M28 debug endpoints
+```
 
 ## Processing Pipeline
 
-M30.1 plugin preview upload pipeline:
+当前 `POST /api/upload-m30-preview` 后台链路：
 
 ```text
-receive multipart PNG at /api/upload-m30-preview
+receive multipart PNG
 -> validate MIME, PNG signature, size, and IHDR metadata
 -> save uploads/{taskId}/original.png
--> create task status=processing stage=m30_queued
+-> create task status=processing stage=m29_queued
 -> OCR
--> M29 visual primitive graph
--> M31 reconstruction diagnostics
--> M29.1 symbol fragment grouping
--> M29.0.2 text-masked media audit
--> M29.0.3 visual evidence normalization with M29.1 lineage
--> M29.0.7 text/visual ownership gate
--> M29.0.4 visual object candidate audit with ownership routing
--> M29.0.5 text-aware visual object refinement
--> M30 evidence-grounded DSL materialization with text editability decisions, accepted image materialization, copied media asset text cleanup, composite media materialization, and fallback erasure for materialized nodes
--> copy local M30 DSL assets to assets/{taskId}/m30 and rewrite URLs
--> M39 content-chrome boundary classification, classifies materialized M30 nodes as chrome or content using relative geometry rules and optional ONNX model proposer
--> M37 hierarchy readiness diagnostic, if M31 artifacts exist
--> M38 controlled hierarchy materialization, if M37 report exists and M38 is enabled; skips units with boundary_classification_conflict
--> M39.1 unit structure readiness audit, if M31 artifacts exist
--> save dsl_results path to m30/m30_materialized_dsl.json
--> mark task completed
+-> raw M29 visual primitive graph
+-> M29.2 source-level UI physical graph
+-> M29.3.1 source relation graph report
+-> M29.4 stable design cluster report
+-> M29.5 replay quality plan
+-> M29 plan-driven DSL materialization
+-> publish M29 assets
+-> save dsl_results path to m29_materialized/m29_materialized_dsl.json
+-> mark task completed stage=m29_completed
 ```
 
-This is the product preview path. It deliberately does not run:
+当前链路不运行：
 
 ```text
-M29.1.3 mixed conflict audit
-M29.0.3.2 residual mixed review
-M29.0.6 member boundary quality audit
 removed pre-M29 upload chain
+M29 Direct compare replay
+M29.1 / M29.0.x legacy bridge
+M30 evidence-grounded materialization
+M31 reconstruction diagnostics
+M37 hierarchy readiness
+M38 hierarchy materialization
+M39 content/chrome classification
+M39.1 unit structure readiness
+ONNX proposer
 Auto Layout
 Figma Component/Instance
 SVG/vectorization
 icon recovery
 ```
 
-M31 reconstruction UI tree is a runtime diagnostic side path. It consumes only source PNG, OCR JSON/document, and M29 `nodes.json`/document, writes report artifacts, and does not change M30 DSL or renderer output.
+## M29 Source Truth
 
-M31.1.1 ensures the source PNG is decoded once into `PngPixels`; unit fallback crops are sliced from decoded rows and then encoded as PNG. M31 fallback generation must not call compressed PNG crop helpers per unit.
+Raw M29 输出 text/shape/image/symbol/unknown primitives、support backgrounds、shape geometry fit、assets 和 report artifacts。它只描述源图像中的物理证据，不生成 DSL visible nodes。
 
-M34.1 keeps OCR text evidence in the source chain. Rotated or graphic text is not dropped before M29. Instead, M30 writes a text editability decision for each text member:
-
-```text
-editable_text
-graphic_text_preserve_in_fallback
-review_text
-```
-
-Only `editable_text` becomes visible `m30_text_member` and participates in fallback pixel erasure. Preserved graphic text remains inside the fallback image and appears in the M30 report for audit.
-
-M34.2 adds context-aware counter signals to reduce false-positive preservation of ordinary UI text. The policy uses relative bbox geometry and local pixel metrics:
+M29.2 输出 source objects：
 
 ```text
-aligned_text_row
-compact_overlay_badge
-metadata_text_cluster
-stable_local_background
+visualKind
+pixelOwner
+replayDecision
+sourceEvidence
+confidence
+reasons
+risks
 ```
 
-These signals can override weak preserve signals such as light OCR angle noise or image containment. They do not use business words, fixed coordinates, or fixed-resolution pixel constants.
+M29.3.1 是纯 bbox relation graph report。M29.4 是 weak structural evidence report。M29.5 是 replay plan quality gate，负责去重、排序、node budget 和 cleanup 授权。
 
-M36 samples foreground color for emitted editable text from source PNG pixels. It uses local dominant background and high-contrast interior pixels, then writes the sampled color to DSL text `style.color`. Preserved graphic text is not sampled or redrawn.
+M29.4 的 cluster role hint 不提供组件化、Auto Layout、Figma Component/Instance 或直接 materialization 权限。它只能进入 M29.5 plan 的解释性 `clusterIds`。
 
-M34.3 cleans high-confidence leading text-symbol leakage before M30 emits editable text. OCR and M29 evidence stay unchanged; M30 may trim a leading uppercase `Q` only when source pixels show a projection gap between a left symbol-like ink group and the right text ink group. The emitted text node uses `cleanedBBox`, so fallback erasure naturally leaves the protected symbol pixels in the fallback image. M34.3 does not modify M31 or create icon layers.
+## M29 Plan-Driven Materialization
 
-M30.6 is an internal M30 image materialization policy. It does not add a runtime stage. It allows only large `assetUse=image_asset` entries from M29.0.5 to bypass the old zero text-overlap visual-asset gate when their overlap is below `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP`, their area is above `M30_ACCEPTED_IMAGE_MIN_AREA`, they have no high-risk text/boundary flags, and lineage resolves back to a raw M29 image node such as `image_003`.
-
-M30.6 writes recovered ids into the emitted image node meta, including the extended `sourceEvidenceNodeIds` list consumed by M37. It does not run OCR, does not recover image-internal overlays, does not fix `1/6`, does not clean parent image internals, and does not change M37/M38 grouping policy.
-
-M30.7 is also an internal M30 policy, not a runtime stage. It enforces raster pixel ownership after media materialization:
+`backend/app/m29_plan_materializer.py` 是当前正式 DSL producer。它的输入只来自：
 
 ```text
-editable text layer exists above copied media asset
--> same text pixels must be removed from the copied media asset underneath
+source PNG
+OCR
+raw M29
+M29.2
+M29.3
+M29.4
+M29.5 replay plan
 ```
 
-The cleanup edits only M30 copied assets under `m30/assets/`, never M29.0.5 source assets. It maps editable text bboxes into local image pixels and fills those bboxes with local background samples. M30.7 also materializes large M29.0.5 `partially_separated` objects with `combinedAssetPath` as `role=m30_composite_media_asset` image nodes, so carousel/banner blocks can be selected and dragged as single raster layers. It does not split their internal art text into editable text.
-
-M37 is a read-only hierarchy readiness side path. It reads M31 tree/report and the final M30 DSL/report, then writes `m37_hierarchy_readiness_report.json`. It does not modify DSL, create visible frames, or change Renderer coordinate semantics.
-
-M38 is the first controlled hierarchy materialization stage. It consumes only M37 safe direct-match candidates, creates transparent DSL `group` containers, and moves existing M30 children under those containers with parent-local coordinates. It preserves absolute page bboxes in `rawLayout`/meta, does not change assets, does not run OCR or visual detection, and does not mutate M37 artifacts.
-
-M39 is the content-chrome boundary classification stage. It runs between M30 asset publish and M37 hierarchy readiness. It reads the M30 DSL and optionally the source PNG, classifies materialized `m30_text_member`, `m30_shape_candidate`, `m30_visual_asset`, and `m30_composite_media_asset` nodes as `"chrome"` or `"content"` in the node `meta.boundaryClassification` field using:
+它只执行 M29.5 plan：
 
 ```text
-relative geometry rules (top/bottom 12% full-width spans, right-edge floats)
-optional ONNX model proposer (YOLOv8, non-blocking, dynamically loaded)
+text_replay -> role=m29_text
+shape_replay -> role=m29_shape
+image_replay -> role=m29_image
+icon_replay -> role=m29_symbol
+preserve_in_parent_raster / fallback_only / diagnostic_only / suppress_duplicate -> no visible node
 ```
 
-M37 uses M39 labels to mark reconstruction units that contain both chrome and content nodes as unsafe (`boundary_classification_conflict`). M38 skips those units. M39 does not create visible elements, does not move nodes, does not change assets, and never classifies `fallback_region` or `original_reference`.
+可见层顺序由 plan 控制：
 
-M39 can be disabled with `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false`. The optional proposer is controlled by `M39_ONNX_PROPOSER_ENABLED` and `M39_ONNX_MODEL_PATH`; missing `numpy`, `Pillow`, `onnxruntime`, model file, bad output shape, or inference failure only records `modelSkippedReason`/warnings in the M39 report and falls back to rule-only classification.
+```text
+background/support shape -> raster/media image -> icon -> text
+```
 
-M39.1 is a read-only unit structure readiness audit stage. It runs after M38 when M31 artifacts exist and writes `m39_1/unit_structure_readiness_report.json`. It normalizes M37 safe/unsafe units, derives diagnostic product-card/banner/chrome-shell/content-section candidates from M30/M39 geometry, and records ONNX box candidates as diagnostic-only unless corroborated by existing rule evidence. It does not create visible nodes, move DSL nodes, change assets, promote units, implement M40, or adapt to Codia schema.
+Materializer 负责：
+
+- 从 source PNG 边缘样本推导 root/page 背景，避免 fallback-off 时固定浅色坍塌。
+- 复制或裁切 plan-approved raster/media/icon assets。
+- 只对 plan-approved visible actions 创建 DSL nodes。
+- 只按 M29.5 `cleanupTargets` 执行 fallback erasure 和 copied image asset cleanup。
+- 写出 `m29_materialization_report.json` 供诊断。
+
+Materializer 不负责：
+
+```text
+重新判断 text editability
+重新判断 contains/overlap cleanup
+发明新 bbox
+按主题、颜色、截图、文案或行业特化
+把 cluster 变成 component/container
+```
 
 ## Artifact Profiles
 
-`M30_PREVIEW_PROFILE=production` is the default for plugin preview.
+`M29_PREVIEW_PROFILE=production` 是默认插件 preview profile：
 
 ```text
-production:
-  keep OCR JSON
-  keep structured M29/M30 JSON
-  keep M29.0.5 formal assets needed by M30
-  keep M30 DSL/report
-  keep published renderer assets
-  keep stage_timings.json
-  skip overlays, preview sheets, review/contact sheets, M30 preview PNG
-
-development:
-  keep full diagnostic output
+keep OCR JSON
+keep structured M29/M29.2/M29.3/M29.4/M29.5 JSON
+keep M29 materialized DSL/report and published assets
+keep stage_timings.json
+skip raw M29 overlays and preview sheets when possible
 ```
 
-The profile changes artifacts only. It does not change OCR, M29 classification rules, DSL schema, or renderer behavior.
+`development` 保留 raw M29 诊断 artifacts。profile 只影响 artifacts，不改变 OCR、M29 classification、DSL schema 或 Renderer 行为。
+
+`M30_PREVIEW_PROFILE` 仅作为兼容 alias 被读取；新配置应使用 `M29_PREVIEW_PROFILE`。
 
 ## Storage
 
@@ -156,41 +169,26 @@ backend/storage/
   m30_1_uploads/
 ```
 
-Each M30 preview task writes:
+每个 preview task 当前可能写入：
 
 ```text
 storage/uploads/{taskId}/original.png
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 storage/m30_1_uploads/{taskId}/m29/
-storage/m30_1_uploads/{taskId}/m31/
-storage/m30_1_uploads/{taskId}/m29_1/
-storage/m30_1_uploads/{taskId}/m29_0_2/
-storage/m30_1_uploads/{taskId}/m29_0_3/
-storage/m30_1_uploads/{taskId}/m29_0_7/
-storage/m30_1_uploads/{taskId}/m29_0_4/
-storage/m30_1_uploads/{taskId}/m29_0_5/
-storage/m30_1_uploads/{taskId}/m30/
-storage/m30_1_uploads/{taskId}/m37/
-storage/m30_1_uploads/{taskId}/m38/
-storage/m30_1_uploads/{taskId}/m39/
-storage/m30_1_uploads/{taskId}/m39_1/
+storage/m30_1_uploads/{taskId}/m29_2/
+storage/m30_1_uploads/{taskId}/m29_3/
+storage/m30_1_uploads/{taskId}/m29_4/
+storage/m30_1_uploads/{taskId}/m29_5/
+storage/m30_1_uploads/{taskId}/m29_materialized/
 storage/m30_1_uploads/{taskId}/stage_timings.json
-storage/assets/{taskId}/m30/
+storage/assets/{taskId}/m29/
 ```
 
-`backend/storage/` is diagnostic/runtime data and must not be committed.
-
-M31 manual runs write outside the task runtime by default:
-
-```text
-storage/m31_runs/{taskId}/m31_reconstruction_tree.json
-storage/m31_runs/{taskId}/m31_reconstruction_tree_report.json
-storage/m31_runs/{taskId}/m31_unit_fallback_assets/
-```
+`backend/storage/` 是 runtime/diagnostic data，不提交。
 
 ## Task State
 
-Current task status values:
+当前 task status：
 
 ```text
 processing
@@ -198,29 +196,22 @@ completed
 failed
 ```
 
-Current stage names are concrete pipeline stages, for example:
+当前 stage names：
 
 ```text
-m30_queued
+m29_queued
 ocr
 m29
-m31_reconstruction
-m29_1
-m29_0_2
-m29_0_3
-m29_0_7
-m29_0_4
-m29_0_5
-m30_materialization
-m30_asset_publish
-m39_boundary_classification
-m37_hierarchy_readiness
-m38_hierarchy_materialization
-m39_1_unit_structure_readiness_audit
-m30_completed
+m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
+m29_materialization
+m29_asset_publish
+m29_completed
 ```
 
-`stage_timings.json` records `stage`, start/end timestamps, elapsed seconds, status, and error metadata for each stage.
+`stage_timings.json` 记录 `stage`、start/end timestamps、elapsed seconds、status 和 error metadata。
 
 ## Failure Strategy
 
@@ -233,13 +224,9 @@ unreadable PNG dimensions
 file too large
 ```
 
-Background pipeline failures mark the task as failed and write `error_logs`.
+OCR 是当前 preview path 的 required evidence。missing Baidu token、unsupported OCR provider、remote OCR failure 或 timeout 都会让任务失败，不生成 fake completed DSL。
 
-In the current M30 preview path, OCR is required evidence. A missing Baidu token, unsupported OCR provider, remote OCR failure, or OCR timeout fails the M30 preview task instead of emitting a fake completed DSL.
-
-M29/M30 stages should fail fast when their required source artifacts or contracts are invalid. The product path should not fabricate visible nodes from audit-only or missing evidence.
-
-M31 diagnostics are optional by default. If `M31_UPLOAD_DIAGNOSTICS_STRICT=false`, M31 failure writes a failed `m31_reconstruction` timing and an `error_logs` row, then the pipeline continues to M30 DSL. If `M31_UPLOAD_DIAGNOSTICS_STRICT=true`, M31 failure marks the task failed at `stage=m31_reconstruction`.
+M29 required stages and M29 plan materialization should fail fast when required artifacts or contracts are invalid. The current product path no longer has a non-blocking compare materializer that can fail silently while `/dsl` succeeds.
 
 ## Database
 
@@ -253,14 +240,12 @@ ocr_results
 error_logs
 ```
 
-Large stage payloads remain JSON files under `storage/m30_1_uploads/{taskId}/`.
-
-M30.2.2 does not perform database migrations or local storage cleanup. Existing old local tables/files may remain on a developer machine, but active source no longer creates or consumes the removed pre-M29 result tables.
+Large stage payloads remain JSON files under `storage/m30_1_uploads/{taskId}/`。
 
 ## Boundaries
 
 Backend generates DSL and assets. It does not operate the Figma canvas.
 
-Renderer consumes DSL only. It does not run OCR, M29, asset slicing, or quality gates.
+Renderer consumes DSL only. It does not run OCR, M29, materialization, asset slicing, or quality gates.
 
-Plugin UI treats backend pipeline details as task status and does not depend on M29/M30 internal JSON.
+Plugin UI treats backend pipeline details as task status and does not depend on internal M29 JSON.

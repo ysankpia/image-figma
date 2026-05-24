@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .png_tools import PngMetadata, PngPixels, PngRegion
-from .png_tools import UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata
+from .png_tools import UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
 
 
 M29PrimitiveType = Literal["text", "shape", "image", "symbol", "unknown"]
@@ -76,6 +76,7 @@ class M29PrimitiveNode:
     parent_id: str | None = None
     child_ids: list[str] = field(default_factory=list)
     mask_data: bytes | None = None
+    geometry: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = {
@@ -97,6 +98,7 @@ class M29PrimitiveNode:
             "maskPath": self.mask_path,
             "parentId": self.parent_id,
             "childIds": self.child_ids or None,
+            "geometry": self.geometry,
         }
         data.update({key: value for key, value in optional.items() if value is not None})
         return data
@@ -163,6 +165,21 @@ class M29VisualPrimitiveOptions:
     symbol_color_threshold: int = 24
     text_padding: int = 2
     output_preview_max_thumb: int = 160
+    low_contrast_support_enabled: bool = True
+    low_contrast_support_min_width: int = 48
+    low_contrast_support_min_height: int = 18
+    low_contrast_support_max_area_ratio: float = 0.08
+    low_contrast_support_max_width_ratio: float = 0.90
+    low_contrast_support_max_texture: float = 0.075
+    low_contrast_support_max_color_count: int = 10
+    low_contrast_support_min_edge_delta: int = 6
+    low_contrast_support_max_edge_delta: int = 80
+    text_support_background_enabled: bool = True
+    text_support_background_min_area_ratio: float = 1.15
+    text_support_background_max_area_ratio: float = 4.00
+    text_support_background_min_aspect: float = 1.8
+    text_support_background_padding_x_ratio: float = 0.55
+    text_support_background_padding_y_ratio: float = 0.45
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -402,7 +419,12 @@ def extract_m29_visual_primitive_graph(
         max_area_ratio=max(options.max_component_area_ratio, 0.80),
     )
     shapes = detect_shapes(initial_components, pixels, image, options)
+    support_shapes = detect_low_contrast_support_regions(pixels, image, text_boxes or [], initial_components, shapes, options)
+    shapes = stable_sort_nodes([*shapes, *support_shapes])
     images, unknown_images = detect_images(initial_components, pixels, text_mask, shapes, options)
+    text_support_shapes = detect_text_support_background_regions(pixels, image, text_boxes or [], shapes, images, options)
+    shapes = stable_sort_nodes([*shapes, *text_support_shapes])
+    images = [node for node in images if not any(bbox_iou(node.bbox, shape.bbox) > 0.72 for shape in text_support_shapes)]
     image_mask = build_image_protection_mask(pixels.width, pixels.height, images, options.image_protection_padding)
     foreground = build_remaining_foreground_mask(pixels, text_mask, image_mask, shapes)
     remaining_components = connected_components(
@@ -634,20 +656,25 @@ def detect_shapes(
         subtype: str | None = None
         confidence = 0.0
         reasons: list[str] = []
+        geometry = fit_connected_component_geometry(component, options)
         if is_line_like(bbox, metrics, options):
             subtype = "separator"
             confidence = 0.86
             reasons = ["line_like", "low_texture"]
-        elif is_ellipse_like(component, pixels, options):
+        elif geometry["kind"] in {"circle", "ellipse"} and geometry["confidence"] in {"high", "medium"}:
             subtype = "badge_background" if area < 3200 else "small_ellipse"
             confidence = 0.78
-            reasons = ["ellipse_like", "corner_background_like"]
-        elif is_rect_like(component, options):
+            reasons = ["ellipse_like", "corner_background_like", "shape_geometry_fit"]
+        elif geometry["kind"] == "rect" and geometry["confidence"] in {"high", "medium"} and is_rect_like(component, options):
             subtype = rect_subtype(bbox, image)
             confidence = 0.82
-            reasons = ["solid_fill", "low_texture", "rect_like"]
+            reasons = ["solid_fill", "low_texture", "rect_like", "shape_geometry_fit"]
         if subtype is None:
             continue
+        style: dict[str, object] = {"fill": rgb_to_hex(metrics.mean_rgb)}
+        radius = geometry_radius(geometry, bbox)
+        if radius is not None and subtype not in {"separator"}:
+            style["radius"] = radius
         nodes.append(
             M29PrimitiveNode(
                 id=f"shape_{len(nodes) + 1:03d}",
@@ -660,10 +687,479 @@ def detect_shapes(
                 layer_hint=shape_layer_hint(subtype),
                 reasons=reasons,
                 metrics=metrics,
-                style={"fill": rgb_to_hex(metrics.mean_rgb), **({"radius": rough_radius(bbox)} if subtype not in {"separator"} else {})},
+                style=style,
+                geometry=geometry,
             )
         )
     return nodes
+
+
+def detect_low_contrast_support_regions(
+    pixels: PngPixels,
+    image: PngMetadata,
+    text_boxes: list[M29TextBox],
+    components: list[M29ConnectedComponent],
+    shapes: list[M29PrimitiveNode],
+    options: M29VisualPrimitiveOptions,
+) -> list[M29PrimitiveNode]:
+    if not options.low_contrast_support_enabled or not text_boxes:
+        return []
+    foreground_bboxes = [
+        component.bbox
+        for component in components
+        if bbox_area(component.bbox) <= options.symbol_max_area and not is_line_like(component.bbox, component.metrics, options)
+    ]
+    existing_shape_bboxes = [node.bbox for node in shapes]
+    candidates: list[M29PrimitiveNode] = []
+    for text_box in text_boxes:
+        bbox = bbox_clamp(text_box.bbox, image.width, image.height)
+        if bbox is None:
+            continue
+        candidate = find_low_contrast_support_bbox(pixels, bbox, foreground_bboxes, image, options)
+        if candidate is None:
+            continue
+        if any(bbox_iou(candidate, existing) > 0.82 for existing in existing_shape_bboxes):
+            continue
+        if any(bbox_iou(candidate, existing.bbox) > 0.82 for existing in candidates):
+            continue
+        metrics = support_region_metrics(pixels, candidate)
+        try:
+            fill = sample_rect_edges_dominant_background(
+                pixels,
+                candidate,
+                sides={"top", "bottom", "left", "right"},
+                inset=2,
+                thickness=2,
+                tolerance=18,
+                min_fraction=0.50,
+            ).mean_rgb
+        except Exception:
+            fill = list(metrics.mean_rgb)
+        containing_evidence = low_contrast_support_evidence_bboxes(candidate, bbox, foreground_bboxes)
+        reasons = ["low_contrast_support_region", "stable_local_fill", "contains_text_evidence"]
+        if any(not bbox_intersects(bbox, item) for item in containing_evidence):
+            reasons.append("contains_visual_evidence")
+        geometry = fit_low_contrast_support_geometry(pixels, candidate, [bbox, *containing_evidence])
+        radius = geometry_radius(geometry, candidate)
+        style: dict[str, object] = {"fill": rgb_to_hex(tuple(fill))}
+        if radius is not None:
+            style["radius"] = radius
+        candidates.append(
+            M29PrimitiveNode(
+                id=f"shape_support_{len(candidates) + 1:03d}",
+                type="shape",
+                subtype="low_contrast_support",
+                bbox=candidate,
+                confidence=0.78,
+                source="low_contrast_support_detector",
+                source_order=len(candidates),
+                layer_hint="container",
+                reasons=reasons,
+                metrics=metrics,
+                style=style,
+                geometry=geometry,
+            )
+        )
+    return candidates
+
+
+def find_low_contrast_support_bbox(
+    pixels: PngPixels,
+    text_bbox: list[int],
+    foreground_bboxes: list[list[int]],
+    image: PngMetadata,
+    options: M29VisualPrimitiveOptions,
+) -> list[int] | None:
+    _, _, width, height = text_bbox
+    line_evidence = low_contrast_support_line_evidence_bboxes(text_bbox, foreground_bboxes)
+    evidence_union = union_bbox([text_bbox, *line_evidence])
+    if not line_evidence or evidence_union is None:
+        return None
+    min_w = max(options.low_contrast_support_min_width, width + 24)
+    min_h = max(options.low_contrast_support_min_height, height + 12)
+    max_w = round(image.width * options.low_contrast_support_max_width_ratio)
+    max_h = min(max(min_h, height + 44), 96)
+    best: tuple[float, list[int]] | None = None
+    pad_x = max(14, round(height * 0.8))
+    vertical_paddings = sorted(
+        {
+            max(8, round(height * 0.45)),
+            max(8, round((height + max(26, round(height * 1.2)) - evidence_union[3]) / 2)),
+        }
+    )
+    union_candidates = []
+    for pad_y in vertical_paddings:
+        union_candidates.extend(
+            [
+                [evidence_union[0] - pad_x, evidence_union[1] - pad_y, evidence_union[2] + pad_x * 2, evidence_union[3] + pad_y * 2],
+                [
+                    evidence_union[0] - round(pad_x * 1.5),
+                    evidence_union[1] - pad_y,
+                    evidence_union[2] + round(pad_x * 3.0),
+                    evidence_union[3] + pad_y * 2,
+                ],
+            ]
+        )
+    for raw in union_candidates:
+        candidate = bbox_clamp(raw, image.width, image.height)
+        if candidate is None or not bbox_contains(candidate, text_bbox):
+            continue
+        if candidate[2] < min_w or candidate[2] > max_w or candidate[3] < min_h or candidate[3] > max_h:
+            continue
+        score = score_low_contrast_support_candidate(pixels, candidate, text_bbox, foreground_bboxes, image, options)
+        if score is None:
+            continue
+        if best is None or score > best[0] or (score == best[0] and bbox_area(candidate) < bbox_area(best[1])):
+            best = (score, candidate)
+    return best[1] if best is not None else None
+
+
+def low_contrast_support_line_evidence_bboxes(text_bbox: list[int], foreground_bboxes: list[list[int]]) -> list[list[int]]:
+    _, _, width, height = text_bbox
+    max_gap = max(96, height * 16)
+    max_evidence_width = max(48, round(width * 0.45), height * 2)
+    max_evidence_height = max(24, round(height * 1.2))
+    evidence = [
+        item
+        for item in foreground_bboxes
+        if not bbox_intersects(item, text_bbox)
+        and bbox_vertical_overlap_ratio(item, text_bbox) >= 0.25
+        and bbox_gap_distance(item, text_bbox) <= max_gap
+        and item[2] <= max_evidence_width
+        and item[3] <= max_evidence_height
+    ]
+    return sorted(evidence, key=lambda item: (bbox_gap_distance(item, text_bbox), item[0], item[1], item[2], item[3]))
+
+
+def union_bbox(bboxes: list[list[int]]) -> list[int] | None:
+    valid = [bbox for bbox in bboxes if len(bbox) == 4 and bbox[2] > 0 and bbox[3] > 0]
+    if not valid:
+        return None
+    x1 = min(bbox[0] for bbox in valid)
+    y1 = min(bbox[1] for bbox in valid)
+    x2 = max(bbox_x2(bbox) for bbox in valid)
+    y2 = max(bbox_y2(bbox) for bbox in valid)
+    return [x1, y1, x2 - x1, y2 - y1]
+
+
+def score_low_contrast_support_candidate(
+    pixels: PngPixels,
+    candidate: list[int],
+    text_bbox: list[int],
+    foreground_bboxes: list[list[int]],
+    image: PngMetadata,
+    options: M29VisualPrimitiveOptions,
+) -> float | None:
+    area_ratio = bbox_area(candidate) / max(1, image.width * image.height)
+    if area_ratio <= 0 or area_ratio > options.low_contrast_support_max_area_ratio:
+        return None
+    if candidate[2] < options.low_contrast_support_min_width or candidate[3] < options.low_contrast_support_min_height:
+        return None
+    if candidate[2] > image.width * options.low_contrast_support_max_width_ratio:
+        return None
+    if candidate[3] > max(110, image.height * 0.08):
+        return None
+    fill_metrics = support_region_metrics(pixels, candidate)
+    if fill_metrics.texture_score > options.low_contrast_support_max_texture:
+        return None
+    if fill_metrics.color_count > options.low_contrast_support_max_color_count:
+        return None
+    boundary_deltas = support_boundary_deltas(pixels, candidate, padding=3, thickness=3)
+    if boundary_deltas is None:
+        return None
+    min_boundary_delta = min(boundary_deltas.values())
+    edge_delta = round(sum(boundary_deltas.values()) / len(boundary_deltas))
+    if min_boundary_delta < options.low_contrast_support_min_edge_delta:
+        return None
+    if edge_delta > options.low_contrast_support_max_edge_delta:
+        return None
+    evidence_count = len(low_contrast_support_evidence_bboxes(candidate, text_bbox, foreground_bboxes))
+    if evidence_count == 0:
+        return None
+    horizontal_support = candidate[2] / max(1, candidate[3])
+    if horizontal_support < 2.0:
+        return None
+    area_penalty = area_ratio * 20
+    return round(edge_delta + evidence_count * 4 + min(horizontal_support, 10) * 0.2 - fill_metrics.texture_score * 30 - fill_metrics.color_count * 0.1 - area_penalty, 4)
+
+
+def low_contrast_support_evidence_bboxes(candidate: list[int], text_bbox: list[int], foreground_bboxes: list[list[int]]) -> list[list[int]]:
+    return [
+        item
+        for item in foreground_bboxes
+        if bbox_contains(candidate, item)
+        and bbox_area(item) < bbox_area(candidate) * 0.65
+        and not bbox_intersects(item, text_bbox)
+        and bbox_vertical_overlap_ratio(item, text_bbox) >= 0.25
+    ]
+
+
+def detect_text_support_background_regions(
+    pixels: PngPixels,
+    image: PngMetadata,
+    text_boxes: list[M29TextBox],
+    existing_shapes: list[M29PrimitiveNode],
+    images: list[M29PrimitiveNode],
+    options: M29VisualPrimitiveOptions,
+) -> list[M29PrimitiveNode]:
+    if not options.text_support_background_enabled or not text_boxes:
+        return []
+    existing_bboxes = [node.bbox for node in existing_shapes]
+    candidates: list[M29PrimitiveNode] = []
+    for text_box in text_boxes:
+        bbox = bbox_clamp(text_box.bbox, image.width, image.height)
+        if bbox is None:
+            continue
+        candidate = find_text_support_background_bbox(pixels, bbox, image, options)
+        if candidate is None:
+            continue
+        if any(bbox_intersection_area(candidate, image_node.bbox) > 0 for image_node in images):
+            continue
+        if any(bbox_iou(candidate, existing) > 0.82 for existing in existing_bboxes):
+            continue
+        if any(bbox_iou(candidate, existing.bbox) > 0.82 for existing in candidates):
+            continue
+        metrics = support_region_metrics(pixels, candidate)
+        try:
+            fill = sample_rect_edges_dominant_background(
+                pixels,
+                candidate,
+                sides={"top", "bottom", "left", "right"},
+                inset=2,
+                thickness=2,
+                tolerance=18,
+                min_fraction=0.50,
+            ).mean_rgb
+        except Exception:
+            fill = list(metrics.mean_rgb)
+        geometry = fit_low_contrast_support_geometry(pixels, candidate, [bbox])
+        radius = geometry_radius(geometry, candidate)
+        style: dict[str, object] = {"fill": rgb_to_hex(tuple(fill))}
+        if radius is not None:
+            style["radius"] = radius
+        candidates.append(
+            M29PrimitiveNode(
+                id=f"shape_text_support_{len(candidates) + 1:03d}",
+                type="shape",
+                subtype="text_support_background",
+                bbox=candidate,
+                confidence=0.78,
+                source="text_support_background_detector",
+                source_order=len(candidates),
+                layer_hint="container",
+                reasons=["text_support_background_region", "stable_local_fill", "contains_text_evidence", "finite_outer_ring"],
+                metrics=metrics,
+                style=style,
+                geometry=geometry,
+            )
+        )
+    return candidates
+
+
+def find_text_support_background_bbox(
+    pixels: PngPixels,
+    text_bbox: list[int],
+    image: PngMetadata,
+    options: M29VisualPrimitiveOptions,
+) -> list[int] | None:
+    text_area = bbox_area(text_bbox)
+    if text_area <= 0:
+        return None
+    _, _, width, height = text_bbox
+    max_w = round(image.width * options.low_contrast_support_max_width_ratio)
+    max_h = min(max(options.low_contrast_support_min_height, height + 44), 96)
+    pad_x_values = sorted(
+        {
+            max(4, round(height * options.text_support_background_padding_x_ratio)),
+            max(6, round(height * 0.85)),
+            max(8, round(width * 0.20)),
+            max(10, round(width * 0.30)),
+            max(10, round(height * 1.20)),
+        }
+    )
+    pad_y_values = sorted(
+        {
+            max(3, round(height * options.text_support_background_padding_y_ratio)),
+            max(4, round(height * 0.55)),
+            max(5, round(height * 0.85)),
+        }
+    )
+    best: tuple[float, list[int]] | None = None
+    for pad_x in pad_x_values:
+        for pad_y in pad_y_values:
+            raw = [text_bbox[0] - pad_x, text_bbox[1] - pad_y, text_bbox[2] + pad_x * 2, text_bbox[3] + pad_y * 2]
+            candidate = bbox_clamp(raw, image.width, image.height)
+            if candidate is None:
+                continue
+            score = score_text_support_background_candidate(pixels, candidate, text_bbox, image, options)
+            if score is None:
+                continue
+            if candidate[2] > max_w or candidate[3] > max_h:
+                continue
+            if best is None or score > best[0] or (score == best[0] and bbox_area(candidate) < bbox_area(best[1])):
+                best = (score, candidate)
+    return best[1] if best is not None else None
+
+
+def score_text_support_background_candidate(
+    pixels: PngPixels,
+    candidate: list[int],
+    text_bbox: list[int],
+    image: PngMetadata,
+    options: M29VisualPrimitiveOptions,
+) -> float | None:
+    text_area = bbox_area(text_bbox)
+    candidate_area = bbox_area(candidate)
+    if text_area <= 0 or candidate_area <= 0:
+        return None
+    text_contained = bbox_intersection_area(candidate, text_bbox) / text_area
+    if text_contained < 0.90:
+        return None
+    support_area_ratio = candidate_area / text_area
+    if support_area_ratio < options.text_support_background_min_area_ratio or support_area_ratio > options.text_support_background_max_area_ratio:
+        return None
+    support_aspect = candidate[2] / max(1, candidate[3])
+    if support_aspect < options.text_support_background_min_aspect:
+        return None
+    fill_metrics = support_region_metrics(pixels, candidate)
+    if fill_metrics.texture_score > options.low_contrast_support_max_texture:
+        return None
+    if fill_metrics.color_count > options.low_contrast_support_max_color_count:
+        return None
+    boundary_deltas = support_boundary_deltas(pixels, candidate, padding=3, thickness=3)
+    if boundary_deltas is None:
+        return None
+    min_boundary_delta = min(boundary_deltas.values())
+    edge_delta = round(sum(boundary_deltas.values()) / len(boundary_deltas))
+    if min_boundary_delta < options.low_contrast_support_min_edge_delta:
+        return None
+    if edge_delta > options.low_contrast_support_max_edge_delta:
+        return None
+    return round(
+        edge_delta
+        + min(support_aspect, 8) * 0.25
+        + fill_metrics.fill_ratio
+        - fill_metrics.texture_score * 30
+        - fill_metrics.color_count * 0.1
+        - support_area_ratio * 0.05,
+        4,
+    )
+
+
+def bbox_intersection_area(left: list[int], right: list[int]) -> int:
+    if not bbox_intersects(left, right):
+        return 0
+    x1 = max(left[0], right[0])
+    y1 = max(left[1], right[1])
+    x2 = min(bbox_x2(left), bbox_x2(right))
+    y2 = min(bbox_y2(left), bbox_y2(right))
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def bbox_vertical_overlap_ratio(left: list[int], right: list[int]) -> float:
+    overlap = max(0, min(bbox_y2(left), bbox_y2(right)) - max(left[1], right[1]))
+    return overlap / max(1, min(left[3], right[3]))
+
+
+def support_edge_delta(pixels: PngPixels, bbox: list[int]) -> int:
+    inner = support_region_metrics(pixels, bbox).mean_rgb
+    outer = sample_outer_ring_mean_rgb(pixels, bbox, padding=3, thickness=3)
+    return color_distance(inner, outer)
+
+
+def support_boundary_deltas(pixels: PngPixels, bbox: list[int], *, padding: int, thickness: int) -> dict[str, int] | None:
+    if bbox[0] - padding < 0 or bbox[1] - padding < 0:
+        return None
+    if bbox_x2(bbox) + padding > pixels.width or bbox_y2(bbox) + padding > pixels.height:
+        return None
+    if bbox[2] <= 0 or bbox[3] <= 0:
+        return None
+    inner = support_region_metrics(pixels, bbox).mean_rgb
+    x, y, width, height = bbox
+    top = sample_region_mean_rgb(pixels, [x, y - padding, width, thickness])
+    bottom = sample_region_mean_rgb(pixels, [x, y + height + padding - thickness, width, thickness])
+    left = sample_region_mean_rgb(pixels, [x - padding, y, thickness, height])
+    right = sample_region_mean_rgb(pixels, [x + width + padding - thickness, y, thickness, height])
+    return {
+        "top": color_distance(inner, top),
+        "bottom": color_distance(inner, bottom),
+        "left": color_distance(inner, left),
+        "right": color_distance(inner, right),
+    }
+
+
+def sample_region_mean_rgb(pixels: PngPixels, bbox: list[int]) -> tuple[int, int, int]:
+    clamped = bbox_clamp(bbox, pixels.width, pixels.height)
+    if clamped is None:
+        return measure_region(pixels, [0, 0, pixels.width, pixels.height]).mean_rgb
+    x, y, width, height = clamped
+    red = green = blue = count = 0
+    for row_index in range(y, y + height):
+        row = pixels.rows[row_index]
+        for column in range(x, x + width):
+            offset = column * 3
+            red += row[offset]
+            green += row[offset + 1]
+            blue += row[offset + 2]
+            count += 1
+    if count == 0:
+        return measure_region(pixels, clamped).mean_rgb
+    return (round(red / count), round(green / count), round(blue / count))
+
+
+def support_region_metrics(pixels: PngPixels, bbox: list[int]) -> M29PrimitiveMetrics:
+    try:
+        sample = sample_rect_edges_dominant_background(
+            pixels,
+            bbox,
+            sides={"top", "bottom", "left", "right"},
+            inset=2,
+            thickness=2,
+            tolerance=18,
+            min_fraction=0.50,
+        )
+        mean = tuple(int(value) for value in sample.mean_rgb)
+        return M29PrimitiveMetrics(
+            color_count=1 if sample.max_channel_delta <= 18 else 2,
+            texture_score=round(sample.max_channel_delta / 255, 4),
+            edge_score=0.0,
+            fill_ratio=sample.confidence,
+            aspect_ratio=round(bbox[2] / max(1, bbox[3]), 4),
+            brightness=sample.brightness,
+            mean_rgb=mean,
+        )
+    except Exception:
+        return measure_region(pixels, bbox)
+
+
+def sample_outer_ring_mean_rgb(pixels: PngPixels, bbox: list[int], *, padding: int, thickness: int) -> tuple[int, int, int]:
+    outer = bbox_clamp(pad_bbox(bbox, padding), pixels.width, pixels.height)
+    if outer is None:
+        return measure_region(pixels, bbox).mean_rgb
+    x, y, width, height = outer
+    inner_x1, inner_y1 = bbox[0], bbox[1]
+    inner_x2, inner_y2 = bbox_x2(bbox), bbox_y2(bbox)
+    red = green = blue = count = 0
+    for row_index in range(y, y + height):
+        row = pixels.rows[row_index]
+        for column in range(x, x + width):
+            in_inner = inner_x1 <= column < inner_x2 and inner_y1 <= row_index < inner_y2
+            near_outer_edge = (
+                column < x + thickness
+                or column >= x + width - thickness
+                or row_index < y + thickness
+                or row_index >= y + height - thickness
+            )
+            if in_inner or not near_outer_edge:
+                continue
+            offset = column * 3
+            red += row[offset]
+            green += row[offset + 1]
+            blue += row[offset + 2]
+            count += 1
+    if count == 0:
+        return measure_region(pixels, bbox).mean_rgb
+    return (round(red / count), round(green / count), round(blue / count))
 
 
 def detect_images(
@@ -1193,19 +1689,242 @@ def is_rect_like(component: M29ConnectedComponent, options: M29VisualPrimitiveOp
     )
 
 
-def is_ellipse_like(component: M29ConnectedComponent, pixels: PngPixels, options: M29VisualPrimitiveOptions) -> bool:
+def fit_connected_component_geometry(
+    component: M29ConnectedComponent,
+    options: M29VisualPrimitiveOptions,
+) -> dict[str, Any]:
     bbox = component.bbox
-    ratio = bbox[2] / max(1, bbox[3])
-    if not (0.65 <= ratio <= 1.55 and 0.45 <= component.fill_ratio <= 0.90 and component.area >= options.min_shape_area and component.area < 10000):
-        return False
-    x, y, width, height = bbox
-    corners = [(x, y), (x + width - 1, y), (x, y + height - 1), (x + width - 1, y + height - 1)]
-    corner_distances = []
-    for column, row_index in corners:
-        row = pixels.rows[row_index]
-        offset = column * 3
-        corner_distances.append(color_distance((row[offset], row[offset + 1], row[offset + 2]), component.metrics.mean_rgb))
-    return sum(1 for distance in corner_distances if distance > 24) >= 2
+    if is_line_like(bbox, component.metrics, options):
+        return shape_geometry(
+            "line",
+            "high",
+            metrics={"fitError": 0.0, "centerFillRatio": component.fill_ratio, "cornerMissingRatio": 0.0, "edgeFillRatio": component.fill_ratio},
+            evidence=["mask_fit", "line_like"],
+        )
+    if component.mask_data is None or len(component.mask_data) != bbox[2] * bbox[3]:
+        return shape_geometry("unknown", "low", evidence=["missing_mask"])
+
+    width, height = bbox[2], bbox[3]
+    center = local_mask_occupancy(component.mask_data, width, height, [round(width * 0.25), round(height * 0.25), max(1, round(width * 0.50)), max(1, round(height * 0.50))])
+    corner_size = max(2, round(min(width, height) * 0.22))
+    corners = [
+        local_mask_occupancy(component.mask_data, width, height, [0, 0, corner_size, corner_size]),
+        local_mask_occupancy(component.mask_data, width, height, [width - corner_size, 0, corner_size, corner_size]),
+        local_mask_occupancy(component.mask_data, width, height, [0, height - corner_size, corner_size, corner_size]),
+        local_mask_occupancy(component.mask_data, width, height, [width - corner_size, height - corner_size, corner_size, corner_size]),
+    ]
+    corner_missing = sum(1 for value in corners if value <= 0.45) / 4
+    edge = local_mask_edge_occupancy(component.mask_data, width, height, thickness=max(1, min(3, min(width, height) // 8)))
+    ratio = width / max(1, height)
+    ellipse_fill = 3.14159 / 4
+    ellipse_error = abs(component.fill_ratio - ellipse_fill)
+    metrics = {
+        "fitError": round(min(abs(1 - component.fill_ratio), ellipse_error), 4),
+        "centerFillRatio": round(center, 4),
+        "cornerMissingRatio": round(corner_missing, 4),
+        "edgeFillRatio": round(edge, 4),
+    }
+
+    if is_rect_like(component, options) and center >= 0.90 and corner_missing <= 0.25:
+        return shape_geometry("rect", "high", metrics=metrics, evidence=["mask_fit", "corner_occupancy", "stable_fill"])
+    if (
+        component.area >= options.min_shape_area
+        and component.area < 10000
+        and 0.45 <= component.fill_ratio <= 0.90
+        and 0.35 <= ratio <= 2.80
+        and center >= 0.75
+        and corner_missing >= 0.50
+        and ellipse_error <= 0.20
+    ):
+        kind = "circle" if 0.85 <= ratio <= 1.18 else "ellipse"
+        confidence = "high" if ellipse_error <= 0.12 and corner_missing >= 0.75 else "medium"
+        radius = round(min(width, height) / 2) if kind == "circle" else None
+        return shape_geometry(kind, confidence, radius=radius, metrics=metrics, evidence=["mask_fit", "corner_occupancy"])
+    return shape_geometry("unknown", "low", metrics=metrics, evidence=["mask_fit"])
+
+
+def fit_low_contrast_support_geometry(pixels: PngPixels, bbox: list[int], ignored_bboxes: list[list[int]]) -> dict[str, Any]:
+    width, height = bbox[2], bbox[3]
+    if width <= 0 or height <= 0:
+        return shape_geometry("unknown", "low", evidence=["invalid_bbox"])
+    fill = support_region_metrics(pixels, bbox).mean_rgb
+    ignored = [
+        local_intersection_bbox(bbox, item)
+        for item in ignored_bboxes
+        if bbox_intersects(bbox, item)
+    ]
+
+    def occupancy(region: list[int]) -> float:
+        return support_fill_occupancy(pixels, bbox, region, fill, ignored)
+
+    corner_size = max(3, round(min(width, height) * 0.28))
+    corners = [
+        occupancy([0, 0, corner_size, corner_size]),
+        occupancy([width - corner_size, 0, corner_size, corner_size]),
+        occupancy([0, height - corner_size, corner_size, corner_size]),
+        occupancy([width - corner_size, height - corner_size, corner_size, corner_size]),
+    ]
+    corner_missing = sum(1 for value in corners if value <= 0.55) / 4
+    center = occupancy([round(width * 0.22), round(height * 0.22), max(1, round(width * 0.56)), max(1, round(height * 0.56))])
+    top_edge = occupancy([round(width * 0.22), 0, max(1, round(width * 0.56)), max(1, round(height * 0.18))])
+    bottom_edge = occupancy([round(width * 0.22), height - max(1, round(height * 0.18)), max(1, round(width * 0.56)), max(1, round(height * 0.18))])
+    left_edge = occupancy([0, round(height * 0.28), max(1, round(width * 0.12)), max(1, round(height * 0.44))])
+    right_edge = occupancy([width - max(1, round(width * 0.12)), round(height * 0.28), max(1, round(width * 0.12)), max(1, round(height * 0.44))])
+    edge = min(top_edge, bottom_edge, max(left_edge, right_edge))
+    metrics = {
+        "fitError": round(1 - min(center, edge), 4),
+        "centerFillRatio": round(center, 4),
+        "cornerMissingRatio": round(corner_missing, 4),
+        "edgeFillRatio": round(edge, 4),
+    }
+
+    if center >= 0.82 and edge >= 0.72 and corner_missing >= 0.75:
+        radius = estimate_support_radius_from_occupancy(pixels, bbox, fill, ignored)
+        half_short_edge = max(1, round(min(width, height) / 2))
+        if radius >= round(half_short_edge * 0.75):
+            return shape_geometry("pill", "high", radius=half_short_edge, metrics=metrics, evidence=["occupancy_fit", "corner_occupancy", "stable_fill"])
+        if radius > 0:
+            return shape_geometry("rounded_rect", "medium", radius=radius, metrics=metrics, evidence=["occupancy_fit", "corner_occupancy", "stable_fill"])
+    if center >= 0.82 and min(corners) >= 0.62:
+        return shape_geometry("rect", "medium", metrics=metrics, evidence=["occupancy_fit", "corner_occupancy", "stable_fill"])
+    return shape_geometry("unknown", "low", metrics=metrics, evidence=["occupancy_fit"])
+
+
+def shape_geometry(
+    kind: str,
+    confidence: str,
+    *,
+    radius: int | None = None,
+    metrics: dict[str, float] | None = None,
+    evidence: list[str] | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if radius is not None:
+        params["radius"] = max(0, round(radius))
+    return {
+        "kind": kind,
+        "confidence": confidence,
+        "params": params,
+        "metrics": {
+            "fitError": 1.0,
+            "centerFillRatio": 0.0,
+            "cornerMissingRatio": 0.0,
+            "edgeFillRatio": 0.0,
+            **(metrics or {}),
+        },
+        "evidence": evidence or [],
+    }
+
+
+def geometry_radius(geometry: dict[str, Any], bbox: list[int]) -> int | None:
+    if geometry.get("confidence") == "low":
+        return None
+    if geometry.get("kind") not in {"rounded_rect", "pill", "circle", "ellipse"}:
+        return None
+    params = geometry.get("params") if isinstance(geometry.get("params"), dict) else {}
+    value = params.get("radius")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return max(0, min(round(value), min(bbox[2], bbox[3]) // 2))
+
+
+def local_mask_occupancy(mask_data: bytes, width: int, height: int, bbox: list[int]) -> float:
+    x, y, box_width, box_height = clamp_local_bbox(bbox, width, height)
+    if box_width <= 0 or box_height <= 0:
+        return 0.0
+    hits = 0
+    for row_index in range(y, y + box_height):
+        start = row_index * width + x
+        hits += sum(1 for value in mask_data[start : start + box_width] if value)
+    return hits / max(1, box_width * box_height)
+
+
+def local_mask_edge_occupancy(mask_data: bytes, width: int, height: int, *, thickness: int) -> float:
+    areas = [
+        [0, 0, width, thickness],
+        [0, height - thickness, width, thickness],
+        [0, 0, thickness, height],
+        [width - thickness, 0, thickness, height],
+    ]
+    return sum(local_mask_occupancy(mask_data, width, height, area) for area in areas) / 4
+
+
+def support_fill_occupancy(
+    pixels: PngPixels,
+    outer_bbox: list[int],
+    local_region: list[int],
+    fill: tuple[int, int, int],
+    ignored_local_bboxes: list[list[int]],
+) -> float:
+    x, y, width, height = clamp_local_bbox(local_region, outer_bbox[2], outer_bbox[3])
+    if width <= 0 or height <= 0:
+        return 0.0
+    hits = 0
+    samples = 0
+    for local_y in range(y, y + height):
+        row = pixels.rows[outer_bbox[1] + local_y]
+        for local_x in range(x, x + width):
+            if any(local_bbox_contains(item, local_x, local_y) for item in ignored_local_bboxes):
+                continue
+            offset = (outer_bbox[0] + local_x) * 3
+            rgb = (row[offset], row[offset + 1], row[offset + 2])
+            samples += 1
+            if color_distance(rgb, fill) <= 24:
+                hits += 1
+    return hits / max(1, samples)
+
+
+def estimate_support_radius_from_occupancy(
+    pixels: PngPixels,
+    bbox: list[int],
+    fill: tuple[int, int, int],
+    ignored_local_bboxes: list[list[int]],
+) -> int:
+    width, height = bbox[2], bbox[3]
+    limit = max(1, min(width, height) // 2)
+    probes: list[int] = []
+    for row_offset in range(0, limit):
+        y_values = [row_offset, height - row_offset - 1]
+        for local_y in y_values:
+            run = 0
+            row = pixels.rows[bbox[1] + local_y]
+            for local_x in range(width):
+                if any(local_bbox_contains(item, local_x, local_y) for item in ignored_local_bboxes):
+                    continue
+                offset = (bbox[0] + local_x) * 3
+                rgb = (row[offset], row[offset + 1], row[offset + 2])
+                if color_distance(rgb, fill) <= 24:
+                    run += 1
+                elif run == 0:
+                    continue
+                else:
+                    break
+            if run > 0:
+                probes.append(max(0, (width - run) // 2))
+    if not probes:
+        return 0
+    probes = sorted(probes)
+    return max(0, min(limit, probes[len(probes) // 2]))
+
+
+def clamp_local_bbox(bbox: list[int], width: int, height: int) -> list[int]:
+    x1 = max(0, min(width, round(bbox[0])))
+    y1 = max(0, min(height, round(bbox[1])))
+    x2 = max(0, min(width, round(bbox[0] + bbox[2])))
+    y2 = max(0, min(height, round(bbox[1] + bbox[3])))
+    return [x1, y1, max(0, x2 - x1), max(0, y2 - y1)]
+
+
+def local_bbox_contains(bbox: list[int], x: int, y: int) -> bool:
+    return bbox[0] <= x < bbox[0] + bbox[2] and bbox[1] <= y < bbox[1] + bbox[3]
+
+
+def local_intersection_bbox(outer: list[int], item: list[int]) -> list[int]:
+    x1 = max(outer[0], item[0])
+    y1 = max(outer[1], item[1])
+    x2 = min(bbox_x2(outer), bbox_x2(item))
+    y2 = min(bbox_y2(outer), bbox_y2(item))
+    return [x1 - outer[0], y1 - outer[1], max(0, x2 - x1), max(0, y2 - y1)]
 
 
 def rect_subtype(bbox: list[int], image: PngMetadata) -> str:
@@ -1220,13 +1939,15 @@ def rect_subtype(bbox: list[int], image: PngMetadata) -> str:
 def shape_layer_hint(subtype: str) -> M29LayerHint:
     if subtype == "background":
         return "background"
+    if subtype in {"low_contrast_support", "text_support_background"}:
+        return "container"
     if subtype in {"badge_background", "small_ellipse", "small_rounded_rect", "icon_button_background"}:
         return "overlay"
     return "container"
 
 
 def is_protective_shape(node: M29PrimitiveNode) -> bool:
-    return node.subtype in {"background", "card_background", "search_field_background", "large_container", "separator"}
+    return node.subtype in {"background", "card_background", "search_field_background", "low_contrast_support", "text_support_background", "large_container", "separator"}
 
 
 def score_image_candidate(component: M29ConnectedComponent, text_overlap: float, shape_overlap: float, options: M29VisualPrimitiveOptions) -> float:
@@ -1290,10 +2011,6 @@ def add_internal_contrast_pixels(data: bytearray, pixels: PngPixels, shape: M29P
 
 def pad_bbox(bbox: list[int], padding: int) -> list[int]:
     return [bbox[0] - padding, bbox[1] - padding, bbox[2] + padding * 2, bbox[3] + padding * 2]
-
-
-def rough_radius(bbox: list[int]) -> int:
-    return max(0, min(bbox[2], bbox[3]) // 8)
 
 
 def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> int:

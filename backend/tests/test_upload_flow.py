@@ -29,7 +29,7 @@ def test_removed_pre_m29_upload_surface_is_not_registered(client: TestClient, pn
         assert client.get(endpoint).status_code == 404
 
 
-def test_current_m30_upload_surface_still_completes(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
+def test_current_upload_surface_returns_m29_plan_driven_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
     upload = client.post("/api/upload-m30-preview", files={"file": png_file})
 
     assert upload.status_code == 200
@@ -38,19 +38,20 @@ def test_current_m30_upload_surface_still_completes(client: TestClient, png_file
     task = client.get(f"/api/tasks/{task_id}")
     assert task.status_code == 200
     assert task.json()["data"]["status"] == "completed"
-    assert task.json()["data"]["stage"] == "m30_completed"
+    assert task.json()["data"]["stage"] == "m29_completed"
 
     dsl = client.get(f"/api/tasks/{task_id}/dsl")
     assert dsl.status_code == 200
     body = dsl.json()["data"]["dsl"]
-    assert "m30_evidence_grounded_materialization" in body["meta"]["qualityFlags"]
+    assert "m29_plan_driven_materialization" in body["meta"]["qualityFlags"]
     assert any(child.get("role") == "fallback_region" for child in body["root"]["children"])
-    assert any(child.get("role") == "m30_text_member" for child in body["root"]["children"])
+    assert any(child.get("role") == "m29_text" for child in body["root"]["children"])
+    assert not any(child.get("role") == "m30_text_member" for child in body["root"]["children"])
 
-    report = client.get(f"/api/tasks/{task_id}/m30-materialization")
+    report = client.get(f"/api/tasks/{task_id}/m29-materialization")
     assert report.status_code == 200
     report_data = report.json()["data"]
-    assert report_data["summary"]["fallbackPreserved"] is True
+    assert report_data["summary"]["visibleNodeCount"] >= 1
     assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
 
 

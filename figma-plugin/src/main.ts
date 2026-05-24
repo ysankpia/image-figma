@@ -87,7 +87,7 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
     throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
   }
 
-  postToUI({ type: "status", message: "Fetching M30 materialized design.", tone: "normal" });
+  postToUI({ type: "status", message: "Fetching M29 plan-driven design.", tone: "normal" });
   const dsl = await getTaskDsl(upload.taskId);
 
   postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });

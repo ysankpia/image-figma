@@ -7,48 +7,13 @@
 - 项目入口：[../README.md](../README.md)
 - Agent 工作规则：[../AGENTS.md](../AGENTS.md)
 - 当前项目演进路线图：[roadmap.md](roadmap.md)
-- 当前 visual primitive graph 计划：[plans/active/029-visual-primitive-graph-harness.md](plans/active/029-visual-primitive-graph-harness.md)
-- 当前 M29 blocked evidence 增强计划：[plans/active/029-0-1-blocked-evidence-enhancement.md](plans/active/029-0-1-blocked-evidence-enhancement.md)
-- 当前 M29.1 symbol fragment grouping 计划：[plans/active/029-1-symbol-fragment-grouping.md](plans/active/029-1-symbol-fragment-grouping.md)
-- 当前 M29.0.2 text-masked media audit 计划：[plans/active/029-0-2-text-masked-media-audit.md](plans/active/029-0-2-text-masked-media-audit.md)
-- 当前 M29.0.3 visual evidence normalization 计划：[plans/active/029-0-3-visual-evidence-normalization.md](plans/active/029-0-3-visual-evidence-normalization.md)
-- 当前 M29.0.3.1 text-rejected lineage feedback gate 计划：[plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md](plans/active/029-0-3-1-text-rejected-lineage-feedback-gate.md)
-- 当前 M29.0.3.2 residual mixed boundary review 计划：[plans/active/029-0-3-2-residual-mixed-boundary-review.md](plans/active/029-0-3-2-residual-mixed-boundary-review.md)
-- 当前 M29.0.3.2 80-image residual mixed batch acceptance 计划：[plans/active/029-0-3-2-extended-residual-mixed-batch-acceptance.md](plans/active/029-0-3-2-extended-residual-mixed-batch-acceptance.md)
-- 当前 M29.0.4 generic visual object candidate audit 计划：[plans/active/029-0-4-generic-visual-object-candidate-audit.md](plans/active/029-0-4-generic-visual-object-candidate-audit.md)
-- 当前 M29.0.5 text-aware visual object refinement 计划：[plans/active/029-0-5-text-aware-visual-object-refinement.md](plans/active/029-0-5-text-aware-visual-object-refinement.md)
-- 当前 M29.0.6 member boundary quality audit 计划：[plans/active/029-0-6-member-boundary-quality-audit.md](plans/active/029-0-6-member-boundary-quality-audit.md)
-- 当前 M29.0.7 text ownership gate 计划：[plans/active/029-0-7-text-ownership-gate.md](plans/active/029-0-7-text-ownership-gate.md)
-- 当前 M29.1.1 pre-OCR symbol lineage audit 计划：[plans/active/029-1-1-pre-ocr-symbol-lineage-audit.md](plans/active/029-1-1-pre-ocr-symbol-lineage-audit.md)
-- 当前 M29.1.2 symbol lineage survival contract 计划：[plans/active/029-1-2-symbol-lineage-survival-contract.md](plans/active/029-1-2-symbol-lineage-survival-contract.md)
-- 当前 M29.1.3 mixed symbol/text conflict classification audit 计划：[plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md](plans/active/029-1-3-mixed-symbol-text-conflict-classification-audit.md)
-- 当前 M30 evidence-grounded DSL materialization 计划：[plans/active/030-evidence-grounded-dsl-materialization.md](plans/active/030-evidence-grounded-dsl-materialization.md)
-- 当前 M30.1 plugin M29-to-M30 upload preview 计划：[plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md](plans/active/030-1-plugin-m29-to-m30-upload-pipeline-preview.md)
-- 当前 M30.2 conservative text cover 计划：[plans/active/030-2-conservative-text-cover.md](plans/active/030-2-conservative-text-cover.md)
-- M30.2.1 legacy pre-M29 surface freeze 计划，已被 M30.2.2 取代：[plans/active/030-2-1-legacy-pre-m29-surface-freeze.md](plans/active/030-2-1-legacy-pre-m29-surface-freeze.md)
-- 当前 M30.2.2 remove frozen pre-M29 backend chain 计划：[plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md](plans/active/030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md)
-- 当前 M30.3 text font size harmonization 计划：[plans/active/030-3-text-font-size-harmonization.md](plans/active/030-3-text-font-size-harmonization.md)
-- 当前 M30.4 preserve isolated text nodes in candidate audit 计划：[plans/active/030-4-preserve-isolated-text-nodes-in-candidate-audit.md](plans/active/030-4-preserve-isolated-text-nodes-in-candidate-audit.md)
-- 当前 M30.6 accepted image asset materialization policy 计划：[plans/active/030-6-accepted-image-asset-materialization-policy.md](plans/active/030-6-accepted-image-asset-materialization-policy.md)
-- 当前 M30.7 raster layer deduplication for materialized media 计划：[plans/active/030-7-raster-layer-deduplication-for-materialized-media.md](plans/active/030-7-raster-layer-deduplication-for-materialized-media.md)
-- 当前 M31 reconstruction UI tree 计划：[plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md](plans/active/031-reconstruction-ui-tree-from-primitive-evidence.md)
-- 当前 M31.1 upload diagnostics 计划：[plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md](plans/active/031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md)
-- 当前 M31.1.1 decoded-pixels fallback crop 计划：[plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md](plans/active/031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md)
-- 当前 M32 figma boolean subtract 和 backend rgba masking 计划：[plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md](plans/active/032-figma-boolean-subtract-and-backend-rgba-masking.md)
-- 当前 M33 pixel-level background text erasure 计划：[plans/active/033-pixel-level-background-text-erasure.md](plans/active/033-pixel-level-background-text-erasure.md)
-- 当前 M34 OCR artistic and rotated text filtering 计划：[plans/active/034-ocr-artistic-and-rotated-text-filtering.md](plans/active/034-ocr-artistic-and-rotated-text-filtering.md)
-- 当前 M34.1 graphic text evidence preservation 计划：[plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md](plans/active/034-1-preserve-graphic-text-evidence-and-editability-decision.md)
-- 当前 M34.2 context-aware UI text editability 计划：[plans/active/034-2-context-aware-ui-text-editability.md](plans/active/034-2-context-aware-ui-text-editability.md)
-- 当前 M34.3 text-symbol leakage cleanup 计划：[plans/active/034-3-text-symbol-leakage-cleanup-before-m30-materialization.md](plans/active/034-3-text-symbol-leakage-cleanup-before-m30-materialization.md)
-- 当前 M35 shapes and images pixel-level background erasure 计划：[plans/active/035-shapes-and-images-pixel-level-background-erasure.md](plans/active/035-shapes-and-images-pixel-level-background-erasure.md)
-- 当前 M36 text foreground color sampling 计划：[plans/active/036-context-aware-text-foreground-color-sampling.md](plans/active/036-context-aware-text-foreground-color-sampling.md)
-- 当前 M36.1 contrast-weighted foreground sampling 计划：[plans/active/036-1-contrast-weighted-text-foreground-sampling.md](plans/active/036-1-contrast-weighted-text-foreground-sampling.md)
-- 当前 M37 hierarchy readiness 计划：[plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md](plans/active/037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md)
-- 当前 M38 controlled hierarchy materialization 计划：[plans/active/038-controlled-hierarchy-materialization.md](plans/active/038-controlled-hierarchy-materialization.md)
-- 当前 M39 content-chrome boundary classification 计划：[plans/active/039-content-chrome-boundary-classification.md](plans/active/039-content-chrome-boundary-classification.md)
-- 当前 M39.1 unit structure readiness audit 计划：[plans/active/039-1-unit-structure-readiness-audit.md](plans/active/039-1-unit-structure-readiness-audit.md)
-- 当前 M39.1.1 unit candidate quality gate 计划：[plans/active/039-1-1-unit-candidate-quality-gate.md](plans/active/039-1-1-unit-candidate-quality-gate.md)
-- M40 nested hierarchy materialization 草案，已暂缓到 M39.2 之后：[plans/active/040-nested-hierarchy-materialization.md](plans/active/040-nested-hierarchy-materialization.md)
+- 当前主链架构入口：[architecture/backend.md](architecture/backend.md)
+- 当前主线代码地图：[engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
+- M29 数学合同：[architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)
+- M29 入门数学推演：[architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)
+- M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
+- 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
+- 当前 active plan：[plans/active/](plans/active/) 当前为空；下一阶段开始前再写入新的 active 计划。
 
 ## By Task Type
 
@@ -75,6 +40,8 @@
 - [architecture/renderer.md](architecture/renderer.md)：Image-to-Figma Renderer 边界。
 - [architecture/frontend.md](architecture/frontend.md)：Figma 插件 UI 与 Main。
 - [architecture/backend.md](architecture/backend.md)：后端 API 与处理管线。
+- [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 主链的 bbox、ownership、relation、cluster、replay plan 和 plan-driven materialization 数学合同。
+- [architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)：面向初中数学基础读者的 M29 bbox、pixelOwner、region relation、cluster 和 replay plan 推演。
 - [architecture/api-contracts.md](architecture/api-contracts.md)：API v0.1 合同。
 - [architecture/data-model.md](architecture/data-model.md)：SQLite 数据模型。
 - [architecture/integrations.md](architecture/integrations.md)：OCR、AI、Figma、存储集成。
@@ -86,6 +53,8 @@
 
 - [engineering/coding-standards.md](engineering/coding-standards.md)
 - [engineering/testing-strategy.md](engineering/testing-strategy.md)
+- [engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
+- [engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - [engineering/definition-of-done.md](engineering/definition-of-done.md)
 - [engineering/dependency-policy.md](engineering/dependency-policy.md)
 - [engineering/browser-validation.md](engineering/browser-validation.md)
@@ -96,8 +65,11 @@
 
 - 计划模板：[plans/template.md](plans/template.md)
 - 当前计划：[plans/active/](plans/active/)
-- 已完成计划：[plans/completed/](plans/completed/)
+- 已完成计划：[plans/completed/index.md](plans/completed/index.md)
+- 已替代计划：[plans/archive/superseded/index.md](plans/archive/superseded/index.md)
+- 已暂缓计划：[plans/archive/deferred/index.md](plans/archive/deferred/index.md)
 - Pre-M29 历史实验计划归档：[plans/archive/pre_m29/](plans/archive/pre_m29/)
+- ADR 是历史决策记录，不等于全部仍是 active runtime。M31-M39/M39.1 相关 ADR 当前仅作历史追溯。
 - ADR 模板：[decisions/adr-template.md](decisions/adr-template.md)
 - Monorepo 初始化决策：[decisions/0003-initialize-pnpm-monorepo.md](decisions/0003-initialize-pnpm-monorepo.md)
 - Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)
@@ -129,6 +101,15 @@
 - M27 SAM2 visual candidate filtering 决策：[decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md](decisions/0030-filter-sam2-visual-candidates-before-business-icon-pool-merge.md)
 - M28 UI visual extraction 决策：[decisions/0031-extract-ui-visual-objects-before-figma-replay.md](decisions/0031-extract-ui-visual-objects-before-figma-replay.md)
 - M29 visual primitive graph 决策：[decisions/0032-build-visual-primitive-graph-before-figma-replay.md](decisions/0032-build-visual-primitive-graph-before-figma-replay.md)
+- M29 direct replay 分支实验决策：[decisions/0065-test-m29-direct-replay-before-more-unit-promotion.md](decisions/0065-test-m29-direct-replay-before-more-unit-promotion.md)
+- M29 direct replay Figma 对比决策：[decisions/0066-render-m29-direct-and-mainline-side-by-side-in-figma.md](decisions/0066-render-m29-direct-and-mainline-side-by-side-in-figma.md)
+- M29.2 source pixel ownership 决策：[decisions/0067-solve-pixel-ownership-at-m29-source-layer.md](decisions/0067-solve-pixel-ownership-at-m29-source-layer.md)
+- M29 pixel topology and ownership graph 决策：[decisions/0068-treat-m29-as-pixel-topology-and-ownership-graph.md](decisions/0068-treat-m29-as-pixel-topology-and-ownership-graph.md)
+- Componentization on set-relation graph isomorphism 决策：[decisions/0069-base-componentization-on-set-relation-graph-isomorphism.md](decisions/0069-base-componentization-on-set-relation-graph-isomorphism.md)
+- M29 region relation before clustering 决策：[decisions/0070-define-m29-region-relation-before-clustering.md](decisions/0070-define-m29-region-relation-before-clustering.md)
+- M29 pixel ownership decision 决策：[decisions/0071-define-m29-pixel-ownership-decision.md](decisions/0071-define-m29-pixel-ownership-decision.md)
+- M29 replay plan quality gate 决策：[decisions/0072-use-replay-plan-as-m29-direct-quality-gate.md](decisions/0072-use-replay-plan-as-m29-direct-quality-gate.md)
+- M29 shape geometry fitting 决策：[decisions/0073-require-shape-geometry-fitting-before-radius-replay.md](decisions/0073-require-shape-geometry-fitting-before-radius-replay.md)
 - M29.1 symbol fragment grouping 决策：[decisions/0033-group-symbol-fragments-after-primitive-graph.md](decisions/0033-group-symbol-fragments-after-primitive-graph.md)
 - M29.0.2 text mask media audit 决策：[decisions/0034-use-text-mask-before-media-recovery.md](decisions/0034-use-text-mask-before-media-recovery.md)
 - M29.0.3 visual evidence normalization 决策：[decisions/0035-normalize-visual-evidence-after-text-mask.md](decisions/0035-normalize-visual-evidence-after-text-mask.md)

@@ -1,0 +1,62 @@
+# Completed Plans
+
+本索引列出已移出 `docs/plans/active/` 的计划。
+
+- [M29.0.1 Blocked Evidence Enhancement](029-0-1-blocked-evidence-enhancement.md) — `completed`
+- [M29.0.2 Text-Masked Visual Media Audit](029-0-2-text-masked-media-audit.md) — `completed`
+- [M29.0.3.1 Text-Rejected Lineage Feedback Gate](029-0-3-1-text-rejected-lineage-feedback-gate.md) — `completed`
+- [M29.0.3.2 80-Image Residual Mixed Boundary Acceptance](029-0-3-2-extended-residual-mixed-batch-acceptance.md) — `completed`
+- [M29.0.3.2 Residual Mixed Boundary Review](029-0-3-2-residual-mixed-boundary-review.md) — `completed`
+- [M29.0.3 Visual Evidence Normalization](029-0-3-visual-evidence-normalization.md) — `completed`
+- [M29.0.4 Generic Visual Object Candidate Audit](029-0-4-generic-visual-object-candidate-audit.md) — `completed`
+- [M29.0.5 Text-Aware Visual Object Refinement](029-0-5-text-aware-visual-object-refinement.md) — `completed`
+- [M29.0.6 Member Boundary Quality Audit](029-0-6-member-boundary-quality-audit.md) — `completed`
+- [M29.0.7 Text Ownership Gate](029-0-7-text-ownership-gate.md) — `completed`
+- [M29.1.1 Pre-OCR Symbol Lineage Audit](029-1-1-pre-ocr-symbol-lineage-audit.md) — `completed`
+- [M29.1.2 Symbol Lineage Survival Contract](029-1-2-symbol-lineage-survival-contract.md) — `completed`
+- [M29.1.3 Mixed Symbol/Text Conflict Classification Audit](029-1-3-mixed-symbol-text-conflict-classification-audit.md) — `completed`
+- [M29.1 Symbol Fragment Grouping And Asset Integrity Audit](029-1-symbol-fragment-grouping.md) — `completed`
+- [M29.2.1 Pixel Ownership Consistency](029-2-1-pixel-ownership-consistency.md) — `completed`
+- [M29.2.2 Finite Support And Small Textured Foreground Ownership](029-2-2-finite-support-and-textured-foreground-ownership.md) — `completed`
+- [M29.2 Source-Level UI Physical Graph](029-2-source-level-ui-physical-graph.md) — `completed`
+- [M29.3.0 Region Relation Kernel](029-3-0-region-relation-kernel.md) — `completed`
+- [M29.3.1 Region Relation Graph Report](029-3-1-region-relation-graph-report.md) — `completed`
+- [M29.4 Stable Design Cluster](029-4-stable-design-cluster.md) — `completed`
+- [M29.5 Replay Engine V2: Quality Replay Plan](029-5-replay-engine-v2-quality-plan.md) — `completed`
+- [M29 Backend Downstream Pruning](029-backend-downstream-pruning.md) — `completed`
+- [M29 Contract Regression Matrix](029-contract-regression-matrix.md) — `completed`
+- [M29 Direct Replay Experiment](029-direct-replay-experiment.md) — `completed`
+- [M29 Direct Replay Figma Compare Mode](029-direct-replay-figma-compare-mode.md) — `completed`
+- [M29 Direct Shape Physical Style Preservation](029-direct-shape-physical-style-preservation.md) — `completed`
+- [M29 Direct Source Support And Layer Order Fix](029-direct-source-support-and-layer-order-fix.md) — `completed`
+- [M29 Experimental Mathematical Contract](029-experimental-mathematical-contract.md) — `completed`
+- [M29 Math From First Principles](029-math-from-first-principles.md) — `completed`
+- [M29 Plan-Driven Raster/Media Preservation Mainline Cutover](029-plan-driven-raster-media-preservation.md) — `completed`
+- [M29 Shape Geometry Fit Before Radius Replay](029-shape-geometry-fit-before-radius-replay.md) — `completed`
+- [M29 Text Support Background Source Contract](029-text-support-background-source-contract.md) — `completed`
+- [M29 Visual Primitive Graph Harness](029-visual-primitive-graph-harness.md) — `completed`
+- [M30.1 Plugin M29-to-M30 Upload Pipeline Preview](030-1-plugin-m29-to-m30-upload-pipeline-preview.md) — `completed`
+- [M30.2.2 Remove Frozen Pre-M29 Legacy Backend Chain](030-2-2-remove-frozen-pre-m29-legacy-backend-chain.md) — `completed`
+- [M30.2 Conservative Text Cover](030-2-conservative-text-cover.md) — `completed`
+- [M30.3 Text Font Size Harmonization](030-3-text-font-size-harmonization.md) — `completed`
+- [M30.4 Preserve Isolated Text Nodes in Candidate Audit](030-4-preserve-isolated-text-nodes-in-candidate-audit.md) — `completed`
+- [M30.6 Accepted Image Asset Materialization Policy](030-6-accepted-image-asset-materialization-policy.md) — `completed`
+- [M30.7 Raster Layer Deduplication For Materialized Media](030-7-raster-layer-deduplication-for-materialized-media.md) — `completed`
+- [M30 Evidence-Grounded DSL Materialization](030-evidence-grounded-dsl-materialization.md) — `completed`
+- [M31.1.1 Fast M31 Fallback Crop From Decoded Pixels](031-1-1-fast-m31-fallback-crop-from-decoded-pixels.md) — `completed`
+- [M31.1 Attach Reconstruction Diagnostics To Upload Pipeline](031-1-attach-reconstruction-tree-diagnostics-to-upload-pipeline.md) — `completed`
+- [M31 Reconstruction UI Tree From Primitive Evidence](031-reconstruction-ui-tree-from-primitive-evidence.md) — `completed`
+- [M32 Figma Boolean Subtract and Backend RGBA Masking](032-figma-boolean-subtract-and-backend-rgba-masking.md) — `completed`
+- [M33 Pixel-Level Background Text Erasure](033-pixel-level-background-text-erasure.md) — `completed`
+- [M34.1 Preserve Graphic Text Evidence And Editability Decision](034-1-preserve-graphic-text-evidence-and-editability-decision.md) — `completed`
+- [M34.2 Context-Aware UI Text Editability](034-2-context-aware-ui-text-editability.md) — `completed`
+- [M34.3 Text-Symbol Leakage Cleanup Before M30 Materialization](034-3-text-symbol-leakage-cleanup-before-m30-materialization.md) — `completed`
+- [M34 OCR Artistic and Rotated Text Filtering](034-ocr-artistic-and-rotated-text-filtering.md) — `completed`
+- [M35 Shapes and Images Pixel-Level Background Erasure](035-shapes-and-images-pixel-level-background-erasure.md) — `completed`
+- [M36.1 Contrast-Weighted Text Foreground Sampling](036-1-contrast-weighted-text-foreground-sampling.md) — `completed`
+- [M36 Context-Aware Text Foreground Color Sampling](036-context-aware-text-foreground-color-sampling.md) — `completed`
+- [M37 M31-to-M30 Hierarchy Readiness And Ownership Bridge](037-m31-to-m30-hierarchy-readiness-and-ownership-bridge.md) — `completed`
+- [M38 Controlled Hierarchy Materialization](038-controlled-hierarchy-materialization.md) — `completed`
+- [M39.1 Unit Structure Readiness Audit](039-1-unit-structure-readiness-audit.md) — `completed`
+- [M39 Content-Chrome Boundary Classification](039-content-chrome-boundary-classification.md) — `completed`
+- [Docs Current M29 Mainline Cleanup](041-docs-current-mainline-cleanup.md) — `completed`

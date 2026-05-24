@@ -46,21 +46,19 @@ completed
 failed
 ```
 
-Current M30 preview stages include:
+Current preview stages include:
 
 ```text
-m30_queued
+m29_queued
 ocr
 m29
-m29_1
-m29_0_2
-m29_0_3
-m29_0_7
-m29_0_4
-m29_0_5
-m30_materialization
-m30_asset_publish
-m30_completed
+m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
+m29_materialization
+m29_asset_publish
+m29_completed
 ```
 
 ## assets
@@ -82,21 +80,23 @@ height
 created_at
 ```
 
-Current roles are intentionally generic:
+Current roles are intentionally generic and DSL-driven:
 
 ```text
 original
-m30_asset
-m30_visual_asset
+fallback_region
+m29_image
+m29_symbol
+m29_asset
 ```
 
-Other M30 materializer roles may be stored if a DSL asset provides a more specific role. They must still resolve to files under `/files/assets/*`.
+Other M29 materializer roles may be stored if a DSL asset provides a more specific role. They must still resolve to files under `/files/assets/*`.
 
-M30 preview publishes image assets used by DSL to:
+M29 preview publishes image assets used by DSL to:
 
 ```text
-storage/assets/{taskId}/m30/
-/files/assets/{taskId}/m30/...
+storage/assets/{taskId}/m29/
+/files/assets/{taskId}/m29/...
 ```
 
 ## dsl_results
@@ -118,7 +118,7 @@ created_at
 For current preview tasks, `dsl_path` points to:
 
 ```text
-storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
 ```
 
 `validation_status` is currently `valid` when the pipeline completes.
@@ -148,7 +148,7 @@ OCR payload path:
 storage/m30_1_uploads/{taskId}/ocr/ocr.json
 ```
 
-In M30 preview, OCR failure fails the task because OCR text ownership is a source fact for M29/M30 materialization.
+In M29 preview, OCR failure fails the task because OCR text ownership is a source fact for M29 materialization.
 
 ## error_logs
 
@@ -169,7 +169,7 @@ created_at
 
 ## File Payloads
 
-SQLite does not store M29/M30 evidence payloads. They live under:
+SQLite does not store M29 evidence payloads. They live under:
 
 ```text
 storage/m30_1_uploads/{taskId}/
@@ -180,20 +180,20 @@ Important files:
 ```text
 ocr/ocr.json
 m29/nodes.json
-m29_1/group_nodes.json
-m29_0_2/text_masked_media_audit.json
-m29_0_3/visual_evidence.json
-m29_0_7/text_visual_ownership_gate.json
-m29_0_4/visual_object_candidates.json
-m29_0_5/refined_visual_objects.json
-m30/m30_materialized_dsl.json
-m30/m30_materialization_report.json
+m29_2/source_ui_physical_graph.json
+m29_3/region_relation_graph_report.json
+m29_4/stable_design_cluster_report.json
+m29_5/replay_plan.json
+m29_materialized/m29_materialized_dsl.json
+m29_materialized/m29_materialization_report.json
 stage_timings.json
 ```
 
-## Removed Tables
+The directory prefix `m30_1_uploads` is historical storage naming. It is not a statement that the runtime still uses M30 materialization.
 
-The following old result tables are no longer active source contracts:
+## Removed Tables And Payloads
+
+The following old result tables or payload families are no longer active source contracts:
 
 ```text
 primitive_results
@@ -212,6 +212,10 @@ icon_visible_fallback_results
 icon_business_candidate_results
 perception_benchmark_results
 sam_visual_candidate_results
+m29_direct/*
+m29_0_x/*
+m30/*
+M31-M39 downstream reports
 ```
 
-They may still exist in old local databases. M30.2.2 does not delete them because this stage removes active source/runtime surface, not historical developer data.
+They may still exist in old local databases or storage directories. Current code does not delete historical developer data.

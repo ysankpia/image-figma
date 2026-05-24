@@ -49,9 +49,9 @@ async def upload_png_m30_preview(
         {
             "id": task_id,
             "status": "processing",
-            "stage": "m30_queued",
+            "stage": "m29_queued",
             "progress": 1,
-            "message": "M30 preview pipeline queued.",
+            "message": "M29 plan-driven pipeline queued.",
             "original_filename": file.filename or "upload.png",
             "mime_type": file.content_type or "image/png",
             "file_size": len(data),
@@ -67,7 +67,7 @@ async def upload_png_m30_preview(
         {
             "taskId": task_id,
             "status": "processing",
-            "stage": "m30_queued",
+            "stage": "m29_queued",
             "progress": 1,
             "file": {
                 "filename": file.filename or "upload.png",

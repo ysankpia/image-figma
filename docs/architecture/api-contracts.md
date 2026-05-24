@@ -1,17 +1,22 @@
 # API Contracts
 
-API v0.1 serves the current single-image preview path:
+API v0.1 serves the current single-image M29 plan-driven preview path:
 
 ```text
 PNG upload
--> OCR + M29 + M31 diagnostics + M30 + M37 diagnostics
--> DSL v0.1
+-> OCR
+-> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
+-> M29 plan-driven DSL v0.1
 -> Figma Renderer
 ```
 
+`POST /api/upload-m30-preview` keeps a historical route name for plugin compatibility. Runtime semantics are M29 mainline.
+
+M29 Direct compare, legacy M30 materialization diagnostics, M31/M37/M38/M39/M39.1 downstream diagnostics, and old M8-M28 debug endpoints have been removed from current runtime.
+
 ## Contract Ownership
 
-The backend and Figma plugin jointly own this contract. Any path, response shape, task state, or error-code change must update this document and the relevant implementation plan.
+Backend and Figma plugin jointly own this contract. Any endpoint, response shape, task state, or error-code change must update this document and the relevant implementation plan.
 
 ## Base URL
 
@@ -61,7 +66,7 @@ time
 
 ### `POST /api/upload-m30-preview`
 
-Plugin default upload endpoint.
+Plugin default upload endpoint. The path name is historical; the task it creates runs the M29 plan-driven pipeline.
 
 Request:
 
@@ -85,7 +90,7 @@ Immediate success response:
   "data": {
     "taskId": "task_abc",
     "status": "processing",
-    "stage": "m30_queued",
+    "stage": "m29_queued",
     "progress": 1,
     "file": {
       "filename": "upload.png",
@@ -98,9 +103,7 @@ Immediate success response:
 }
 ```
 
-The endpoint creates a task and runs OCR + M29 + M30 in a background task. It does not run the removed pre-M29 upload chain.
-M31 reconstruction diagnostics run after M29 when `M31_UPLOAD_DIAGNOSTICS_ENABLED=true`; they do not change the DSL output.
-M37 hierarchy readiness diagnostics run after final M30 DSL/report exist and only when M31 artifacts exist. M37 does not add an API endpoint and does not change `/api/tasks/{taskId}/dsl`.
+The endpoint creates a task and runs the current M29 pipeline in a background task. It does not run the removed pre-M29 chain, removed M29 Direct compare path, removed legacy M30 product materializer, or removed downstream M31-M39 stages.
 
 ### `GET /api/tasks/{taskId}`
 
@@ -112,14 +115,14 @@ Returns task status:
   "data": {
     "taskId": "task_abc",
     "status": "processing",
-    "stage": "m29_0_4",
-    "progress": 74,
-    "message": "Building visual object candidates."
+    "stage": "m29_5_replay_plan",
+    "progress": 25,
+    "message": "Building M29.5 replay quality plan."
   }
 }
 ```
 
-Status values currently used:
+Status values:
 
 ```text
 processing
@@ -127,81 +130,68 @@ completed
 failed
 ```
 
+Current stage values:
+
+```text
+m29_queued
+ocr
+m29
+m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
+m29_materialization
+m29_asset_publish
+m29_completed
+```
+
 ### `GET /api/tasks/{taskId}/dsl`
 
 Returns the generated DSL only after the task is completed.
 
-For current preview tasks, the DSL file is:
+Current preview DSL file:
 
 ```text
-storage/m30_1_uploads/{taskId}/m30/m30_materialized_dsl.json
+storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
 ```
 
 The DSL must:
 
-- preserve fallback.
-- include M30 materialization metadata.
+- preserve fallback and hidden original reference.
+- include M29 plan-driven materialization metadata.
 - use visible `text`, `shape`, and `image` nodes only.
+- use M29 roles such as `m29_text`, `m29_shape`, `m29_image`, and `m29_symbol`.
 - never emit visible mixed/future/audit-only evidence.
-- never emit DSL `icon` type from the M30 upload path.
+- never infer Auto Layout or Figma Component/Instance.
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`.
 
-### `GET /api/tasks/{taskId}/m30-materialization`
+### `GET /api/tasks/{taskId}/m29-materialization`
 
-Returns M30 materialization diagnostics:
+Returns M29 plan-driven materialization diagnostics:
 
 ```text
 summary
 warnings
 skippedItems
-textEditabilityDecisions
-preservedGraphicTextItems
-reviewTextItems
-debugPreviewPath
+replayedNodes
 outputDsl
+outputReport
 stageTimings
 ```
 
 This endpoint is read-only and is not required by the Figma renderer.
 
-`textEditabilityDecisions` records whether each M30 text member became `editable_text`, `graphic_text_preserve_in_fallback`, or `review_text`. Only `editable_text` is emitted as visible DSL text. Preserved graphic text remains in fallback and is not erased from fallback image assets.
+The report answers:
 
-### `GET /api/tasks/{taskId}/m31-reconstruction`
-
-Returns M31 reconstruction diagnostics generated from source PNG, OCR JSON, and M29 `nodes.json`.
-
-Response data:
-
-```json
-{
-  "taskId": "task_abc",
-  "status": "completed",
-  "stage": "m30_completed",
-  "summary": {
-    "primitiveRefCount": 12,
-    "unitCount": 5,
-    "reviewBucketCount": 0,
-    "primitiveOwnershipRate": 1.0,
-    "orphanPrimitiveCount": 0,
-    "rootLeafPrimitiveCount": 0,
-    "unitFallbackCoverage": 1.0,
-    "createdDetectionBBoxCount": 0,
-    "permissionViolationCount": 0,
-    "forbiddenHitCount": 0
-  },
-  "warnings": [],
-  "reviewBuckets": [],
-  "unitSummaries": [],
-  "outputTree": "/abs/path/m31_reconstruction_tree.json",
-  "debugOverlayPath": null,
-  "stageTimings": {}
-}
+```text
+which M29.5 plan items were replayed
+which items were skipped
+how many text/shape/image/icon nodes were created
+whether fallback cleanup executed
+whether copied raster/media asset cleanup executed
+which source objects and plan items authorized cleanup
 ```
-
-This endpoint is read-only, returns report-level data only, and is not required by the Figma renderer. It does not return the full tree JSON.
-
-If the task exists but M31 diagnostics are disabled or failed in optional mode, the endpoint returns `M31_RECONSTRUCTION_NOT_FOUND`.
 
 ### `GET /api/assets/{assetId}`
 
@@ -222,35 +212,18 @@ GET /files/uploads/*
 GET /files/assets/*
 ```
 
-M30 image assets referenced by the renderer must be fetchable through:
-
-```text
-/files/assets/{taskId}/m30/...
-```
+M29 materialized image assets referenced by the renderer must be fetchable through `/files/assets/...`.
 
 ## Removed Endpoints
 
-The following are not part of the active API contract:
+These routes are historical and must not be treated as current runtime contracts:
 
 ```text
 POST /api/upload
-GET /api/tasks/{taskId}/primitives
-GET /api/tasks/{taskId}/ocr
-GET /api/tasks/{taskId}/dsl-patch
-GET /api/tasks/{taskId}/text-replacements
-GET /api/tasks/{taskId}/text-bindings
-GET /api/tasks/{taskId}/component-structures
-GET /api/tasks/{taskId}/component-annotations
-GET /api/tasks/{taskId}/layer-separation-candidates
-GET /api/tasks/{taskId}/asset-slice-candidates
-GET /api/tasks/{taskId}/icon-candidates
-GET /api/tasks/{taskId}/icon-coverage-audit
-GET /api/tasks/{taskId}/icon-gap-candidates
-GET /api/tasks/{taskId}/icon-placement-plan
-GET /api/tasks/{taskId}/icon-visible-fallback
-GET /api/tasks/{taskId}/icon-business-candidates
-GET /api/tasks/{taskId}/perception-benchmark
-GET /api/tasks/{taskId}/sam-visual-candidates
+GET /api/tasks/{taskId}/m29-direct-dsl
+GET /api/tasks/{taskId}/m30-materialization
+GET /api/tasks/{taskId}/m31-reconstruction
+GET /api/tasks/{taskId}/m39-boundary-classification
+GET /api/tasks/{taskId}/m39-1-unit-structure-readiness
+old M8-M28 debug endpoints
 ```
-
-They were removed in M30.2.2. Historical behavior is preserved only through git history, ADRs, and archived reference docs.

@@ -20,32 +20,8 @@
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
-| `M30_PREVIEW_PROFILE` | M30.1 插件 preview artifact profile，支持 `production`、`development` | `production` | 否 |
-| `M31_UPLOAD_DIAGNOSTICS_ENABLED` | 是否在 `/api/upload-m30-preview` 后台链路中生成 M31 reconstruction diagnostics | `true` | 否 |
-| `M31_UPLOAD_DIAGNOSTICS_STRICT` | M31 diagnostics 失败是否阻断 task completed | `false` | 否 |
-| `OCR_TEXT_EDITABILITY_ENABLED` | 是否在 M30 materialization 前执行 text editability decision | `true` | 否 |
-| `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` | 是否把旋转、媒体区、复杂背景等高风险文字保留在 fallback 而不是物化成普通 text layer | `true` | 否 |
-| `OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED` | 是否在 M30 物化前清理高置信 leading text-symbol leakage | `true` | 否 |
-| `OCR_MAX_ROTATION_ANGLE` | 允许物化为普通 text layer 的最大 OCR polygon 偏转角度 | `3.0` | 否 |
-| `OCR_MAX_BACKGROUND_TEXTURE` | 图形文字 preserve 判定使用的背景纹理阈值 | `0.45` | 否 |
-| `OCR_MAX_BACKGROUND_COLOR_COUNT` | 图形文字 preserve 判定使用的颜色数阈值 | `32` | 否 |
-| `M30_SHAPE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 shape bbox | `true` | 否 |
-| `M30_IMAGE_ERASURE_ENABLED` | 是否从 fallback 图中擦除已物化 image bbox | `true` | 否 |
-| `M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED` | 是否启用 M30.6 低文字重叠大 image asset 物化策略 | `true` | 否 |
-| `M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP` | M30.6 大 image asset 可接受的最大文字重叠比例 | `0.02` | 否 |
-| `M30_ACCEPTED_IMAGE_MIN_AREA` | M30.6 大 image asset 可物化的最小 bbox 面积 | `20000` | 否 |
-| `M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED` | 是否从 M30 copied media asset 中擦除已物化 editable text bbox | `true` | 否 |
-| `M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED` | 是否把大面积 `partially_separated` composite media 物化为独立 image node | `true` | 否 |
-| `M30_COMPOSITE_MEDIA_MIN_AREA` | M30.7 composite media 可物化的最小 bbox 面积 | `50000` | 否 |
-| `M39_CONTENT_CHROME_CLASSIFICATION_ENABLED` | 是否在 M30 asset publish 后运行 M39 content/chrome 边界分类 | `true` | 否 |
-| `M39_ONNX_PROPOSER_ENABLED` | 是否允许 M39 尝试本机 ONNX 模型候选提议器；失败时降级 rule-only | `true` | 否 |
-| `M39_ONNX_MODEL_PATH` | M39 可选 ONNX proposer 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 否 |
-| `M39_1_UNIT_STRUCTURE_READINESS_ENABLED` | 是否在 M38 后运行 M39.1 unit structure readiness 只读审计 | `true` | 否 |
-| `M39_1_ONNX_UNIT_PROPOSER_ENABLED` | 是否允许 M39.1 尝试本机 ONNX unit box 候选提议器；失败时降级 rule-only | `true` | 否 |
-| `M39_1_ONNX_MODEL_PATH` | M39.1 可选 ONNX unit proposer 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 否 |
-| `M38_HIERARCHY_MATERIALIZATION_ENABLED` | 是否在 M37 后把 safe direct-match hierarchy candidates 物化成 DSL group | `true` | 否 |
-| `M38_HIERARCHY_MATERIALIZATION_STRICT` | M38 失败是否阻断 task completed | `false` | 否 |
-| `M38_HIERARCHY_MAX_CONTAINERS` | 单次上传最多物化的 M38 hierarchy group 数量 | `8` | 否 |
+| `M29_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
+| `M30_PREVIEW_PROFILE` | 历史 alias；仅当 `M29_PREVIEW_PROFILE` 未设置时读取 | `production` | 否 |
 
 ## OCR
 
@@ -64,151 +40,27 @@ BAIDU_PADDLE_OCR_TOKEN=...
 
 `BAIDU_PADDLE_OCR_TOKEN` must be supplied through local environment or an untracked env file. Do not commit real tokens.
 
-## M30 Preview Profile
+OCR failure fails the current M29 preview task. The backend must not mark a task completed with fake DSL after OCR required evidence fails.
+
+## M29 Preview Profile
 
 ```bash
-M30_PREVIEW_PROFILE=production
+M29_PREVIEW_PROFILE=production
 ```
 
-`production` is the default plugin preview runtime. It keeps OCR JSON, structured M29/M30 JSON, M29.0.5 formal visual assets needed by M30, published renderer assets, M30 DSL/report, and `stage_timings.json`. It skips overlays, preview sheets, review/contact sheets, and M30 preview PNGs.
+`production` is the default plugin preview runtime. It keeps OCR JSON, structured M29/M29.2/M29.3/M29.4/M29.5 JSON, M29 materialized DSL/report, published renderer assets, and `stage_timings.json`. It skips raw M29 overlays and preview sheets where possible.
 
 ```bash
-M30_PREVIEW_PROFILE=development
+M29_PREVIEW_PROFILE=development
 ```
 
-`development` keeps full diagnostics for local evidence debugging. This variable affects only `/api/upload-m30-preview`; single-stage M29/M30 scripts keep their own development defaults.
+`development` keeps raw M29 diagnostics such as overlays and preview sheet for local evidence debugging. This variable affects only artifacts; it does not change OCR, M29 classification, replay plan, DSL schema, or Renderer behavior.
 
-## M31 Upload Diagnostics
-
-```bash
-M31_UPLOAD_DIAGNOSTICS_ENABLED=true
-```
-
-默认每次 `/api/upload-m30-preview` 都在 M29 后生成 M31 reconstruction tree/report。M31 只消费 source PNG、OCR JSON/document 和 M29 `nodes.json`/document，不读取 M29.0.x 或 M30 DSL 作为结构事实来源。
-
-```bash
-M31_UPLOAD_DIAGNOSTICS_ENABLED=false
-```
-
-关闭后不生成 `storage/m30_1_uploads/{taskId}/m31/`，`GET /api/tasks/{taskId}/m31-reconstruction` 返回 `M31_RECONSTRUCTION_NOT_FOUND`。
-
-```bash
-M31_UPLOAD_DIAGNOSTICS_STRICT=false
-```
-
-默认非阻塞：M31 失败只写 `stage_timings.json` 和 `error_logs`，M30 DSL 继续生成。
-
-```bash
-M31_UPLOAD_DIAGNOSTICS_STRICT=true
-```
-
-开发验收模式：M31 失败会让 task failed，stage 为 `m31_reconstruction`。
-
-## OCR Text Editability
-
-```bash
-OCR_TEXT_EDITABILITY_ENABLED=true
-OCR_GRAPHIC_TEXT_PRESERVE_ENABLED=true
-OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED=true
-```
-
-默认启用 M34.1 文本可编辑性决策。OCR text boxes 不会在 M29 前被删除；M30 根据现有 OCR/M29.0.2/M29.0.5 证据决定：
-
-```text
-editable_text
-graphic_text_preserve_in_fallback
-review_text
-```
-
-只有 `editable_text` 会生成 `m30_text_member` 并参与 fallback erasure。`graphic_text_preserve_in_fallback` 保留在 fallback 图像里，并出现在 M30 report 的 `preservedGraphicTextItems` 中。
-
-M34.2 后，M30 会把弱 preserve signal 和通用几何 counter signal 一起记录到 report：
-
-```text
-metrics.preserveSignals
-metrics.editableCounterSignals
-```
-
-这些 counter signal 只来自相对几何和局部像素，例如 aligned text row、compact overlay badge、metadata cluster 和 stable local background；不会使用业务词或固定屏幕坐标。
-
-M34.3 默认启用 text-symbol leakage cleanup。它只在 M30 物化 editable text 前运行，第一版自动清理高置信 leading uppercase `Q` 泄漏，并且必须有源像素投影间隙证据。OCR JSON、M29 nodes、M31 tree 和 Renderer 合同都不改变。
-
-M36 text foreground color sampling 是 M30 materialization 的默认行为，没有单独环境变量。它只影响已物化的 editable `m30_text_member`，不会重画 preserved graphic text。
-
-## M30 Accepted Image Materialization
-
-```bash
-M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED=true
-M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP=0.02
-M30_ACCEPTED_IMAGE_MIN_AREA=20000
-M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED=true
-M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED=true
-M30_COMPOSITE_MEDIA_MIN_AREA=50000
-```
-
-M30.6 默认启用。它只影响 M30 内部的 large accepted image asset policy：当 M29.0.5 已经产出 `assetUse=image_asset`，且文字重叠很低、面积足够大、没有高风险 text/boundary flags、并能通过 M29.0.4/M29.0.3 血统追溯回 raw M29 image node 时，M30 会把它物化成 `role=m30_visual_asset` 的 DSL image node。
-
-这不是 OCR、不是 `1/6` 或 image-internal overlay recovery、不是 parent asset cleanup，也不是 M38 grouping。普通 icon/small visual asset 仍然走原来的严格 `safe_visual_text_overlap_max=0.0` 策略。
-
-M30.7 也在 M30 内部运行，不新增 runtime stage。`M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED=true` 时，M30 只会修改自己复制到 `m30/assets/` 下的 media PNG：如果 editable `m30_text_member` 的 bbox 几乎完全落在 `m30_visual_asset` 或 `m30_composite_media_asset` 内部，就把该 bbox 在 copied image asset 中补成局部背景色，避免拖走上层文字后露出烘焙文字重影。原始 M29.0.5 asset 不会被修改。
-
-`M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED=true` 时，M30 会把大面积 `decision=partially_separated` 且有 `combinedAssetPath` 的 composite media 作为 `role=m30_composite_media_asset` image node 物化。它用于让轮播图/Banner 整块可选中、可拖动；第一版保留图内艺术标题烘焙在 raster 中，不做内部文字编辑。
-
-M37 hierarchy readiness 是 M31/M30 产物存在时生成的诊断阶段，没有单独环境变量。它不直接改变 `/api/tasks/{taskId}/dsl`。
-
-## M39 Content-Chrome Boundary Classification
-
-```bash
-M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=true
-M39_ONNX_PROPOSER_ENABLED=true
-M39_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
-```
-
-M39 runs after M30 asset publishing and before M37. It classifies materialized M30 text, shape, visual image, and composite media nodes as `chrome` or `content` in `meta.boundaryClassification`.
-
-`M39_CONTENT_CHROME_CLASSIFICATION_ENABLED=false` skips the stage entirely. No `storage/m30_1_uploads/{taskId}/m39/` report is created and M37/M38 behave as they did before M39.
-
-`M39_ONNX_PROPOSER_ENABLED=true` only allows an optional candidate proposer. `numpy`, `Pillow`, `onnxruntime`, the model file, output shape, or inference can all be absent or fail without failing the upload. Those cases are reported as `modelSkippedReason` in `m39_boundary_classification_report.json`; final classification remains rule-gated.
-
-## M39.1 Unit Structure Readiness Audit
-
-```bash
-M39_1_UNIT_STRUCTURE_READINESS_ENABLED=true
-M39_1_ONNX_UNIT_PROPOSER_ENABLED=true
-M39_1_ONNX_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
-```
-
-M39.1 runs after M38 when M31 artifacts exist. It writes `storage/m30_1_uploads/{taskId}/m39_1/unit_structure_readiness_report.json`, explaining safe M37 units, blocked/micro units, product-card/banner/chrome/content diagnostic candidates, blocker reasons, and future promotion hints.
-
-M39.1 is report-only. It does not create visible nodes, move DSL nodes, edit assets, promote units, implement M40 nested hierarchy, or output Codia-compatible schema.
-
-`M39_1_ONNX_UNIT_PROPOSER_ENABLED=true` only allows optional unit box proposals. Missing `numpy`, `Pillow`, `onnxruntime`, missing model, bad output shape, or inference failure records `modelSkippedReason` and does not fail the upload. Model-only candidates remain `diagnostic_only` and cannot become DSL truth.
-
-## M38 Hierarchy Materialization
-
-```bash
-M38_HIERARCHY_MATERIALIZATION_ENABLED=true
-M38_HIERARCHY_MATERIALIZATION_STRICT=false
-M38_HIERARCHY_MAX_CONTAINERS=8
-```
-
-M38 默认在 M37 report 存在时运行。它只消费 M37 safe direct-match candidates，把现有 M30 text/image/shape 节点移动到透明 DSL `group` 容器下，并把 child 坐标转换为 parent-local 坐标。它不运行 OCR、不创建新 bbox、不改 assets、不做 icon/vector extraction。
-
-关闭 M38：
-
-```bash
-M38_HIERARCHY_MATERIALIZATION_ENABLED=false
-```
-
-关闭后最终 DSL 保持 M30 扁平 children，不生成 `storage/m30_1_uploads/{taskId}/m38/`，stage timings 里也不会出现 `m38_hierarchy_materialization`。
-
-默认 `STRICT=false` 时 M38 失败只写 failed stage timing 和 error log，任务继续完成。`STRICT=true` 时 M38 失败会让 task failed，stage 为 `m38_hierarchy_materialization`。
-
-`OCR_ARTISTIC_TEXT_FILTER_ENABLED` 是兼容旧 M34 配置的 alias：当未显式设置 `OCR_GRAPHIC_TEXT_PRESERVE_ENABLED` 时，它会影响 preserve 开关。它不再表示删除 OCR text boxes。
+`M30_PREVIEW_PROFILE` is a backward-compatible alias for old local shells. New docs, scripts, and manual commands should use `M29_PREVIEW_PROFILE`.
 
 ## Removed Variables
 
-M30.2.2 removed the frozen pre-M29 backend chain. These variables are no longer active runtime configuration:
+这些变量不再是 active runtime configuration。不要把它们加回 `.env.local` 期待恢复旧链路：
 
 ```text
 LEGACY_PRE_M29_UPLOAD_ENABLED
@@ -230,6 +82,31 @@ PERCEPTION_BENCHMARK_ENABLED
 SAM_VISUAL_CANDIDATE_ENABLED
 OPENAI_API_KEY
 OPENAI_VISION_MODEL
+OCR_TEXT_EDITABILITY_ENABLED
+OCR_GRAPHIC_TEXT_PRESERVE_ENABLED
+OCR_TEXT_SYMBOL_LEAKAGE_CLEANUP_ENABLED
+OCR_MAX_ROTATION_ANGLE
+OCR_MAX_BACKGROUND_TEXTURE
+OCR_MAX_BACKGROUND_COLOR_COUNT
+M30_SHAPE_ERASURE_ENABLED
+M30_IMAGE_ERASURE_ENABLED
+M30_ACCEPTED_IMAGE_MATERIALIZATION_ENABLED
+M30_ACCEPTED_IMAGE_MAX_TEXT_OVERLAP
+M30_ACCEPTED_IMAGE_MIN_AREA
+M30_IMAGE_ASSET_TEXT_ERASURE_ENABLED
+M30_COMPOSITE_MEDIA_MATERIALIZATION_ENABLED
+M30_COMPOSITE_MEDIA_MIN_AREA
+M31_UPLOAD_DIAGNOSTICS_ENABLED
+M31_UPLOAD_DIAGNOSTICS_STRICT
+M38_HIERARCHY_MATERIALIZATION_ENABLED
+M38_HIERARCHY_MATERIALIZATION_STRICT
+M38_HIERARCHY_MAX_CONTAINERS
+M39_CONTENT_CHROME_CLASSIFICATION_ENABLED
+M39_ONNX_PROPOSER_ENABLED
+M39_ONNX_MODEL_PATH
+M39_1_UNIT_STRUCTURE_READINESS_ENABLED
+M39_1_ONNX_UNIT_PROPOSER_ENABLED
+M39_1_ONNX_MODEL_PATH
 ```
 
-Historical meanings are available only in archived docs and git history.
+Historical meanings are available only in archived docs, completed plans, ADRs, and git history.

@@ -1,6 +1,6 @@
 # 可靠性
 
-v0.1 的可靠性目标是让当前主链路稳定、可审计、失败可解释。
+v0.1 的可靠性目标是让当前 M29 plan-driven preview path 稳定、可审计、失败可解释。
 
 ## Current Task States
 
@@ -12,23 +12,22 @@ completed
 failed
 ```
 
-典型 stage：
+当前典型 stage：
 
 ```text
-m30_queued
+m29_queued
 ocr
 m29
-m31_reconstruction
-m29_1
-m29_0_2
-m29_0_3
-m29_0_7
-m29_0_4
-m29_0_5
-m30_materialization
-m30_asset_publish
-m30_completed
+m29_2_source_ui_physical_graph
+m29_3_relation_graph_report
+m29_4_stable_design_cluster
+m29_5_replay_plan
+m29_materialization
+m29_asset_publish
+m29_completed
 ```
+
+M29 Direct、M29.0.x、M30、M31/M37/M38/M39/M39.1 stage names are historical and should not appear in new upload tasks.
 
 ## Failure Strategy
 
@@ -51,36 +50,24 @@ message = concrete error
 
 The backend also writes `error_logs`.
 
-M31.1 diagnostics have explicit optional/strict behavior:
-
-```text
-M31_UPLOAD_DIAGNOSTICS_STRICT=false
-  M31 failure records failed timing + error log
-  task continues to M30 DSL
-
-M31_UPLOAD_DIAGNOSTICS_STRICT=true
-  M31 failure marks task failed
-  stage = m31_reconstruction
-```
-
-This keeps plugin preview usable while M31 grouping/ownership is being validated on real uploads.
+There is no longer a non-blocking compare materializer in the product path. If M29.2, M29.3, M29.4, M29.5, materialization, or asset publish fails, `/api/tasks/{taskId}/dsl` must not pretend to be ready.
 
 ## OCR As Required Evidence
 
-In the current M30 preview path, OCR is not a decorative diagnostic. It provides text ownership evidence for M29 and source text for M30 materialization.
+In the current M29 preview path, OCR is not a decorative diagnostic. It provides text evidence for M29 ownership and materialization.
 
 Therefore:
 
 - unsupported OCR provider fails the task.
 - missing Baidu token fails the task when `OCR_PROVIDER=baidu_ppocrv5`.
 - remote OCR timeout/failure fails the task.
-- the backend must not mark a task completed with fake M30 DSL after OCR failure.
+- the backend must not mark a task completed with fake DSL after OCR failure.
 
 This is different from the removed pre-M29 fallback-first chain, where OCR failure could still return a deterministic fallback DSL.
 
-## M29/M30 Safety
+## M29 Safety
 
-M29/M30 failures should fail fast when required evidence is invalid or missing. They must not fabricate visible DSL nodes from:
+M29 required stages should fail fast when required evidence is invalid or missing. They must not fabricate visible DSL nodes from:
 
 ```text
 mixed evidence
@@ -88,21 +75,29 @@ future candidates
 audit-only references
 missing source assets
 newly invented bboxes
+weak cluster hints
 ```
 
-M30 may preserve fallback and skip unsafe text/shape/image materialization. Skips must be recorded in `m30_materialization_report.json`.
+M29 materializer may preserve fallback and skip unsafe text/shape/image materialization. Skips must be recorded in `m29_materialization_report.json`.
+
+Cleanup must be plan-authorized:
+
+```text
+fallback erasure -> only if M29.5 cleanupTargets includes target=fallback
+copied raster/media cleanup -> only if M29.5 cleanupTargets includes target=copied_image_asset
+```
+
+Materializer must not independently recompute cleanup ownership from contains/overlap.
 
 ## Artifact Timing
 
-Every M30 preview task writes:
+Every preview task writes:
 
 ```text
 storage/m30_1_uploads/{taskId}/stage_timings.json
 ```
 
-`GET /api/tasks/{taskId}/m30-materialization` returns the same timings so slow stages can be traced without scanning logs.
-
-`GET /api/tasks/{taskId}/m31-reconstruction` returns the M31 summary and the same timings. If diagnostics are disabled or optional M31 failed before writing a report, it returns `M31_RECONSTRUCTION_NOT_FOUND`.
+`GET /api/tasks/{taskId}/m29-materialization` returns the same timings so slow stages can be traced without scanning logs.
 
 ## Timeouts
 
@@ -128,6 +123,6 @@ Not allowed:
 - silent background reruns without task status updates.
 - fabricating completed output after required evidence failure.
 
-## Removed Legacy Reliability Rules
+## Removed Reliability Rules
 
-The old pre-M29 upload chain and M8-M28 diagnostic endpoints were removed in M30.2.2. Their fallback-first reliability behavior is historical only and must not be used to reason about the current product path.
+The old pre-M29 upload chain and M8-M28 diagnostic endpoints were removed in M30.2.2. M31-M39/M39.1 downstream experiments were later removed from backend runtime by M29 backend downstream pruning. M29 Direct compare and legacy M30 materialization product paths have also been removed from current runtime. Their fallback, optional diagnostics, ONNX proposer, hierarchy, grouping, and M30-specific behavior is historical only and must not be used to reason about the current product path.
