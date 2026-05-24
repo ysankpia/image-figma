@@ -27,9 +27,6 @@ class Storage:
     def upload_path(self, task_id: str) -> Path:
         return self.uploads_dir / task_id / "original.png"
 
-    def m30_asset_url(self, task_id: str, filename: str) -> str:
-        return f"{self.public_base_url}/files/assets/{task_id}/m30/{filename}"
-
     def save_upload(self, task_id: str, data: bytes) -> Path:
         path = self.upload_path(task_id)
         path.parent.mkdir(parents=True, exist_ok=True)

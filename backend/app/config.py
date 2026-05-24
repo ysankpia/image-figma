@@ -23,7 +23,7 @@ class Settings:
     baidu_paddle_ocr_model: str = "PP-OCRv5"
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
-    m29_preview_profile: str = "production"
+    upload_preview_profile: str = "production"
 
 
 def get_settings() -> Settings:
@@ -48,7 +48,7 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_model=os.getenv("BAIDU_PADDLE_OCR_MODEL", "PP-OCRv5").strip() or "PP-OCRv5",
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
-        m29_preview_profile=parse_m29_preview_profile(os.getenv("M29_PREVIEW_PROFILE", os.getenv("M30_PREVIEW_PROFILE", "production"))),
+        upload_preview_profile=parse_upload_preview_profile(os.getenv("UPLOAD_PREVIEW_PROFILE", "production")),
     )
 
 
@@ -92,7 +92,7 @@ def parse_csv(value: str) -> list[str]:
     return [item for item in items if item]
 
 
-def parse_m29_preview_profile(value: str) -> str:
+def parse_upload_preview_profile(value: str) -> str:
     profile = value.strip().lower() or "production"
     if profile not in {"production", "development"}:
         return "production"

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .errors import ApiError, error_response
-from .routes import assets, health, tasks, upload_m30_preview
+from .routes import assets, health, tasks, upload_preview
 from .state import state
 
 
@@ -19,7 +19,7 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(ApiError, lambda _request, error: error_response(error))
     app.include_router(health.router)
-    app.include_router(upload_m30_preview.router)
+    app.include_router(upload_preview.router)
     app.include_router(tasks.router)
     app.include_router(assets.router)
     app.mount("/files/uploads", StaticFiles(directory=state.storage.uploads_dir), name="uploads")

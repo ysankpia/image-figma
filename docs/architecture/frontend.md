@@ -78,14 +78,14 @@ UI clicks Sample
 ```text
 UI selects PNG
 -> UI clicks Generate from PNG
--> Main uploads PNG to /api/upload-m30-preview
+-> Main uploads PNG to /api/upload-preview
 -> Main polls /api/tasks/{taskId}
 -> Main fetches /api/tasks/{taskId}/dsl
 -> Main calls Renderer
 -> Main reports done or error
 ```
 
-`/api/upload-m30-preview` 是历史命名。当前它返回 M29 plan-driven DSL，不再返回 legacy M30 DSL，也不再提供 M29 Direct compare 双画布路径。
+`/api/upload-preview` 是历史命名。当前它返回 M29 plan-driven DSL，不再返回 legacy M30 DSL，也不再提供 M29 Direct compare 双画布路径。
 
 ## User Language
 

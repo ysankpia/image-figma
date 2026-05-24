@@ -63,7 +63,7 @@ def build_m29_plan_materialized_dsl(
     m295_replay_plan: dict[str, Any] | None = None,
     extra_warnings: list[str] | None = None,
     options: M29PlanMaterializerOptions | None = None,
-    task_id: str = "m29_materialized",
+    task_id: str = "materialized_design",
 ) -> M29PlanMaterializerResult:
     options = options or M29PlanMaterializerOptions()
     image = read_png_metadata(source_png)
@@ -171,8 +171,8 @@ def build_m29_plan_materialized_dsl(
             "truthSource": "source_png_plus_ocr_plus_m29_5_replay_plan",
         },
     }
-    (output_dir / "m29_materialized_dsl.json").write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "m29_materialization_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "design.dsl.json").write_text(json.dumps(dsl, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "materialization_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return M29PlanMaterializerResult(dsl=dsl, report=report)
 
 

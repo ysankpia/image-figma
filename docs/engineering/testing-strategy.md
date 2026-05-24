@@ -4,7 +4,7 @@
 
 ```text
 Figma plugin
--> /api/upload-m30-preview
+-> /api/upload-preview
 -> OCR
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
 -> M29 plan-driven materializer
@@ -22,7 +22,7 @@ v0.1 重点验证：
 - Renderer 可消费 DSL v0.1。
 - 后端当前 API 可创建任务、更新状态、返回 M29 plan-driven DSL。
 - M29 evidence chain 不污染 visible DSL children。
-- 插件默认上传走 `/api/upload-m30-preview`。
+- 插件默认上传走 `/api/upload-preview`。
 - 插件 completed 后只调用 `/api/tasks/{taskId}/dsl`。
 - M29.5 replay plan 可被写出并被 M29 materializer 消费。
 - 本地 M29 image/raster/icon asset URL 可由 renderer fetch。
@@ -70,7 +70,7 @@ pnpm --filter @image-figma/figma-plugin run build
 
 必须覆盖：
 
-- 默认上传调用 `/api/upload-m30-preview`。
+- 默认上传调用 `/api/upload-preview`。
 - 上传后轮询 `/api/tasks/{taskId}`。
 - completed 后调用 `/api/tasks/{taskId}/dsl`。
 - 不再调用 `/api/tasks/{taskId}/m29-direct-dsl` 或 `/api/tasks/{taskId}/m30-materialization`。
@@ -99,7 +99,7 @@ uv run pytest \
   tests/test_stable_design_cluster.py \
   tests/test_m29_replay_plan.py \
   tests/test_m29_plan_materializer.py \
-  tests/test_m30_upload_pipeline.py \
+  tests/test_upload_preview_pipeline.py \
   tests/test_routes_tasks.py \
   tests/test_config_env.py \
   tests/test_png_tools.py \
@@ -112,18 +112,18 @@ Required backend coverage:
 - `GET /api/health` succeeds.
 - `POST /api/upload` returns 404.
 - old task debug endpoints return 404.
-- `POST /api/upload-m30-preview` accepts PNG and creates a processing task with `stage=m29_queued`.
+- `POST /api/upload-preview` accepts PNG and creates a processing task with `stage=m29_queued`.
 - invalid MIME, invalid PNG, unreadable dimensions, and too-large file are rejected.
-- completed task returns M29 plan-driven DSL from `m29_materialized_dsl.json`.
+- completed task returns M29 plan-driven DSL from `design.dsl.json`.
 - completed task writes M29.5 replay plan to `m29_5/replay_plan.json`.
-- completed task returns M29 materialization report through `/api/tasks/{taskId}/m29-materialization`.
+- completed task returns M29 materialization report through `/api/tasks/{taskId}/materialization`.
 - `/api/tasks/{taskId}/m29-direct-dsl` returns 404.
 - `/api/tasks/{taskId}/m30-materialization` returns 404.
 - unfinished task returns `DSL_NOT_READY`.
 - M29 materialization failure fails the task and blocks `/dsl`.
 - M29 image assets are published under `/files/assets/{taskId}/m29/...`.
 - OCR provider failures fail the task and do not create fake completed DSL.
-- CORS covers `/api/upload-m30-preview`.
+- CORS covers `/api/upload-preview`.
 - New upload tasks do not create removed M29 Direct, M29.0.x, M30, or downstream directories/stages.
 
 ## M29 Evidence And Materialization Chain

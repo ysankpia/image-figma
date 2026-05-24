@@ -55,13 +55,13 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv("OCR_PROVIDER", "baidu_ppocrv5")
-    monkeypatch.setenv("M29_PREVIEW_PROFILE", "development")
+    monkeypatch.setenv("UPLOAD_PREVIEW_PROFILE", "development")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
 
     settings = config.get_settings()
 
     assert settings.ocr_provider == "baidu_ppocrv5"
-    assert settings.m29_preview_profile == "development"
+    assert settings.upload_preview_profile == "development"
 
 
 def test_parse_bool_supports_common_env_values() -> None:

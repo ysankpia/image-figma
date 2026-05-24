@@ -42,7 +42,7 @@ M29.5 replay plan 是可见 materialization 的订单。
 
 ```text
 Figma Plugin
--> POST /api/upload-m30-preview
+-> POST /api/upload-preview
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 source ownership
@@ -55,7 +55,7 @@ Figma Plugin
 -> Figma Canvas
 ```
 
-`/api/upload-m30-preview` 是历史命名；当前语义是 M29 mainline。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。
+`/api/upload-preview` 是当前正式上传入口。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。
 
 当前已经下线：
 
@@ -115,7 +115,7 @@ Long files are now a real maintenance risk. Refactor only with behavior-preservi
 visual_primitive_graph.py
 source_ui_physical_graph.py
 m29_plan_materializer.py
-m30_upload_pipeline.py
+upload_preview_pipeline.py
 ```
 
 Suggested split order:
@@ -125,7 +125,7 @@ Suggested split order:
 3. M29 materializer node appenders and cleanup executors.
 4. pipeline orchestration, asset publishing, and task state handling.
 
-Do not rename every historical `m30_*` path in the same stage as algorithm changes. Route/storage names can be cleaned later as a mechanical compatibility phase.
+Do not mix naming cleanup with algorithm changes. Product surface cleanup should stay mechanical and separately tested.
 
 ### 3. Historical Code Pruning
 

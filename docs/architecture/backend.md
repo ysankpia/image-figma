@@ -8,16 +8,16 @@
 
 ```text
 GET  /api/health
-POST /api/upload-m30-preview
+POST /api/upload-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
-GET  /api/tasks/{taskId}/m29-materialization
+GET  /api/tasks/{taskId}/materialization
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
 ```
 
-`POST /api/upload-m30-preview` 是历史命名的兼容入口。它当前运行 M29 mainline，不运行 legacy M30 product path。
+`POST /api/upload-preview` 是历史命名的兼容入口。它当前运行 M29 mainline，不运行 legacy M30 product path。
 
 已移除的接口不再通过环境变量复活，包括：
 
@@ -33,7 +33,7 @@ old M8-M28 debug endpoints
 
 ## Processing Pipeline
 
-当前 `POST /api/upload-m30-preview` 后台链路：
+当前 `POST /api/upload-preview` 后台链路：
 
 ```text
 receive multipart PNG
@@ -48,7 +48,7 @@ receive multipart PNG
 -> M29.5 replay quality plan
 -> M29 plan-driven DSL materialization
 -> publish M29 assets
--> save dsl_results path to m29_materialized/m29_materialized_dsl.json
+-> save dsl_results path to materialized_design/design.dsl.json
 -> mark task completed stage=m29_completed
 ```
 
@@ -127,7 +127,7 @@ Materializer 负责：
 - 复制或裁切 plan-approved raster/media/icon assets。
 - 只对 plan-approved visible actions 创建 DSL nodes。
 - 只按 M29.5 `cleanupTargets` 执行 fallback erasure 和 copied image asset cleanup。
-- 写出 `m29_materialization_report.json` 供诊断。
+- 写出 `materialization_report.json` 供诊断。
 
 Materializer 不负责：
 
@@ -141,7 +141,7 @@ Materializer 不负责：
 
 ## Artifact Profiles
 
-`M29_PREVIEW_PROFILE=production` 是默认插件 preview profile：
+`UPLOAD_PREVIEW_PROFILE=production` 是默认插件 preview profile：
 
 ```text
 keep OCR JSON
@@ -153,7 +153,7 @@ skip raw M29 overlays and preview sheets when possible
 
 `development` 保留 raw M29 诊断 artifacts。profile 只影响 artifacts，不改变 OCR、M29 classification、DSL schema 或 Renderer 行为。
 
-`M30_PREVIEW_PROFILE` 仅作为兼容 alias 被读取；新配置应使用 `M29_PREVIEW_PROFILE`。
+`UPLOAD_PREVIEW_PROFILE` 仅作为兼容 alias 被读取；新配置应使用 `UPLOAD_PREVIEW_PROFILE`。
 
 ## Storage
 
@@ -166,21 +166,21 @@ backend/storage/
   dsl/
   ocr/
   logs/
-  m30_1_uploads/
+  upload_previews/
 ```
 
 每个 preview task 当前可能写入：
 
 ```text
 storage/uploads/{taskId}/original.png
-storage/m30_1_uploads/{taskId}/ocr/ocr.json
-storage/m30_1_uploads/{taskId}/m29/
-storage/m30_1_uploads/{taskId}/m29_2/
-storage/m30_1_uploads/{taskId}/m29_3/
-storage/m30_1_uploads/{taskId}/m29_4/
-storage/m30_1_uploads/{taskId}/m29_5/
-storage/m30_1_uploads/{taskId}/m29_materialized/
-storage/m30_1_uploads/{taskId}/stage_timings.json
+storage/upload_previews/{taskId}/ocr/ocr.json
+storage/upload_previews/{taskId}/m29/
+storage/upload_previews/{taskId}/m29_2/
+storage/upload_previews/{taskId}/m29_3/
+storage/upload_previews/{taskId}/m29_4/
+storage/upload_previews/{taskId}/m29_5/
+storage/upload_previews/{taskId}/materialized_design/
+storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
 ```
 
@@ -240,7 +240,7 @@ ocr_results
 error_logs
 ```
 
-Large stage payloads remain JSON files under `storage/m30_1_uploads/{taskId}/`。
+Large stage payloads remain JSON files under `storage/upload_previews/{taskId}/`。
 
 ## Boundaries
 

@@ -20,11 +20,11 @@
 
 ## 当前主链
 
-当前产品入口仍是历史命名的 `/api/upload-m30-preview`。这个 endpoint 名字为兼容插件保留，运行语义已经是 M29 mainline：
+当前产品入口是 `/api/upload-preview`，运行语义是 M29 mainline：
 
 ```text
 Figma Plugin
--> POST /api/upload-m30-preview
+-> POST /api/upload-preview
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 source ownership

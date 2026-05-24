@@ -7,43 +7,43 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 
-def test_m29_materialization_route_returns_report(client: TestClient) -> None:
+def test_materialization_route_returns_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m29_materialization"
+    task_id = "task_route_materialization"
     now = datetime.now(UTC).isoformat()
     insert_task(state, task_id, status="completed", now=now)
-    task_root = state.settings.storage_root / "m30_1_uploads" / task_id
-    report_dir = task_root / "m29_materialized"
+    task_root = state.settings.storage_root / "upload_previews" / task_id
+    report_dir = task_root / "materialized_design"
     report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "m29_materialized_dsl.json").write_text(json.dumps({"version": "0.1"}), encoding="utf-8")
-    (report_dir / "m29_materialization_report.json").write_text(
+    (report_dir / "design.dsl.json").write_text(json.dumps({"version": "0.1"}), encoding="utf-8")
+    (report_dir / "materialization_report.json").write_text(
         json.dumps({"summary": {"visibleNodeCount": 2}, "warnings": [], "skippedItems": [], "replayedNodes": []}),
         encoding="utf-8",
     )
     (task_root / "stage_timings.json").write_text(
-        json.dumps({"schemaName": "M3011StageTimings", "stages": [{"stage": "m29_materialization", "status": "completed"}]}),
+        json.dumps({"schemaName": "UploadPreviewStageTimings", "stages": [{"stage": "m29_materialization", "status": "completed"}]}),
         encoding="utf-8",
     )
 
-    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
+    response = client.get(f"/api/tasks/{task_id}/materialization")
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["summary"]["visibleNodeCount"] == 2
-    assert str(data["outputReport"]).endswith("m29_materialization_report.json")
-    assert data["stageTimings"]["schemaName"] == "M3011StageTimings"
+    assert str(data["outputReport"]).endswith("materialization_report.json")
+    assert data["stageTimings"]["schemaName"] == "UploadPreviewStageTimings"
 
 
-def test_m29_materialization_route_missing_report(client: TestClient) -> None:
+def test_materialization_route_missing_report(client: TestClient) -> None:
     state = importlib.import_module("app.state").state
-    task_id = "task_route_m29_materialization_missing"
+    task_id = "task_route_materialization_missing"
     now = datetime.now(UTC).isoformat()
     insert_task(state, task_id, status="completed", now=now)
 
-    response = client.get(f"/api/tasks/{task_id}/m29-materialization")
+    response = client.get(f"/api/tasks/{task_id}/materialization")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "M29_MATERIALIZATION_NOT_FOUND"
+    assert response.json()["error"]["code"] == "MATERIALIZATION_NOT_FOUND"
 
 
 def insert_task(state, task_id: str, *, status: str, now: str) -> None:

@@ -7,7 +7,7 @@ import {
   type RenderWarning
 } from "@image-figma/image-to-figma-renderer";
 import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json";
-import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPngM30Preview } from "./apiClient";
+import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPngPreview } from "./apiClient";
 import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
 
 declare const __html__: string;
@@ -79,7 +79,7 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
   postToUI({ type: "render-started", source: "upload" });
   postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
 
-  const upload = await uploadPngM30Preview(fileName, bytes);
+  const upload = await uploadPngPreview(fileName, bytes);
   postToUI({ type: "status", message: "Running OCR + M29 evidence pipeline.", tone: "normal" });
 
   const task = await waitForCompletedTask(upload.taskId);

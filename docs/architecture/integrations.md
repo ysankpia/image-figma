@@ -52,7 +52,7 @@ M29 is a local app-layer module chain, not an external service.
 It produces structured JSON evidence under:
 
 ```text
-storage/m30_1_uploads/{taskId}/
+storage/upload_previews/{taskId}/
 ```
 
 M29 plan-driven materializer is the only current layer that emits the DSL consumed by the plugin renderer.

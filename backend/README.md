@@ -8,7 +8,7 @@ The product runtime is M29 plan-driven:
 
 ```text
 Figma plugin
--> POST /api/upload-m30-preview
+-> POST /api/upload-preview
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 source ownership
@@ -20,7 +20,7 @@ Figma plugin
 -> Renderer writes Figma nodes
 ```
 
-`/api/upload-m30-preview` keeps its historical route name for plugin compatibility. It no longer means the legacy M30 materializer is the product source of truth.
+`/api/upload-preview` is the product upload endpoint. The legacy materializer is not the product source of truth.
 
 The frozen pre-M29 upload chain, M29 Direct compare product endpoint, legacy M30 materialization product path, M31-M39/M39.1 downstream experiments, and ONNX proposer are not active backend runtime.
 
@@ -28,10 +28,10 @@ The frozen pre-M29 upload chain, M29 Direct compare product endpoint, legacy M30
 
 ```bash
 uv sync
-M29_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-`M30_PREVIEW_PROFILE` is accepted only as a backward-compatible alias for `M29_PREVIEW_PROFILE`.
+`UPLOAD_PREVIEW_PROFILE` controls artifact retention only. It does not change ownership, replay decisions, DSL schema, or Renderer behavior.
 
 ## Test
 
@@ -50,7 +50,7 @@ uv run pytest \
   tests/test_stable_design_cluster.py \
   tests/test_m29_replay_plan.py \
   tests/test_m29_plan_materializer.py \
-  tests/test_m30_upload_pipeline.py \
+  tests/test_upload_preview_pipeline.py \
   tests/test_routes_tasks.py \
   tests/test_config_env.py \
   tests/test_png_tools.py \
@@ -62,10 +62,10 @@ uv run pytest \
 
 ```text
 GET  /api/health
-POST /api/upload-m30-preview
+POST /api/upload-preview
 GET  /api/tasks/{taskId}
 GET  /api/tasks/{taskId}/dsl
-GET  /api/tasks/{taskId}/m29-materialization
+GET  /api/tasks/{taskId}/materialization
 GET  /api/assets/{assetId}
 GET  /files/uploads/*
 GET  /files/assets/*
@@ -94,10 +94,10 @@ progress = 100
 `GET /api/tasks/{taskId}/dsl` returns:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+storage/upload_previews/{taskId}/materialized_design/design.dsl.json
 ```
 
-`GET /api/tasks/{taskId}/m29-materialization` returns the M29 materialization report summary, warnings, skipped items, replayed nodes, output paths, and `stage_timings.json`.
+`GET /api/tasks/{taskId}/materialization` returns the materialization report summary, warnings, skipped items, replayed nodes, output paths, and `stage_timings.json`.
 
 ## Current Pipeline
 
@@ -150,8 +150,8 @@ In the preview pipeline, OCR is required evidence. If the configured OCR provide
 ## M29 Preview Profile
 
 ```bash
-M29_PREVIEW_PROFILE=production   # default plugin preview runtime
-M29_PREVIEW_PROFILE=development  # full raw M29 diagnostics for local debugging
+UPLOAD_PREVIEW_PROFILE=production   # default plugin preview runtime
+UPLOAD_PREVIEW_PROFILE=development  # full raw M29 diagnostics for local debugging
 ```
 
 `production` keeps OCR JSON, structured M29/M29.2/M29.3/M29.4/M29.5 JSON, M29 materialized DSL/report, published renderer assets, and `stage_timings.json`. It skips raw M29 overlays and preview sheets where possible.
@@ -207,20 +207,20 @@ storage/assets/
 storage/dsl/
 storage/ocr/
 storage/logs/
-storage/m30_1_uploads/
+storage/upload_previews/
 ```
 
 Each upload task may include:
 
 ```text
-storage/m30_1_uploads/{taskId}/ocr/
-storage/m30_1_uploads/{taskId}/m29/
-storage/m30_1_uploads/{taskId}/m29_2/
-storage/m30_1_uploads/{taskId}/m29_3/
-storage/m30_1_uploads/{taskId}/m29_4/
-storage/m30_1_uploads/{taskId}/m29_5/
-storage/m30_1_uploads/{taskId}/m29_materialized/
-storage/m30_1_uploads/{taskId}/stage_timings.json
+storage/upload_previews/{taskId}/ocr/
+storage/upload_previews/{taskId}/m29/
+storage/upload_previews/{taskId}/m29_2/
+storage/upload_previews/{taskId}/m29_3/
+storage/upload_previews/{taskId}/m29_4/
+storage/upload_previews/{taskId}/m29_5/
+storage/upload_previews/{taskId}/materialized_design/
+storage/upload_previews/{taskId}/stage_timings.json
 ```
 
 Renderer-fetchable image assets are published to:

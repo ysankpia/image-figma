@@ -4,11 +4,11 @@ v0.1 只做能定位问题的日志和 artifact，不做完整监控平台。
 
 ## Current Upload Diagnostics
 
-当前 `/api/upload-m30-preview` 的主要诊断入口：
+当前 `/api/upload-preview` 的主要诊断入口：
 
 ```text
-storage/m30_1_uploads/{taskId}/stage_timings.json
-GET /api/tasks/{taskId}/m29-materialization
+storage/upload_previews/{taskId}/stage_timings.json
+GET /api/tasks/{taskId}/materialization
 ```
 
 `stage_timings.json` 记录每个 stage 的开始时间、结束时间、耗时、状态、错误码和错误消息。
@@ -33,7 +33,7 @@ M29 Direct、M29.0.x、M30、M31/M37/M38/M39/M39.1 stage timings are historical 
 M29 writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29/nodes.json
+storage/upload_previews/{taskId}/m29/nodes.json
 ```
 
 In development profile, raw M29 may also write overlays and preview sheets.
@@ -41,8 +41,8 @@ In development profile, raw M29 may also write overlays and preview sheets.
 M29.2 writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph.json
-storage/m30_1_uploads/{taskId}/m29_2/source_ui_physical_graph_overlay.png
+storage/upload_previews/{taskId}/m29_2/source_ui_physical_graph.json
+storage/upload_previews/{taskId}/m29_2/source_ui_physical_graph_overlay.png
 ```
 
 The report summary includes:
@@ -66,19 +66,19 @@ Each source object records `visualKind`, `pixelOwner`, `replayDecision`, `source
 M29.3.1 writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_3/region_relation_graph_report.json
+storage/upload_previews/{taskId}/m29_3/region_relation_graph_report.json
 ```
 
 M29.4 writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_4/stable_design_cluster_report.json
+storage/upload_previews/{taskId}/m29_4/stable_design_cluster_report.json
 ```
 
 M29.5 writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_5/replay_plan.json
+storage/upload_previews/{taskId}/m29_5/replay_plan.json
 ```
 
 Its summary focuses on replay quality:
@@ -101,12 +101,12 @@ nodeBudgetSuppressedCount
 M29 plan-driven materializer writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialization_report.json
+storage/upload_previews/{taskId}/materialized_design/design.dsl.json
+storage/upload_previews/{taskId}/materialized_design/materialization_report.json
 storage/assets/{taskId}/m29/*
 ```
 
-`GET /api/tasks/{taskId}/m29-materialization` returns the same report plus stage timings.
+`GET /api/tasks/{taskId}/materialization` returns the same report plus stage timings.
 
 The report summary includes:
 

@@ -40,17 +40,17 @@ uv sync
 
 ```bash
 cd backend
-M29_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 开发诊断 profile：
 
 ```bash
 cd backend
-M29_PREVIEW_PROFILE=development uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+UPLOAD_PREVIEW_PROFILE=development uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-`M30_PREVIEW_PROFILE` 只作为历史 alias 被读取；新命令使用 `M29_PREVIEW_PROFILE`。
+`UPLOAD_PREVIEW_PROFILE` 只作为历史 alias 被读取；新命令使用 `UPLOAD_PREVIEW_PROFILE`。
 
 ## OCR
 
@@ -135,10 +135,10 @@ git status --short --branch
 3. 加载 `figma-plugin/manifest.json`。
 4. 运行 `Image-to-Figma Design`。
 5. 插件应打开 `420 x 560` 工具面板。
-6. 启动后端：`cd backend && M29_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`。
+6. 启动后端：`cd backend && UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`。
 7. 选择一个 PNG。
 8. 点击 `Generate from PNG`。
-9. 插件上传到 `/api/upload-m30-preview`。
+9. 插件上传到 `/api/upload-preview`。
 10. 后端完成后，插件拉取 `/api/tasks/{taskId}/dsl`。
 11. 当前页面应生成尺寸等于 PNG 的 root Frame。
 12. Layers 中应出现 hidden original reference、visible fallback、以及 M29 plan-approved text/shape/image layers。
@@ -154,7 +154,7 @@ git status --short --branch
 
 ```bash
 curl -F "file=@/absolute/path/to/input.png" \
-  http://localhost:8000/api/upload-m30-preview
+  http://localhost:8000/api/upload-preview
 ```
 
 轮询任务：
@@ -169,17 +169,16 @@ curl http://localhost:8000/api/tasks/{taskId}
 curl http://localhost:8000/api/tasks/{taskId}/dsl
 ```
 
-获取 M29 materialization report：
+获取 materialization report：
 
 ```bash
-curl http://localhost:8000/api/tasks/{taskId}/m29-materialization
+curl http://localhost:8000/api/tasks/{taskId}/materialization
 ```
 
 当前不支持：
 
 ```bash
 curl http://localhost:8000/api/tasks/{taskId}/m29-direct-dsl
-curl http://localhost:8000/api/tasks/{taskId}/m30-materialization
 curl http://localhost:8000/api/upload
 ```
 

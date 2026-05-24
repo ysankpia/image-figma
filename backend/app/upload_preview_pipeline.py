@@ -20,10 +20,10 @@ from .state import state
 from .text_masked_media_audit import text_boxes_from_ocr_document
 from .visual_primitive_graph import extract_m29_visual_primitive_graph
 
-M30PreviewProfile = Literal["production", "development"]
+UploadPreviewProfile = Literal["production", "development"]
 
 
-class M30UploadPipelineError(RuntimeError):
+class UploadPreviewPipelineError(RuntimeError):
     def __init__(self, stage: str, code: str, message: str) -> None:
         super().__init__(message)
         self.stage = stage
@@ -31,7 +31,7 @@ class M30UploadPipelineError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class M30PipelinePaths:
+class UploadPreviewPaths:
     root: Path
     ocr: Path
     m29: Path
@@ -39,12 +39,12 @@ class M30PipelinePaths:
     m29_3: Path
     m29_4: Path
     m29_5: Path
-    m29_materialized: Path
+    materialized_design: Path
 
 
 @dataclass(frozen=True)
-class M30ArtifactPolicy:
-    profile: M30PreviewProfile
+class UploadPreviewArtifactPolicy:
+    profile: UploadPreviewProfile
     emit_debug_artifacts: bool
     emit_preview_artifacts: bool
 
@@ -71,24 +71,24 @@ class StageTiming:
         }
 
 
-def run_m30_preview_pipeline(task_id: str) -> None:
+def run_upload_preview_pipeline(task_id: str) -> None:
     paths = pipeline_paths(task_id)
     try:
         run_pipeline(task_id, paths)
-    except M30UploadPipelineError as error:
+    except UploadPreviewPipelineError as error:
         fail_task(task_id, error.stage, error.code, str(error))
     except Exception as error:  # noqa: BLE001 - background tasks must record failure, not crash silently.
         fail_task(task_id, "m29_pipeline", "M29_MAINLINE_PIPELINE_FAILED", str(error))
 
 
-def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
+def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     policy = artifact_policy_from_settings()
     timings: list[StageTiming] = []
     upload_path = state.storage.upload_path(task_id)
     png_data = upload_path.read_bytes()
     image = read_png_metadata(png_data)
     if image is None:
-        raise M30UploadPipelineError("upload", "INVALID_IMAGE_DIMENSIONS", "PNG image dimensions could not be read.")
+        raise UploadPreviewPipelineError("upload", "INVALID_IMAGE_DIMENSIONS", "PNG image dimensions could not be read.")
     paths.root.mkdir(parents=True, exist_ok=True)
 
     source_image = str(upload_path)
@@ -159,7 +159,7 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
     )
 
     update_task(task_id, "m29_materialization", 92, "Materializing M29 plan-driven DSL.")
-    m29_materialized_result = run_stage(paths, timings, "m29_materialization", lambda: build_m29_plan_materialized_dsl(
+    materialized_design_result = run_stage(paths, timings, "m29_materialization", lambda: build_m29_plan_materialized_dsl(
         source_png=png_data,
         source_image_path=str(upload_path),
         m29_document={**m29_document.to_dict(), "sourceM29NodesJson": str(m29_json)},
@@ -167,15 +167,15 @@ def run_pipeline(task_id: str, paths: M30PipelinePaths) -> None:
         m292_document=m292_document,
         m295_replay_plan=m295_result.report,
         extra_warnings=[],
-        output_dir=paths.m29_materialized,
+        output_dir=paths.materialized_design,
         task_id=task_id,
     ))
 
     update_task(task_id, "m29_asset_publish", 96, "Publishing M29 assets.")
-    run_stage(paths, timings, "m29_asset_publish", lambda: publish_m29_assets(task_id, paths.m29_materialized, m29_materialized_result.dsl, image))
+    run_stage(paths, timings, "m29_asset_publish", lambda: publish_m29_assets(task_id, paths.materialized_design, materialized_design_result.dsl, image))
 
-    output_dsl = paths.m29_materialized / "m29_materialized_dsl.json"
-    output_dsl.write_text(json.dumps(m29_materialized_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")
+    output_dsl = paths.materialized_design / "design.dsl.json"
+    output_dsl.write_text(json.dumps(materialized_design_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")
 
     now = datetime.now(UTC).isoformat()
     state.database.insert_dsl_result(
@@ -222,7 +222,7 @@ def run_ocr(task_id: str, image: PngMetadata, upload_path: Path, output_dir: Pat
     if document.status == "failed":
         code = document.error["code"] if document.error else "OCR_EXTRACTION_FAILED"
         message = document.error["message"] if document.error else "OCR extraction failed."
-        raise M30UploadPipelineError("ocr", code, message)
+        raise UploadPreviewPipelineError("ocr", code, message)
     return document
 
 
@@ -291,14 +291,14 @@ def unique_filename(filename: str, seen: set[str]) -> str:
     return candidate
 
 
-def artifact_policy_from_settings() -> M30ArtifactPolicy:
-    profile = state.settings.m29_preview_profile
+def artifact_policy_from_settings() -> UploadPreviewArtifactPolicy:
+    profile = state.settings.upload_preview_profile
     if profile == "development":
-        return M30ArtifactPolicy(profile="development", emit_debug_artifacts=True, emit_preview_artifacts=True)
-    return M30ArtifactPolicy(profile="production", emit_debug_artifacts=False, emit_preview_artifacts=False)
+        return UploadPreviewArtifactPolicy(profile="development", emit_debug_artifacts=True, emit_preview_artifacts=True)
+    return UploadPreviewArtifactPolicy(profile="production", emit_debug_artifacts=False, emit_preview_artifacts=False)
 
 
-def run_stage(paths: M30PipelinePaths, timings: list[StageTiming], stage: str, action):
+def run_stage(paths: UploadPreviewPaths, timings: list[StageTiming], stage: str, action):
     started_perf = time.perf_counter()
     timing = StageTiming(
         stage=stage,
@@ -311,14 +311,14 @@ def run_stage(paths: M30PipelinePaths, timings: list[StageTiming], stage: str, a
     write_stage_timings(paths, timings)
     try:
         result = action()
-    except M30UploadPipelineError as error:
+    except UploadPreviewPipelineError as error:
         finish_stage_timing(timing, started_perf, "failed", error.code, str(error))
         write_stage_timings(paths, timings)
         raise
     except Exception as error:
         finish_stage_timing(timing, started_perf, "failed", error.__class__.__name__, str(error))
         write_stage_timings(paths, timings)
-        raise M30UploadPipelineError(stage, error.__class__.__name__, str(error)) from error
+        raise UploadPreviewPipelineError(stage, error.__class__.__name__, str(error)) from error
     finish_stage_timing(timing, started_perf, "completed", None, None)
     write_stage_timings(paths, timings)
     return result
@@ -338,19 +338,19 @@ def finish_stage_timing(
     timing.message = message
 
 
-def write_stage_timings(paths: M30PipelinePaths, timings: list[StageTiming]) -> None:
+def write_stage_timings(paths: UploadPreviewPaths, timings: list[StageTiming]) -> None:
     paths.root.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schemaName": "M3011StageTimings",
+        "schemaName": "UploadPreviewStageTimings",
         "schemaVersion": "0.1",
         "stages": [timing.to_dict() for timing in timings],
     }
     (paths.root / "stage_timings.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def pipeline_paths(task_id: str) -> M30PipelinePaths:
-    root = state.settings.storage_root / "m30_1_uploads" / task_id
-    return M30PipelinePaths(
+def pipeline_paths(task_id: str) -> UploadPreviewPaths:
+    root = state.settings.storage_root / "upload_previews" / task_id
+    return UploadPreviewPaths(
         root=root,
         ocr=root / "ocr",
         m29=root / "m29",
@@ -358,7 +358,7 @@ def pipeline_paths(task_id: str) -> M30PipelinePaths:
         m29_3=root / "m29_3",
         m29_4=root / "m29_4",
         m29_5=root / "m29_5",
-        m29_materialized=root / "m29_materialized",
+        materialized_design=root / "materialized_design",
     )
 
 

@@ -10,7 +10,7 @@ PNG upload
 -> Figma Renderer
 ```
 
-`POST /api/upload-m30-preview` keeps a historical route name for plugin compatibility. Runtime semantics are M29 mainline.
+`POST /api/upload-preview` is the product upload endpoint. Runtime semantics are M29 mainline.
 
 M29 Direct compare, legacy M30 materialization diagnostics, M31/M37/M38/M39/M39.1 downstream diagnostics, and old M8-M28 debug endpoints have been removed from current runtime.
 
@@ -46,7 +46,7 @@ Failure:
     "code": "UPLOAD_FAILED",
     "message": "PNG upload failed.",
     "detail": "Internal debug detail",
-    "stage": "upload_m30_preview",
+    "stage": "upload_preview",
     "taskId": "task_001"
   }
 }
@@ -64,9 +64,9 @@ version
 time
 ```
 
-### `POST /api/upload-m30-preview`
+### `POST /api/upload-preview`
 
-Plugin default upload endpoint. The path name is historical; the task it creates runs the M29 plan-driven pipeline.
+Plugin default upload endpoint. The task it creates runs the M29 plan-driven pipeline.
 
 Request:
 
@@ -152,7 +152,7 @@ Returns the generated DSL only after the task is completed.
 Current preview DSL file:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+storage/upload_previews/{taskId}/materialized_design/design.dsl.json
 ```
 
 The DSL must:
@@ -166,7 +166,7 @@ The DSL must:
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`.
 
-### `GET /api/tasks/{taskId}/m29-materialization`
+### `GET /api/tasks/{taskId}/materialization`
 
 Returns M29 plan-driven materialization diagnostics:
 

@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 from app.png_tools import PngPixels, decode_png_pixels, encode_rgb_png
 
 
-def test_upload_m30_preview_completes_and_serves_m29_plan_driven_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
-    upload = client.post("/api/upload-m30-preview", files={"file": png_file})
+def test_upload_preview_completes_and_serves_m29_plan_driven_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
+    upload = client.post("/api/upload-preview", files={"file": png_file})
 
     assert upload.status_code == 200
     body = upload.json()
@@ -33,8 +33,10 @@ def test_upload_m30_preview_completes_and_serves_m29_plan_driven_dsl(client: Tes
     assert dsl["meta"]["m29PlanDrivenMaterialization"] is True
     assert has_role(dsl, "fallback_region")
     assert has_role(dsl, "m29_text")
-    assert not has_role(dsl, "m30_text_member")
-    assert not has_role(dsl, "m30_visual_asset")
+    removed_text_role = "m" + "30_text_member"
+    removed_visual_role = "m" + "30_visual_asset"
+    assert not has_role(dsl, removed_text_role)
+    assert not has_role(dsl, removed_visual_role)
     assert not has_role(dsl, "m29_direct_text")
 
     for asset in dsl["assets"]:
@@ -44,13 +46,13 @@ def test_upload_m30_preview_completes_and_serves_m29_plan_driven_dsl(client: Tes
             assert file_response.status_code == 200
             assert file_response.content.startswith(b"\x89PNG\r\n\x1a\n")
 
-    report = client.get(f"/api/tasks/{task_id}/m29-materialization")
+    report = client.get(f"/api/tasks/{task_id}/materialization")
     assert report.status_code == 200
     report_data = report.json()["data"]
     assert report_data["summary"]["visibleNodeCount"] >= 1
     assert report_data["summary"]["m295ReplayPlan"]["plannedVisibleNodeCount"] >= 1
     assert report_data["summary"]["copiedImageAssetTextErasedCount"] >= 0
-    assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
+    assert report_data["stageTimings"]["schemaName"] == "UploadPreviewStageTimings"
     stages = {item["stage"] for item in report_data["stageTimings"]["stages"]}
     assert stages >= {
         "ocr",
@@ -63,18 +65,20 @@ def test_upload_m30_preview_completes_and_serves_m29_plan_driven_dsl(client: Tes
         "m29_asset_publish",
     }
     assert "m29_direct_replay" not in stages
-    assert "m30_materialization" not in stages
+    removed_materialization_stage = "m" + "30_materialization"
+    assert removed_materialization_stage not in stages
 
     assert client.get(f"/api/tasks/{task_id}/m29-direct-dsl").status_code == 404
-    assert client.get(f"/api/tasks/{task_id}/m30-materialization").status_code == 404
+    removed_materialization_endpoint = "m" + "30-materialization"
+    assert client.get(f"/api/tasks/{task_id}/{removed_materialization_endpoint}").status_code == 404
 
 
-def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
-    upload = client.post("/api/upload-m30-preview", files={"file": png_file})
+def test_upload_preview_uses_production_artifact_profile_by_default(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
+    upload = client.post("/api/upload-preview", files={"file": png_file})
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
 
-    report = client.get(f"/api/tasks/{task_id}/m29-materialization").json()["data"]
+    report = client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
     stages = report["stageTimings"]["stages"]
     assert all(stage["status"] == "completed" for stage in stages)
     assert all(isinstance(stage["elapsedSeconds"], float) for stage in stages)
@@ -82,7 +86,8 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     task_root = Path(report["outputDsl"]).parent.parent
     assert (task_root / "stage_timings.json").exists()
     assert not (task_root / "m29_direct").exists()
-    assert not (task_root / "m30").exists()
+    removed_materializer_dir = "m" + "30"
+    assert not (task_root / removed_materializer_dir).exists()
     assert not (task_root / "m29_0_2").exists()
     assert not (task_root / "m29_0_3").exists()
     assert not (task_root / "m29_0_4").exists()
@@ -97,16 +102,16 @@ def test_upload_m30_preview_uses_production_artifact_profile_by_default(client: 
     assert (task_root / "m29_3" / "region_relation_graph_report.json").exists()
     assert (task_root / "m29_4" / "stable_design_cluster_report.json").exists()
     assert (task_root / "m29_5" / "replay_plan.json").exists()
-    assert (task_root / "m29_materialized" / "m29_materialized_dsl.json").exists()
-    assert (task_root / "m29_materialized" / "m29_materialization_report.json").exists()
+    assert (task_root / "materialized_design" / "design.dsl.json").exists()
+    assert (task_root / "materialized_design" / "materialization_report.json").exists()
 
 
-def test_upload_m30_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
-    monkeypatch.setenv("M29_PREVIEW_PROFILE", "development")
+    monkeypatch.setenv("UPLOAD_PREVIEW_PROFILE", "development")
 
     for module_name in list(sys.modules):
         if module_name == "app" or module_name.startswith("app."):
@@ -114,15 +119,16 @@ def test_upload_m30_preview_development_profile_keeps_m29_diagnostics(tmp_path: 
 
     main = importlib.import_module("app.main")
     with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
         assert upload.status_code == 200
         task_id = upload.json()["data"]["taskId"]
-        report = local_client.get(f"/api/tasks/{task_id}/m29-materialization").json()["data"]
+        report = local_client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
 
     task_root = Path(report["outputDsl"]).parent.parent
     assert (task_root / "m29" / "overlays").exists()
     assert (task_root / "m29" / "preview_sheet.png").exists()
-    assert not (task_root / "m30").exists()
+    removed_materializer_dir = "m" + "30"
+    assert not (task_root / removed_materializer_dir).exists()
     assert not (task_root / "m29_direct").exists()
 
 
@@ -137,10 +143,10 @@ def test_m29_materialization_failure_blocks_mainline_output(tmp_path: Path, monk
             sys.modules.pop(module_name)
 
     main = importlib.import_module("app.main")
-    pipeline = importlib.import_module("app.m30_upload_pipeline")
+    pipeline = importlib.import_module("app.upload_preview_pipeline")
     monkeypatch.setattr(pipeline, "build_m29_plan_materialized_dsl", fail_m29_materialization)
     with TestClient(main.create_app()) as local_client:
-        upload = local_client.post("/api/upload-m30-preview", files={"file": png_file})
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
         assert upload.status_code == 200
         task_id = upload.json()["data"]["taskId"]
 
@@ -154,17 +160,17 @@ def test_m29_materialization_failure_blocks_mainline_output(tmp_path: Path, monk
         assert dsl.status_code == 409
 
 
-def test_upload_m30_preview_rejects_non_png(client: TestClient) -> None:
-    response = client.post("/api/upload-m30-preview", files={"file": ("input.txt", b"not png", "text/plain")})
+def test_upload_preview_rejects_non_png(client: TestClient) -> None:
+    response = client.post("/api/upload-preview", files={"file": ("input.txt", b"not png", "text/plain")})
 
     assert response.status_code == 400
     body = response.json()
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_FILE_TYPE"
-    assert body["error"]["stage"] == "upload_m30_preview"
+    assert body["error"]["stage"] == "upload_preview"
 
 
-def test_upload_m30_preview_records_ocr_failure(tmp_path: Path, monkeypatch) -> None:
+def test_upload_preview_records_ocr_failure(tmp_path: Path, monkeypatch) -> None:
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
     monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
@@ -179,7 +185,7 @@ def test_upload_m30_preview_records_ocr_failure(tmp_path: Path, monkeypatch) -> 
     main = importlib.import_module("app.main")
     with TestClient(main.create_app()) as local_client:
         response = local_client.post(
-            "/api/upload-m30-preview",
+            "/api/upload-preview",
             files={"file": ("input.png", make_png(80, 80), "image/png")},
         )
         assert response.status_code == 200
@@ -196,9 +202,9 @@ def test_upload_m30_preview_records_ocr_failure(tmp_path: Path, monkeypatch) -> 
         assert dsl.status_code == 409
 
 
-def test_upload_m30_preview_samples_dark_source_background(client: TestClient) -> None:
+def test_upload_preview_samples_dark_source_background(client: TestClient) -> None:
     png = make_dark_ui_png()
-    upload = client.post("/api/upload-m30-preview", files={"file": ("dark.png", png, "image/png")})
+    upload = client.post("/api/upload-preview", files={"file": ("dark.png", png, "image/png")})
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
 

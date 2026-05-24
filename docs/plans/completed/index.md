@@ -32,6 +32,7 @@
 - [M29 Experimental Mathematical Contract](029-experimental-mathematical-contract.md) — `completed`
 - [M29 Math From First Principles](029-math-from-first-principles.md) — `completed`
 - [M29 Plan-Driven Raster/Media Preservation Mainline Cutover](029-plan-driven-raster-media-preservation.md) — `completed`
+- [M29 Product Surface Naming Cleanup](029-product-surface-naming-cleanup.md) — `completed`
 - [M29 Shape Geometry Fit Before Radius Replay](029-shape-geometry-fit-before-radius-replay.md) — `completed`
 - [M29 Text Support Background Source Contract](029-text-support-background-source-contract.md) — `completed`
 - [M29 Visual Primitive Graph Harness](029-visual-primitive-graph-harness.md) — `completed`

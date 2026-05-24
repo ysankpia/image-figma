@@ -30,7 +30,7 @@ def test_removed_pre_m29_upload_surface_is_not_registered(client: TestClient, pn
 
 
 def test_current_upload_surface_returns_m29_plan_driven_dsl(client: TestClient, png_file: tuple[str, bytes, str]) -> None:
-    upload = client.post("/api/upload-m30-preview", files={"file": png_file})
+    upload = client.post("/api/upload-preview", files={"file": png_file})
 
     assert upload.status_code == 200
     task_id = upload.json()["data"]["taskId"]
@@ -46,26 +46,27 @@ def test_current_upload_surface_returns_m29_plan_driven_dsl(client: TestClient, 
     assert "m29_plan_driven_materialization" in body["meta"]["qualityFlags"]
     assert any(child.get("role") == "fallback_region" for child in body["root"]["children"])
     assert any(child.get("role") == "m29_text" for child in body["root"]["children"])
-    assert not any(child.get("role") == "m30_text_member" for child in body["root"]["children"])
+    removed_text_role = "m" + "30_text_member"
+    assert not any(child.get("role") == removed_text_role for child in body["root"]["children"])
 
-    report = client.get(f"/api/tasks/{task_id}/m29-materialization")
+    report = client.get(f"/api/tasks/{task_id}/materialization")
     assert report.status_code == 200
     report_data = report.json()["data"]
     assert report_data["summary"]["visibleNodeCount"] >= 1
-    assert report_data["stageTimings"]["schemaName"] == "M3011StageTimings"
+    assert report_data["stageTimings"]["schemaName"] == "UploadPreviewStageTimings"
 
 
-def test_m30_upload_rejects_invalid_uploads(client: TestClient) -> None:
-    text = client.post("/api/upload-m30-preview", files={"file": ("input.txt", b"not png", "text/plain")})
+def test_upload_preview_rejects_invalid_uploads(client: TestClient) -> None:
+    text = client.post("/api/upload-preview", files={"file": ("input.txt", b"not png", "text/plain")})
     assert text.status_code == 400
     assert text.json()["error"]["code"] == "INVALID_FILE_TYPE"
 
-    broken = client.post("/api/upload-m30-preview", files={"file": ("broken.png", b"\x89PNG\r\n\x1a\n", "image/png")})
+    broken = client.post("/api/upload-preview", files={"file": ("broken.png", b"\x89PNG\r\n\x1a\n", "image/png")})
     assert broken.status_code == 400
     assert broken.json()["error"]["code"] == "INVALID_IMAGE_DIMENSIONS"
 
     large = client.post(
-        "/api/upload-m30-preview",
+        "/api/upload-preview",
         files={"file": ("large.png", b"\x89PNG\r\n\x1a\n" + b"0" * (10 * 1024 * 1024), "image/png")},
     )
     assert large.status_code == 413

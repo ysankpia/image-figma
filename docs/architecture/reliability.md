@@ -78,7 +78,7 @@ newly invented bboxes
 weak cluster hints
 ```
 
-M29 materializer may preserve fallback and skip unsafe text/shape/image materialization. Skips must be recorded in `m29_materialization_report.json`.
+M29 materializer may preserve fallback and skip unsafe text/shape/image materialization. Skips must be recorded in `materialization_report.json`.
 
 Cleanup must be plan-authorized:
 
@@ -94,10 +94,10 @@ Materializer must not independently recompute cleanup ownership from contains/ov
 Every preview task writes:
 
 ```text
-storage/m30_1_uploads/{taskId}/stage_timings.json
+storage/upload_previews/{taskId}/stage_timings.json
 ```
 
-`GET /api/tasks/{taskId}/m29-materialization` returns the same timings so slow stages can be traced without scanning logs.
+`GET /api/tasks/{taskId}/materialization` returns the same timings so slow stages can be traced without scanning logs.
 
 ## Timeouts
 

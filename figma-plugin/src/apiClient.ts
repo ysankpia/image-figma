@@ -35,8 +35,8 @@ export class BackendApiError extends Error {
   }
 }
 
-export async function uploadPngM30Preview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
-  return uploadPngTo("/upload-m30-preview", fileName, bytes);
+export async function uploadPngPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
+  return uploadPngTo("/upload-preview", fileName, bytes);
 }
 
 async function uploadPngTo(endpoint: string, fileName: string, bytes: Uint8Array): Promise<UploadResult> {

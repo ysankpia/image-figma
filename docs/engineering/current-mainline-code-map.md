@@ -6,7 +6,7 @@
 
 ```text
 Plugin upload
--> backend/app/m30_upload_pipeline.py
+-> backend/app/upload_preview_pipeline.py
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 ownership
@@ -18,8 +18,6 @@ Plugin upload
 -> Renderer
 ```
 
-The route and orchestrator still contain `m30` in names for historical compatibility. Current runtime semantics are M29 mainline.
-
 M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and ONNX proposer have been pruned from active backend runtime.
 
 ## Runtime Entry Surface
@@ -28,16 +26,16 @@ M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experim
 
 ```text
 backend/app/routes/health.py
-backend/app/routes/upload_m30_preview.py
+backend/app/routes/upload_preview.py
 backend/app/routes/tasks.py
 backend/app/routes/assets.py
 ```
 
-当前产品上传入口是 `POST /api/upload-m30-preview`。旧 `POST /api/upload`、`GET /api/tasks/{taskId}/m29-direct-dsl`、`GET /api/tasks/{taskId}/m30-materialization`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
+当前产品上传入口是 `POST /api/upload-preview`。旧 `POST /api/upload`、`GET /api/tasks/{taskId}/m29-direct-dsl`、`GET /api/tasks/{taskId}/m30-materialization`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
 
 ## Pipeline Orchestrator
 
-`backend/app/m30_upload_pipeline.py` 是当前后端主编排文件。它负责：
+`backend/app/upload_preview_pipeline.py` 是当前后端主编排文件。它负责：
 
 ```text
 validate upload
@@ -49,7 +47,7 @@ publish M29 assets
 write task status and stage timings
 ```
 
-这个文件名仍是历史命名。后续若重命名，应单独开极小阶段处理 import、route、tests 和 docs；不要和算法改动混做。
+这个文件只负责编排，不承载 owner、relation、cleanup 授权或 materialization 策略。
 
 ## Source Truth Layer
 
@@ -166,9 +164,9 @@ M29.5 replay plan
 It creates:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialization_report.json
-storage/m30_1_uploads/{taskId}/m29_materialized/assets/
+storage/upload_previews/{taskId}/materialized_design/design.dsl.json
+storage/upload_previews/{taskId}/materialized_design/materialization_report.json
+storage/upload_previews/{taskId}/materialized_design/assets/
 ```
 
 It owns:
@@ -249,6 +247,6 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 1. `visual_primitive_graph.py`：按 bbox/mask math、support detectors、geometry fit、detectors、artifact writers 拆分。
 2. `m29_plan_materializer.py`：按 plan consumption、node appenders、asset cleanup、fallback cleanup、report policy 拆分。
 3. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
-4. `m30_upload_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分或在独立阶段重命名。
+4. `upload_preview_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分或在独立阶段重命名。
 
 每次拆分都必须先有 focused tests，且 diff 应证明 output contract 不变。

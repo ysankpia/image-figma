@@ -1082,7 +1082,7 @@ tests/test_region_relation_graph_report.py
 tests/test_stable_design_cluster.py
 tests/test_m29_replay_plan.py
 tests/test_m29_plan_materializer.py
-tests/test_m30_upload_pipeline.py
+tests/test_upload_preview_pipeline.py
 ```
 
 如果未来引入全局优化或组件化，不能只看“生成数量变多”。验收指标必须包括：

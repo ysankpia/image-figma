@@ -9,7 +9,7 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 ```text
 单张 PNG
 -> Figma Plugin
--> POST /api/upload-m30-preview
+-> POST /api/upload-preview
 -> OCR
 -> raw M29 primitive graph
 -> M29.2 source ownership
@@ -22,7 +22,7 @@ Image-to-Figma Design 的目标是把单张 PNG 截图或设计稿转换为 Figm
 -> Figma 可编辑设计稿
 ```
 
-`/api/upload-m30-preview` 是历史命名的兼容入口，当前语义已经是 M29 mainline。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。
+`/api/upload-preview` 是当前正式上传入口。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。
 
 ## 当前能力
 
@@ -55,7 +55,7 @@ Figma Component/Instance
 ```bash
 cd backend
 uv sync
-M29_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 前端/插件：

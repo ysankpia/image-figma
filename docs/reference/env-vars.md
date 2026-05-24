@@ -20,8 +20,7 @@
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
-| `M29_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
-| `M30_PREVIEW_PROFILE` | 历史 alias；仅当 `M29_PREVIEW_PROFILE` 未设置时读取 | `production` | 否 |
+| `UPLOAD_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
 
 ## OCR
 
@@ -45,18 +44,16 @@ OCR failure fails the current M29 preview task. The backend must not mark a task
 ## M29 Preview Profile
 
 ```bash
-M29_PREVIEW_PROFILE=production
+UPLOAD_PREVIEW_PROFILE=production
 ```
 
 `production` is the default plugin preview runtime. It keeps OCR JSON, structured M29/M29.2/M29.3/M29.4/M29.5 JSON, M29 materialized DSL/report, published renderer assets, and `stage_timings.json`. It skips raw M29 overlays and preview sheets where possible.
 
 ```bash
-M29_PREVIEW_PROFILE=development
+UPLOAD_PREVIEW_PROFILE=development
 ```
 
 `development` keeps raw M29 diagnostics such as overlays and preview sheet for local evidence debugging. This variable affects only artifacts; it does not change OCR, M29 classification, replay plan, DSL schema, or Renderer behavior.
-
-`M30_PREVIEW_PROFILE` is a backward-compatible alias for old local shells. New docs, scripts, and manual commands should use `M29_PREVIEW_PROFILE`.
 
 ## Removed Variables
 

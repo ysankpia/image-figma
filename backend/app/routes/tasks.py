@@ -77,8 +77,8 @@ def get_task_dsl(task_id: str) -> dict[str, object]:
     return success_response({"dsl": json.loads(dsl_path.read_text(encoding="utf-8"))})
 
 
-@router.get("/tasks/{task_id}/m29-materialization")
-def get_task_m29_materialization(task_id: str) -> dict[str, object]:
+@router.get("/tasks/{task_id}/materialization")
+def get_task_materialization(task_id: str) -> dict[str, object]:
     task = state.database.get_task(task_id)
     if task is None:
         raise ApiError(
@@ -89,20 +89,20 @@ def get_task_m29_materialization(task_id: str) -> dict[str, object]:
             task_id=task_id,
         )
 
-    report_path = state.settings.storage_root / "m30_1_uploads" / task_id / "m29_materialized" / "m29_materialization_report.json"
+    report_path = state.settings.storage_root / "upload_previews" / task_id / "materialized_design" / "materialization_report.json"
     if not report_path.exists():
         raise ApiError(
-            "M29_MATERIALIZATION_NOT_FOUND",
-            "M29 materialization report not found.",
+            "MATERIALIZATION_NOT_FOUND",
+            "Materialization report not found.",
             status_code=status.HTTP_404_NOT_FOUND,
-            stage="m29_materialization_lookup",
+            stage="materialization_lookup",
             task_id=task_id,
         )
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     timings_path = report_path.parent.parent / "stage_timings.json"
     timings = json.loads(timings_path.read_text(encoding="utf-8")) if timings_path.exists() else None
-    output_dsl = report_path.parent / "m29_materialized_dsl.json"
+    output_dsl = report_path.parent / "design.dsl.json"
     data: dict[str, object] = {
         "taskId": task_id,
         "status": task["status"],

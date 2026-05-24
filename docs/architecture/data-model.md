@@ -118,7 +118,7 @@ created_at
 For current preview tasks, `dsl_path` points to:
 
 ```text
-storage/m30_1_uploads/{taskId}/m29_materialized/m29_materialized_dsl.json
+storage/upload_previews/{taskId}/materialized_design/design.dsl.json
 ```
 
 `validation_status` is currently `valid` when the pipeline completes.
@@ -145,7 +145,7 @@ created_at
 OCR payload path:
 
 ```text
-storage/m30_1_uploads/{taskId}/ocr/ocr.json
+storage/upload_previews/{taskId}/ocr/ocr.json
 ```
 
 In M29 preview, OCR failure fails the task because OCR text ownership is a source fact for M29 materialization.
@@ -172,7 +172,7 @@ created_at
 SQLite does not store M29 evidence payloads. They live under:
 
 ```text
-storage/m30_1_uploads/{taskId}/
+storage/upload_previews/{taskId}/
 ```
 
 Important files:
@@ -184,12 +184,12 @@ m29_2/source_ui_physical_graph.json
 m29_3/region_relation_graph_report.json
 m29_4/stable_design_cluster_report.json
 m29_5/replay_plan.json
-m29_materialized/m29_materialized_dsl.json
-m29_materialized/m29_materialization_report.json
+materialized_design/design.dsl.json
+materialized_design/materialization_report.json
 stage_timings.json
 ```
 
-The directory prefix `m30_1_uploads` is historical storage naming. It is not a statement that the runtime still uses M30 materialization.
+The directory prefix `upload_previews` is historical storage naming. It is not a statement that the runtime still uses M30 materialization.
 
 ## Removed Tables And Payloads
 
