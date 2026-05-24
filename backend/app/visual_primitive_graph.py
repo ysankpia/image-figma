@@ -1,395 +1,65 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal
-
-from .png_tools import PngMetadata, PngPixels, PngRegion
-from .png_tools import UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
-
-
-M29PrimitiveType = Literal["text", "shape", "image", "symbol", "unknown"]
-M29LayerHint = Literal["background", "container", "content", "overlay", "unknown"]
-M29TextSource = Literal["ocr", "manual", "detector", "test"]
-M29TextKind = Literal["line", "word", "block", "unknown"]
-M29RelationType = Literal["contains", "overlaps", "protects", "near", "aligned"]
-M29_BLOCKED_EVIDENCE_VERSION = "0.2"
-
-LAYER_ORDER: dict[str, int] = {"background": 0, "container": 1, "content": 2, "overlay": 3, "unknown": 4}
-OVERLAY_COLORS: dict[str, tuple[int, int, int]] = {
-    "text": (160, 80, 220),
-    "shape": (0, 122, 255),
-    "image": (0, 180, 210),
-    "symbol": (0, 200, 90),
-    "unknown": (238, 190, 40),
-    "blocked": (235, 64, 52),
-    "protected": (140, 140, 140),
-}
-
-
-@dataclass(frozen=True)
-class M29TextBox:
-    id: str
-    bbox: list[int]
-    text: str | None = None
-    confidence: float = 1.0
-    source: M29TextSource = "ocr"
-    kind: M29TextKind = "unknown"
-    meta: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class M29BinaryMask:
-    width: int
-    height: int
-    data: bytes
-
-
-@dataclass(frozen=True)
-class M29PrimitiveMetrics:
-    color_count: int
-    texture_score: float
-    edge_score: float
-    fill_ratio: float
-    aspect_ratio: float
-    brightness: float
-    mean_rgb: tuple[int, int, int]
-
-
-@dataclass(frozen=True)
-class M29PrimitiveNode:
-    id: str
-    type: M29PrimitiveType
-    subtype: str
-    bbox: list[int]
-    confidence: float
-    source: str
-    source_order: int
-    layer_hint: M29LayerHint
-    reasons: list[str]
-    metrics: M29PrimitiveMetrics
-    style: dict[str, object] | None = None
-    text: str | None = None
-    asset_path: str | None = None
-    mask_path: str | None = None
-    parent_id: str | None = None
-    child_ids: list[str] = field(default_factory=list)
-    mask_data: bytes | None = None
-    geometry: dict[str, Any] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        data = {
-            "id": self.id,
-            "type": self.type,
-            "subtype": self.subtype,
-            "bbox": self.bbox,
-            "confidence": round(self.confidence, 3),
-            "source": self.source,
-            "sourceOrder": self.source_order,
-            "layerHint": self.layer_hint,
-            "reasons": self.reasons,
-            "metrics": metrics_to_dict(self.metrics),
-        }
-        optional = {
-            "style": self.style,
-            "text": self.text,
-            "assetPath": self.asset_path,
-            "maskPath": self.mask_path,
-            "parentId": self.parent_id,
-            "childIds": self.child_ids or None,
-            "geometry": self.geometry,
-        }
-        data.update({key: value for key, value in optional.items() if value is not None})
-        return data
-
-
-@dataclass(frozen=True)
-class M29BlockedPrimitive:
-    id: str
-    bbox: list[int]
-    source: str
-    reasons: list[str]
-    metrics: M29PrimitiveMetrics | None = None
-    context: dict[str, object] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "id": self.id,
-            "bbox": self.bbox,
-            "source": self.source,
-            "reasons": self.reasons,
-        }
-        if self.metrics is not None:
-            data["metrics"] = metrics_to_dict(self.metrics)
-        if self.context is not None:
-            data["context"] = self.context
-        return data
-
-
-@dataclass(frozen=True)
-class M29PrimitiveRelation:
-    parent_id: str
-    child_id: str
-    type: M29RelationType
-    confidence: float
-    reasons: list[str]
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "parentId": self.parent_id,
-            "childId": self.child_id,
-            "type": self.type,
-            "confidence": round(self.confidence, 3),
-            "reasons": self.reasons,
-        }
-
-
-@dataclass(frozen=True)
-class M29VisualPrimitiveOptions:
-    min_component_area: int = 16
-    max_component_area_ratio: float = 0.25
-    min_shape_area: int = 64
-    shape_texture_threshold: float = 0.12
-    shape_color_threshold: int = 10
-    line_max_thickness: int = 4
-    line_min_length: int = 20
-    min_image_area: int = 1200
-    image_color_threshold: int = 32
-    image_texture_threshold: float = 0.18
-    image_accept_threshold: float = 0.78
-    image_protection_padding: int = 2
-    symbol_min_area: int = 16
-    symbol_max_area: int = 12000
-    symbol_texture_threshold: float = 0.20
-    symbol_color_threshold: int = 24
-    text_padding: int = 2
-    output_preview_max_thumb: int = 160
-    low_contrast_support_enabled: bool = True
-    low_contrast_support_min_width: int = 48
-    low_contrast_support_min_height: int = 18
-    low_contrast_support_max_area_ratio: float = 0.08
-    low_contrast_support_max_width_ratio: float = 0.90
-    low_contrast_support_max_texture: float = 0.075
-    low_contrast_support_max_color_count: int = 10
-    low_contrast_support_min_edge_delta: int = 6
-    low_contrast_support_max_edge_delta: int = 80
-    text_support_background_enabled: bool = True
-    text_support_background_min_area_ratio: float = 1.15
-    text_support_background_max_area_ratio: float = 4.00
-    text_support_background_min_aspect: float = 1.8
-    text_support_background_padding_x_ratio: float = 0.55
-    text_support_background_padding_y_ratio: float = 0.45
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class M29ConnectedComponent:
-    id: str
-    bbox: list[int]
-    area: int
-    centroid: tuple[float, float]
-    fill_ratio: float
-    metrics: M29PrimitiveMetrics
-    source: str
-    mask_data: bytes | None = None
-
-
-@dataclass(frozen=True)
-class M29DebugArtifacts:
-    text_exclusion: str | None = None
-    initial_components: str | None = None
-    shapes: str | None = None
-    images: str | None = None
-    image_protection: str | None = None
-    foreground_mask: str | None = None
-    symbols: str | None = None
-    final_nodes: str | None = None
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            key: value
-            for key, value in {
-                "textExclusion": self.text_exclusion,
-                "initialComponents": self.initial_components,
-                "shapes": self.shapes,
-                "images": self.images,
-                "imageProtection": self.image_protection,
-                "foregroundMask": self.foreground_mask,
-                "symbols": self.symbols,
-                "finalNodes": self.final_nodes,
-            }.items()
-            if value is not None
-        }
-
-
-@dataclass(frozen=True)
-class M29VisualPrimitiveGraphDocument:
-    version: str
-    source_image: str
-    image_size: dict[str, int]
-    nodes: list[M29PrimitiveNode]
-    relations: list[M29PrimitiveRelation]
-    blocked: list[M29BlockedPrimitive]
-    debug: M29DebugArtifacts
-    warnings: list[str]
-    meta: dict[str, Any]
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "version": self.version,
-            "sourceImage": self.source_image,
-            "imageSize": self.image_size,
-            "nodes": [node.to_dict() for node in self.nodes],
-            "relations": [relation.to_dict() for relation in self.relations],
-            "blocked": [item.to_dict() for item in self.blocked],
-            "debug": self.debug.to_dict(),
-            "warnings": self.warnings,
-            "meta": self.meta,
-        }
-
-
-def metrics_to_dict(metrics: M29PrimitiveMetrics) -> dict[str, Any]:
-    return {
-        "colorCount": metrics.color_count,
-        "textureScore": round(metrics.texture_score, 4),
-        "edgeScore": round(metrics.edge_score, 4),
-        "fillRatio": round(metrics.fill_ratio, 4),
-        "aspectRatio": round(metrics.aspect_ratio, 4),
-        "brightness": round(metrics.brightness, 3),
-        "meanRgb": list(metrics.mean_rgb),
-    }
-
-
-def bbox_x2(bbox: list[int]) -> int:
-    return bbox[0] + bbox[2]
-
-
-def bbox_y2(bbox: list[int]) -> int:
-    return bbox[1] + bbox[3]
-
-
-def bbox_area(bbox: list[int]) -> int:
-    if len(bbox) != 4:
-        return 0
-    return max(0, bbox[2]) * max(0, bbox[3])
-
-
-def bbox_intersects(left: list[int], right: list[int]) -> bool:
-    return min(bbox_x2(left), bbox_x2(right)) > max(left[0], right[0]) and min(bbox_y2(left), bbox_y2(right)) > max(left[1], right[1])
-
-
-def bbox_contains(outer: list[int], inner: list[int]) -> bool:
-    return outer[0] <= inner[0] and outer[1] <= inner[1] and bbox_x2(outer) >= bbox_x2(inner) and bbox_y2(outer) >= bbox_y2(inner)
-
-
-def bbox_iou(left: list[int], right: list[int]) -> float:
-    if not bbox_intersects(left, right):
-        return 0.0
-    x1 = max(left[0], right[0])
-    y1 = max(left[1], right[1])
-    x2 = min(bbox_x2(left), bbox_x2(right))
-    y2 = min(bbox_y2(left), bbox_y2(right))
-    intersection = max(0, x2 - x1) * max(0, y2 - y1)
-    union = bbox_area(left) + bbox_area(right) - intersection
-    return intersection / max(1, union)
-
-
-def bbox_gap_distance(left: list[int], right: list[int]) -> int:
-    x_gap = max(0, max(left[0], right[0]) - min(bbox_x2(left), bbox_x2(right)))
-    y_gap = max(0, max(left[1], right[1]) - min(bbox_y2(left), bbox_y2(right)))
-    return max(x_gap, y_gap)
-
-
-def bbox_clamp(bbox: list[int], image_width: int, image_height: int) -> list[int] | None:
-    if len(bbox) != 4:
-        return None
-    x1 = max(0, min(image_width, round(bbox[0])))
-    y1 = max(0, min(image_height, round(bbox[1])))
-    x2 = max(0, min(image_width, round(bbox[0] + bbox[2])))
-    y2 = max(0, min(image_height, round(bbox[1] + bbox[3])))
-    if x2 <= x1 or y2 <= y1:
-        return None
-    return [x1, y1, x2 - x1, y2 - y1]
-
-
-def bbox_in_bounds(bbox: list[int], image_width: int, image_height: int) -> bool:
-    return len(bbox) == 4 and bbox[2] > 0 and bbox[3] > 0 and bbox[0] >= 0 and bbox[1] >= 0 and bbox_x2(bbox) <= image_width and bbox_y2(bbox) <= image_height
-
-
-def mask_empty(width: int, height: int) -> M29BinaryMask:
-    return M29BinaryMask(width=width, height=height, data=bytes(width * height))
-
-
-def mask_from_bboxes(width: int, height: int, bboxes: list[list[int]]) -> M29BinaryMask:
-    data = bytearray(width * height)
-    for bbox in bboxes:
-        clamped = bbox_clamp(bbox, width, height)
-        if clamped is None:
-            continue
-        x, y, box_width, box_height = clamped
-        for row_index in range(y, y + box_height):
-            start = row_index * width + x
-            data[start : start + box_width] = b"\xff" * box_width
-    return M29BinaryMask(width=width, height=height, data=bytes(data))
-
-
-def mask_get(mask: M29BinaryMask, x: int, y: int) -> bool:
-    if x < 0 or y < 0 or x >= mask.width or y >= mask.height:
-        return False
-    return mask.data[y * mask.width + x] != 0
-
-
-def mask_union(left: M29BinaryMask, right: M29BinaryMask) -> M29BinaryMask:
-    require_same_mask_size(left, right)
-    return M29BinaryMask(left.width, left.height, bytes(255 if a or b else 0 for a, b in zip(left.data, right.data, strict=True)))
-
-
-def mask_subtract(left: M29BinaryMask, right: M29BinaryMask) -> M29BinaryMask:
-    require_same_mask_size(left, right)
-    return M29BinaryMask(left.width, left.height, bytes(255 if a and not b else 0 for a, b in zip(left.data, right.data, strict=True)))
-
-
-def mask_intersects_bbox(mask: M29BinaryMask, bbox: list[int]) -> bool:
-    clamped = bbox_clamp(bbox, mask.width, mask.height)
-    if clamped is None:
-        return False
-    x, y, width, height = clamped
-    for row_index in range(y, y + height):
-        start = row_index * mask.width + x
-        if any(mask.data[start : start + width]):
-            return True
-    return False
-
-
-def mask_bbox_near(mask: M29BinaryMask, bbox: list[int], padding: int) -> bool:
-    return mask_intersects_bbox(mask, pad_bbox(bbox, padding))
-
-
-def mask_to_png(mask: M29BinaryMask) -> bytes:
-    validate_mask(mask)
-    row = bytes((0, 0, 0))
-    rows = []
-    for row_index in range(mask.height):
-        output = bytearray()
-        for value in mask.data[row_index * mask.width : (row_index + 1) * mask.width]:
-            output.extend((255, 255, 255) if value else row)
-        rows.append(bytes(output))
-    return encode_rgb_png(mask.width, mask.height, rows)
-
-
-def validate_mask(mask: M29BinaryMask) -> None:
-    if mask.width <= 0 or mask.height <= 0 or len(mask.data) != mask.width * mask.height:
-        raise ValueError("M29 binary mask dimensions do not match data length")
-
-
-def require_same_mask_size(left: M29BinaryMask, right: M29BinaryMask) -> None:
-    validate_mask(left)
-    validate_mask(right)
-    if left.width != right.width or left.height != right.height:
-        raise ValueError("M29 binary mask size mismatch")
+from typing import Any
+
+from .png_tools import PngMetadata, PngPixels, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, read_png_metadata, sample_rect_edges_dominant_background
+from .visual_primitive import (
+    LAYER_ORDER,
+    M29_BLOCKED_EVIDENCE_VERSION,
+    OVERLAY_COLORS,
+    M29BinaryMask,
+    M29BlockedPrimitive,
+    M29ConnectedComponent,
+    M29DebugArtifacts,
+    M29LayerHint,
+    M29PrimitiveMetrics,
+    M29PrimitiveNode,
+    M29PrimitiveRelation,
+    M29PrimitiveType,
+    M29RelationType,
+    M29TextBox,
+    M29TextKind,
+    M29TextSource,
+    M29VisualPrimitiveGraphDocument,
+    M29VisualPrimitiveOptions,
+    bbox_area,
+    bbox_clamp,
+    bbox_contains,
+    bbox_gap_distance,
+    bbox_in_bounds,
+    bbox_intersection_area,
+    bbox_intersects,
+    bbox_iou,
+    bbox_vertical_overlap_ratio,
+    bbox_x2,
+    bbox_y2,
+    clamp_float,
+    color_distance,
+    crop_pixels,
+    draw_rect,
+    mask_bbox_near,
+    mask_bbox_overlap_ratio,
+    mask_empty,
+    mask_from_bboxes,
+    mask_get,
+    mask_intersects_bbox,
+    mask_subtract,
+    mask_to_png,
+    mask_union,
+    measure_region,
+    metrics_to_dict,
+    near_white,
+    pad_bbox,
+    require_same_mask_size,
+    rgb_to_hex,
+    sample_outer_ring_mean_rgb,
+    sample_region_mean_rgb,
+    union_bbox,
+    validate_mask,
+)
 
 
 def extract_m29_visual_primitive_graph(
@@ -593,55 +263,6 @@ def connected_components(mask: M29BinaryMask, pixels: PngPixels, *, min_area: in
     return components
 
 
-def measure_region(pixels: PngPixels, bbox: list[int], *, fill_ratio: float | None = None) -> M29PrimitiveMetrics:
-    clamped = bbox_clamp(bbox, pixels.width, pixels.height)
-    if clamped is None:
-        return M29PrimitiveMetrics(0, 0, 0, 0, 0, 0, (0, 0, 0))
-    x, y, width, height = clamped
-    step = max(1, round((width * height / 4096) ** 0.5))
-    buckets: dict[tuple[int, int, int], int] = {}
-    samples = 0
-    red_sum = green_sum = blue_sum = 0
-    texture_total = 0
-    edge_hits = 0
-    edge_checks = 0
-    for row_index in range(y, y + height, step):
-        row = pixels.rows[row_index]
-        next_row = pixels.rows[min(pixels.height - 1, row_index + step)]
-        for column in range(x, x + width, step):
-            offset = column * 3
-            rgb = (row[offset], row[offset + 1], row[offset + 2])
-            red_sum += rgb[0]
-            green_sum += rgb[1]
-            blue_sum += rgb[2]
-            buckets[(rgb[0] // 16, rgb[1] // 16, rgb[2] // 16)] = buckets.get((rgb[0] // 16, rgb[1] // 16, rgb[2] // 16), 0) + 1
-            samples += 1
-            if column + step < pixels.width:
-                neighbor_offset = (column + step) * 3
-                diff = color_distance(rgb, (row[neighbor_offset], row[neighbor_offset + 1], row[neighbor_offset + 2]))
-                texture_total += diff
-                edge_checks += 1
-                edge_hits += 1 if diff > 48 else 0
-            if row_index + step < pixels.height:
-                diff = color_distance(rgb, (next_row[offset], next_row[offset + 1], next_row[offset + 2]))
-                texture_total += diff
-                edge_checks += 1
-                edge_hits += 1 if diff > 48 else 0
-    samples = max(1, samples)
-    mean_rgb = (round(red_sum / samples), round(green_sum / samples), round(blue_sum / samples))
-    dominant = max(buckets.values()) if buckets else 0
-    dominant_ratio = dominant / samples
-    return M29PrimitiveMetrics(
-        color_count=len(buckets),
-        texture_score=round((texture_total / max(1, edge_checks)) / 255, 4),
-        edge_score=round(edge_hits / max(1, edge_checks), 4),
-        fill_ratio=round(fill_ratio if fill_ratio is not None else dominant_ratio, 4),
-        aspect_ratio=round(width / max(1, height), 4),
-        brightness=round(mean_rgb[0] * 0.299 + mean_rgb[1] * 0.587 + mean_rgb[2] * 0.114, 3),
-        mean_rgb=mean_rgb,
-    )
-
-
 def detect_shapes(
     components: list[M29ConnectedComponent],
     pixels: PngPixels,
@@ -829,17 +450,6 @@ def low_contrast_support_line_evidence_bboxes(text_bbox: list[int], foreground_b
         and item[3] <= max_evidence_height
     ]
     return sorted(evidence, key=lambda item: (bbox_gap_distance(item, text_bbox), item[0], item[1], item[2], item[3]))
-
-
-def union_bbox(bboxes: list[list[int]]) -> list[int] | None:
-    valid = [bbox for bbox in bboxes if len(bbox) == 4 and bbox[2] > 0 and bbox[3] > 0]
-    if not valid:
-        return None
-    x1 = min(bbox[0] for bbox in valid)
-    y1 = min(bbox[1] for bbox in valid)
-    x2 = max(bbox_x2(bbox) for bbox in valid)
-    y2 = max(bbox_y2(bbox) for bbox in valid)
-    return [x1, y1, x2 - x1, y2 - y1]
 
 
 def score_low_contrast_support_candidate(
@@ -1046,21 +656,6 @@ def score_text_support_background_candidate(
     )
 
 
-def bbox_intersection_area(left: list[int], right: list[int]) -> int:
-    if not bbox_intersects(left, right):
-        return 0
-    x1 = max(left[0], right[0])
-    y1 = max(left[1], right[1])
-    x2 = min(bbox_x2(left), bbox_x2(right))
-    y2 = min(bbox_y2(left), bbox_y2(right))
-    return max(0, x2 - x1) * max(0, y2 - y1)
-
-
-def bbox_vertical_overlap_ratio(left: list[int], right: list[int]) -> float:
-    overlap = max(0, min(bbox_y2(left), bbox_y2(right)) - max(left[1], right[1]))
-    return overlap / max(1, min(left[3], right[3]))
-
-
 def support_edge_delta(pixels: PngPixels, bbox: list[int]) -> int:
     inner = support_region_metrics(pixels, bbox).mean_rgb
     outer = sample_outer_ring_mean_rgb(pixels, bbox, padding=3, thickness=3)
@@ -1088,25 +683,6 @@ def support_boundary_deltas(pixels: PngPixels, bbox: list[int], *, padding: int,
     }
 
 
-def sample_region_mean_rgb(pixels: PngPixels, bbox: list[int]) -> tuple[int, int, int]:
-    clamped = bbox_clamp(bbox, pixels.width, pixels.height)
-    if clamped is None:
-        return measure_region(pixels, [0, 0, pixels.width, pixels.height]).mean_rgb
-    x, y, width, height = clamped
-    red = green = blue = count = 0
-    for row_index in range(y, y + height):
-        row = pixels.rows[row_index]
-        for column in range(x, x + width):
-            offset = column * 3
-            red += row[offset]
-            green += row[offset + 1]
-            blue += row[offset + 2]
-            count += 1
-    if count == 0:
-        return measure_region(pixels, clamped).mean_rgb
-    return (round(red / count), round(green / count), round(blue / count))
-
-
 def support_region_metrics(pixels: PngPixels, bbox: list[int]) -> M29PrimitiveMetrics:
     try:
         sample = sample_rect_edges_dominant_background(
@@ -1130,36 +706,6 @@ def support_region_metrics(pixels: PngPixels, bbox: list[int]) -> M29PrimitiveMe
         )
     except Exception:
         return measure_region(pixels, bbox)
-
-
-def sample_outer_ring_mean_rgb(pixels: PngPixels, bbox: list[int], *, padding: int, thickness: int) -> tuple[int, int, int]:
-    outer = bbox_clamp(pad_bbox(bbox, padding), pixels.width, pixels.height)
-    if outer is None:
-        return measure_region(pixels, bbox).mean_rgb
-    x, y, width, height = outer
-    inner_x1, inner_y1 = bbox[0], bbox[1]
-    inner_x2, inner_y2 = bbox_x2(bbox), bbox_y2(bbox)
-    red = green = blue = count = 0
-    for row_index in range(y, y + height):
-        row = pixels.rows[row_index]
-        for column in range(x, x + width):
-            in_inner = inner_x1 <= column < inner_x2 and inner_y1 <= row_index < inner_y2
-            near_outer_edge = (
-                column < x + thickness
-                or column >= x + width - thickness
-                or row_index < y + thickness
-                or row_index >= y + height - thickness
-            )
-            if in_inner or not near_outer_edge:
-                continue
-            offset = column * 3
-            red += row[offset]
-            green += row[offset + 1]
-            blue += row[offset + 2]
-            count += 1
-    if count == 0:
-        return measure_region(pixels, bbox).mean_rgb
-    return (round(red / count), round(green / count), round(blue / count))
 
 
 def detect_images(
@@ -1413,15 +959,6 @@ def export_node_assets(nodes: list[M29PrimitiveNode], pixels: PngPixels, output_
         else:
             exported.append(node)
     return exported
-
-
-def crop_pixels(pixels: PngPixels, bbox: list[int]) -> bytes:
-    clamped = bbox_clamp(bbox, pixels.width, pixels.height)
-    if clamped is None:
-        raise UnsupportedPngCropError("M29 crop bbox is invalid.")
-    x, y, width, height = clamped
-    rows = [pixels.rows[row_index][x * 3 : (x + width) * 3] for row_index in range(y, y + height)]
-    return encode_rgb_png(width, height, rows)
 
 
 def write_debug_overlays(
@@ -1982,18 +1519,6 @@ def is_overlay_sized(bbox: list[int]) -> bool:
     return bbox_area(bbox) <= 3200 and max(bbox[2], bbox[3]) <= 80
 
 
-def mask_bbox_overlap_ratio(mask: M29BinaryMask, bbox: list[int]) -> float:
-    clamped = bbox_clamp(bbox, mask.width, mask.height)
-    if clamped is None:
-        return 0.0
-    x, y, width, height = clamped
-    hits = 0
-    for row_index in range(y, y + height):
-        start = row_index * mask.width + x
-        hits += sum(1 for value in mask.data[start : start + width] if value)
-    return hits / max(1, width * height)
-
-
 def add_internal_contrast_pixels(data: bytearray, pixels: PngPixels, shape: M29PrimitiveNode, text_mask: M29BinaryMask, image_mask: M29BinaryMask) -> None:
     x, y, width, height = shape.bbox
     fill = tuple(int(str(shape.style.get("fill", "#000000"))[index : index + 2], 16) for index in (1, 3, 5)) if shape.style and shape.style.get("fill") else shape.metrics.mean_rgb
@@ -2007,38 +1532,3 @@ def add_internal_contrast_pixels(data: bytearray, pixels: PngPixels, shape: M29P
             rgb = (row[offset], row[offset + 1], row[offset + 2])
             if color_distance(rgb, fill) > 80:
                 data[index] = 255
-
-
-def pad_bbox(bbox: list[int], padding: int) -> list[int]:
-    return [bbox[0] - padding, bbox[1] - padding, bbox[2] + padding * 2, bbox[3] + padding * 2]
-
-
-def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> int:
-    return abs(left[0] - right[0]) + abs(left[1] - right[1]) + abs(left[2] - right[2])
-
-
-def near_white(rgb: tuple[int, int, int]) -> bool:
-    return rgb[0] >= 245 and rgb[1] >= 245 and rgb[2] >= 245
-
-
-def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
-    return "#" + "".join(f"{max(0, min(255, value)):02X}" for value in rgb)
-
-
-def clamp_float(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def draw_rect(rows: list[bytearray], image_width: int, image_height: int, bbox: list[int], color: tuple[int, int, int], thickness: int) -> None:
-    clamped = bbox_clamp(bbox, image_width, image_height)
-    if clamped is None:
-        return
-    x, y, width, height = clamped
-    color_bytes = bytes(color)
-    for row_index in range(y, y + height):
-        if row_index < y + thickness or row_index >= y + height - thickness:
-            for column in range(x, x + width):
-                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
-        else:
-            for column in list(range(x, min(x + thickness, x + width))) + list(range(max(x, x + width - thickness), x + width)):
-                rows[row_index][column * 3 : column * 3 + 3] = color_bytes

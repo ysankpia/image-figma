@@ -65,7 +65,17 @@ assets.py: M29 materialized assets publish
 
 ### Raw M29 Primitive Graph
 
-`backend/app/visual_primitive_graph.py` 生成 raw M29 primitive graph。它负责：
+Raw M29 的基础数学层已拆到 `backend/app/visual_primitive/`：
+
+```text
+types.py: raw M29 dataclasses and Literal contracts
+bbox.py: bbox math and bbox set operations
+mask.py: binary mask construction, overlap, validation, PNG export
+metrics.py: region metrics, color distance, numeric clamps
+pixels.py: pixel crop, region/ring sampling, debug rectangle drawing
+```
+
+`backend/app/visual_primitive_graph.py` 仍是兼容入口和 detector orchestration 文件，继续导出 `extract_m29_visual_primitive_graph` 以及历史调用方依赖的 M29 类型和基础函数。它负责：
 
 ```text
 source PNG pixel measurement
@@ -78,10 +88,9 @@ shape geometry fitting
 source assets and overlays
 ```
 
-这是当前最大的 source truth 文件之一。后续拆分应围绕真实边界进行：
+后续拆分应继续围绕真实边界进行：
 
 ```text
-bbox/mask math
 support background detectors
 shape geometry fit
 primitive detectors
@@ -268,7 +277,7 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 
 代码瘦身应单独开阶段，且默认先做无行为变更拆分。优先顺序：
 
-1. `visual_primitive_graph.py`：按 bbox/mask math、support detectors、geometry fit、detectors、artifact writers 拆分。
+1. `visual_primitive_graph.py`：继续按 support detectors、geometry fit、detectors、artifact writers 拆分；基础 types/bbox/mask/metrics/pixels 已在 `visual_primitive/`。
 2. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
 3. `upload_preview/`：继续保持薄编排；后续如需调整 stage 顺序必须单独开行为阶段。
 

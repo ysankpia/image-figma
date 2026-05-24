@@ -34,6 +34,7 @@
 - [M29 Plan-Driven Raster/Media Preservation Mainline Cutover](029-plan-driven-raster-media-preservation.md) — `completed`
 - [M29 Plan Materializer No-Behavior Split](029-plan-materializer-no-behavior-split.md) — `completed`
 - [M29 Product Surface Naming Cleanup](029-product-surface-naming-cleanup.md) — `completed`
+- [M29 Raw Geometry/Mask No-Behavior Split](029-raw-m29-geometry-mask-no-behavior-split.md) — `completed`
 - [M29 Shape Geometry Fit Before Radius Replay](029-shape-geometry-fit-before-radius-replay.md) — `completed`
 - [M29 Text Support Background Source Contract](029-text-support-background-source-contract.md) — `completed`
 - [M29 Upload Preview Pipeline No-Behavior Split](029-upload-preview-pipeline-no-behavior-split.md) — `completed`
