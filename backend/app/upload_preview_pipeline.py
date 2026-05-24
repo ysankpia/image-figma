@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .database import json_dumps
-from .m29_plan_materializer import build_m29_plan_materialized_dsl
 from .m29_replay_plan import build_m295_replay_plan
 from .ocr import extract_ocr
+from .plan_materializer import build_plan_driven_dsl
 from .png_tools import PngMetadata, read_png_metadata
 from .region_relation_graph_report import extract_m2931_region_relation_graph_report
 from .stable_design_cluster import extract_m294_stable_design_cluster_report
@@ -159,7 +159,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     )
 
     update_task(task_id, "m29_materialization", 92, "Materializing M29 plan-driven DSL.")
-    materialized_design_result = run_stage(paths, timings, "m29_materialization", lambda: build_m29_plan_materialized_dsl(
+    materialized_design_result = run_stage(paths, timings, "m29_materialization", lambda: build_plan_driven_dsl(
         source_png=png_data,
         source_image_path=str(upload_path),
         m29_document={**m29_document.to_dict(), "sourceM29NodesJson": str(m29_json)},

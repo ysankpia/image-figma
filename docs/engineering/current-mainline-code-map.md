@@ -151,7 +151,7 @@ m29_symbol
 
 ## M29 Plan Materialization
 
-`backend/app/m29_plan_materializer.py` is the current formal DSL producer. It consumes:
+`backend/app/plan_materializer/` is the current formal DSL producer. It consumes:
 
 ```text
 source PNG
@@ -167,6 +167,18 @@ It creates:
 storage/upload_previews/{taskId}/materialized_design/design.dsl.json
 storage/upload_previews/{taskId}/materialized_design/materialization_report.json
 storage/upload_previews/{taskId}/materialized_design/assets/
+```
+
+Package responsibilities:
+
+```text
+builder.py: entry flow, output write, base DSL namespacing
+background.py: source background, text background, foreground, shape fill/radius sampling
+replay.py: M29.5 plan item to DSL node conversion
+assets.py: raster/icon asset crop, copy, local URL helpers
+cleanup.py: plan-authorized fallback and copied image cleanup execution
+report.py: materialization summary/report helpers
+types.py: options/result/replay node dataclasses
 ```
 
 It owns:
@@ -245,8 +257,7 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 代码瘦身应单独开阶段，且默认先做无行为变更拆分。优先顺序：
 
 1. `visual_primitive_graph.py`：按 bbox/mask math、support detectors、geometry fit、detectors、artifact writers 拆分。
-2. `m29_plan_materializer.py`：按 plan consumption、node appenders、asset cleanup、fallback cleanup、report policy 拆分。
-3. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
-4. `upload_preview_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分或在独立阶段重命名。
+2. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
+3. `upload_preview_pipeline.py`：按 orchestration、artifact publish、task state/error handling 拆分。
 
 每次拆分都必须先有 focused tests，且 diff 应证明 output contract 不变。

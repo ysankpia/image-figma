@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from ..m29_materialization_utils import list_dicts, map_page_bbox_to_asset_pixels, sample_outer_bbox_ring_rgb
+from ..png_tools import PngPixels, decode_png_pixels, encode_rgb_png
+from ..visual_primitive_graph import bbox_clamp
+from .background import sample_canvas_background
+from .types import ReplayNode
+
+
+def clean_text_from_copied_image_assets(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    replayed: list[ReplayNode],
+    *,
+    plan_items: list[dict[str, Any]] | None = None,
+) -> int:
+    text_nodes = [item for item in replayed if item.role == "m29_text" and item.replay_decision in {"ocr_text_replay", "text_replay"}]
+    image_nodes = [item for item in replayed if item.role == "m29_image" and item.asset_url]
+    if not text_nodes or not image_nodes:
+        return 0
+
+    assets = {
+        str(asset.get("assetId")): asset
+        for asset in list_dicts(dsl.get("assets"))
+        if asset.get("assetId") and asset.get("role") == "m29_image"
+    }
+    erased_count = 0
+    for image_node in image_nodes:
+        if image_node.asset_id and image_node.asset_id not in assets:
+            continue
+        image_path = (output_dir / str(image_node.asset_url)).resolve()
+        if not image_path.exists():
+            continue
+        try:
+            pixels = decode_png_pixels(image_path.read_bytes())
+        except Exception:
+            continue
+
+        scale_x = pixels.width / max(1, image_node.bbox[2])
+        scale_y = pixels.height / max(1, image_node.bbox[3])
+        rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        for text_node in text_nodes:
+            if not plan_allows_copied_image_cleanup(plan_items or [], text_node.source_id, image_node.source_id):
+                continue
+            local_bbox = map_page_bbox_to_asset_pixels(text_node.bbox, image_node.bbox, pixels.width, pixels.height, scale_x, scale_y)
+            if local_bbox is None:
+                continue
+            try:
+                fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
+            except Exception:
+                fill = sample_canvas_background(pixels)
+            x, y, width, height = local_bbox
+            for row_idx in range(y, y + height):
+                row = rows[row_idx]
+                for col_idx in range(x, x + width):
+                    offset = col_idx * 3
+                    row[offset] = fill[0]
+                    row[offset + 1] = fill[1]
+                    row[offset + 2] = fill[2]
+            modified = True
+            erased_count += 1
+        if modified:
+            image_path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows]))
+    return erased_count
+
+
+def plan_allows_copied_image_cleanup(plan_items: list[dict[str, Any]], text_source_id: str, image_source_id: str) -> bool:
+    for item in plan_items:
+        if str(item.get("sourceObjectId") or "") != text_source_id:
+            continue
+        if item.get("finalReplayAction") != "text_replay":
+            return False
+        for target in item.get("cleanupTargets", []) if isinstance(item.get("cleanupTargets"), list) else []:
+            if (
+                isinstance(target, dict)
+                and target.get("target") == "copied_image_asset"
+                and str(target.get("targetSourceObjectId") or "") == image_source_id
+            ):
+                return True
+    return False
+
+
+def erase_replayed_bboxes_from_fallback(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    source_pixels: PngPixels,
+    replayed: list[ReplayNode],
+    *,
+    plan_items: list[dict[str, Any]],
+) -> int:
+    fallback_assets = [asset for asset in list_dicts(dsl.get("assets")) if asset.get("role") == "fallback_region" and asset.get("type") == "image"]
+    if not fallback_assets or not replayed:
+        return 0
+    erased = 0
+    for asset in fallback_assets:
+        path = output_dir / str(asset.get("url") or "")
+        if not path.exists():
+            continue
+        try:
+            pixels = decode_png_pixels(path.read_bytes())
+        except Exception:
+            continue
+        rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        for item in replayed:
+            if not plan_allows_fallback_cleanup(plan_items, item.source_id):
+                continue
+            bbox = bbox_clamp(item.bbox, pixels.width, pixels.height)
+            if bbox is None:
+                continue
+            fill = sample_outer_bbox_ring_rgb(source_pixels, bbox)
+            x, y, width, height = bbox
+            for row_idx in range(y, y + height):
+                row = rows[row_idx]
+                for col_idx in range(x, x + width):
+                    offset = col_idx * 3
+                    row[offset] = fill[0]
+                    row[offset + 1] = fill[1]
+                    row[offset + 2] = fill[2]
+            modified = True
+            erased += 1
+        if modified:
+            path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows]))
+    return erased
+
+
+def plan_allows_fallback_cleanup(plan_items: list[dict[str, Any]], source_id: str) -> bool:
+    for item in plan_items:
+        if str(item.get("sourceObjectId") or "") != source_id:
+            continue
+        if item.get("finalReplayAction") not in {"text_replay", "image_replay", "icon_replay", "shape_replay"}:
+            return False
+        for target in item.get("cleanupTargets", []) if isinstance(item.get("cleanupTargets"), list) else []:
+            if isinstance(target, dict) and target.get("target") == "fallback":
+                return True
+    return False

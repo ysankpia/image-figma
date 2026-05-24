@@ -114,7 +114,7 @@ Long files are now a real maintenance risk. Refactor only with behavior-preservi
 ```text
 visual_primitive_graph.py
 source_ui_physical_graph.py
-m29_plan_materializer.py
+plan_materializer/
 upload_preview_pipeline.py
 ```
 
@@ -122,8 +122,7 @@ Suggested split order:
 
 1. raw M29 bbox/mask/support/geometry/artifact helpers.
 2. M29.2 media/text/icon/shape ownership classifiers.
-3. M29 materializer node appenders and cleanup executors.
-4. pipeline orchestration, asset publishing, and task state handling.
+3. pipeline orchestration, asset publishing, and task state handling.
 
 Do not mix naming cleanup with algorithm changes. Product surface cleanup should stay mechanical and separately tested.
 

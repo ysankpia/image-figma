@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.m29_plan_materializer import build_m29_plan_materialized_dsl
+from app.plan_materializer import build_plan_driven_dsl
 from app.png_tools import PngPixels, decode_png_pixels, encode_rgb_png, read_png_metadata
 
 
@@ -12,7 +12,7 @@ def test_m29_plan_materializer_requires_m295_plan(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(80, 60))
 
     with pytest.raises(ValueError, match="M29.5 replay plan is required"):
-        build_m29_plan_materialized_dsl(
+        build_plan_driven_dsl(
             source_png=source.read_bytes(),
             source_image_path=str(source),
             m29_document=m29_document(tmp_path, nodes=[]),
@@ -41,7 +41,7 @@ def test_m29_plan_items_are_the_only_visible_materialization_order(tmp_path: Pat
         ]
     )
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 40]), m29_node("shape_001", "shape", [70, 70, 20, 6])]),
@@ -63,7 +63,7 @@ def test_m29_plan_items_are_the_only_visible_materialization_order(tmp_path: Pat
 def test_m29_plan_materializer_samples_source_background_instead_of_fixed_white(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(100, 80, fill=(9, 13, 27), marks=[([25, 20, 50, 30], (40, 70, 120))]))
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[]),
@@ -105,7 +105,7 @@ def test_copied_media_cleanup_requires_m295_cleanup_target(tmp_path: Path) -> No
         ]
     )
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 50])]),
@@ -125,7 +125,7 @@ def test_copied_media_cleanup_requires_m295_cleanup_target(tmp_path: Path) -> No
             m295_item("plan_text", "text", [30, 28, 20, 8], "text_replay", "m29_text"),
         ]
     )
-    result_without_cleanup = build_m29_plan_materialized_dsl(
+    result_without_cleanup = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 50])]),
@@ -143,7 +143,7 @@ def test_fallback_erasure_requires_m295_fallback_cleanup_target(tmp_path: Path) 
     source = write_png(tmp_path / "source.png", make_png(80, 60, fill=(240, 240, 240), marks=[([20, 20, 20, 10], (0, 0, 0))]))
     m292 = m292_document([m292_object("text", [20, 20, 20, 10], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"])])
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[]),
@@ -164,7 +164,7 @@ def test_shape_replay_uses_only_source_geometry_fit_radius(tmp_path: Path) -> No
     m292 = m292_document([m292_object("shape", [20, 20, 50, 24], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])])
     plan = m295_plan([m295_item("plan_shape", "shape", [20, 20, 50, 24], "shape_replay", "m29_shape")])
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(
@@ -193,7 +193,7 @@ def test_shape_replay_does_not_invent_radius_without_geometry_fit(tmp_path: Path
     m292 = m292_document([m292_object("shape", [20, 20, 50, 24], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])])
     plan = m295_plan([m295_item("plan_shape", "shape", [20, 20, 50, 24], "shape_replay", "m29_shape")])
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 50, 24])]),
@@ -212,7 +212,7 @@ def test_shape_replay_samples_missing_fill_from_source_pixels(tmp_path: Path) ->
     m292 = m292_document([m292_object("shape", [20, 20, 50, 24], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])])
     plan = m295_plan([m295_item("plan_shape", "shape", [20, 20, 50, 24], "shape_replay", "m29_shape")])
 
-    result = build_m29_plan_materialized_dsl(
+    result = build_plan_driven_dsl(
         source_png=source.read_bytes(),
         source_image_path=str(source),
         m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 50, 24])]),

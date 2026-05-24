@@ -93,7 +93,7 @@ M29.4 的 cluster role hint 不提供组件化、Auto Layout、Figma Component/I
 
 ## M29 Plan-Driven Materialization
 
-`backend/app/m29_plan_materializer.py` 是当前正式 DSL producer。它的输入只来自：
+`backend/app/plan_materializer/` 是当前正式 DSL producer。它的输入只来自：
 
 ```text
 source PNG
