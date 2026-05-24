@@ -1,26 +1,16 @@
-# AGENTS.md
+# Repository Guidelines
 
-本项目采用 agent-first 文档工作流。仓库文件是事实来源，不依赖聊天记录。
+本仓库采用 agent-first 工作流。仓库文件是事实来源，不依赖聊天记录；旧计划、ADR 和 legacy 草稿只能作为背景，不能覆盖当前代码和当前 docs。
 
-## 读取顺序
+## Project Structure & Module Organization
 
-1. 先读本文件。
-2. 再读 [docs/index.md](docs/index.md)。
-3. 根据任务类型只读相关文档。
-4. 非平凡实现先创建或更新 `docs/plans/active/` 中的计划。
-5. 改动完成前同步更新产品、架构、工程、计划、bug 或 ADR 文档。
+本仓库是 pnpm workspace 加 FastAPI 后端。`packages/dsl-schema/` 维护 DSL v0.1 类型、schema 和校验；`packages/image-to-figma-renderer/` 负责把已校验 DSL 写入 Figma adapter；`figma-plugin/` 包含插件 UI、main thread、manifest 和 bundle 检查；`backend/` 包含 FastAPI app、上传主链、M29 source truth、plan materializer、routes、storage helper 和 `backend/tests/`。
 
-## 项目边界
+当前文档入口是 [docs/index.md](docs/index.md)。正式规格在 `docs/product/`、`docs/architecture/`、`docs/engineering/`、`docs/runbooks/`、`docs/reference/`、`docs/decisions/`、`docs/plans/` 和 `docs/bugs/`；历史草稿只保留在 `docs/reference/legacy/`。
 
-- 项目名：Image-to-Figma Design。
-- 当前状态：M29 plan-driven 主链收口完成。M29 是当前产品 source truth，`/api/tasks/{taskId}/dsl` 返回 M29.5 replay plan 驱动的 DSL。
-- 项目类型：`multi-end-frontend`。
-- 一期目标：单张 PNG 上传后生成 DSL v0.1，并由 Figma Renderer 写入可编辑 Figma 设计稿。
-- 一期硬边界：不做代码生成、Figma Component/Instance、Auto Layout、批量上传、账号、支付、额度、质量看板、多模型平台。
+## Current Mainline
 
-## 当前主链
-
-当前产品入口是 `/api/upload-preview`，运行语义是 M29 mainline：
+当前唯一产品主链是：
 
 ```text
 Figma Plugin
@@ -29,98 +19,98 @@ Figma Plugin
 -> raw M29 primitive graph
 -> M29.2 source ownership
 -> M29.3 relation graph
--> M29.4 weak structural cluster report
+-> M29.4 weak structural evidence
 -> M29.5 replay plan
 -> M29 plan-driven materializer
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
--> Figma Canvas
+-> Figma
 ```
 
-M29 是 source truth 层。它负责从 PNG/OCR/source evidence 中固定 bbox、mask、pixel ownership、region relation、weak cluster evidence 和 replay plan。
+`/api/upload-preview` 是正式上传入口。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。当前主线详情以 [docs/engineering/current-mainline-code-map.md](docs/engineering/current-mainline-code-map.md) 为准。
 
-M29 plan-driven materializer 是当前唯一正式 DSL producer。它只消费 M29.5 plan 里的 `finalReplayAction`、`pixelOwner`、`cleanupTargets`、bbox、source lineage 和 asset evidence；它不重新判断 owner，不按文字、颜色、主题、行业或具体截图做样式补丁。
+## Documentation Routing
 
-M30 legacy materializer、M29 Direct compare endpoint 和插件 compare UI 已从当前产品路径下线。M29.0.x、M30、M31-M39/M39.1、ONNX proposer、SAM2/perception/icon/slice/provider harness 的 ADR 和 completed plans 只作为历史追溯，不得当成 active runtime。
+先读本文件，再读 [docs/index.md](docs/index.md)，然后按任务只读相关文档。
 
-## Legacy 边界
+- 产品范围和验收：`docs/product/`。
+- DSL、API、Renderer、后端、插件边界：`docs/architecture/`。
+- 当前代码地图、测试、文档维护和 M29 regression matrix：`docs/engineering/`。
+- 运行、发布、调试、迁移：`docs/runbooks/`。
+- 环境变量、外部接口、术语和 legacy 草稿：`docs/reference/`。
+- 计划：`docs/plans/active/`、`docs/plans/completed/`、`docs/plans/archive/`。
+- bug 复盘和回归保护：`docs/bugs/`。
 
-旧 M8-M28 debug endpoints、pre-M29 upload chain、M29.0.x bridge、M30 evidence-grounded materialization、M29 Direct compare、M31-M39 downstream experiments 和 ONNX proposer 不属于当前产品主链。不要通过环境变量、兼容 route、插件按钮或旧脚本把它们恢复成产品路径。
+ADR 是历史决策记录，不等于 active runtime。涉及被删除链路时，以当前代码地图、测试策略和最新 completed plan 为准。
 
-可以复用旧代码里的中性工具能力，例如 PNG 读写、bbox 工具、asset copy、cleanup 执行机制。但 source truth、owner 分配、cleanup 授权和 visible node 订单必须回到 M29.2/M29.5 合同。
+## Build, Test, and Development Commands
 
-## 任务路由
+安装和 workspace 检查：
 
-- 产品范围和验收：读 `docs/product/`。
-- 当前主链架构和代码地图：读 `docs/architecture/` 与 [docs/engineering/current-mainline-code-map.md](docs/engineering/current-mainline-code-map.md)。
-- DSL、Renderer、后端、插件边界：读 `docs/architecture/`。
-- 测试、验证、代码风格、文档维护：读 `docs/engineering/`。
-- 运行、发布、调试、迁移：读 `docs/runbooks/`。
-- 外部接口、环境变量、术语、历史草稿：读 `docs/reference/`。
-- 重大技术决策：读 `docs/decisions/`。ADR 是历史决策记录，不等于全部仍是 active runtime。
-- 执行计划：读 `docs/plans/`。
-- 缺陷复盘和回归保护：读 `docs/bugs/`。
+```bash
+pnpm install
+pnpm run check
+pnpm -r run test
+pnpm -r run typecheck
+pnpm --filter @image-figma/figma-plugin run build
+```
 
-## 计划规则
+后端使用 `.tool-versions` 中的 Python 3.12.7：
 
-以下任务必须先写计划：
+```bash
+cd backend
+uv sync
+UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run pytest -q
+```
+
+交付前至少检查：
+
+```bash
+git diff --check
+git status --short --branch
+```
+
+## Coding Style & Boundary Rules
+
+TypeScript 使用 ESM、两空格缩进、`camelCase` 值/函数和 `PascalCase` 类型。Python 使用四空格缩进，模块和函数用 `snake_case`，在有助于边界表达时添加类型提示。
+
+保持边界清楚：Renderer 不导入 backend；backend 不导入插件；插件 UI 不直接调用 Figma API；共享合同只通过 `packages/dsl-schema/`。不要提交 `dist/`、`backend/storage/`、数据库、日志、cache、密钥或临时产物。
+
+优先简单、当前可验证的实现。不要为假想未来加抽象，不创建 `utils`、`common`、`misc` 垃圾桶模块。大型中心文件是设计压力；继续增加行为前优先按真实职责拆模块。
+
+## Planning & Documentation Rules
+
+以下工作必须先创建或更新 `docs/plans/active/` 中的计划：
 
 - 影响多个模块或目录。
-- 修改 DSL、API、数据模型或运行方式。
-- 增加依赖或工程脚本。
-- 实现插件、Renderer、后端、识别管线中的任一核心能力。
+- 修改 DSL、API、数据模型、环境变量或运行方式。
+- 增加依赖、工程脚本或 CI 行为。
+- 修改插件、Renderer、后端、M29 evidence chain、replay plan 或 materializer 主链能力。
 - 修复会影响主链路的缺陷。
 
-计划生命周期必须和目录一致：
+计划状态必须和目录一致：未完成计划放 `active/`，已完成计划放 `completed/`，被替代或暂缓的计划放 `archive/` 对应子目录。行为、API、数据模型、环境变量、构建命令、运行步骤、架构边界或验收标准变化，必须同步更新相关 docs。
 
-- `docs/plans/active/` 只放真实下一阶段工作。
-- 已完成计划必须移入 `docs/plans/completed/`。
-- 已替代计划必须移入 `docs/plans/archive/superseded/`。
-- 已暂缓计划必须移入 `docs/plans/archive/deferred/`。
-- 不允许 `active` 目录保留 `completed`、`deferred` 或 `superseded-by-*` 状态文件。
+## Testing & Validation Rules
 
-## 实现约束
+测试策略以 [docs/engineering/testing-strategy.md](docs/engineering/testing-strategy.md) 为准。DSL 改动必须有 schema 或等价合同校验；Renderer 改动必须能用测试 DSL 验证；后端 API 改动必须有接口级验证；插件或 Figma 可见行为改动必须按本项目验证文档记录可观察结果。
 
-- 先保持 DSL -> Figma 稳定，再逐步增强 PNG -> DSL。
-- 保持模块边界清楚，不把后端识别、Renderer 和插件 UI 混在一起。
-- 优先小而稳定的实现，不为未来功能提前加抽象。
-- 复杂区域优先由 source-owned raster/media/fallback 保全，不能让局部失败拖垮整页生成。
-- 修复 source ownership 问题必须从 raw M29 / M29.2 source 合同修起；禁止在 materializer、Renderer 或 plugin 里按文字内容、颜色名、中文语义、主题或样式补丁伪造结果。
-- `pixelOwner` 和 `replayDecision` 是回放权限门，不是视觉猜测标签。看不懂、算不准、无法证明 cleanup 安全的对象，应保留在 raster/fallback/report，而不是勉强画成 editable node。
-- M29.3 relation kernel 必须保持纯 bbox/geometry 逻辑；不要在下游业务文件里再写一套 contains/near/duplicate 规则。
-- M29.4 cluster 始终是 weak structural evidence。`row_like`、`column_like`、`background_anchor_like`、`repeated_item_like` 不提供组件化、Auto Layout、Figma Component/Instance 或 materialization 权限。
-- M29.5 replay plan 是正式 materialization 前的最后质量门。可见层顺序、去重、node budget、fallback cleanup 和 copied raster/media asset cleanup 授权必须由 plan 控制。
-- M29 plan-driven materializer 只能执行 plan，不得新增 cleanup 授权，不得重新判断 owner，不得把 M29.4 weak cluster 当组件权限。
-- root/page 背景必须来自 source PNG 的边缘或全局样本；禁止恢复固定浅色默认背景来掩盖 fallback-off 问题。
-- 不要恢复已删除的 M29 Direct/M30 product path、M31/M37/M38/M39/M39.1 runtime、routes、env 或 ONNX proposer，除非新计划证明它们服务当前 M29 source truth，并重新建立测试合同。
-- AI/OCR/视觉 provider 输出不能直接成为 DSL 权威，必须经过 M29 source ownership、relation、replay plan 和校验。
-- 上传主链路默认返回 M29 plan-driven DSL。
-- 任何行为、接口、数据模型、环境变量、运行步骤变化都必须更新文档。
+M29 owner、relation、replay、materializer、cleanup 授权或 fallback 行为改动，必须先映射到 [docs/engineering/m29-contract-regression-matrix.md](docs/engineering/m29-contract-regression-matrix.md)。没有覆盖就先补测试或明确记录无法自动化的替代 guard。
 
-## 验证要求
+## Bugfix & Regression Rules
 
-- DSL 变更必须有 schema 或等价校验。
-- Renderer 变更必须能用假 DSL 验证。
-- 后端 API 变更必须有接口级验证。
-- 插件 UI 或浏览器可见行为变更必须做本地可视化验证。
-- Bug 修复必须有回归保护；无法自动化时必须在 bug 记录里说明。
-- M29 owner/relation/replay/materialization/cleanup 改动必须先映射到 [docs/engineering/m29-contract-regression-matrix.md](docs/engineering/m29-contract-regression-matrix.md)，没有覆盖就先补测试。
+Bug 工作从 `docs/bugs/index.md` 和相关 bug 记录开始。修复前先复现，修复后记录根因、修复摘要、回归保护和验证证据。无法添加自动化回归时，必须在 bug 记录中写明替代 guard 和剩余风险。
 
-## 阶段提交规则
+## Commit & Pull Request Guidelines
 
-- 一个 M 阶段完成后必须形成独立 git commit，提交信息使用该阶段的实际能力描述，例如 `feat: add low-risk text replacement harness`。
-- 阶段 commit 必须只包含本阶段范围内的代码、测试、文档、ADR 和计划更新；不得把下一阶段探索、临时调试、storage、dist、密钥或无关本地改动混进去。
-- 阶段计划的验收项完成后，先提交阶段 commit，再在该提交之上运行完整验证命令；验证失败时用后续 fix commit 修正，不能把多个阶段攒成一个大提交。
-- 开始下一阶段前必须确认 `git status --short` 干净，或者明确记录并隔离用户未提交的无关改动。
-- 小的阶段内修正可以追加在同阶段 commit 前；阶段验收通过之后再出现的新问题，应按 bug fix 或下一阶段单独提交。
+提交使用 Conventional Commit 风格，例如 `docs:`、`refactor:`、`test:`、`feat:`、`fix:`。阶段工作必须形成独立提交，提交范围只包含本阶段代码、测试、文档、ADR 和计划更新；不要混入下一阶段探索、临时调试、storage、dist、密钥或无关本地改动。
 
-## 完成定义
+PR 或交付说明应包含 changed surface、关联 plan/bug/ADR、验证命令和可见 UI/Figma/产物证据。新增 env var 时同步 `.env.example` 和 `docs/reference/env-vars.md`。
 
-任务完成必须满足：
+## Agent-Specific Guardrails
 
-- 实现或文档改动完整。
-- 对应计划状态更新。
-- 相关文档同步更新。
-- 验证命令或人工验证记录清楚。
-- 阶段级工作已经按阶段提交，且提交边界清楚。
-- 如果涉及 bug，bug 记录包含根因、修复、回归保护和验证证据。
+不要恢复已删除的 M29 Direct compare、legacy M30 materialization product path、M31-M39/M39.1 runtime、routes、env 或 ONNX proposer。旧 ADR、completed plans 和 legacy 草稿提到这些路径时，只能作为历史背景。
+
+M29.4 weak cluster 只是 evidence，不提供 component、Auto Layout、Figma Component/Instance 或 materialization 权限。M29.5 replay plan 是唯一 materialization order、node budget、dedupe 和 cleanup 授权来源。M29 plan-driven materializer 只执行 plan，不重新判断 owner，不新增 cleanup 授权。
+
+Source ownership 问题必须从 raw M29 或 M29.2 修起；不要在 materializer、Renderer 或 plugin 里按颜色、文案、主题、行业、文件名或固定 bbox 写特化补丁。root/page 背景必须来自 source PNG 采样，不恢复固定浅色默认背景来掩盖 fallback-off 问题。
