@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..m29_replay_plan import build_m295_replay_plan
+from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
 from ..plan_materializer import build_plan_driven_dsl
 from ..png_tools import PngMetadata
@@ -104,6 +105,23 @@ def run_m295_replay_plan_stage(
     )
 
 
+def run_m29_ownership_conservation_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m292_document: dict[str, Any],
+    m2931_report: dict[str, Any],
+    m295_report: dict[str, Any],
+):
+    return extract_m29_ownership_conservation_report(
+        task_id=task_id,
+        m292_document=m292_document,
+        m2931_report=m2931_report,
+        m295_report=m295_report,
+        output_dir=paths.m29_ownership_conservation,
+    )
+
+
 def run_materialization_stage(
     *,
     task_id: str,
@@ -127,4 +145,3 @@ def run_materialization_stage(
         output_dir=paths.materialized_design,
         task_id=task_id,
     )
-

@@ -21,6 +21,7 @@ Figma Plugin
 -> M29.3 relation graph
 -> M29.4 weak structural evidence
 -> M29.5 replay plan
+-> M29 ownership conservation report
 -> M29 plan-driven materializer
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer

@@ -14,6 +14,7 @@ from .stages import (
     run_m2931_relation_stage,
     run_m294_cluster_stage,
     run_m295_replay_plan_stage,
+    run_m29_ownership_conservation_stage,
     run_m29_visual_primitive_stage,
     run_materialization_stage,
     run_ocr,
@@ -114,6 +115,20 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
+    update_task(task_id, "m29_ownership_conservation", 28, "Checking M29 ownership conservation.")
+    run_stage(
+        paths,
+        timings,
+        "m29_ownership_conservation",
+        lambda: run_m29_ownership_conservation_stage(
+            task_id=task_id,
+            paths=paths,
+            m292_document=m292_document,
+            m2931_report=m2931_result.report,
+            m295_report=m295_result.report,
+        ),
+    )
+
     update_task(task_id, "m29_materialization", 92, "Materializing M29 plan-driven DSL.")
     materialized_design_result = run_stage(
         paths,
@@ -158,4 +173,3 @@ def artifact_policy_from_settings() -> UploadPreviewArtifactPolicy:
     if profile == "development":
         return UploadPreviewArtifactPolicy(profile="development", emit_debug_artifacts=True, emit_preview_artifacts=True)
     return UploadPreviewArtifactPolicy(profile="production", emit_debug_artifacts=False, emit_preview_artifacts=False)
-

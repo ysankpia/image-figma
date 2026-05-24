@@ -57,6 +57,11 @@ missing: 当前没有有效测试；下一阶段必须补。
 | M29-CR-043 | Plan-Driven Materialization | source-proven support shape 与 text member 重叠 | M29.5 排序为 shape below text；materializer 只消费 plan | 全局放宽 ordinary shape/text overlap 或从 text bbox 伪造背景 | covered | `test_source_ui_physical_graph.py::test_text_support_background_shape_replays_as_control_background`, `test_m29_replay_plan.py::test_m295_plan_items_are_sorted_for_replay_layer_order`, `test_m29_plan_materializer.py::test_m29_plan_items_are_the_only_visible_materialization_order` |
 | M29-CR-044 | Owner Boundary / Raster Preservation | 大面积复杂 image-like low-confidence raw M29 unknown | M29.2 升级为 `media_region` + `preserve_raster` + `image_replay` | fallback-off 时复杂图表/照片/卡片区域消失或被白底替代 | covered | `test_source_ui_physical_graph.py::test_large_image_like_unknown_becomes_preserved_media_region`, `test_upload_preview_pipeline.py::test_upload_preview_samples_dark_source_background` |
 | M29-CR-045 | Plan-Driven Materialization / Background | 深色、浅色或混合源图 | root/page background 来自 source PNG 样本 | fallback-off 暴露固定 `#F7F8FA` 白底 | covered | `test_m29_plan_materializer.py::test_m29_plan_materializer_samples_source_background_instead_of_fixed_white`, `test_upload_preview_pipeline.py::test_upload_preview_samples_dark_source_background` |
+| M29-CR-046 | Ownership Conservation | M29.5 accepted visible replay actions | ownership conservation report 只记录 `text_replay` / `image_replay` / `icon_replay` / `shape_replay` visible claims，且 `createdVisibleNodeCount=0` | report stage 创建 DSL nodes、改 DSL 或改 assets | covered | `test_ownership_conservation.py::test_ownership_conservation_records_basic_visible_claims` |
+| M29-CR-047 | Ownership Conservation | `preserve_in_parent_raster` / `fallback_only` / `diagnostic_only` / `suppress_duplicate` plan items | 不生成 visible claim；错误 visible target role 只能进 conflict | non-visible item 被当成 replay owner | covered | `test_ownership_conservation.py::test_preserve_raster_text_has_no_visible_or_cleanup_claim`, `test_ownership_conservation.py::test_diagnostic_fallback_and_suppressed_items_do_not_claim_visible_ownership` |
+| M29-CR-048 | Ownership Conservation / Cleanup | editable text contained by preserve-raster media | copied image asset cleanup 必须同时由 M29.5 cleanup target 和 M29.3 relation 解释 | 无 relation 或错误 target 也被当成 safe cleanup | covered | `test_ownership_conservation.py::test_copied_image_cleanup_is_explainable_for_text_contained_by_media`, `test_ownership_conservation.py::test_invalid_copied_cleanup_target_is_reported` |
+| M29-CR-049 | Ownership Conservation / Overlap | accepted visible claims overlap 或 near_equal | 无解释关系时记录 `visible_ownership_overlap`；shape behind text/icon 属于 explainable background/foreground overlap | ordinary duplicate visible ownership 静默通过，或 support/background overlap 被误判为 blocking failure | covered | `test_ownership_conservation.py::test_shape_behind_text_overlap_is_explainable_background_foreground_overlap`, `test_ownership_conservation.py::test_near_equal_visible_claims_are_reported_as_overlap` |
+| M29-CR-050 | Upload Pipeline / Report Artifact | upload-preview production profile | `m29_ownership_conservation` stage timing 存在，report artifact 存在，DSL/materialization response shape 不变 | ownership report 缺失、阻断正常 materialization、或恢复 legacy route | covered | `test_upload_preview_pipeline.py::test_upload_preview_completes_and_serves_m29_plan_driven_dsl`, `test_upload_preview_pipeline.py::test_upload_preview_uses_production_artifact_profile_by_default` |
 
 ## Review Rule
 
@@ -67,6 +72,7 @@ missing: 当前没有有效测试；下一阶段必须补。
 现有 pytest 是否覆盖？
 如果没有覆盖，是否先补 test？
 是否仍保持 M29.4 report-only、M29.5 plan-only、materializer 只消费 plan？
+如果涉及 ownership conservation，是否仍保持 report-only 且不影响 DSL/assets/materialization？
 ```
 
 如果答案不清楚，不要直接改阈值或 materialization 逻辑。

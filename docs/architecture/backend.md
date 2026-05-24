@@ -46,6 +46,7 @@ receive multipart PNG
 -> M29.3.1 source relation graph report
 -> M29.4 stable design cluster report
 -> M29.5 replay quality plan
+-> M29 ownership conservation report
 -> M29 plan-driven DSL materialization
 -> publish M29 assets
 -> save dsl_results path to materialized_design/design.dsl.json
@@ -90,6 +91,14 @@ risks
 M29.3.1 是纯 bbox relation graph report。M29.4 是 weak structural evidence report。M29.5 是 replay plan quality gate，负责去重、排序、node budget 和 cleanup 授权。
 
 M29.4 的 cluster role hint 不提供组件化、Auto Layout、Figma Component/Instance 或直接 materialization 权限。它只能进入 M29.5 plan 的解释性 `clusterIds`。
+
+M29 ownership conservation report 位于 M29.5 之后、materializer 之前。它读取 M29.2 source objects、M29.3.1 relation graph 和 M29.5 replay plan，写出全局 ownership/cleanup 风险报告：
+
+```text
+storage/upload_previews/{taskId}/m29_ownership_conservation/ownership_conservation_report.json
+```
+
+这个阶段是 report-only：不改变 replay plan，不创建 DSL visible nodes，不改 asset，不授权 cleanup，也不是 materializer 的输入。
 
 ## M29 Plan-Driven Materialization
 
@@ -179,6 +188,7 @@ storage/upload_previews/{taskId}/m29_2/
 storage/upload_previews/{taskId}/m29_3/
 storage/upload_previews/{taskId}/m29_4/
 storage/upload_previews/{taskId}/m29_5/
+storage/upload_previews/{taskId}/m29_ownership_conservation/
 storage/upload_previews/{taskId}/materialized_design/
 storage/upload_previews/{taskId}/stage_timings.json
 storage/assets/{taskId}/m29/
@@ -206,6 +216,7 @@ m29_2_source_ui_physical_graph
 m29_3_relation_graph_report
 m29_4_stable_design_cluster
 m29_5_replay_plan
+m29_ownership_conservation
 m29_materialization
 m29_asset_publish
 m29_completed

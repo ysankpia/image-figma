@@ -13,6 +13,7 @@ Plugin upload
 -> M29.3 relation
 -> M29.4 weak cluster
 -> M29.5 replay plan
+-> M29 ownership conservation report
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -42,6 +43,7 @@ validate upload
 save source PNG
 run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
+run M29 ownership conservation report
 run M29 plan-driven materialization
 publish M29 assets
 write task status and stage timings
@@ -55,7 +57,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/materialization stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/materialization stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -207,6 +209,38 @@ report.py: reasons and summary construction
 validation.py: report schema and read-only invariant checks
 utils.py: stable sort and ordered dedupe helpers
 ```
+
+### M29 Ownership Conservation
+
+`backend/app/ownership_conservation/` 是 M29.5 之后、materialization 之前的全局 ownership conservation report。它消费：
+
+```text
+M29.2 source objects
+M29.3.1 relation graph
+M29.5 replay plan
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_ownership_conservation/ownership_conservation_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: visible/non-visible action constants and result type
+normalization.py: M29.2 source object and M29.5 plan item normalization
+relations.py: M29.3 edge lookup and media/text relation checks
+geometry.py: bbox overlap, intersection, union, and ratio helpers
+claims.py: source object, visible replay, and cleanup claim construction
+conflicts.py: conservation conflict and warning detection
+report.py: summary counts and read-only invariant fields
+validation.py: report schema and report-only invariant checks
+```
+
+这个 package 只报告风险，不改变任何输入对象。它不创建 DSL nodes，不改 M29.5 plan，不授权 cleanup，不被 materializer 消费。
 
 ### Historical M29 Audit Packages
 

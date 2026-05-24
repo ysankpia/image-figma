@@ -69,3 +69,4 @@
 - [M39.1 Unit Structure Readiness Audit](039-1-unit-structure-readiness-audit.md) — `completed`
 - [M39 Content-Chrome Boundary Classification](039-content-chrome-boundary-classification.md) — `completed`
 - [Docs Current M29 Mainline Cleanup](041-docs-current-mainline-cleanup.md) — `completed`
+- [M29 Pixel Ownership Conservation Report](043-pixel-ownership-conservation-report.md) — `completed`
