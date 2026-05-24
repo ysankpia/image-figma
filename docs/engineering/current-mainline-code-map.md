@@ -74,6 +74,7 @@ mask.py: binary mask construction, overlap, validation, PNG export
 metrics.py: region metrics, color distance, numeric clamps
 pixels.py: pixel crop, region/ring sampling, debug rectangle drawing
 geometry.py: shape geometry fit, support occupancy fit, radius/layer hint helpers
+components.py: text exclusion mask, foreground mask, connected components, image protection mask
 ```
 
 `backend/app/visual_primitive_graph.py` 仍是兼容入口和 detector orchestration 文件，继续导出 `extract_m29_visual_primitive_graph` 以及历史调用方依赖的 M29 类型和基础函数。它负责：
@@ -81,7 +82,6 @@ geometry.py: shape geometry fit, support occupancy fit, radius/layer hint helper
 ```text
 source PNG pixel measurement
 OCR text bbox ingestion
-foreground masks
 text / shape / image / symbol / unknown primitive nodes
 low_contrast_support detection
 text_support_background detection
@@ -276,7 +276,7 @@ M20-M28、旧 icon/slice/provider harness、visual provider benchmark、mask pro
 
 代码瘦身应单独开阶段，且默认先做无行为变更拆分。优先顺序：
 
-1. `visual_primitive_graph.py`：继续按 support detectors、detectors、artifact writers 拆分；基础 types/bbox/mask/metrics/pixels 和 geometry fit 已在 `visual_primitive/`。
+1. `visual_primitive_graph.py`：继续按 support detectors、detectors、artifact writers 拆分；基础 types/bbox/mask/metrics/pixels、geometry fit 和 component evidence layer 已在 `visual_primitive/`。
 2. `source_ui_physical_graph.py`：按 OCR text ownership、media detection、icon clustering、shape/unknown/blocked classification 拆分。
 3. `upload_preview/`：继续保持薄编排；后续如需调整 stage 顺序必须单独开行为阶段。
 
