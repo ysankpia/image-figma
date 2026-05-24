@@ -11,6 +11,8 @@
 - 当前主线代码地图：[engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
 - M29 数学合同：[architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)
 - M29 入门数学推演：[architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)
+- M29 之后 Codia 级数学草案：[architecture/m29-to-codia-math-contract-v0.1.md](architecture/m29-to-codia-math-contract-v0.1.md)
+- 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
 - 当前 active plan：[plans/active/](plans/active/) 当前为空；下一阶段开始前再写入新的 active 计划。
@@ -42,6 +44,7 @@
 - [architecture/backend.md](architecture/backend.md)：后端 API 与处理管线。
 - [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 主链的 bbox、ownership、relation、cluster、replay plan 和 plan-driven materialization 数学合同。
 - [architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)：面向初中数学基础读者的 M29 bbox、pixelOwner、region relation、cluster 和 replay plan 推演。
+- [architecture/m29-to-codia-math-contract-v0.1.md](architecture/m29-to-codia-math-contract-v0.1.md)：M29 之后 hierarchy、layout、component、token、vectorization、materialization 和 quality metrics 的未来数学草案；不是当前 runtime 合同。
 - [architecture/api-contracts.md](architecture/api-contracts.md)：API v0.1 合同。
 - [architecture/data-model.md](architecture/data-model.md)：SQLite 数据模型。
 - [architecture/integrations.md](architecture/integrations.md)：OCR、AI、Figma、存储集成。
@@ -156,5 +159,6 @@
 - 外部接口：[reference/external-apis.md](reference/external-apis.md)
 - DevTools MCP：[reference/devtools-mcp.md](reference/devtools-mcp.md)
 - Agent guidelines 中文参考快照：[reference/agent-guidelines.zh-CN.md](reference/agent-guidelines.zh-CN.md)
+- 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
 - Pre-M29 归档清单：[reference/legacy/pre-m29-archive-inventory.md](reference/legacy/pre-m29-archive-inventory.md)
