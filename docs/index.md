@@ -155,5 +155,6 @@
 - 术语表：[reference/glossary.md](reference/glossary.md)
 - 外部接口：[reference/external-apis.md](reference/external-apis.md)
 - DevTools MCP：[reference/devtools-mcp.md](reference/devtools-mcp.md)
+- Agent guidelines 中文参考快照：[reference/agent-guidelines.zh-CN.md](reference/agent-guidelines.zh-CN.md)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
 - Pre-M29 归档清单：[reference/legacy/pre-m29-archive-inventory.md](reference/legacy/pre-m29-archive-inventory.md)
