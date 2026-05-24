@@ -204,6 +204,7 @@ normalization.py: M29.2 source object normalization
 lookups.py: M29.3 edge and M29.4 cluster lookup construction
 decisions.py: replay action mapping, target role, duplicate priority
 cleanup.py: fallback and copied-image asset cleanup authorization
+overlap.py: same-owner visible replay overlap suppression
 budget.py: visible node budget suppression and duplicate plan items
 report.py: reasons and summary construction
 validation.py: report schema and read-only invariant checks

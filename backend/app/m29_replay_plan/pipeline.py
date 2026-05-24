@@ -10,6 +10,7 @@ from .cleanup import cleanup_targets_for, contained_media_edge_ids
 from .decisions import near_equal_duplicate_ids, replay_action_for, target_role_for_action
 from .lookups import build_cluster_lookup, build_edge_lookup
 from .normalization import normalize_source_objects
+from .overlap import suppress_visible_overlap_duplicates
 from .report import build_summary, reasons_for
 from .types import M295ReplayPlanOptions, M295ReplayPlanResult
 from .utils import plan_sort_key
@@ -74,8 +75,10 @@ def build_m295_replay_plan(
         else:
             plan_items.append(plan_item)
 
+    replay_candidates, visible_overlap_suppressed = suppress_visible_overlap_duplicates(replay_candidates, edge_lookup)
     accepted, node_budget_suppressed = apply_node_budget(replay_candidates, options.max_visible_nodes)
     plan_items.extend(accepted)
+    plan_items.extend(visible_overlap_suppressed)
     plan_items.extend(node_budget_suppressed)
     plan_items.extend(suppressed_duplicate_items(source_objects, suppressed_source_ids, edge_lookup, cluster_lookup))
     plan_items = sorted(plan_items, key=plan_sort_key)

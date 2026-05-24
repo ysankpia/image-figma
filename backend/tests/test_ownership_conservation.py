@@ -194,6 +194,23 @@ def test_near_equal_visible_claims_are_reported_as_overlap(tmp_path: Path) -> No
     assert report["summary"]["conflictTypeCounts"]["visible_ownership_overlap"] == 1
 
 
+def test_small_bbox_edge_overlap_is_not_reported_as_visible_ownership_conflict(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("left", [10, 10, 100, 20], "control_background", "shape_geometry", "shape_replay"),
+            m292_object("right", [105, 10, 100, 20], "control_background", "shape_geometry", "shape_replay"),
+        ],
+        edges=[edge("edge_small_overlap", "left", "right", "overlaps")],
+        plan_items=[
+            plan_item("plan_left", "left", [10, 10, 100, 20], "shape_replay", "m29_shape"),
+            plan_item("plan_right", "right", [105, 10, 100, 20], "shape_replay", "m29_shape"),
+        ],
+    )
+
+    assert report["summary"]["conflictCount"] == 0
+
+
 def ownership_report(
     tmp_path: Path,
     *,

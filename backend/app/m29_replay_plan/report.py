@@ -42,6 +42,7 @@ def build_summary(plan_items: list[dict[str, Any]], skipped_items: list[dict[str
         "copiedImageAssetCleanupTargetCount": sum(1 for target in cleanup_targets if target.get("target") == "copied_image_asset"),
         "clusterSupportedPlanItemCount": sum(1 for item in plan_items if item.get("clusterIds")),
         "nodeBudgetSuppressedCount": sum(1 for item in plan_items if "node_budget_suppressed" in item.get("reasons", [])),
+        "visibleOverlapSuppressedCount": sum(1 for item in plan_items if "visible_overlap_duplicate_suppressed" in item.get("reasons", [])),
         "skippedInvalidSourceObjectCount": len(skipped_items),
         "warningCount": len(warnings),
         "finalReplayActionCounts": dict(sorted(action_counts.items())),

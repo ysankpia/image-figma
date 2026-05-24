@@ -53,7 +53,8 @@ def detect_visible_overlap_conflicts(
     for index, left in enumerate(visible_claims):
         for right in visible_claims[index + 1 :]:
             intersection = intersection_area(left["bbox"], right["bbox"])
-            if intersection <= 0 and not edge_is_near_equal(edge_between(edge_lookup, left["sourceObjectId"], right["sourceObjectId"])):
+            ratio = overlap_ratio(left["bbox"], right["bbox"])
+            if ratio < 0.20 and not edge_is_near_equal(edge_between(edge_lookup, left["sourceObjectId"], right["sourceObjectId"])):
                 continue
             if overlap_is_explainable(left, right, edge_lookup):
                 continue
@@ -65,7 +66,7 @@ def detect_visible_overlap_conflicts(
                     [left["planItemId"], right["planItemId"]],
                     union_bbox(left["bbox"], right["bbox"]),
                     "accepted visible replay claims overlap without an explainable owner relation",
-                    metrics={"intersectionArea": intersection, "overlapRatio": overlap_ratio(left["bbox"], right["bbox"])},
+                    metrics={"intersectionArea": intersection, "overlapRatio": ratio},
                 )
             )
     return conflicts
@@ -196,4 +197,3 @@ def conflict(
     if metrics:
         item["metrics"] = metrics
     return item
-

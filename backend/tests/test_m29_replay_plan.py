@@ -122,6 +122,59 @@ def test_m295_near_equal_duplicate_keeps_one_replay_owner(tmp_path: Path) -> Non
     assert result.report["summary"]["suppressedDuplicateCount"] == 1
 
 
+def test_m295_suppresses_same_icon_contained_visible_overlap(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_icon_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("icon_outer", [10, 10, 34, 22], "raster_icon", "raster_icon", "icon_replay"),
+                m292_object("icon_inner", [19, 19, 8, 13], "raster_icon", "raster_icon", "icon_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["icon_outer", "icon_inner"],
+            [edge("icon_overlap", "icon_outer", "icon_inner", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"icon_outer": "icon_replay", "icon_inner": "suppress_duplicate"}
+    suppressed = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "icon_inner")
+    assert "visible_overlap_duplicate_suppressed" in suppressed["reasons"]
+    assert "visible_overlap_duplicate" in suppressed["risks"]
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
+def test_m295_suppresses_same_shape_high_overlap_without_suppressing_text_background(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_shape_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("shape_outer", [10, 10, 155, 55], "control_background", "shape_geometry", "shape_replay"),
+                m292_object("shape_inner", [17, 10, 110, 55], "control_background", "shape_geometry", "shape_replay"),
+                m292_object("label", [24, 24, 40, 12], "editable_ui_text", "editable_text", "text_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["shape_outer", "shape_inner", "label"],
+            [
+                edge("shape_overlap", "shape_outer", "shape_inner", "contains", []),
+                edge("shape_label", "shape_outer", "label", "contains", []),
+            ],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions["shape_outer"] == "shape_replay"
+    assert actions["shape_inner"] == "suppress_duplicate"
+    assert actions["label"] == "text_replay"
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
 def test_m295_records_cluster_support_without_semantic_role_promotion(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_cluster",

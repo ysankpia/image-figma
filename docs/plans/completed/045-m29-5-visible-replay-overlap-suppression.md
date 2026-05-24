@@ -1,6 +1,6 @@
 # M29.5 Visible Replay Overlap Suppression
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-25
 - 负责人：未指定
 
@@ -103,3 +103,30 @@ curl -F "file=@backend/storage/uploads/task_ed8387636f80/original.png;type=image
 - 同类 visible ownership overlap conflict 明显下降，目标为 0；若仍有 warning，必须说明是背景/前景允许关系还是下一阶段处理对象。
 - materialization response shape 不变。
 
+## Result
+
+实现内容：
+
+- 新增 `backend/app/m29_replay_plan/overlap.py`，只处理同类 visible replay owner overlap suppression。
+- M29.5 在 node budget 前压制明显重复的 `icon_replay/icon_replay` 和 `shape_replay/shape_replay`。
+- M29.5 summary 新增 `visibleOverlapSuppressedCount`。
+- ownership conservation report 不再把小面积 bbox 擦边当成 visible ownership conflict。
+
+真实上传验证：
+
+```text
+input: backend/storage/uploads/task_ed8387636f80/original.png
+taskId: task_624dfba069bc
+status: completed
+m29_ownership_conservation: completed
+visibleReplayClaimCount: 90
+conflictCount: 0
+visibleOverlapSuppressedCount: 7
+```
+
+Phase 1 前后对比：
+
+```text
+before: visible_ownership_overlap = 9
+after:  visible_ownership_overlap = 0
+```
