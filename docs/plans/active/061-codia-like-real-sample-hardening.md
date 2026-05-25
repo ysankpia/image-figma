@@ -1679,3 +1679,110 @@ Use the Stage 7 ledger as the new baseline. The top gate ratio is now 0.018258,
 so future stages should inspect the remaining top gate components for actual
 structural misses instead of continuing to optimize text/shape validation noise.
 ```
+
+### Stage 8: Gate Diff Settlement And Stop Point
+
+Status:
+
+```text
+settled
+```
+
+Scope:
+
+```text
+Inspected the Stage 7 batch ledger and top gate-diff records before changing
+code. Stage 7 reduced the remaining non-text gate diff to a low level:
+average gate normalized mean absolute error is 0.001449, and the worst
+gateChangedPixelRatio10 is 0.018258 across the 40-image primary batch.
+
+The remaining top gate diffs are mixed small residuals rather than one clear
+generic defect: small shape/image/text intersections, control-background
+boundary residue, suppressed duplicate boundaries, a few diagnostic-only
+fragments, and local image/media rendering differences. There is no single safe
+owning layer left that can be repaired from this metric alone without risking
+sample-specific threshold tuning or promoting weak diagnostic fragments.
+
+No code, DSL, API, Renderer, Figma plugin, source ownership, replay plan,
+materializer, cleanup authorization, or dependency behavior changed in this
+stage.
+```
+
+First-principles settlement:
+
+```text
+real goal: reduce user repair cost in Figma, not squeeze visual metrics after
+  the remaining metric is already low and mixed
+source truth: Stage 7 40-image HTTP batch ledger + source_gate_diff artifacts
+information-loss point: residual gate pixels no longer identify one source
+  evidence loss point; they combine small renderer, boundary, media, and
+  intentionally blocked diagnostic evidence
+owning layer: no single implementation owning layer is proven by the current
+  evidence
+do-not-do: do not lower candidate thresholds, recover diagnostic fragments, or
+  tune bbox/color rules from the remaining top samples
+next verification: open a new bug/stage only from a concrete user-visible
+  sample failure with source artifact evidence and owning-layer classification
+```
+
+Stage 7 baseline ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_063815/upload_preview_batch_validation.json
+```
+
+Stage 7 baseline result:
+
+```text
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+visible replay claims: 4921
+promoted internal source objects: 22
+average DSL visual normalized mean absolute error: 0.039127
+max DSL visual changed pixel ratio @10: 0.111889
+average DSL visual gate normalized mean absolute error: 0.001449
+max DSL visual gate changed pixel ratio @10: 0.018258
+```
+
+Top remaining gate records:
+
+```text
+29-e9a490e9a5aee694b6e993b6.png: gateChangedPixelRatio10=0.018258, gateNormalizedMeanAbsError=0.002318
+34-e7a5a8e58aa1e6bc94e587ba.png: gateChangedPixelRatio10=0.017771, gateNormalizedMeanAbsError=0.001609
+19-e696b0e883bde6ba90e58585e794b5.png: gateChangedPixelRatio10=0.015419, gateNormalizedMeanAbsError=0.003491
+03-e7949fe9b29ce4b9b0e88f9c.png: gateChangedPixelRatio10=0.012402, gateNormalizedMeanAbsError=0.002127
+02-e7bbbce59088e59586e59f8e.png: gateChangedPixelRatio10=0.012319, gateNormalizedMeanAbsError=0.003749
+37-e59296e595a1e88cb6e9a5ae.png: gateChangedPixelRatio10=0.011351, gateNormalizedMeanAbsError=0.003577
+08-e98791e89e8de79086e8b4a2.png: gateChangedPixelRatio10=0.010799, gateNormalizedMeanAbsError=0.004764
+12-e5908ce59f8ee8b791e885bf.png: gateChangedPixelRatio10=0.010225, gateNormalizedMeanAbsError=0.003313
+30-e699bae685a7e5aeb6e5b185.png: gateChangedPixelRatio10=0.008190, gateNormalizedMeanAbsError=0.002642
+36-e58d9ae789a9e9a686e5afbce8a788.png: gateChangedPixelRatio10=0.006301, gateNormalizedMeanAbsError=0.002318
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, account, or one-screenshot rule was added. This
+stage explicitly rejects metric squeezing from the remaining low, mixed
+gate-diff residues. Future implementation must start from a concrete
+user-visible failure, not from trying to make the residual gate metric smaller.
+```
+
+Decision:
+
+```text
+Stop the current Stage 061 long-run coding loop at the Stage 7 baseline.
+The next work item should be a new bug or active plan tied to a specific
+visible failure and owning-layer diagnosis. Bug 012 remains open/partial and
+should not be closed until raw blocked recovery or an equivalent evidence path
+is fixed and validated.
+```
