@@ -16,7 +16,7 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：[plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)；525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
+- 当前 active plan：[plans/active/061-codia-like-real-sample-hardening.md](plans/active/061-codia-like-real-sample-hardening.md)；Gemini 审核核验计划见 [plans/active/060-gemini-review-first-principles-audit.md](plans/active/060-gemini-review-first-principles-audit.md)，M29 internal icon 证据合同计划见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
 
 ## By Task Type
 
@@ -163,5 +163,7 @@
 - DevTools MCP：[reference/devtools-mcp.md](reference/devtools-mcp.md)
 - Agent guidelines 中文参考快照：[reference/agent-guidelines.zh-CN.md](reference/agent-guidelines.zh-CN.md)
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
+- 外部代码审核技术规划输入：[reference/code_review_first_principles_technical_plan.md](reference/code_review_first_principles_technical_plan.md)
+- Codex 长跑执行提示词输入：[reference/codex_prompt.md](reference/codex_prompt.md)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
 - Pre-M29 归档清单：[reference/legacy/pre-m29-archive-inventory.md](reference/legacy/pre-m29-archive-inventory.md)
