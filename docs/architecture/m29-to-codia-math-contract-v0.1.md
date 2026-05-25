@@ -412,6 +412,525 @@ WrongCleanupRate =
 
 ---
 
+# 第 1A 章：Media Internal Pixel Decomposition，复合媒体内部像素分解
+
+## 1A.1 问题
+
+`preserve_raster` 不能永远等于“内部全部不可理解”。它在 M29.2 的第一职责是保住复杂视觉 fidelity，避免把照片、图表、玻璃拟态、渐变和纹理误画成简单 shape。但复合 UI 区域经常同时包含：
+
+```text
+raster background
+internal OCR text
+internal icon
+internal separator
+internal small visual mark
+internal repeated UI item
+```
+
+如果一个大 media 被整体接受为：
+
+```text
+pixelOwner(M) = preserve_raster
+replayDecision(M) = image_replay
+```
+
+下游就会得到稳定视觉，但内部普通 UI 图标、导航 item、卡片内 marker、表格里的小圆点和图标可能没有独立 source object。这个问题不是 carousel、nav、table、金融 App 或某个文案的特化问题，而是一个通用源对象缺口：
+
+```text
+CompositeMedia(M) contains recoverable internal foreground objects.
+```
+
+## 1A.2 复合媒体定义
+
+给定 M29.2 source object `M`：
+
+```text
+B(M) = [x, y, w, h]
+pixelOwner(M) = preserve_raster
+replayDecision(M) = image_replay
+```
+
+定义内部 OCR 文本：
+
+```text
+TextInside(M) =
+  { t in OCR |
+    intersectionArea(B(t), B(M)) / area(B(t)) >= 0.95
+  }
+```
+
+定义内部 raw primitive：
+
+```text
+RawInside(M) =
+  { r in G29 |
+    intersectionArea(B(r), B(M)) / area(B(r)) >= 0.95
+  }
+```
+
+复合媒体判定：
+
+```text
+CompositeMedia(M) iff
+  pixelOwner(M) = preserve_raster
+  and replayDecision(M) = image_replay
+  and (
+    count(TextInside(M)) >= 1
+    or count(RawInside(M)) >= 2
+    or "contains_internal_text" in risks(M)
+  )
+```
+
+这个定义只使用通用 source evidence：bbox containment、OCR、raw primitive、M29.2 owner/risk。它不能使用：
+
+```text
+file name
+task id
+fixed bbox
+literal text content
+industry/theme/color special case
+```
+
+## 1A.3 背景 owner 与内部前景 owner
+
+复合媒体需要把 owner 拆成两层：
+
+```text
+backgroundOwner(p) ∈ {fallback, preserve_raster_background, shape}
+foregroundOwner(p) ∈ {editable_text, raster_icon, internal_icon_candidate, internal_shape_candidate, diagnostic}
+```
+
+对于 `CompositeMedia(M)`，默认背景仍由原 media 拥有：
+
+```text
+if p ∈ B(M):
+  backgroundOwner(p) = preserve_raster_background(M)
+```
+
+内部候选只允许声明前景，不允许夺走整个 media 背景：
+
+```text
+InternalForegroundClaim(c, M) only claims foregroundOwner(p)
+for p in mask(c)
+```
+
+约束：
+
+```text
+count(backgroundOwner(p)) <= 1
+count(foregroundOwner(p)) <= 1
+```
+
+也就是说：
+
+```text
+media 背景可以保留为 raster；
+内部高置信 UI foreground 可以另行提出候选；
+二者必须由 cleanup authorization 解释，不能静默双影。
+```
+
+## 1A.4 OCR 文字保护 Mask
+
+内部图标检测必须先排除文字笔画。对每个内部 OCR 文本 `t`：
+
+```text
+B_pad(t) = [
+  x(t) - px,
+  y(t) - py,
+  w(t) + 2px,
+  h(t) + 2py
+]
+```
+
+一般第一版：
+
+```text
+px = 2..4
+py = 2..4
+```
+
+文字保护 mask：
+
+```text
+TextMask_M(p) = 1
+iff exists t in TextInside(M), p ∈ B_pad(t)
+```
+
+后续内部 foreground 搜索：
+
+```text
+SearchMask_M(p) =
+  1 iff p ∈ B(M) and TextMask_M(p) = 0
+```
+
+禁止规则：
+
+```text
+if overlapArea(B(c), TextMask_M) / area(B(c)) > τ_text_overlap:
+  reject c as internal_icon_candidate
+```
+
+否则中文笔画、数字笔画、小字号标签会被 connected component 错当成 icon。
+
+## 1A.5 局部背景模型
+
+复合 media 内部常有渐变、光效、纹理和半透明层。不能用单一全局背景色：
+
+```text
+bg = average(edge pixels)
+```
+
+应当为每个像素估计局部背景：
+
+```text
+bg_M(p) =
+  median({
+    P(q) |
+    q in Window(p, R),
+    q not in TextMask_M,
+    q not high_contrast
+  })
+```
+
+工程第一版可以近似为：
+
+```text
+bg_M(p) = Blur(P restricted to B(M), R)
+```
+
+其中：
+
+```text
+R = 12..24 px
+```
+
+局部颜色差：
+
+```text
+ColorDiff(p) =
+  |R(p) - R(bg_M(p))|
++ |G(p) - G(bg_M(p))|
++ |B(p) - B(bg_M(p))|
+```
+
+亮度与饱和度：
+
+```text
+L(p) = 0.299R(p) + 0.587G(p) + 0.114B(p)
+S(p) = max(R,G,B) - min(R,G,B)
+```
+
+## 1A.6 相对前景分数
+
+内部前景不是“亮色”，而是“相对局部背景异常”：
+
+```text
+ForegroundScore_M(p) =
+  a * ColorDiff(p)
++ b * |S(p) - S(bg_M(p))|
++ c * |L(p) - L(bg_M(p))|
++ d * EdgeStrength(p)
+- e * BackgroundTexturePenalty(p)
+```
+
+初始前景 mask：
+
+```text
+FG_M(p) = 1 iff
+  p ∈ B(M)
+  and TextMask_M(p) = 0
+  and ForegroundScore_M(p) >= τ_fg
+```
+
+然后做连通域：
+
+```text
+C_M = connected_components(FG_M)
+```
+
+每个 component `c` 记录：
+
+```text
+B(c)
+area(c)
+fillRatio(c) = area(c) / area(B(c))
+colorComplexity(c)
+textureScore(c)
+edgeScore(c)
+```
+
+## 1A.7 内部图标候选分数
+
+UI icon / marker / small visual foreground 的判断不能只靠连通域面积。需要同时看尺寸、紧凑度、颜色一致性、文本锚点、重复排列和主视觉惩罚：
+
+```text
+IconScore(c, M) =
+  a * SizeScore(c)
++ b * CompactnessScore(c)
++ c * ColorCoherenceScore(c)
++ d * TextAnchorScore(c, TextInside(M))
++ e * RepetitionScore(c, C_M)
++ f * LocalControlRegionScore(c)
+- g * TextOverlapPenalty(c)
+- h * HeroGraphicPenalty(c, M)
+- i * TextureFragmentPenalty(c)
+```
+
+尺寸门：
+
+```text
+SizeScore(c) = 1
+iff τ_min_area <= area(c) <= τ_max_internal_icon_area
+```
+
+紧凑度：
+
+```text
+Compactness(c) = area(c) / area(B(c))
+```
+
+颜色一致性可以用粗 bucket：
+
+```text
+bucket(P) = [R//16, G//16, B//16]
+ColorComplexity(c) = uniqueBuckets(c) / max(1, area(c))
+ColorCoherenceScore(c) = 1 / (1 + ColorComplexity(c))
+```
+
+## 1A.8 文本锚点与重复行验证
+
+对于内部 label `t` 和候选 `c`：
+
+```text
+dx(c,t) = |cx(c) - cx(t)|
+dy(c,t) = y(t) - y2(c)
+```
+
+当图标位于 label 上方时：
+
+```text
+dy(c,t) > 0
+```
+
+文本锚点分：
+
+```text
+TextAnchorScore(c) =
+  max over t in TextInside(M) [
+    exp(-dx(c,t)^2 / σx^2)
+    * exp(-(dy(c,t)-μ_gap)^2 / σy^2)
+  ]
+```
+
+对于重复 UI item 集合：
+
+```text
+Pairs = {(c_i, t_i)}
+```
+
+排序一致性：
+
+```text
+OrderScore =
+  1 if order(cx(c_i)) = order(cx(t_i))
+  else 0
+```
+
+间距稳定：
+
+```text
+GapStability =
+  1 / (1 + Var({cx(c_{i+1}) - cx(c_i)}))
+```
+
+重复 action row 分数：
+
+```text
+RepeatedActionRowScore =
+  a * MatchCoverage
++ b * OrderScore
++ c * GapStability
++ d * SameSizeScore
++ e * SameYBandScore
+```
+
+这套公式只要求“图标与 label 的几何锚定和重复排列”，不关心 label 写的是哪个字。
+
+## 1A.9 主视觉与纹理碎片惩罚
+
+复合 media 内常有大主视觉、光效、照片纹理和装饰线。它们可能形成连通域，但不应该被提升成 UI icon：
+
+```text
+HeroGraphicPenalty(c, M) =
+  a * LargeAreaScore(c, M)
++ b * CenterMassScore(c, M)
++ c * TextureScore(c)
++ d * LongFragmentScore(c)
+- e * TextAnchorScore(c)
+```
+
+其中：
+
+```text
+LargeAreaScore(c,M) = clamp(area(c) / area(M) / τ_large, 0, 1)
+```
+
+长条碎片惩罚：
+
+```text
+LongFragmentScore(c) =
+  1 if max(w(c), h(c)) / max(1, min(w(c), h(c))) >= τ_aspect_long
+  else 0
+```
+
+竖向分割线、横线、表格线如果要恢复，应走：
+
+```text
+internal_separator_candidate
+```
+
+不能假装成 icon。
+
+## 1A.10 内部提升许可
+
+内部候选不能直接创建 DSL visible node。第一版只能 report-only：
+
+```text
+InternalPromotionCandidate(c, M) iff
+  CompositeMedia(M)
+  and contained_ratio(B(c), B(M)) >= 0.95
+  and TextMaskOverlap(c) <= τ_text_overlap
+  and IconScore(c,M) >= τ_icon
+  and HeroGraphicPenalty(c,M) <= τ_hero
+```
+
+候选角色：
+
+```text
+internal_icon_candidate
+internal_shape_candidate
+internal_separator_candidate
+internal_ui_label
+internal_decorative_candidate
+rejected_internal_fragment
+```
+
+M29.6 report 必须记录：
+
+```text
+mediaSourceObjectId
+candidateRawNodeIds
+candidateBbox
+candidateRole
+scoreBreakdown
+matchedTextSourceObjectIds
+rejectedReason
+confidence
+```
+
+## 1A.11 Transparent Asset Extraction
+
+透明资产提取不是通用 Photoshop 抠图。它只服务已经有 source evidence 的小 UI asset：
+
+```text
+TransparentAssetAllowed(c) iff
+  candidateRole(c) in {internal_icon_candidate, raster_icon}
+  and confidence(c) in {high, medium}
+  and BackgroundStability(c) >= τ_bg_stable
+  and TextMaskOverlap(c) <= τ_text_overlap
+  and area(c) <= τ_asset_area
+```
+
+输出仍是矩形 PNG，但透明度按 mask 给出：
+
+```text
+cropBBox = pad(B(c), p)
+Alpha(p) =
+  0   if ForegroundScore_M(p) <= τ_bg
+  255 if ForegroundScore_M(p) >= τ_fg
+  round(255 * (ForegroundScore_M(p)-τ_bg)/(τ_fg-τ_bg)) otherwise
+```
+
+输出：
+
+```text
+Out(p) = [R(p), G(p), B(p), Alpha(p)]
+```
+
+这就是“按形状抠”的工程表达：
+
+```text
+bbox crop + alpha mask
+```
+
+## 1A.12 Copied Media Cleanup 权限
+
+如果内部候选后续被真正 materialized，原 copied media asset 里不能静默双影。cleanup 仍然必须单独授权：
+
+```text
+InternalCleanupAllowed(c, M) iff
+  materialized(c) = true
+  and contained_ratio(B(c), B(M)) >= 0.95
+  and pixelOwner(M) = preserve_raster
+  and localBackgroundConfidence(c) >= τ_bg_conf
+  and cleanupRisk(c) <= medium
+```
+
+对 icon / asset：
+
+```text
+if Alpha(c,p) > 128:
+  copiedMedia(p) = bg_M(p)
+```
+
+对 text：
+
+```text
+erase text mask or text bbox with bg_M(p)
+```
+
+第一版 M29.6 不执行 cleanup，只报告：
+
+```text
+cleanupWouldBeRequired = true
+cleanupAllowed = false
+reason = report_only
+```
+
+## 1A.13 非目标
+
+```text
+不按轮播图、底部导航、表格、金融页面、文案或固定 bbox 特化。
+不从 M29.6 直接改 DSL。
+不从 M29.6 直接改 M29.5 replay plan。
+不全图无脑 connected components。
+不把主视觉光效、照片纹理、艺术字碎片当 UI icon。
+不引入通用人像/商品 remove-background 作为第一版主线。
+```
+
+## 1A.14 验收指标
+
+```text
+CompositeMediaRecall
+InternalCandidatePrecision
+TextGlyphFalseIconRate
+HeroFragmentFalseIconRate
+RepeatedItemMatchCoverage
+TransparentAssetAllowPrecision
+CleanupAuthorizationCompleteness
+```
+
+第一版验收是 report，不是视觉输出：
+
+```text
+reportOnly = true
+dslChanged = false
+assetChanged = false
+createdVisibleNodeCount = 0
+```
+
+---
+
 # 第 2 章：Hierarchy Tree，层级树
 
 Codia 级输出不是 flat nodes，而应当有 tree / childElements。Figma 里 Frame 也是 layout hierarchy 的容器。M29 当前 Direct Replay 是 flat DSL replay，不是 tree。后续第一件事就是从 flat objects 推层级。
@@ -3593,6 +4112,7 @@ P: source pixels
 T: OCR boxes
 G29: primitive graph
 O: source objects
+I: media internal decomposition candidates
 R: region relation graph
 H: hierarchy tree
 G: sibling groups
@@ -3609,16 +4129,17 @@ Q: quality report
 
 ```text
 O = SourceObjectResolver(P,T,G29)
+I = MediaInternalDecompose(P,T,G29,O)
 R = RelationKernel(O)
 H = HierarchyInfer(O,R)
 G = GroupInfer(O,R,H)
 L = LayoutInfer(G,R)
 C = ComponentInfer(G,L,R)
 D = TokenInfer(O,G,C)
-V = VectorInfer(P,O)
-M = MaterializationPermission(O,H,G,L,C,D,V)
+V = VectorInfer(P,O,I)
+M = MaterializationPermission(O,I,H,G,L,C,D,V)
 F = FigmaMaterialize(M)
-Q = Evaluate(P,F,O,H,L,C,D)
+Q = Evaluate(P,F,O,I,H,L,C,D)
 ```
 
 ## 12.2 最重要的权限顺序
@@ -3628,12 +4149,13 @@ Q = Evaluate(P,F,O,H,L,C,D)
 2. Pixel owner 稳
 3. Relation 稳
 4. Cleanup 权限稳
-5. Hierarchy 才能进
-6. Layout 才能进
-7. Auto Layout 才能进
-8. Component 才能进
-9. Token binding 才能进
-10. Figma materialization 才能强承诺
+5. Composite media 内部 foreground 候选只能先 report
+6. Hierarchy 才能进
+7. Layout 才能进
+8. Auto Layout 才能进
+9. Component 才能进
+10. Token binding 才能进
+11. Figma materialization 才能强承诺
 ```
 
 ## 12.3 核心禁止规则
@@ -3659,6 +4181,12 @@ Rule 6:
 
 Rule 7:
   不能为了提高 editability 牺牲 high-risk raster fidelity。
+
+Rule 8:
+  不能因为 preserve_raster media 内存在 OCR 或 raw symbol，就直接创建内部 visible node。
+
+Rule 9:
+  不能用文案、文件名、行业、主题色或固定 bbox 判定 internal icon。
 ```
 
 ---
@@ -3672,6 +4200,7 @@ Phase 1:
   Pixel Ownership Conservation
   Cleanup Authorization
   Quality Metrics v1
+  Media Internal Decomposition formula
 
 Phase 2:
   Hierarchy Tree
@@ -3702,6 +4231,38 @@ Phase 7:
   True Figma Component/Instance
   Design system export
   Plugin repair UI
+```
+
+当前 C 阶段按更细执行相位拆分：
+
+```text
+C0:
+  Quality benchmark / repair-cost calibration
+
+C1:
+  Hierarchy + sibling group confidence calibration
+
+C2:
+  Auto Layout permission calibration
+
+C3:
+  Component isomorphism report-only
+
+C4:
+  Variant report-only
+
+C5:
+  Vectorization report-only / opt-in
+
+C6:
+  Controlled materialization experiment
+
+M29.6 parallel source-evidence track:
+  Media Internal Decomposition report-only
+  Transparent Asset Extraction report-only
+  Execution-supported internal source promotion experiment
+  M29.5 replay/cleanup authorization
+  Materializer consumption of M29.5-authorized internal assets
 ```
 
 ---

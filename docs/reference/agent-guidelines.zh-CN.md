@@ -25,7 +25,18 @@ Figma Plugin
 -> M29.3 relation graph
 -> M29.4 weak structural evidence
 -> M29.5 replay plan
+-> M29 ownership conservation report
+-> M29.6 media internal decomposition report
+-> M29 transparent asset report
+-> M29 internal source promotion
+-> M29.3/M29.4/M29.5 final reports from promoted M29.2
+-> M29 hierarchy candidate report
+-> M29 sibling group candidate report
+-> M29 layout energy report
+-> M29 Auto Layout permission report
 -> M29 plan-driven materializer
+-> M29 design token report
+-> M29 B-stage quality report
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
 -> Figma
@@ -115,6 +126,6 @@ PR 或交付说明应包含 changed surface、关联 plan/bug/ADR、验证命令
 
 不要恢复已删除的 M29 Direct compare、legacy M30 materialization product path、M31-M39/M39.1 runtime、routes、env 或 ONNX proposer。旧 ADR、completed plans 和 legacy 草稿提到这些路径时，只能作为历史背景。
 
-M29.4 weak cluster 只是 evidence，不提供 component、Auto Layout、Figma Component/Instance 或 materialization 权限。M29.5 replay plan 是唯一 materialization order、node budget、dedupe 和 cleanup 授权来源。M29 plan-driven materializer 只执行 plan，不重新判断 owner，不新增 cleanup 授权。
+M29.4 weak cluster、M29 ownership conservation、M29.6 media internal decomposition、M29 transparent asset report、M29 hierarchy candidates、M29 sibling group candidates、M29 layout energy、M29 Auto Layout permission、M29 design token 和 M29 B-stage quality reports 都是 evidence/permission/diagnostic surfaces。C-stage materialization 只能消费高置信 structural evidence，在已 replay 的节点外创建透明 controlled structure group；不能创建 Auto Layout、Figma Component/Instance、variables、variants、vectors 或新的 visible owner nodes。M29.6 不能自己提升内部 media candidates 或授权 cleanup。M29 transparent asset report 只能生成诊断 RGBA artifact；不能自己替换 materialized assets 或授权 cleanup。M29 internal source promotion 是当前唯一能把 M29.6/transparent evidence 回灌到 M29.2 source ownership 的桥；promoted objects 必须重新经过 M29.3/M29.4/M29.5 才能 materialize。M29.5 replay plan 是唯一 materialization order、node budget、dedupe、visible internal icon replay 和 cleanup 授权来源。M29 plan-driven materializer 只执行 plan，不重新判断 owner，不新增 cleanup 授权。
 
 Source ownership 问题必须从 raw M29 或 M29.2 修起；不要在 materializer、Renderer 或 plugin 里按颜色、文案、主题、行业、文件名或固定 bbox 写特化补丁。root/page 背景必须来自 source PNG 采样，不恢复固定浅色默认背景来掩盖 fallback-off 问题。

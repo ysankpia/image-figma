@@ -7,6 +7,7 @@ Figma plugin
 -> /api/upload-preview
 -> OCR
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
+-> M29 ownership conservation / M29.6 media internal decomposition / M29 transparent asset report / B-stage reports
 -> M29 plan-driven materializer
 -> DSL v0.1
 -> Renderer
@@ -98,6 +99,10 @@ uv run pytest \
   tests/test_region_relation_graph_report.py \
   tests/test_stable_design_cluster.py \
   tests/test_m29_replay_plan.py \
+  tests/test_ownership_conservation.py \
+  tests/test_media_internal_decomposition.py \
+  tests/test_transparent_asset_report.py \
+  tests/test_internal_source_promotion.py \
   tests/test_m29_plan_materializer.py \
   tests/test_upload_preview_pipeline.py \
   tests/test_routes_tasks.py \
@@ -116,6 +121,9 @@ Required backend coverage:
 - invalid MIME, invalid PNG, unreadable dimensions, and too-large file are rejected.
 - completed task returns M29 plan-driven DSL from `design.dsl.json`.
 - completed task writes M29.5 replay plan to `m29_5/replay_plan.json`.
+- completed task writes M29.6 media internal decomposition report to `m29_media_internal_decomposition/media_internal_decomposition_report.json`.
+- completed task writes M29 transparent asset report to `m29_transparent_assets/transparent_asset_report.json`.
+- completed task writes M29 internal source promotion report to `m29_internal_source_promotion/internal_source_promotion_report.json`.
 - completed task returns M29 materialization report through `/api/tasks/{taskId}/materialization`.
 - `/api/tasks/{taskId}/m29-direct-dsl` returns 404.
 - `/api/tasks/{taskId}/m30-materialization` returns 404.
@@ -141,6 +149,14 @@ Required evidence coverage:
 - M29 low-contrast support regions must have finite outer-ring evidence; page-edge open bands are rejected.
 - M29.2 must route small high-texture/high-color circle or ellipse foreground to raster icon/fallback instead of pure shape replay.
 - M29.2 media regions prevent internal fragments from becoming separate replay layers.
+- M29.6 reports composite `preserve_raster` media internal OCR/text masks/raw symbol or shape candidates and non-OCR foreground components without changing DSL, assets, replay plan, cleanup authorization, or materialization.
+- M29.6 text masks prevent OCR glyph fragments from becoming internal icon candidates.
+- M29.6 rejects large hero/texture fragments and separators as icon candidates unless generic evidence supports them.
+- M29 transparent asset report only considers existing `raster_icon/icon_replay` source objects and execution-supported M29.6 `internal_icon_candidate` items.
+- M29 transparent asset report rejects OCR-overlapping, unstable-background, execution-unsupported, high edge-alpha residue, or overly large candidates, and is not consumed directly by materializer.
+- M29 internal source promotion writes promoted M29.2 source objects only for accepted, execution-supported M29.6 internal icon candidates with transparent asset allow.
+- M29.5 keeps promoted internal icon overlay over its parent media only when source evidence links the icon to that parent media and transparent asset.
+- materializer consumes transparent assets only after M29.5 has authorized the promoted icon replay.
 - OCR text suppresses high-overlap M29 raster primitive.
 - M29.5 preserves visible replay order: shape/support/background, then image, then icon, then text.
 - `preserve_in_parent_raster` does not create visible nodes and does not erase fallback pixels.
@@ -151,6 +167,7 @@ Required evidence coverage:
 - M29 plan materializer samples root/page background from source PNG, not a fixed light default.
 - fallback erasure is executed only with M29.5 fallback cleanup target.
 - copied image asset text cleanup is executed only with M29.5 copied image asset cleanup target.
+- copied image asset promoted-internal cleanup is executed only with M29.5 copied image asset cleanup target and transparent asset alpha mask.
 
 ## Static Pruning Checks
 

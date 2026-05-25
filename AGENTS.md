@@ -22,6 +22,10 @@ Figma Plugin
 -> M29.4 weak structural evidence
 -> M29.5 replay plan
 -> M29 ownership conservation report
+-> M29.6 media internal decomposition report
+-> M29 transparent asset report
+-> M29 internal source promotion
+-> M29.3/M29.4/M29.5 final reports from promoted M29.2
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
@@ -118,6 +122,6 @@ PRs or handoffs should state the changed surface, linked plan/bug/ADR, validatio
 
 Do not restore removed M29 Direct compare, legacy M30 materialization product paths, M31-M39/M39.1 runtime, routes, environment variables, or ONNX proposer. When old ADRs, completed plans, or legacy drafts mention those paths, treat them as historical background only.
 
-M29.4 weak cluster, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, M29 Auto Layout permission, M29 design token, and M29 B-stage quality reports are evidence/permission/diagnostic surfaces. C-stage materialization may consume high-confidence structural evidence only to create transparent controlled structure groups around already replayed nodes. It must not create Auto Layout, Figma Component/Instance, variables, variants, vectors, or new visible owner nodes. M29.5 replay plan is still the only source for materialization order, node budget, dedupe, and cleanup authorization. The M29 plan-driven materializer must not reclassify owners or add cleanup authorization.
+M29.4 weak cluster, M29 ownership conservation, M29.6 media internal decomposition, M29 transparent asset report, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, M29 Auto Layout permission, M29 design token, and M29 B-stage quality reports are evidence/permission/diagnostic surfaces. C-stage materialization may consume high-confidence structural evidence only to create transparent controlled structure groups around already replayed nodes. It must not create Auto Layout, Figma Component/Instance, variables, variants, vectors, or new visible owner nodes. M29.6 must not promote internal media candidates or authorize cleanup by itself. M29 transparent asset report may generate diagnostic RGBA artifacts only; it must not replace materialized assets or authorize cleanup by itself. M29 internal source promotion is the only current bridge from M29.6/transparent evidence back into M29.2 source ownership, and promoted objects must be reprocessed through M29.3/M29.4/M29.5 before materialization. M29.5 replay plan is still the only source for materialization order, node budget, dedupe, visible internal icon replay, and cleanup authorization. The M29 plan-driven materializer must not reclassify owners or add cleanup authorization.
 
 Source ownership defects must be fixed in raw M29 or M29.2. Do not patch them in the materializer, Renderer, or plugin with color, copy, theme, industry, filename, or fixed-bbox special cases. Root/page background must come from source PNG sampling; do not restore a fixed light default to hide fallback-off failures.

@@ -14,6 +14,10 @@ Plugin upload
 -> M29.4 weak cluster
 -> M29.5 replay plan
 -> M29 ownership conservation report
+-> M29.6 media internal decomposition report
+-> M29 transparent asset report
+-> M29 internal source promotion
+-> final M29.3/M29.4/M29.5 reports from promoted M29.2
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
@@ -50,6 +54,10 @@ save source PNG
 run OCR
 run M29/M29.2/M29.3/M29.4/M29.5
 run M29 ownership conservation report
+run M29.6 media internal decomposition report
+run M29 transparent asset report
+run M29 internal source promotion
+rerun M29.3/M29.4/M29.5/ownership from promoted M29.2
 run M29 hierarchy candidate report
 run M29 sibling group candidate report
 run M29 layout energy report
@@ -69,7 +77,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -255,6 +263,97 @@ validation.py: report schema and report-only invariant checks
 ```
 
 这个 package 只报告风险，不改变任何输入对象。它不创建 DSL nodes，不改 M29.5 plan，不授权 cleanup，不被 materializer 消费。
+
+### M29.6 Media Internal Decomposition
+
+`backend/app/media_internal_decomposition/` 是 ownership conservation 之后、materialization 之前的 report-only composite-media evidence surface。它消费：
+
+```text
+OCR blocks
+source PNG pixels
+raw M29 primitive nodes and blocked evidence
+M29.2 source objects
+M29.3.1 relation graph metadata
+M29.5 replay plan metadata
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_media_internal_decomposition/media_internal_decomposition_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration and JSON write
+types.py: report-only constants and result type
+normalization.py: OCR/raw M29/M29.2/M29.5 normalization
+geometry.py: bbox containment, overlap, padding, row/gap scoring helpers
+candidates.py: composite media detection, text masks, OCR-anchor and non-OCR foreground component detection, internal candidate scoring, action-row grouping, rejection summaries
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and report-only invariant checks
+```
+
+这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。它不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。后续如果要让内部 icon/image 可选，必须先经过 source ownership promotion 和 M29.5 replay/cleanup 授权。
+
+### M29 Transparent Asset Report
+
+`backend/app/transparent_asset_report/` 是 M29.6 之后、materialization 之前的 report-only transparent asset evidence surface。它消费：
+
+```text
+source PNG pixels
+OCR blocks
+M29.2 source objects
+M29.6 media internal decomposition report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_transparent_assets/transparent_asset_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: report extraction orchestration, diagnostic RGBA write, and JSON write
+types.py: report-only constants and result type
+normalization.py: OCR/M29.2/M29.6 normalization
+geometry.py: bbox/image-bound and overlap helpers
+candidates.py: allowed candidate-source selection and preflight gates
+alpha.py: edge background sampling, alpha mask metrics, edge-alpha risk gate, and diagnostic RGBA output
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and report-only invariant checks
+```
+
+这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
+
+### M29 Internal Source Promotion
+
+`backend/app/internal_source_promotion/` 是 M29.6/transparent evidence 回到 M29.2 source ownership 的唯一当前桥。它消费：
+
+```text
+M29.2 source objects
+M29.6 media internal decomposition report
+M29 transparent asset report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_internal_source_promotion/internal_source_promotion_report.json
+storage/upload_previews/{taskId}/m29_internal_source_promotion/source_ui_physical_graph.promoted.json
+```
+
+模块边界：
+
+```text
+pipeline.py: internal icon promotion and promoted M29.2 document write
+types.py: promotion result and invariant metadata
+```
+
+这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 high confidence 或结构支持 medium confidence 的对象。它不创建 DSL nodes，不绕过 M29.5。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
 
 ### M29 Hierarchy Candidates
 
@@ -612,6 +711,7 @@ source-proven shape fill/radius replay
 raster/media/icon crop or asset copy
 plan-authorized fallback cleanup
 plan-authorized copied image asset text cleanup
+plan-authorized copied image asset promoted-internal alpha-mask cleanup
 report building
 ```
 

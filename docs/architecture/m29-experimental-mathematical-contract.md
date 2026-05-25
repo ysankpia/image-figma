@@ -12,6 +12,8 @@
 - 不把双栏、瀑布流、卡片、导航栏编译成组件。
 - 不求解全局布局优化问题。
 - 不创建 Figma Component/Instance。
+- 不对 `preserve_raster` media 内部 foreground 做运行时二次提升。
+- 不生成透明 asset 抠图作为主链 visible node 来源。
 - 不绕过 M29.5 plan 去改变 `/api/tasks/{taskId}/dsl`。
 - 不把 M29.4 cluster role hint 当成真实层级或组件。
 
@@ -1005,7 +1007,57 @@ M29.4 只是 structural cluster report；M29.5 只是 replay plan；M29 plan-dri
 
 第二，M29.4 role hint 很弱。`row_like`、`column_like`、`background_anchor_like` 是结构提示，不是 layout tree。尤其 `media_text_group_like` 当前没有实际产出路径。
 
-第三，没有全局 ownership conservation。理想情况下，每个源像素应满足：
+第三，`preserve_raster` 现在仍是保守终点，不是二次分解入口。它可以保护复杂 media 的视觉 fidelity，但也会吞掉内部普通 UI foreground，例如内部 label 附近的 icon、底部导航 icon、卡片/table 内的小圆点、小图或细分割线。正确抽象不是按 carousel、nav、table、行业或文案特化，而是：
+
+```text
+CompositeMedia(M) =
+  preserve_raster image_replay media
+  with internal OCR/raw primitive evidence
+```
+
+后续需要新增 report-only 的 M29.6 Media Internal Decomposition：
+
+```text
+M29.6 inputs:
+  source PNG pixels
+  OCR boxes
+  raw M29 primitive graph
+  M29.2 source objects
+  M29.3.1 relation graph
+  M29.5 replay plan
+
+M29.6 output:
+  internal foreground candidates
+  text protection masks
+  local background / foreground scores
+  connected component evidence
+  icon/text-anchor/repetition matches
+  rejected internal fragments
+```
+
+M29.6 必须保持：
+
+```text
+reportOnly = true
+dslChanged = false
+assetChanged = false
+createdVisibleNodeCount = 0
+```
+
+它不能按文案、文件名、行业、主题色或固定 bbox 判定；也不能直接改 M29.5 replay plan 或 materializer。
+
+第四，没有 transparent asset extraction 报告。当前 icon/image asset 主要是 bbox crop；对于高置信小 UI asset，后续应在 source evidence 层用：
+
+```text
+local background model
+foreground mask
+connected component
+alpha mask
+```
+
+生成可审计的 RGBA 透明资产候选。但第一版也必须 report-only，不能作为通用人像/商品 background removal 主线，不能覆盖所有 media。
+
+第五，当前已有 ownership conservation report，但没有 per-pixel bitmap owner solver。理想情况下，每个源像素应满足：
 
 ```text
 owner(pixel) in {fallback, text, image, icon, shape}
@@ -1014,7 +1066,7 @@ and high-confidence visible owners should not double-own the same pixel
 
 当前通过 IoU、cleanup 和局部 owner gate 近似实现，还不是全局约束。
 
-第四，没有 component graph isomorphism。真正组件化至少需要：
+第六，没有 component graph isomorphism。真正组件化至少需要：
 
 ```text
 subgraph A ~= subgraph B
@@ -1023,7 +1075,7 @@ under relation labels, owner labels, normalized geometry, content slots
 
 M29.4 只做 motif connected component，不做同构匹配。
 
-第五，没有 layout energy。若未来要判断 row/column/grid/masonry，应该先定义：
+第七，layout energy 已进入 report 阶段，但仍不能直接等于 Auto Layout 或真实响应式。若未来要判断 row/column/grid/masonry，应该继续校准：
 
 ```text
 E_row(C), E_col(C), E_grid(C), E_masonry(C)
@@ -1032,7 +1084,7 @@ layout(C) = argmin(E)
 
 但这应作为 M29 之后的 component/layout 阶段，而不是混进 source ownership。
 
-第六，语义命名仍有债。`control_background`、`card_background` 是方便 replay 的中间分类，不等于可靠识别了 Control 或 Card。
+第八，语义命名仍有债。`control_background`、`card_background` 是方便 replay 的中间分类，不等于可靠识别了 Control 或 Card。
 
 ## 14. 下一步数学合同建议
 
@@ -1041,6 +1093,12 @@ layout(C) = argmin(E)
 ```text
 Pixel Ownership Conservation:
   每个 replayed bbox 的擦除、保留、复制资产 cleanup 必须能解释像素归属。
+
+Media Internal Decomposition:
+  对 preserve_raster media 内部 OCR/raw foreground 做 report-only 二次分解，先保护文字 mask，再用局部背景、前景分数、连通域、文本锚点和重复排列找内部候选。
+
+Transparent Asset Extraction:
+  只对已有 source evidence 的小 UI asset 生成 alpha PNG 候选报告，不做通用 remove-background，不改 DSL/assets。
 
 Graph Isomorphism:
   定义 repeated unit 的节点标签、边标签、归一化 bbox 和 slot 匹配误差。
