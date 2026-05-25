@@ -15,7 +15,7 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：暂无；最近完成计划见 [plans/completed/054-m29-media-internal-decomposition-and-transparent-assets.md](plans/completed/054-m29-media-internal-decomposition-and-transparent-assets.md)。
+- 当前 active plan：[plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)；最近完成计划见 [plans/completed/054-m29-media-internal-decomposition-and-transparent-assets.md](plans/completed/054-m29-media-internal-decomposition-and-transparent-assets.md)。
 
 ## By Task Type
 

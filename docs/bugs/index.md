@@ -9,6 +9,7 @@
 
 最近 resolved bug：
 
+- [010-dsl-visual-comparison-text-renders-as-solid-bars.md](resolved/010-dsl-visual-comparison-text-renders-as-solid-bars.md)：DSL visual comparison 的 report-only 近似渲染把 text 节点画成实心条，容易误导 525 artifact inspection。
 - [008-fallback-off-dark-ui-white-collapse.md](resolved/008-fallback-off-dark-ui-white-collapse.md)：M29 fallback-off 深色 UI 暴露固定浅色背景，根因是 raster/media preservation 没有回归 M29.2/M29.5 主链。
 - [007-composite-media-outer-shell-duplicates-top-tab-text.md](resolved/007-composite-media-outer-shell-duplicates-top-tab-text.md)：M30.7 同时物化紧轮播图和外层 chrome shell，导致顶部 tab 文本被底层 raster 与上层 text 重复绘制。
 - [006-missing-text-nodes-not-added-to-fallback-single-nodes.md](resolved/006-missing-text-nodes-not-added-to-fallback-single-nodes.md)：M29.0.4 未配对/未聚类成功的孤立文本节点未被 fallback 兜底添加，导致 DSL 丢失文本。

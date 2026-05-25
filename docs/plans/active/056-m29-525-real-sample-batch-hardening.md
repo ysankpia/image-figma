@@ -263,3 +263,43 @@ averageDslVisualNormalizedMeanAbsError = 0.016526
 maxDslVisualChangedPixelRatio10 = 0.080846
 quality grades = high for all six records
 ```
+
+Third repair stage:
+
+```text
+owner = dsl_visual_comparison
+problem = report-only DSL visual comparison rendered every text node as one solid horizontal bar. This made `dsl_render.png` and `source_diff.png` misleading during 525 artifact inspection because diagnostic artifacts could look like large white/color blocks even when DSL text content was present.
+fix = replace the solid bar with a dependency-free text-like glyph texture based on the DSL text content and bbox. This does not add Pillow, does not identify fonts, and does not change DSL, materialization, Renderer, plugin protocol, or actual Figma output.
+guard = focused renderer test asserts text diagnostics contain glyph-like texture and not a long solid bar.
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_dsl_visual_comparison.py -q
+uv run pytest tests/test_dsl_visual_comparison.py tests/test_upload_preview_pipeline.py -q
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/525测试 --poll-timeout 300
+```
+
+Validation results:
+
+```text
+tests/test_dsl_visual_comparison.py: 1 passed
+dsl visual comparison + upload preview pipeline: 8 passed
+post-fix ledger: backend/tmp/validation/upload_preview_batch_20260525_204625/upload_preview_batch_validation.json
+inputCount = 6
+completedTaskCount = 6
+failedTaskCount = 0
+missingArtifactCount = 0
+ownershipConflictTypeCounts = {}
+totalBStageRepairCost = 35
+averageDslVisualNormalizedMeanAbsError = 0.018365
+maxDslVisualChangedPixelRatio10 = 0.084364
+```
+
+Infrastructure note:
+
+```text
+An intermediate rerun at backend/tmp/validation/upload_preview_batch_20260525_204352 failed on sample 6 during OCR with Baidu PP-OCRv5 HTTPS SSLEOFError. A clean full rerun completed afterward, so this is recorded as external OCR dependency instability, not a DSL visual comparison regression.
+```

@@ -79,7 +79,7 @@ def render_element(
             warnings=warnings,
         )
     elif element_type == "text":
-        render_text_approx(rows, bbox, text_rgb(element))
+        render_text_approx(rows, bbox, text_rgb(element), text_content(element))
 
     for child in list_dicts(element.get("children")):
         render_element(
@@ -156,13 +156,109 @@ def draw_scaled_image(rows: list[bytearray], bbox: list[int], image: PngPixels, 
             row[dst_offset : dst_offset + 3] = src_row[src_offset : src_offset + 3]
 
 
-def render_text_approx(rows: list[bytearray], bbox: list[int], rgb: tuple[int, int, int]) -> None:
+def render_text_approx(rows: list[bytearray], bbox: list[int], rgb: tuple[int, int, int], text: str = "") -> None:
     x, y, width, height = bbox
     if width <= 0 or height <= 0:
         return
-    line_height = max(2, min(height, round(height * 0.28)))
+    content = text.strip()
+    if not content:
+        render_text_placeholder(rows, bbox, rgb)
+        return
+    canvas_height = len(rows)
+    canvas_width = len(rows[0]) // 3 if rows else 0
+    if canvas_width <= 0 or canvas_height <= 0:
+        return
+    inset_x = max(1, min(3, width // 12))
+    inset_y = max(1, min(3, height // 5))
+    glyph_height = max(2, height - inset_y * 2)
+    drawable_width = max(1, width - inset_x * 2)
+    glyph_count = max(1, min(len(content), max(1, drawable_width // 2)))
+    slot_width = max(2, drawable_width // glyph_count)
+    sampled_text = sample_text_for_width(content, glyph_count)
+    for index, char in enumerate(sampled_text):
+        if char.isspace():
+            continue
+        glyph_x = x + inset_x + index * slot_width
+        if glyph_x >= x + width:
+            break
+        glyph_y = y + inset_y
+        glyph_width = max(1, min(slot_width - 1, x + width - glyph_x))
+        draw_approx_glyph(
+            rows,
+            glyph_x,
+            glyph_y,
+            glyph_width,
+            glyph_height,
+            rgb,
+            seed=ord(char) + index * 17,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+        )
+
+
+def render_text_placeholder(rows: list[bytearray], bbox: list[int], rgb: tuple[int, int, int]) -> None:
+    x, y, width, height = bbox
+    line_height = max(1, min(height, round(height * 0.18)))
     top = y + max(0, (height - line_height) // 2)
-    fill_rect(rows, [x, top, max(1, round(width * 0.82)), line_height], rgb)
+    dash_width = max(1, min(6, width // 5))
+    gap = max(1, dash_width // 2)
+    cursor = x
+    while cursor < x + width:
+        fill_rect(rows, [cursor, top, min(dash_width, x + width - cursor), line_height], rgb)
+        cursor += dash_width + gap
+
+
+def sample_text_for_width(text: str, count: int) -> str:
+    if len(text) <= count:
+        return text
+    if count <= 1:
+        return text[:1]
+    last_index = len(text) - 1
+    return "".join(text[round(index * last_index / (count - 1))] for index in range(count))
+
+
+def draw_approx_glyph(
+    rows: list[bytearray],
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    rgb: tuple[int, int, int],
+    *,
+    seed: int,
+    canvas_width: int,
+    canvas_height: int,
+) -> None:
+    if width <= 0 or height <= 0:
+        return
+    stroke = max(1, min(2, width, height // 5 if height >= 5 else 1))
+    mid_y = y + max(0, height // 2 - stroke // 2)
+    right_x = x + max(0, width - stroke)
+    bottom_y = y + max(0, height - stroke)
+    draw_glyph_rect(rows, [x, y, stroke, height], rgb, canvas_width, canvas_height)
+    if width >= 3 and seed % 2 == 0:
+        draw_glyph_rect(rows, [right_x, y, stroke, height], rgb, canvas_width, canvas_height)
+    if seed % 3 != 0:
+        draw_glyph_rect(rows, [x, y, width, stroke], rgb, canvas_width, canvas_height)
+    if height >= 5 and seed % 5 != 0:
+        draw_glyph_rect(rows, [x, mid_y, width, stroke], rgb, canvas_width, canvas_height)
+    if seed % 7 != 0:
+        draw_glyph_rect(rows, [x, bottom_y, width, stroke], rgb, canvas_width, canvas_height)
+
+
+def draw_glyph_rect(
+    rows: list[bytearray],
+    bbox: list[int],
+    rgb: tuple[int, int, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> None:
+    x, y, width, height = bbox
+    for row_index in range(max(0, y), min(canvas_height, y + height)):
+        row = rows[row_index]
+        for col_index in range(max(0, x), min(canvas_width, x + width)):
+            offset = col_index * 3
+            row[offset : offset + 3] = bytes(rgb)
 
 
 def fill_rect(rows: list[bytearray], bbox: list[int], rgb: tuple[int, int, int]) -> None:
@@ -216,6 +312,11 @@ def text_rgb(element: dict[str, Any]) -> tuple[int, int, int]:
     if isinstance(color, str):
         return parse_hex(color)
     return (17, 24, 39)
+
+
+def text_content(element: dict[str, Any]) -> str:
+    content = element.get("content") if isinstance(element.get("content"), dict) else {}
+    return str(content.get("text") or "")
 
 
 def is_visible(element: dict[str, Any]) -> bool:
