@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .geometry import intersection_area, overlap_ratio, union_bbox
-from .relations import edge_between, edge_is_near_equal, relation_contains_text
+from .relations import edge_between, edge_is_near_equal, relation_contains_object, relation_contains_text
 from .types import NON_VISIBLE_REPLAY_ACTIONS, VISIBLE_REPLAY_ACTIONS
 
 
@@ -130,8 +130,8 @@ def detect_invalid_cleanup_claims(
         target_id = str(claim.get("targetSourceObjectId") or "")
         plan_item = plan_lookup.get(claim["planItemId"])
         target = source_lookup.get(target_id)
-        if not plan_item or plan_item["finalReplayAction"] != "text_replay":
-            conflicts.append(invalid_copied_cleanup_conflict(claim, "copied image cleanup must belong to a text replay plan item"))
+        if not plan_item:
+            conflicts.append(invalid_copied_cleanup_conflict(claim, "copied image cleanup plan item is missing"))
             continue
         if target is None:
             conflicts.append(invalid_copied_cleanup_conflict(claim, "copied image cleanup target source object is missing"))
@@ -139,10 +139,50 @@ def detect_invalid_cleanup_claims(
         if target["pixelOwner"] != "preserve_raster" or target["replayDecision"] != "image_replay":
             conflicts.append(invalid_copied_cleanup_conflict(claim, "copied image cleanup target must be preserve_raster image_replay media"))
             continue
-        edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
-        if not relation_contains_text(edge, text_id=claim["sourceObjectId"], media_id=target_id):
-            conflicts.append(invalid_copied_cleanup_conflict(claim, "copied image cleanup relation must be media contains text or near_equal"))
+        if copied_cleanup_is_valid_for_text(plan_item, claim, target_id, edge_lookup):
+            continue
+        if copied_cleanup_is_valid_for_promoted_internal_asset(plan_item, claim, target_id, edge_lookup):
+            continue
+        conflicts.append(
+            invalid_copied_cleanup_conflict(
+                claim,
+                "copied image cleanup must be authorized by editable text containment or promoted internal asset containment",
+            )
+        )
     return conflicts
+
+
+def copied_cleanup_is_valid_for_text(
+    plan_item: dict[str, Any],
+    claim: dict[str, Any],
+    target_id: str,
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> bool:
+    if plan_item["finalReplayAction"] != "text_replay":
+        return False
+    edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
+    return relation_contains_text(edge, text_id=claim["sourceObjectId"], media_id=target_id)
+
+
+def copied_cleanup_is_valid_for_promoted_internal_asset(
+    plan_item: dict[str, Any],
+    claim: dict[str, Any],
+    target_id: str,
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> bool:
+    if plan_item["finalReplayAction"] != "icon_replay":
+        return False
+    if claim.get("reason") != "promoted_internal_asset_contained_by_media":
+        return False
+    evidence = plan_item.get("sourceEvidence") if isinstance(plan_item.get("sourceEvidence"), dict) else {}
+    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
+        return False
+    if evidence.get("mediaSourceObjectId") != target_id:
+        return False
+    if not evidence.get("transparentAssetPath"):
+        return False
+    edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
+    return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
 
 
 def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_lookup: dict[frozenset[str], dict[str, Any]]) -> bool:

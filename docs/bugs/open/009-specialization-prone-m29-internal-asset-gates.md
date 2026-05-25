@@ -103,6 +103,7 @@ PromoteInternalAsset(o) =
 - 更新 `docs/engineering/m29-contract-regression-matrix.md`，把 OCR-anchor、non-OCR foreground、group-supported medium 分开列为合同 case。
 - 覆盖 transparent asset edge-alpha 风险拒绝。
 - 覆盖 promoted internal asset 的 M29.5 copied media cleanup 授权和 materializer alpha-mask 擦除。
+- 覆盖 ownership conservation 对 promoted internal icon copied-image cleanup 的解释；普通未提升 icon 仍不得擦 parent media。
 
 仍需新增：
 
@@ -133,6 +134,20 @@ git diff --check
 ```bash
 cd backend
 uv run pytest tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+```
+
+525 批量验证第一轮修复：
+
+```text
+baseline ledger:
+  backend/tmp/validation/upload_preview_batch_20260525_195912/upload_preview_batch_validation.json
+  ownershipConflictTypeCounts = {"invalid_copied_image_asset_cleanup": 12}
+  totalBStageRepairCost = 547
+
+post-fix ledger:
+  backend/tmp/validation/upload_preview_batch_20260525_200800/upload_preview_batch_validation.json
+  ownershipConflictTypeCounts = {}
+  totalBStageRepairCost = 403
 ```
 
 ## Prevention Notes
