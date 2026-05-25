@@ -86,12 +86,45 @@ def test_internal_source_promotion_requires_evidence_contract_even_when_alpha_al
     assert result.report["rejectedCandidates"][0]["reason"] == "missing_evidence_contract"
 
 
+def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        source_objects=[media_object("media_a"), media_object("media_b")],
+        internal_candidates=[
+            internal_icon("candidate_a", [20, 20, 24, 24], confidence="high", text_anchor=0.82, media_source_object_id="media_a"),
+            internal_icon("candidate_b", [20, 20, 24, 24], confidence="high", text_anchor=0.86, media_source_object_id="media_b"),
+        ],
+        transparent_items=[
+            transparent_item("asset_candidate_a", "candidate_a", [20, 20, 24, 24], decision="allow"),
+            transparent_item("asset_candidate_b", "candidate_b", [20, 20, 24, 24], decision="allow"),
+        ],
+        evidence_contract_items=[
+            evidence_contract_item("contract_a", "candidate_a", decision="allow_visible_replay", evidence_score=0.72),
+            evidence_contract_item("contract_b", "candidate_b", decision="allow_visible_replay", evidence_score=0.86),
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["id"] == "m292_promoted_internal_icon_0001"
+    assert promoted["sourceEvidence"]["mediaInternalCandidateId"] == "candidate_b"
+    assert result.report["rejectedCandidates"] == [
+        {
+            "candidateId": "candidate_a",
+            "reason": "duplicate_promoted_internal_bbox",
+            "bbox": [20, 20, 24, 24],
+            "keptBy": "highest_evidence_score",
+        }
+    ]
+
+
 def promotion_report(
     tmp_path: Path,
     *,
     internal_candidates: list[dict],
     transparent_items: list[dict],
     evidence_contract_items: list[dict],
+    source_objects: list[dict] | None = None,
 ):
     return extract_m29_internal_source_promotion_report(
         task_id="task_promotion",
@@ -99,7 +132,7 @@ def promotion_report(
             "schemaName": "M292SourceUiPhysicalGraph",
             "schemaVersion": "0.1",
             "summary": {"sourceObjectCount": 1, "rasterIconCount": 0, "dslChanged": False, "assetChanged": False},
-            "sourceObjects": [media_object()],
+            "sourceObjects": source_objects or [media_object()],
         },
         media_internal_report={
             "schemaName": "M29MediaInternalDecompositionReport",
@@ -120,9 +153,9 @@ def promotion_report(
     )
 
 
-def media_object() -> dict:
+def media_object(object_id: str = "media") -> dict:
     return {
-        "id": "media",
+        "id": object_id,
         "bbox": [0, 0, 100, 100],
         "visualKind": "media_region",
         "pixelOwner": "preserve_raster",
@@ -134,10 +167,18 @@ def media_object() -> dict:
     }
 
 
-def internal_icon(candidate_id: str, bbox: list[int], *, confidence: str, text_anchor: float, group_supported: bool = False) -> dict:
+def internal_icon(
+    candidate_id: str,
+    bbox: list[int],
+    *,
+    confidence: str,
+    text_anchor: float,
+    group_supported: bool = False,
+    media_source_object_id: str = "media",
+) -> dict:
     return {
         "candidateId": candidate_id,
-        "mediaSourceObjectId": "media",
+        "mediaSourceObjectId": media_source_object_id,
         "rawNodeId": "raw_icon",
         "role": "internal_icon_candidate",
         "bbox": bbox,
@@ -149,12 +190,20 @@ def internal_icon(candidate_id: str, bbox: list[int], *, confidence: str, text_a
     }
 
 
-def transparent_item(item_id: str, source_object_id: str, bbox: list[int], *, decision: str, analysis_bbox: list[int] | None = None) -> dict:
+def transparent_item(
+    item_id: str,
+    source_object_id: str,
+    bbox: list[int],
+    *,
+    decision: str,
+    analysis_bbox: list[int] | None = None,
+    media_source_object_id: str = "media",
+) -> dict:
     return {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
         "sourceObjectId": source_object_id,
-        "mediaSourceObjectId": "media",
+        "mediaSourceObjectId": media_source_object_id,
         "bbox": bbox,
         "analysisBbox": analysis_bbox,
         "decision": decision,

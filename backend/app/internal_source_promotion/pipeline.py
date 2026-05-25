@@ -99,7 +99,7 @@ def build_promoted_objects(
         and item.get("sourceKind") == "m29_6_internal_icon_candidate"
         and item.get("candidateId")
     }
-    promoted: list[dict[str, Any]] = []
+    promotion_candidates: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     for candidate_id, candidate in candidates.items():
         item = transparent_items.get(candidate_id)
@@ -109,8 +109,49 @@ def build_promoted_objects(
         if reason:
             rejected.append({"candidateId": candidate_id, "reason": reason, "bbox": candidate.get("bbox") if candidate else (item or {}).get("bbox")})
             continue
-        promoted.append(promoted_object(candidate, item, contract, len(promoted) + 1))
+        promotion_candidates.append(promoted_object(candidate, item, contract, len(promotion_candidates) + 1))
+    promoted, duplicate_rejections = dedupe_promoted_objects(promotion_candidates)
+    rejected.extend(duplicate_rejections)
     return promoted, rejected
+
+
+def dedupe_promoted_objects(promoted: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    selected_by_bbox: dict[tuple[int, int, int, int], dict[str, Any]] = {}
+    rejected: list[dict[str, Any]] = []
+    for item in promoted:
+        bbox = tuple(normalize_bbox(item.get("bbox"), "promoted.bbox"))
+        current = selected_by_bbox.get(bbox)
+        if current is None or promotion_rank(item) > promotion_rank(current):
+            if current is not None:
+                rejected.append(rejected_duplicate(current))
+            selected_by_bbox[bbox] = item
+        else:
+            rejected.append(rejected_duplicate(item))
+    kept = list(selected_by_bbox.values())
+    for index, item in enumerate(kept, start=1):
+        item["id"] = f"m292_promoted_internal_icon_{index:04d}"
+    return kept, rejected
+
+
+def promotion_rank(item: dict[str, Any]) -> tuple[float, int, str]:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    try:
+        score = float(evidence.get("evidenceScore") or 0.0)
+    except (TypeError, ValueError):
+        score = 0.0
+    candidate_id = str(evidence.get("mediaInternalCandidateId") or "")
+    media_id = str(evidence.get("mediaSourceObjectId") or "")
+    return (score, len(candidate_id), media_id)
+
+
+def rejected_duplicate(item: dict[str, Any]) -> dict[str, Any]:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    return {
+        "candidateId": evidence.get("mediaInternalCandidateId"),
+        "reason": "duplicate_promoted_internal_bbox",
+        "bbox": item.get("bbox"),
+        "keptBy": "highest_evidence_score",
+    }
 
 
 def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, Any] | None, evidence_contract: dict[str, Any] | None, base_ids: set[str]) -> str:

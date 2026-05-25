@@ -1209,3 +1209,120 @@ further false-positive control for internal media candidates, and finite-control
 background/editability improvements. Do not change materializer, Renderer, or
 plugin to invent source ownership.
 ```
+
+### Stage 4: Internal Source Promotion Deduplication
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Inspected the Stage 3 ledger before changing code. High diagnostic-only counts
+were not accepted as a repair target because most remaining diagnostic objects
+are text overlap, image-internal texture, oversized foreground, or line-like
+fragments that should remain non-visible. The safer high-impact issue found in
+the ledger was duplicate internal source promotion: one real sample promoted the
+same internal foreground bbox twice from overlapping parent media.
+
+The fix stays in the source promotion bridge. It dedupes promoted internal
+source objects by final promoted bbox, keeps the object with the highest
+evidence score, reassigns stable promoted ids, and records the loser as
+`duplicate_promoted_internal_bbox` in rejectedCandidates. M29.5 and the
+materializer remain consumers only; no downstream owner or cleanup logic was
+invented.
+```
+
+First-principles classification:
+
+```text
+real goal: avoid duplicate source ownership for the same internal foreground pixels
+source truth: promoted M29.2 source objects derived from M29.6 + transparent asset + evidence contract
+information-loss point: overlapping parent media can produce two candidates with the same promoted bbox
+owning layer: internal_source_promotion, before final M29.3/M29.4/M29.5 rebuild
+do-not-do: do not rely on M29.5 overlap suppression or materializer cleanup to hide duplicate source ownership
+next verification: targeted tests + 40-image primary batch + duplicate promoted bbox audit
+```
+
+Fix:
+
+```text
+promotion_candidates -> dedupe by promoted bbox
+rank duplicate candidates by evidenceScore
+keep highest ranked candidate
+reject duplicate losers with duplicate_promoted_internal_bbox
+renumber kept promoted ids after dedupe
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_m29_plan_materializer.py -q
+git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 57 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+duplicate promoted bbox samples: 0
+duplicate_promoted_internal_bbox rejects: 1
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_052302/upload_preview_batch_validation.json
+```
+
+Stage 3 -> Stage 4 key metric comparison:
+
+```text
+visible replay claims: 4921 -> 4921
+promoted internal source objects: 23 -> 22
+average DSL visual gate normalized mean absolute error: 0.004586 -> 0.004586
+max DSL visual gate changed pixel ratio @10: 0.135227 -> 0.135227
+ownership conflict type counts: {} -> {}
+```
+
+Artifact inspection:
+
+```text
+The duplicate promoted bbox found in Stage 3 for
+34-e7a5a8e58aa1e6bc94e587ba.png is gone. The lower-scored duplicate candidate
+is recorded as duplicate_promoted_internal_bbox, and the batch has no remaining
+duplicate promoted internal bboxes.
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, or one-screenshot rule was added. The dedupe key
+is the promoted source bbox produced by the evidence chain, and the selection
+rank is generic evidenceScore.
+```
+
+Next:
+
+```text
+Continue the Stage 4+ loop. Do not recover more diagnostic/blocked foreground
+until independent evidence proves it is UI, because the current ledger shows
+most remaining diagnostic objects are correctly blocked text/texture/large/line
+fragments.
+```
