@@ -16,7 +16,7 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：[plans/active/059-image-math-dependencies-and-boundary-hardening.md](plans/active/059-image-math-dependencies-and-boundary-hardening.md)；M29 internal icon evidence contract 见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。
+- 当前 active plan：[plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)；525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
 
 ## By Task Type
 

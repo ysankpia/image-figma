@@ -1,6 +1,6 @@
 # 059 Image Math Dependencies And Boundary Hardening
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-26
 - 负责人：Codex
 
@@ -266,3 +266,38 @@ git status --short --branch
 - `docs/reference/codex_prompt.md` and `docs/reference/code_review_first_principles_technical_plan.md` are input evidence for this plan. They are not required as committed product docs unless explicitly requested.
 - `/Users/luhui/Downloads/525测试` remains useful for later behavior migration and real sample validation. It is not a closing signal for this first round because no production behavior should consume image_math yet.
 - Future stages must add parity tests before replacing existing report-only internals.
+
+## Completion Evidence
+
+Stage commits:
+
+```text
+b66bc55 docs: define image math execution boundary
+523a5c4 feat: add json tools and image math dependencies
+8202729 feat: add isolated image math execution layer
+45d23c0 test: enforce image math import boundaries
+```
+
+Validation:
+
+```text
+cd backend && uv sync
+cd backend && uv run pytest tests/test_json_tools.py -q
+cd backend && uv run pytest tests/test_image_math_arrays.py tests/test_image_math_masks.py tests/test_image_math_components.py tests/test_image_math_alpha.py -q
+cd backend && uv run pytest tests/test_image_math_import_boundaries.py -q
+cd backend && uv run pytest -q
+pnpm run check
+git diff --check
+```
+
+Result:
+
+```text
+backend pytest: 351 passed
+pnpm run check: passed
+Behavior invariant: yes
+DSL changed: no
+Materialization changed: no
+Replay plan changed: no
+Cleanup behavior changed: no
+```
