@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.dsl_visual_comparison.pipeline import build_diff_png
 from app.dsl_visual_comparison.pipeline import compare_pixels
 from app.dsl_visual_comparison.render import build_text_exclusion_mask
 from app.dsl_visual_comparison.render import render_dsl_to_pixels
+from app.png_tools import decode_png_pixels
 from app.png_tools import PngPixels
 
 
@@ -121,6 +123,28 @@ def test_compare_pixels_reports_gate_metrics_excluding_text_regions() -> None:
     assert comparison["gateChangedPixelRatio10"] == 0
     assert comparison["gateNormalizedMeanAbsError"] == 0
     assert comparison["gateFallbackReason"] is None
+
+
+def test_gate_diff_png_clears_text_excluded_pixels() -> None:
+    source_rows = [bytes([255, 255, 255] * 4) for _ in range(3)]
+    rendered_rows = [bytearray(row) for row in source_rows]
+    rendered_rows[1][3:6] = b"\x00\x00\x00"
+    rendered_rows[1][6:9] = b"\x00\x00\x00"
+    mask = bytearray(12)
+    mask[1 * 4 + 1] = 1
+
+    pixels = decode_png_pixels(
+        build_diff_png(
+            PngPixels(width=4, height=3, rows=source_rows),
+            PngPixels(width=4, height=3, rows=[bytes(row) for row in rendered_rows]),
+            exclusion_mask=bytes(mask),
+        )
+    )
+
+    text_offset = 1 * 3
+    non_text_offset = 2 * 3
+    assert pixels.rows[1][text_offset : text_offset + 3] == b"\x00\x00\x00"
+    assert pixels.rows[1][non_text_offset : non_text_offset + 3] == b"\xff\x00\x00"
 
 
 def test_compare_pixels_falls_back_to_full_metrics_when_text_mask_covers_every_pixel() -> None:

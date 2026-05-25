@@ -589,6 +589,7 @@ published local assets
 storage/upload_previews/{taskId}/m29_dsl_visual_comparison/dsl_visual_comparison_report.json
 storage/upload_previews/{taskId}/m29_dsl_visual_comparison/dsl_render.png
 storage/upload_previews/{taskId}/m29_dsl_visual_comparison/source_diff.png
+storage/upload_previews/{taskId}/m29_dsl_visual_comparison/source_gate_diff.png
 ```
 
 模块边界：
@@ -607,7 +608,7 @@ full-image diff: normalizedMeanAbsError / changedPixelRatio10
 non-text gate diff: gateNormalizedMeanAbsError / gateChangedPixelRatio10
 ```
 
-full-image diff 是诊断面，包含 report-only approximate text renderer 的字体/字形误差。`gate*` 指标会根据 visible DSL text bboxes 构建 exclusion mask，用于判断非文字视觉结构是否退化；如果文本 mask 覆盖后没有任何 non-text 像素，gate 指标回退到 full-image diff，并记录 `gateFallbackReason=no_non_text_pixels`，避免 all-text 样本产生假 0。
+full-image diff 是诊断面，包含 report-only approximate text renderer 的字体/字形误差。`source_gate_diff.png` 是对应 `gate*` 指标的 text-excluded diff artifact：visible DSL text bboxes 覆盖的像素被清零，用于人工查看非文字结构差异。`gate*` 指标会根据同一个 exclusion mask 判断非文字视觉结构是否退化；如果文本 mask 覆盖后没有任何 non-text 像素，gate 指标回退到 full-image diff，并记录 `gateFallbackReason=no_non_text_pixels`，避免 all-text 样本产生假 0。
 
 这不是字体识别、OCR 修复或 text quality acceptance。文字正确性仍必须由 OCR/source ownership/cleanup/Figma-visible validation 证明。
 

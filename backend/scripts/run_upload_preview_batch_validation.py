@@ -217,6 +217,7 @@ def base_record(image_path: Path, input_dir: Path) -> dict[str, Any]:
         "sourceImagePath": None,
         "renderBackImagePath": None,
         "visualDiffImagePath": None,
+        "visualGateDiffImagePath": None,
         "nodeCounts": {},
         "visibleTextCount": 0,
         "visibleShapeCount": 0,
@@ -330,6 +331,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
         "dslVisualComparisonReport": root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json",
         "dslRenderPng": root / "m29_dsl_visual_comparison" / "dsl_render.png",
         "sourceDiffPng": root / "m29_dsl_visual_comparison" / "source_diff.png",
+        "sourceGateDiffPng": root / "m29_dsl_visual_comparison" / "source_gate_diff.png",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
     for key, path in artifact_paths.items():
@@ -341,6 +343,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
     record["sourceImagePath"] = str(artifact_paths["sourceImage"])
     record["renderBackImagePath"] = str(artifact_paths["dslRenderPng"])
     record["visualDiffImagePath"] = str(artifact_paths["sourceDiffPng"])
+    record["visualGateDiffImagePath"] = str(artifact_paths["sourceGateDiffPng"])
     load_summary(record, "stageTimings", artifact_paths["stageTimings"])
     load_summary(record, "dsl", artifact_paths["dsl"])
     load_summary(record, "materialization", artifact_paths["materializationReport"])

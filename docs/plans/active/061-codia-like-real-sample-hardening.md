@@ -1326,3 +1326,115 @@ until independent evidence proves it is UI, because the current ledger shows
 most remaining diagnostic objects are correctly blocked text/texture/large/line
 fragments.
 ```
+
+### Stage 5: Text-Excluded Gate Diff Artifact
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Inspected the latest 40-image ledger and top gate-diff samples before changing
+M29. The highest `gateChangedPixelRatio10` samples were still hard to inspect
+because the only PNG artifact was the full `source_diff.png`, which includes
+approximate text-rendering noise. Stage 2 already added text-excluded gate
+metrics, but there was no matching text-excluded diff image for human
+inspection.
+
+The fix is validation-surface only: `dsl_visual_comparison` now emits
+`source_gate_diff.png`, where pixels covered by the visible DSL text exclusion
+mask are zeroed. The batch ledger records `sourceGateDiffPng` and
+`visualGateDiffImagePath`. No M29, DSL, Renderer, Figma plugin, source
+ownership, replay plan, materializer, or cleanup behavior changed.
+```
+
+First-principles classification:
+
+```text
+real goal: choose future M29 fixes from structural visual evidence, not full-diff text noise
+source truth: source PNG + final materialized DSL + text-excluded comparison mask
+information-loss point: full diff artifact mixes approximate text renderer noise with non-text structural differences
+owning layer: dsl_visual_comparison diagnostic artifact and batch ledger artifact map
+do-not-do: do not tune M29 ownership based on text-noisy full diff screenshots
+next verification: targeted tests + 40-image batch + gate-diff artifact inspection
+```
+
+Fix:
+
+```text
+source_diff.png remains unchanged as full diagnostic diff
+source_gate_diff.png shows only non-text/gate diff pixels
+ledger artifacts include sourceGateDiffPng
+record.visualGateDiffImagePath points to source_gate_diff.png
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_dsl_visual_comparison.py tests/test_upload_preview_batch_validation_script.py tests/test_upload_preview_pipeline.py -q
+git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 16 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+sourceGateDiffPng artifacts: 40/40
+visualGateDiffImagePath records: 40/40
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_054405/upload_preview_batch_validation.json
+```
+
+Stage 4 -> Stage 5 key metric comparison:
+
+```text
+visible replay claims: 4921 -> 4921
+promoted internal source objects: 22 -> 22
+average DSL visual gate normalized mean absolute error: 0.004586 -> 0.004586
+max DSL visual gate changed pixel ratio @10: 0.135227 -> 0.135227
+ownership conflict type counts: {} -> {}
+```
+
+Artifact inspection:
+
+```text
+Generated a top-gate-diff contact sheet from source, rendered DSL, and
+source_gate_diff.png. The gate diff removes most full-diff text noise and makes
+remaining non-text structure/image/icon boundary differences easier to inspect
+for the next M29 repair.
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, or one-screenshot rule was added. The new artifact
+uses the same generic visible-text exclusion mask already used by gate metrics.
+```
+
+Next:
+
+```text
+Use source_gate_diff.png, not full source_diff.png, to choose the next actual
+M29 owning-layer repair.
+```

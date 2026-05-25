@@ -34,9 +34,11 @@ def extract_dsl_visual_comparison(
     comparison = compare_pixels(source_pixels, rendered_pixels, exclusion_mask=text_exclusion_mask)
     render_path = output_dir / "dsl_render.png"
     diff_path = output_dir / "source_diff.png"
+    gate_diff_path = output_dir / "source_gate_diff.png"
     report_path = output_dir / "dsl_visual_comparison_report.json"
     render_path.write_bytes(encode_rgb_png(rendered_pixels.width, rendered_pixels.height, rendered_pixels.rows))
     diff_path.write_bytes(build_diff_png(source_pixels, rendered_pixels))
+    gate_diff_path.write_bytes(build_diff_png(source_pixels, rendered_pixels, exclusion_mask=text_exclusion_mask))
     report = {
         "schemaName": "M29DslVisualComparisonReport",
         "schemaVersion": "0.1",
@@ -54,6 +56,7 @@ def extract_dsl_visual_comparison(
         "artifacts": {
             "dslRenderPng": str(render_path),
             "sourceDiffPng": str(diff_path),
+            "sourceGateDiffPng": str(gate_diff_path),
         },
         "warnings": render_warnings,
         "meta": {
@@ -148,7 +151,7 @@ def is_excluded(exclusion_mask: bytes | None, index: int) -> bool:
     return exclusion_mask is not None and index < len(exclusion_mask) and exclusion_mask[index] != 0
 
 
-def build_diff_png(source: PngPixels, rendered: PngPixels) -> bytes:
+def build_diff_png(source: PngPixels, rendered: PngPixels, exclusion_mask: bytes | None = None) -> bytes:
     width = min(source.width, rendered.width)
     height = min(source.height, rendered.height)
     rows: list[bytes] = []
@@ -158,7 +161,10 @@ def build_diff_png(source: PngPixels, rendered: PngPixels) -> bytes:
         output = bytearray()
         for x in range(width):
             offset = x * 3
-            diff = max(abs(source_row[offset + channel] - rendered_row[offset + channel]) for channel in range(3))
+            if is_excluded(exclusion_mask, y * rendered.width + x):
+                diff = 0
+            else:
+                diff = max(abs(source_row[offset + channel] - rendered_row[offset + channel]) for channel in range(3))
             output.extend((diff, 0, 0))
         rows.append(bytes(output))
     return encode_rgb_png(width, height, rows)
