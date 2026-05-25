@@ -208,7 +208,7 @@ def plan_allows_internal_asset_copied_image_cleanup(plan_items: list[dict[str, A
             if (
                 isinstance(target, dict)
                 and target.get("target") == "copied_image_asset"
-                and target.get("reason") == "promoted_internal_asset_contained_by_media"
+                and target.get("reason") in {"promoted_internal_asset_contained_by_media", "label_anchored_blocked_asset_contained_by_media"}
                 and str(target.get("targetSourceObjectId") or "") == image_source_id
             ):
                 return True

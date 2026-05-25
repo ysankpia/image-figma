@@ -11,6 +11,7 @@ def cleanup_targets_for(
     targets = [{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}]
     if item["replayDecision"] == "icon_replay":
         targets.extend(promoted_internal_asset_cleanup_targets(item, source_objects, edge_lookup))
+        targets.extend(label_anchored_blocked_asset_cleanup_targets(item, source_objects, edge_lookup))
         return targets
     if item["replayDecision"] == "shape_replay":
         targets.extend(shape_cleanup_targets(item, source_objects, edge_lookup))
@@ -83,6 +84,33 @@ def promoted_internal_asset_cleanup_targets(
             "reason": "promoted_internal_asset_contained_by_media",
         }
     ]
+
+
+def label_anchored_blocked_asset_cleanup_targets(
+    item: dict[str, Any],
+    source_objects: list[dict[str, Any]],
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    if not evidence.get("labelAnchorOcrBoxId") or not evidence.get("blockedIds"):
+        return []
+    targets: list[dict[str, Any]] = []
+    for other in source_objects:
+        if other["id"] == item["id"]:
+            continue
+        if other["replayDecision"] != "image_replay" or other["pixelOwner"] != "preserve_raster":
+            continue
+        edge = edge_lookup.get(frozenset({item["id"], other["id"]}))
+        if not edge or not internal_asset_is_contained_by_media(item["id"], other["id"], edge):
+            continue
+        targets.append(
+            {
+                "target": "copied_image_asset",
+                "targetSourceObjectId": other["id"],
+                "reason": "label_anchored_blocked_asset_contained_by_media",
+            }
+        )
+    return targets
 
 
 def contained_media_edge_ids(

@@ -187,6 +187,51 @@ def test_copied_image_cleanup_is_explainable_for_promoted_internal_icon(tmp_path
     assert report["summary"]["conflictCount"] == 0
 
 
+def test_copied_image_cleanup_is_explainable_for_label_anchored_blocked_icon(tmp_path: Path) -> None:
+    source_evidence = {
+        "blockedIds": ["blocked_001"],
+        "mediaContainmentRatio": 1.0,
+        "labelAnchorOcrBoxId": "ocr_tab",
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 120, 90], "media_region", "preserve_raster", "image_replay"),
+            m292_object(
+                "tab_icon",
+                [30, 24, 32, 32],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                source_evidence=source_evidence,
+            ),
+        ],
+        edges=[edge("edge_media_icon", "media", "tab_icon", "contains")],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 120, 90], "image_replay", "m29_image"),
+            plan_item(
+                "plan_icon",
+                "tab_icon",
+                [30, 24, 32, 32],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "label_anchored_blocked_asset_contained_by_media",
+                    },
+                ],
+                source_evidence=source_evidence,
+            ),
+        ],
+    )
+
+    assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 1}
+    assert report["summary"]["conflictCount"] == 0
+
+
 def test_unpromoted_icon_copied_image_cleanup_is_rejected(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,

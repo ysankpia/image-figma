@@ -16,6 +16,7 @@ def extract_m29_internal_source_promotion_report(
     m292_document: dict[str, Any],
     media_internal_report: dict[str, Any],
     transparent_asset_report: dict[str, Any],
+    evidence_contract_report: dict[str, Any],
     output_dir: Path,
 ) -> M29InternalSourcePromotionResult:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -24,6 +25,7 @@ def extract_m29_internal_source_promotion_report(
         base_objects=base_objects,
         media_internal_report=media_internal_report,
         transparent_asset_report=transparent_asset_report,
+        evidence_contract_report=evidence_contract_report,
     )
     promoted_document = build_promoted_m292_document(m292_document, base_objects + promoted_objects, len(promoted_objects))
     document_path = output_dir / "source_ui_physical_graph.promoted.json"
@@ -38,6 +40,8 @@ def extract_m29_internal_source_promotion_report(
         "mediaInternalSchemaVersion": media_internal_report.get("schemaVersion"),
         "transparentAssetSchemaName": transparent_asset_report.get("schemaName"),
         "transparentAssetSchemaVersion": transparent_asset_report.get("schemaVersion"),
+        "evidenceContractSchemaName": evidence_contract_report.get("schemaName"),
+        "evidenceContractSchemaVersion": evidence_contract_report.get("schemaVersion"),
         "outputReport": str(report_path),
         "outputPromotedM292": str(document_path),
         "summary": {
@@ -56,7 +60,7 @@ def extract_m29_internal_source_promotion_report(
         "warnings": [],
         "meta": {
             "createdAt": datetime.now(UTC).isoformat(),
-            "truthSource": "m29_2_plus_m29_6_plus_transparent_asset_report",
+            "truthSource": "m29_2_plus_m29_6_plus_transparent_asset_plus_evidence_contract",
             **REPORT_META,
             "sourceOwnershipChanged": bool(promoted_objects),
         },
@@ -72,43 +76,50 @@ def build_promoted_objects(
     base_objects: list[dict[str, Any]],
     media_internal_report: dict[str, Any],
     transparent_asset_report: dict[str, Any],
+    evidence_contract_report: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     base_ids = {str(item.get("id") or "") for item in base_objects}
     candidates = {
         str(item.get("candidateId") or ""): item
         for item in media_internal_report.get("internalCandidates", [])
         if isinstance(item, dict)
+        and item.get("role") == "internal_icon_candidate"
     }
-    transparent_items = [
-        item
+    transparent_items = {
+        str(item.get("sourceObjectId") or ""): item
         for item in transparent_asset_report.get("items", [])
         if isinstance(item, dict)
         and item.get("source") == "m29_6_internal_icon_candidate"
-        and item.get("decision") == "allow"
         and item.get("sourceObjectId")
-    ]
+    }
+    contracts = {
+        str(item.get("candidateId") or ""): item
+        for item in evidence_contract_report.get("contractItems", [])
+        if isinstance(item, dict)
+        and item.get("sourceKind") == "m29_6_internal_icon_candidate"
+        and item.get("candidateId")
+    }
     promoted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    for item in transparent_items:
-        candidate_id = str(item["sourceObjectId"])
+    for candidate_id, candidate in candidates.items():
+        item = transparent_items.get(candidate_id)
+        contract = contracts.get(candidate_id)
         candidate = candidates.get(candidate_id)
-        reason = reject_reason(candidate, item, base_ids)
+        reason = reject_reason(candidate, item, contract, base_ids)
         if reason:
-            rejected.append({"candidateId": candidate_id, "reason": reason, "bbox": item.get("bbox")})
+            rejected.append({"candidateId": candidate_id, "reason": reason, "bbox": candidate.get("bbox") if candidate else (item or {}).get("bbox")})
             continue
-        promoted.append(promoted_object(candidate, item, len(promoted) + 1))
+        promoted.append(promoted_object(candidate, item, contract, len(promoted) + 1))
     return promoted, rejected
 
 
-def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, Any], base_ids: set[str]) -> str:
+def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, Any] | None, evidence_contract: dict[str, Any] | None, base_ids: set[str]) -> str:
     if candidate is None:
         return "missing_media_internal_candidate"
     if candidate.get("role") != "internal_icon_candidate":
         return "not_internal_icon_candidate"
     if candidate.get("candidateDecision") != "accepted_report_candidate":
         return "internal_candidate_not_accepted"
-    if candidate.get("confidence") != "high" and candidate.get("groupSupportedExecution") is not True:
-        return "internal_candidate_not_execution_supported"
     media_id = str(candidate.get("mediaSourceObjectId") or "")
     if not media_id or media_id not in base_ids:
         return "missing_parent_media_source_object"
@@ -116,16 +127,24 @@ def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, 
         normalize_bbox(candidate.get("bbox"), "candidate.bbox")
     except ValueError:
         return "invalid_candidate_bbox"
-    if transparent_item.get("assetPath") is None:
+    if transparent_item is None:
+        return "missing_transparent_asset_item"
+    if transparent_item.get("decision") != "allow" or transparent_item.get("assetPath") is None:
         return "missing_transparent_asset_path"
+    if evidence_contract is None:
+        return "missing_evidence_contract"
+    decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}
+    if decision.get("mode") != "allow_visible_replay":
+        return "evidence_contract_not_allowing_visible_replay"
     return ""
 
 
-def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any], index: int) -> dict[str, Any]:
+def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any], evidence_contract: dict[str, Any], index: int) -> dict[str, Any]:
     candidate_id = str(candidate["candidateId"])
     media_id = str(candidate["mediaSourceObjectId"])
     raw_node_id = str(candidate.get("rawNodeId") or "")
     bbox = normalize_bbox(candidate["bbox"], "candidate.bbox")
+    decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}
     return {
         "id": f"m292_promoted_internal_icon_{index:04d}",
         "bbox": bbox,
@@ -140,6 +159,9 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             "mediaInternalCandidateId": candidate_id,
             "transparentAssetPath": transparent_item.get("assetPath"),
             "transparentAssetCandidateId": transparent_item.get("candidateId"),
+            "evidenceContractId": evidence_contract.get("contractId"),
+            "evidenceContractDecision": decision.get("mode"),
+            "evidenceScore": decision.get("evidenceScore"),
             "promotionSource": "m29_6_internal_icon_candidate",
             "localBackgroundConfidence": 0.0,
             "textOverlapRatio": round(float(transparent_item.get("textOverlap") or 0.0), 4),
@@ -151,6 +173,7 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             if candidate.get("confidence") == "high"
             else "m29_6_group_supported_internal_icon_candidate",
             "transparent_asset_allow",
+            "evidence_contract_allow_visible_replay",
             "internal_source_promotion",
         ],
         "risks": ["promoted_internal_media_foreground"],

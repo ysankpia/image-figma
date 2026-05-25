@@ -290,6 +290,55 @@ def test_m295_keeps_promoted_internal_icon_over_parent_media(tmp_path: Path) -> 
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
 
 
+def test_m295_keeps_label_anchored_blocked_icon_over_parent_media(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_label_anchored_blocked_icon",
+        m292_document=m292_document(
+            [
+                m292_object(
+                    "media",
+                    [0, 0, 300, 100],
+                    "media_region",
+                    "preserve_raster",
+                    "image_replay",
+                    confidence="medium",
+                    source_evidence={"ocrBoxIds": ["ocr_tab"]},
+                ),
+                m292_object(
+                    "tab_icon",
+                    [42, 20, 42, 44],
+                    "raster_icon",
+                    "raster_icon",
+                    "icon_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "blockedIds": ["blocked_001"],
+                        "mediaContainmentRatio": 1.0,
+                        "labelAnchorOcrBoxId": "ocr_tab",
+                    },
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "tab_icon"],
+            [edge("media_icon", "media", "tab_icon", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media": "image_replay", "tab_icon": "icon_replay"}
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "tab_icon")
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "label_anchored_blocked_asset_contained_by_media",
+    } in icon_item["cleanupTargets"]
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
+
+
 def test_m295_does_not_add_copied_cleanup_for_unpromoted_icon(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_unpromoted_internal_icon",

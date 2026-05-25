@@ -16,6 +16,7 @@ Plugin upload
 -> M29 ownership conservation report
 -> M29.6 media internal decomposition report
 -> M29 transparent asset report
+-> M29 evidence contract report
 -> M29 internal source promotion
 -> final M29.3/M29.4/M29.5 reports from promoted M29.2
 -> M29 hierarchy candidate report
@@ -56,6 +57,7 @@ run M29/M29.2/M29.3/M29.4/M29.5
 run M29 ownership conservation report
 run M29.6 media internal decomposition report
 run M29 transparent asset report
+run M29 evidence contract report
 run M29 internal source promotion
 rerun M29.3/M29.4/M29.5/ownership from promoted M29.2
 run M29 hierarchy candidate report
@@ -77,7 +79,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -329,14 +331,43 @@ validation.py: report schema and report-only invariant checks
 
 这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
 
-### M29 Internal Source Promotion
+### M29 Evidence Contract
 
-`backend/app/internal_source_promotion/` 是 M29.6/transparent evidence 回到 M29.2 source ownership 的唯一当前桥。它消费：
+`backend/app/m29_evidence_contract/` 是 M29.6/transparent evidence 与 internal source promotion 之间的 report-only 证据合同层。它消费：
 
 ```text
 M29.2 source objects
 M29.6 media internal decomposition report
 M29 transparent asset report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_evidence_contract/evidence_contract_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: evidence contract report orchestration and JSON write
+types.py: report-only constants and result type
+scoring.py: positive/negative evidence scoring, risk gate, and decision construction
+report.py: summary counts and report-only invariant fields
+validation.py: report schema and report-only invariant checks
+```
+
+这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent asset allow、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
+
+### M29 Internal Source Promotion
+
+`backend/app/internal_source_promotion/` 是 M29.6/transparent/evidence-contract evidence 回到 M29.2 source ownership 的唯一当前桥。它消费：
+
+```text
+M29.2 source objects
+M29.6 media internal decomposition report
+M29 transparent asset report
+M29 evidence contract report
 ```
 
 它创建：
@@ -353,7 +384,7 @@ pipeline.py: internal icon promotion and promoted M29.2 document write
 types.py: promotion result and invariant metadata
 ```
 
-这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 high confidence 或结构支持 medium confidence 的对象。它不创建 DSL nodes，不绕过 M29.5。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 evidence contract `allow_visible_replay` 的对象。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha allow 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
 
 ### M29 Hierarchy Candidates
 

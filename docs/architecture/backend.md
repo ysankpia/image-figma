@@ -49,6 +49,7 @@ receive multipart PNG
 -> M29 ownership conservation report
 -> M29.6 media internal decomposition report
 -> M29 transparent asset report
+-> M29 evidence contract report
 -> M29 internal source promotion
 -> rebuild M29.3.1/M29.4/M29.5/ownership from promoted M29.2
 -> M29 hierarchy candidate report
@@ -118,7 +119,7 @@ storage/upload_previews/{taskId}/m29_media_internal_decomposition/media_internal
 
 这个阶段是 report-only：不改变 replay plan，不创建 DSL visible nodes，不改 asset，不授权 copied media cleanup，也不是 materializer 的输入。OCR anchor 只是 relation hint，不是唯一 foreground 扫描入口。它的职责是把复合 media 内部可疑 foreground 证据审计出来，后续 promotion/materialization 必须仍回到 source ownership 和 M29.5 授权链。
 
-M29 transparent asset report 位于 M29.6 media internal decomposition 之后、internal source promotion 之前。它读取 source PNG pixels、OCR、M29.2 source objects 和 M29.6 report，只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 生成透明资产候选报告：
+M29 transparent asset report 位于 M29.6 media internal decomposition 之后、evidence contract report 之前。它读取 source PNG pixels、OCR、M29.2 source objects 和 M29.6 report，只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 生成透明资产候选报告：
 
 ```text
 storage/upload_previews/{taskId}/m29_transparent_assets/transparent_asset_report.json
@@ -126,7 +127,15 @@ storage/upload_previews/{taskId}/m29_transparent_assets/transparent_asset_report
 
 这个阶段是 report-only diagnostic artifact：可以生成诊断 RGBA PNG，但不替换 materialized assets，不改变 replay plan，不创建 DSL visible nodes，不提升 source ownership，不授权 cleanup，也不是 materializer 的直接输入。透明资产必须通过稳定背景、foreground contrast、connected foreground 和 edge-alpha 风险门；高边缘 alpha 残留会被拒绝。
 
-M29 internal source promotion 位于 transparent asset report 之后。它只把同时满足 M29.6 accepted `internal_icon_candidate`、transparent asset allow，以及 `high` confidence 或结构支持 medium confidence 的内部前景，提升为增强版 M29.2 `raster_icon/icon_replay` source object：
+M29 evidence contract report 位于 transparent asset report 之后、internal source promotion 之前。它读取 M29.2 source objects、M29.6 report 和 transparent asset report，把 internal UI icon 候选的正证据、负证据、alpha 安全和 cleanup 风险合成 `allow_visible_replay` / `report_only` / `reject`：
+
+```text
+storage/upload_previews/{taskId}/m29_evidence_contract/evidence_contract_report.json
+```
+
+这个阶段是 report-only：不创建 DSL visible nodes，不改 asset，不提升 source ownership，不授权 cleanup，也不是 materializer 的直接输入。它的职责是防止 `confidence` 或透明资产局部门禁直接变成 promotion 权限。
+
+M29 internal source promotion 位于 evidence contract report 之后。它只把同时满足 M29.6 accepted `internal_icon_candidate`、transparent asset allow，以及 evidence contract `allow_visible_replay` 的内部前景，提升为增强版 M29.2 `raster_icon/icon_replay` source object：
 
 ```text
 storage/upload_previews/{taskId}/m29_internal_source_promotion/internal_source_promotion_report.json

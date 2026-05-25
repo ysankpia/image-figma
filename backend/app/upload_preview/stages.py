@@ -13,6 +13,7 @@ from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..internal_source_promotion import extract_m29_internal_source_promotion_report
 from ..layout_energy_report import extract_m29_layout_energy_report
+from ..m29_evidence_contract import extract_m29_evidence_contract_report
 from ..media_internal_decomposition import extract_m29_media_internal_decomposition_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
@@ -181,13 +182,32 @@ def run_m29_internal_source_promotion_stage(
     m292_document: dict[str, Any],
     media_internal_report: dict[str, Any],
     transparent_asset_report: dict[str, Any],
+    evidence_contract_report: dict[str, Any],
 ):
     return extract_m29_internal_source_promotion_report(
         task_id=task_id,
         m292_document=m292_document,
         media_internal_report=media_internal_report,
         transparent_asset_report=transparent_asset_report,
+        evidence_contract_report=evidence_contract_report,
         output_dir=paths.m29_internal_source_promotion,
+    )
+
+
+def run_m29_evidence_contract_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m292_document: dict[str, Any],
+    media_internal_report: dict[str, Any],
+    transparent_asset_report: dict[str, Any],
+):
+    return extract_m29_evidence_contract_report(
+        task_id=task_id,
+        m292_document=m292_document,
+        media_internal_report=media_internal_report,
+        transparent_asset_report=transparent_asset_report,
+        output_dir=paths.m29_evidence_contract,
     )
 
 

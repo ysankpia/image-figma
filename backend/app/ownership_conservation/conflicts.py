@@ -143,6 +143,8 @@ def detect_invalid_cleanup_claims(
             continue
         if copied_cleanup_is_valid_for_promoted_internal_asset(plan_item, claim, target_id, edge_lookup):
             continue
+        if copied_cleanup_is_valid_for_label_anchored_blocked_asset(plan_item, claim, target_id, edge_lookup):
+            continue
         if copied_cleanup_is_valid_for_shape_background(plan_item, claim, target_id, edge_lookup):
             continue
         conflicts.append(
@@ -187,6 +189,23 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
     return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
 
 
+def copied_cleanup_is_valid_for_label_anchored_blocked_asset(
+    plan_item: dict[str, Any],
+    claim: dict[str, Any],
+    target_id: str,
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> bool:
+    if plan_item["finalReplayAction"] != "icon_replay":
+        return False
+    if claim.get("reason") != "label_anchored_blocked_asset_contained_by_media":
+        return False
+    evidence = plan_item.get("sourceEvidence") if isinstance(plan_item.get("sourceEvidence"), dict) else {}
+    if not evidence.get("labelAnchorOcrBoxId") or not evidence.get("blockedIds"):
+        return False
+    edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
+    return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
+
+
 def copied_cleanup_is_valid_for_shape_background(
     plan_item: dict[str, Any],
     claim: dict[str, Any],
@@ -209,10 +228,15 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
         icon = left if left["finalReplayAction"] == "icon_replay" else right
         image = right if icon is left else left
         evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
-        return (
+        if (
             evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
             and evidence.get("mediaSourceObjectId") == image["sourceObjectId"]
             and bool(evidence.get("transparentAssetPath"))
+        ):
+            return True
+        return bool(evidence.get("labelAnchorOcrBoxId")) and bool(evidence.get("blockedIds")) and has_copied_cleanup_target(
+            icon,
+            image["sourceObjectId"],
         )
     if actions == {"image_replay", "text_replay"}:
         text = left if left["finalReplayAction"] == "text_replay" else right

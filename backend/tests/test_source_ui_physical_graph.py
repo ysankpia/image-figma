@@ -296,6 +296,81 @@ def test_blocked_complex_foreground_overlapping_ocr_stays_diagnostic(tmp_path: P
     assert result["summary"]["rasterIconCount"] == 0
 
 
+def test_blocked_media_contained_foreground_with_label_anchor_recovers_as_raster_icon(tmp_path: Path) -> None:
+    source = paint_marks(make_textured_png(260, 180, [0, 60, 260, 100]), [([44, 72, 42, 44], (180, 184, 196)), ([44, 126, 42, 20], (180, 184, 196))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_tab_bar",
+                "unknown",
+                [0, 60, 260, 100],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 120, "textureScore": 0.20, "edgeScore": 0.16, "fillRatio": 0.16},
+            )
+        ],
+        blocked=[
+            {
+                "id": "blocked_tab_icon",
+                "bbox": [44, 72, 42, 44],
+                "source": "symbol_detector",
+                "reasons": ["symbol_color_too_high", "symbol_texture_too_high", "weak_symbol_metrics"],
+                "metrics": {"colorCount": 49, "textureScore": 0.24, "edgeScore": 0.25, "fillRatio": 0.35},
+            }
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_tab_label", "Home", [44, 126, 42, 20])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    icon = only_object(result, "raster_icon")
+    assert icon["pixelOwner"] == "raster_icon"
+    assert icon["replayDecision"] == "icon_replay"
+    assert icon["sourceEvidence"]["blockedIds"] == ["blocked_tab_icon"]
+    assert icon["sourceEvidence"]["mediaContainmentRatio"] == 1.0
+    assert "blocked_media_contained_label_anchored_foreground" in icon["reasons"]
+
+
+def test_blocked_media_contained_foreground_without_label_anchor_stays_diagnostic(tmp_path: Path) -> None:
+    source = paint_marks(make_textured_png(260, 180, [0, 60, 260, 100]), [([44, 72, 42, 44], (180, 184, 196))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_texture",
+                "unknown",
+                [0, 60, 260, 100],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 120, "textureScore": 0.20, "edgeScore": 0.16, "fillRatio": 0.16},
+            )
+        ],
+        blocked=[
+            {
+                "id": "blocked_texture",
+                "bbox": [44, 72, 42, 44],
+                "source": "symbol_detector",
+                "reasons": ["symbol_color_too_high", "symbol_texture_too_high", "weak_symbol_metrics"],
+                "metrics": {"colorCount": 49, "textureScore": 0.24, "edgeScore": 0.25, "fillRatio": 0.35},
+            }
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    diagnostic = only_object(result, "unknown")
+    assert diagnostic["pixelOwner"] == "diagnostic_only"
+    assert diagnostic["replayDecision"] == "skip"
+
+
 def test_symbol_inside_media_is_not_separately_replayed(tmp_path: Path) -> None:
     source = make_textured_png(180, 120, [20, 20, 110, 70])
     m29 = m29_document(
@@ -519,6 +594,16 @@ def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250,
             for column in range(x, x + w):
                 rows[row_index][column * 3 : column * 3 + 3] = bytes(color)
     return PngPixels(width=width, height=height, rows=[bytes(row) for row in rows])
+
+
+def paint_marks(pixels: PngPixels, marks: list[tuple[list[int], tuple[int, int, int]]]) -> PngPixels:
+    rows = [bytearray(row) for row in pixels.rows]
+    for bbox, color in marks:
+        x, y, w, h = bbox
+        for row_index in range(y, y + h):
+            for column in range(x, x + w):
+                rows[row_index][column * 3 : column * 3 + 3] = bytes(color)
+    return PngPixels(width=pixels.width, height=pixels.height, rows=[bytes(row) for row in rows])
 
 
 def make_textured_png(width: int, height: int, media_bbox: list[int]) -> PngPixels:
