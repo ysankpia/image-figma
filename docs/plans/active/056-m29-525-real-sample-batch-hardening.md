@@ -228,3 +228,38 @@ Infrastructure note:
 ```text
 An intermediate rerun at backend/tmp/validation/upload_preview_batch_20260525_200553 failed on sample 3 during OCR with Baidu PP-OCRv5 HTTPS SSLEOFError. A clean full rerun completed afterward, so this is recorded as external OCR dependency instability, not an M29 regression.
 ```
+
+Second repair stage:
+
+```text
+owner = b_stage_quality_report
+problem = B-stage repair cost treated every materialization skip as actionable. In real sample 6, 98 skipped items were intentional non-visible actions (`diagnostic_only`, `suppress_duplicate`, `preserve_in_parent_raster`), so the report produced a low grade despite low visual diff and zero ownership conflicts.
+fix = keep total/non-actionable skipped counts for audit, but count only actionable skipped reasons toward materialization repair cost.
+guard = actionable skipped reasons such as `missing_text` still add repair cost.
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_b_stage_quality_report.py -q
+uv run pytest tests/test_b_stage_quality_report.py tests/test_upload_preview_pipeline.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/525测试 --poll-timeout 300
+```
+
+Validation results:
+
+```text
+tests/test_b_stage_quality_report.py: 7 passed
+b-stage/upload/replay/materializer/ownership focused regression: 59 passed
+post-calibration ledger: backend/tmp/validation/upload_preview_batch_20260525_202200/upload_preview_batch_validation.json
+inputCount = 6
+completedTaskCount = 6
+failedTaskCount = 0
+missingArtifactCount = 0
+ownershipConflictTypeCounts = {}
+totalBStageRepairCost = 35
+averageDslVisualNormalizedMeanAbsError = 0.016526
+maxDslVisualChangedPixelRatio10 = 0.080846
+quality grades = high for all six records
+```

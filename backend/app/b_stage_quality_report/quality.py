@@ -5,6 +5,9 @@ from typing import Any
 from .summary import float_value, int_value, summary_from, warning_count
 
 
+NON_ACTIONABLE_SKIP_REASONS = {"diagnostic_only", "fallback_only", "preserve_in_parent_raster", "suppress_duplicate"}
+
+
 def build_quality_summary(
     *,
     ownership_report: dict[str, Any] | None,
@@ -84,7 +87,9 @@ def build_risk_summary(
         "rejectedAutoLayoutCount": int_value(permission, "rejectCount"),
         "tokenGapCount": 1 if design_token_count(tokens) == 0 else 0,
         "materializationWarningCount": materialization_warning_count,
-        "materializationSkippedCount": skipped_count(materialization),
+        "materializationTotalSkippedCount": skipped_count(materialization),
+        "materializationNonActionableSkippedCount": non_actionable_skipped_count(materialization),
+        "materializationSkippedCount": actionable_skipped_count(materialization),
     }
 
 
@@ -131,17 +136,40 @@ def design_token_count(tokens: dict[str, Any]) -> int:
     )
 
 
-def skipped_count(materialization: dict[str, Any]) -> int:
+def actionable_skipped_count(materialization: dict[str, Any]) -> int:
+    return skipped_count(materialization, exclude_reasons=NON_ACTIONABLE_SKIP_REASONS)
+
+
+def non_actionable_skipped_count(materialization: dict[str, Any]) -> int:
+    total = 0
+    for reason in NON_ACTIONABLE_SKIP_REASONS:
+        total += skipped_reason_count(materialization, reason)
+    return total
+
+
+def skipped_count(materialization: dict[str, Any], *, exclude_reasons: set[str] | None = None) -> int:
     skipped = materialization.get("skippedReasons")
     if not isinstance(skipped, dict):
         return 0
     total = 0
-    for value in skipped.values():
+    for reason, value in skipped.items():
+        if exclude_reasons and str(reason) in exclude_reasons:
+            continue
         try:
             total += int(value)
         except (TypeError, ValueError):
             continue
     return total
+
+
+def skipped_reason_count(materialization: dict[str, Any], reason: str) -> int:
+    skipped = materialization.get("skippedReasons")
+    if not isinstance(skipped, dict):
+        return 0
+    try:
+        return int(skipped.get(reason) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def capability_maturity() -> dict[str, str]:

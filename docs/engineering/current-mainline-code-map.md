@@ -540,6 +540,8 @@ validation.py: report schema and read-only invariant checks
 
 这个 package 只报告 quality/repair-cost，不改 DSL，不阻断 upload-preview，不创建任何 Figma 结构，不被 Renderer 或 Figma 消费。
 
+Repair cost 只统计 actionable materialization skips。`diagnostic_only`、`fallback_only`、`preserve_in_parent_raster` 和 `suppress_duplicate` 是 M29.5 明确选择的非可见/非物化动作，不应按每个 skipped item 拉低质量分；report 仍保留 total/non-actionable skip counts 供审计。
+
 ### M29 DSL Visual Comparison
 
 `backend/app/dsl_visual_comparison/` 是 C-stage upload-preview artifact surface。它消费：

@@ -69,6 +69,28 @@ def test_materialization_warnings_and_skips_add_cost(tmp_path: Path) -> None:
     assert {"kind": "materialization_skips", "count": 2, "weight": 2, "cost": 4} in report["repairCost"]["items"]
 
 
+def test_non_actionable_materialization_skips_do_not_add_repair_cost(tmp_path: Path) -> None:
+    report = quality_report(
+        tmp_path,
+        materialization={
+            "summary": {
+                "visibleNodeCount": 4,
+                "skippedReasons": {
+                    "diagnostic_only": 93,
+                    "suppress_duplicate": 2,
+                    "preserve_in_parent_raster": 3,
+                    "missing_text": 1,
+                },
+            }
+        },
+    )
+
+    assert report["riskSummary"]["materializationTotalSkippedCount"] == 99
+    assert report["riskSummary"]["materializationNonActionableSkippedCount"] == 98
+    assert report["riskSummary"]["materializationSkippedCount"] == 1
+    assert {"kind": "materialization_skips", "count": 1, "weight": 2, "cost": 2} in report["repairCost"]["items"]
+
+
 def quality_report(
     tmp_path: Path,
     *,
