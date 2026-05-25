@@ -376,6 +376,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             png_data=png_data,
             paths=paths,
             dsl=materialized_design_result.dsl,
+            text_boxes=text_boxes,
         ),
     )
 

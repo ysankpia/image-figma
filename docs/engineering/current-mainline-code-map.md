@@ -608,7 +608,9 @@ full-image diff: normalizedMeanAbsError / changedPixelRatio10
 non-text gate diff: gateNormalizedMeanAbsError / gateChangedPixelRatio10
 ```
 
-full-image diff 是诊断面，包含 report-only approximate text renderer 的字体/字形误差。`source_gate_diff.png` 是对应 `gate*` 指标的 text-excluded diff artifact：visible DSL text bboxes 覆盖的像素被清零，用于人工查看非文字结构差异。`gate*` 指标会根据同一个 exclusion mask 判断非文字视觉结构是否退化；如果文本 mask 覆盖后没有任何 non-text 像素，gate 指标回退到 full-image diff，并记录 `gateFallbackReason=no_non_text_pixels`，避免 all-text 样本产生假 0。
+full-image diff 是诊断面，包含 report-only approximate text renderer 的字体/字形误差。`source_gate_diff.png` 是对应 `gate*` 指标的 text-excluded diff artifact：visible DSL text bboxes 和 source OCR text bboxes 覆盖的像素会被清零，用于人工查看非文字结构差异。`gate*` 指标会根据同一个 exclusion mask 判断非文字视觉结构是否退化；如果文本 mask 覆盖后没有任何 non-text 像素，gate 指标回退到 full-image diff，并记录 `gateFallbackReason=no_non_text_pixels`，避免 all-text 样本产生假 0。
+
+source OCR text bbox 只用于 `dsl_visual_comparison` 的验证 mask，不改变 OCR、M29 ownership、DSL、素材、M29.5 replay plan 或 materializer cleanup。报告会记录 `sourceTextBboxCount` 和 `textExclusionSource=dsl_visible_text_plus_source_ocr_text`，方便 batch ledger 判断 gate 指标是否来自完整文本排除合同。
 
 这不是字体识别、OCR 修复或 text quality acceptance。文字正确性仍必须由 OCR/source ownership/cleanup/Figma-visible validation 证明。
 

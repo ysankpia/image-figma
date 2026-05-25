@@ -37,14 +37,35 @@ def render_dsl_to_pixels(
     return PngPixels(width=width, height=height, rows=[bytes(row) for row in rows]), warnings
 
 
-def build_text_exclusion_mask(dsl: dict[str, Any], *, width: int, height: int, padding: int = 1) -> tuple[bytes, int]:
+def build_text_exclusion_mask(
+    dsl: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+    padding: int = 1,
+    source_text_bboxes: list[list[int]] | None = None,
+) -> tuple[bytes, int]:
     mask = bytearray(width * height)
     root = dsl.get("root")
-    if not isinstance(root, dict) or width <= 0 or height <= 0:
+    if width <= 0 or height <= 0:
         return bytes(mask), 0
-    for bbox in collect_visible_text_bboxes(root, parent_offset=(0, 0), is_root=True):
-        mark_bbox(mask, width, height, bbox, padding=padding)
+    if isinstance(root, dict):
+        for bbox in collect_visible_text_bboxes(root, parent_offset=(0, 0), is_root=True):
+            mark_bbox(mask, width, height, bbox, padding=padding)
+    for bbox in source_text_bboxes or []:
+        source_padding = source_text_padding(bbox, fallback_padding=padding)
+        mark_bbox(mask, width, height, bbox, padding=source_padding)
     return bytes(mask), sum(1 for value in mask if value)
+
+
+def source_text_padding(bbox: list[int], *, fallback_padding: int) -> int:
+    if len(bbox) != 4:
+        return fallback_padding
+    try:
+        height = int(round(float(bbox[3])))
+    except (TypeError, ValueError):
+        return fallback_padding
+    return max(fallback_padding, min(4, round(height * 0.12)))
 
 
 def collect_visible_text_bboxes(

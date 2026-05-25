@@ -135,6 +135,11 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert (task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").exists()
     assert (task_root / "m29_dsl_visual_comparison" / "dsl_render.png").exists()
     assert (task_root / "m29_dsl_visual_comparison" / "source_diff.png").exists()
+    assert (task_root / "m29_dsl_visual_comparison" / "source_gate_diff.png").exists()
+    visual_report = json.loads((task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").read_text(encoding="utf-8"))
+    visual_summary = visual_report["summary"]
+    assert visual_summary["textExclusionSource"] == "dsl_visible_text_plus_source_ocr_text"
+    assert visual_summary["sourceTextBboxCount"] > 0
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:

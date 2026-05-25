@@ -98,6 +98,37 @@ def test_text_exclusion_mask_tracks_visible_text_bboxes_with_parent_offsets(tmp_
     assert mask[16 * 100 + 50] == 0
 
 
+def test_text_exclusion_mask_unions_dsl_text_and_source_ocr_text() -> None:
+    mask, covered = build_text_exclusion_mask(
+        {
+            "page": {"width": 80, "height": 40},
+            "root": {
+                "id": "root",
+                "type": "frame",
+                "layout": {"x": 0, "y": 0, "width": 80, "height": 40},
+                "children": [
+                    {
+                        "id": "dsl_text",
+                        "type": "text",
+                        "layout": {"x": 5, "y": 5, "width": 10, "height": 8},
+                        "content": {"text": "A"},
+                    }
+                ],
+            },
+        },
+        width=80,
+        height=40,
+        padding=1,
+        source_text_bboxes=[[40, 12, 20, 16]],
+    )
+
+    assert covered > (12 * 10)
+    assert mask[8 * 80 + 8] == 1
+    assert mask[12 * 80 + 38] == 1
+    assert mask[20 * 80 + 61] == 1
+    assert mask[2 * 80 + 40] == 0
+
+
 def test_compare_pixels_reports_gate_metrics_excluding_text_regions() -> None:
     source_rows = [bytes([255, 255, 255] * 12) for _ in range(8)]
     rendered_rows = [bytearray(row) for row in source_rows]

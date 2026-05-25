@@ -1438,3 +1438,129 @@ Next:
 Use source_gate_diff.png, not full source_diff.png, to choose the next actual
 M29 owning-layer repair.
 ```
+
+### Stage 6: Source-Text-Aware Gate Diff Mask
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Inspected the Stage 5 top `source_gate_diff.png` contact sheet before changing
+M29. The highest gate-diff samples still showed many residual red components
+around list labels, prices, table values, and dense UI copy. The owning layer
+was not M29.6 candidate recovery or materializer replay. The issue was the
+validation mask contract: Stage 5 excluded visible DSL text bboxes, but source
+OCR text that was not materialized, was shifted by approximate rendering, or
+had slightly different bbox coverage could still dominate the "non-text" gate.
+
+The fix is validation-surface only: `dsl_visual_comparison` now builds the
+gate exclusion mask from the union of visible DSL text bboxes and source OCR
+text bboxes. This improves the evidence contract for choosing future structural
+repairs. No DSL output, asset output, source ownership, M29.6 promotion,
+M29.5 replay plan, materializer cleanup, Renderer, or Figma plugin behavior
+changed.
+```
+
+First-principles classification:
+
+```text
+real goal: make gate metrics represent non-text structural differences instead of OCR/font/rendering text residue
+source truth: source PNG + final materialized DSL + OCR source text bboxes + visible DSL text bboxes
+information-loss point: DSL-only text masking cannot protect source text that remains fallback-only or drifts under approximate text rendering
+owning layer: dsl_visual_comparison evidence/validation contract
+do-not-do: do not increase M29.6 promotion or tune materializer output based on residual text-edge gate diffs
+next verification: targeted tests + 40-image HTTP batch + ledger comparison
+```
+
+Fix:
+
+```text
+build_text_exclusion_mask now accepts source_text_bboxes
+source OCR text bboxes are unioned with visible DSL text bboxes for gate metrics
+source OCR bbox padding is proportional to text height and capped at 4 px
+dsl_visual_comparison_report records sourceTextBboxCount
+dsl_visual_comparison_report records textExclusionSource=dsl_visible_text_plus_source_ocr_text
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_dsl_visual_comparison.py tests/test_upload_preview_pipeline.py tests/test_upload_preview_batch_validation_script.py -q
+git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 17 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+sourceTextBboxCount min across records: 52
+textExclusionSource values: dsl_visible_text_plus_source_ocr_text
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_061536/upload_preview_batch_validation.json
+```
+
+Stage 5 -> Stage 6 key metric comparison:
+
+```text
+visible replay claims: 4921 -> 4921
+promoted internal source objects: 22 -> 22
+average DSL visual normalized mean absolute error: 0.041999 -> 0.041999
+max DSL visual changed pixel ratio @10: 0.208853 -> 0.208853
+average DSL visual gate normalized mean absolute error: 0.004586 -> 0.004264
+max DSL visual gate changed pixel ratio @10: 0.135227 -> 0.129967
+ownership conflict type counts: {} -> {}
+```
+
+Artifact inspection:
+
+```text
+Generated Stage 6 contact sheets for the top gate-diff samples before the fix.
+They showed that many remaining high-diff red components were still source text
+residue or text-neighbor rendering drift, not independent icon/background
+failures. A temporary old-ledger recalculation with source OCR text bboxes
+lowered average gate ratio from 0.049915 to 0.046236 with average mask coverage
+around 19.36%, supporting the narrower validation-contract fix.
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, account, or single-screenshot branch was added.
+The only new threshold is generic source-text padding:
+max(fallbackPadding, min(4, round(textHeight * 0.12))). It applies only to the
+dsl_visual_comparison text exclusion mask, not to M29 ownership or materialized
+output. Its expected failure mode is under-masking large font drift rather than
+over-masking controls; the 40-image batch showed stable artifact and ownership
+metrics while reducing gate text residue.
+```
+
+Next:
+
+```text
+Rebuild the top source_gate_diff component sheet from the Stage 6 ledger. If
+the remaining top components are structural and not text residue, choose the
+next owning layer from artifact evidence. Do not recover diagnostic fragments
+or promote more internal icons until independent UI evidence supports it.
+```

@@ -17,6 +17,7 @@ def extract_dsl_visual_comparison(
     materialized_design_dir: Path,
     public_assets_dir: Path,
     output_dir: Path,
+    source_text_bboxes: list[list[int]] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     source_pixels = decode_png_pixels(source_png)
@@ -30,6 +31,7 @@ def extract_dsl_visual_comparison(
         dsl,
         width=rendered_pixels.width,
         height=rendered_pixels.height,
+        source_text_bboxes=source_text_bboxes,
     )
     comparison = compare_pixels(source_pixels, rendered_pixels, exclusion_mask=text_exclusion_mask)
     render_path = output_dir / "dsl_render.png"
@@ -47,6 +49,8 @@ def extract_dsl_visual_comparison(
             **comparison,
             "textExcludedPixelCount": text_excluded_pixel_count,
             "textExcludedCoverage": round(text_excluded_pixel_count / max(1, rendered_pixels.width * rendered_pixels.height), 6),
+            "sourceTextBboxCount": len(source_text_bboxes or []),
+            "textExclusionSource": "dsl_visible_text_plus_source_ocr_text",
             "renderedWidth": rendered_pixels.width,
             "renderedHeight": rendered_pixels.height,
             "sourceWidth": source_pixels.width,

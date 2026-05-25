@@ -358,6 +358,7 @@ def run_m29_dsl_visual_comparison_stage(
     png_data: bytes,
     paths: UploadPreviewPaths,
     dsl: dict[str, Any],
+    text_boxes: list[Any],
 ):
     return extract_dsl_visual_comparison(
         task_id=task_id,
@@ -366,4 +367,5 @@ def run_m29_dsl_visual_comparison_stage(
         materialized_design_dir=paths.materialized_design,
         public_assets_dir=state.storage.assets_dir,
         output_dir=paths.m29_dsl_visual_comparison,
+        source_text_bboxes=[list(item.bbox) for item in text_boxes if hasattr(item, "bbox")],
     )
