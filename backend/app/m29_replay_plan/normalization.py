@@ -36,6 +36,7 @@ def normalize_source_objects(raw_objects: Any) -> tuple[list[dict[str, Any]], li
                 "confidence": str(item.get("confidence") or "low"),
                 "reasons": [str(reason) for reason in item.get("reasons", []) if isinstance(reason, str)],
                 "risks": [str(risk) for risk in item.get("risks", []) if isinstance(risk, str)],
+                "sourceEvidence": item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {},
             }
         )
     return sorted(objects, key=lambda item: item["id"]), skipped

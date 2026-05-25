@@ -72,10 +72,25 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
             return containment_ratio >= 0.20
         return False
     if actions == {"image_replay", "icon_replay"}:
+        if is_promoted_internal_icon_over_parent_media(left, right):
+            return False
         return left_action == "image_replay" and containment_ratio >= 0.20
     if actions == {"text_replay", "icon_replay"}:
         return left_action == "text_replay" and containment_ratio >= 0.25
     return False
+
+
+def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    icon = left if left["finalReplayAction"] == "icon_replay" else right if right["finalReplayAction"] == "icon_replay" else None
+    media = left if left["finalReplayAction"] == "image_replay" else right if right["finalReplayAction"] == "image_replay" else None
+    if icon is None or media is None:
+        return False
+    evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
+    return (
+        evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
+        and evidence.get("mediaSourceObjectId") == media["sourceObjectId"]
+        and bool(evidence.get("transparentAssetPath"))
+    )
 
 
 def lower_priority_overlap_action(left_action: str, right_action: str) -> str:

@@ -107,6 +107,7 @@ def replay_m295_plan_items(
                 replay_source_id=source_object_id,
             )
         elif action == "icon_replay" and options.enable_symbol_replay:
+            transparent_asset = transparent_asset_path_for(item, output_dir)
             append_image_replay_node(
                 dsl,
                 children,
@@ -119,9 +120,14 @@ def replay_m295_plan_items(
                 bbox,
                 replayed,
                 "m29_symbol",
-                extra_meta={**meta, "sourceM29NodeIds": m292_source_ids(item, "m29NodeIds")},
+                extra_meta={
+                    **meta,
+                    "sourceM29NodeIds": m292_source_ids(item, "m29NodeIds"),
+                    **({"m29TransparentAssetPath": str(transparent_asset)} if transparent_asset is not None else {}),
+                },
                 force_crop=True,
                 replay_source_id=source_object_id,
+                source_asset_override=transparent_asset,
             )
         elif action == "shape_replay" and options.enable_simple_shape_replay:
             source_node = first_m29_node(item, m29_by_id)
@@ -210,6 +216,19 @@ def m292_source_ids(item: dict[str, Any], key: str) -> list[str]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
     values = evidence.get(key) if isinstance(evidence, dict) else []
     return [str(value) for value in values if isinstance(value, str) and value]
+
+
+def transparent_asset_path_for(item: dict[str, Any], output_dir: Path) -> Path | None:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
+        return None
+    value = str(evidence.get("transparentAssetPath") or "").strip()
+    if not value:
+        return None
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = output_dir.parent / "m29_transparent_assets" / value
+    return candidate if candidate.exists() else None
 
 
 def first_m29_node(item: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> dict[str, Any] | None:

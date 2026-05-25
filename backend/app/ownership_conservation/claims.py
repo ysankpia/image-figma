@@ -35,6 +35,7 @@ def build_visible_replay_claims(plan_items: list[dict[str, Any]]) -> list[dict[s
                 "pixelOwner": item["pixelOwner"],
                 "confidence": item["confidence"],
                 "cleanupTargets": item["cleanupTargets"],
+                "sourceEvidence": item.get("sourceEvidence", {}),
             }
         )
     return claims

@@ -11,7 +11,7 @@ from ..png_tools import UnsupportedPngCropError, decode_png_pixels, read_png_met
 from ..text_masked_media_audit import text_boxes_from_ocr_document
 from .assets import relative_posix, resolve_m29_dir
 from .background import apply_source_background
-from .cleanup import clean_text_from_copied_image_assets, erase_replayed_bboxes_from_fallback
+from .cleanup import clean_internal_assets_from_copied_image_assets, clean_text_from_copied_image_assets, erase_replayed_bboxes_from_fallback
 from .replay import replay_m295_plan_items
 from .report import build_summary
 from .structure import materialize_controlled_structure_groups
@@ -108,6 +108,12 @@ def build_plan_driven_dsl(
         replayed,
         plan_items=m295_plan_items,
     )
+    copied_image_asset_internal_erased_count = clean_internal_assets_from_copied_image_assets(
+        dsl,
+        output_dir,
+        replayed,
+        plan_items=m295_plan_items,
+    )
 
     fallback_erased_count = 0
     if options.erase_replayed_bboxes_from_fallback:
@@ -131,6 +137,7 @@ def build_plan_driven_dsl(
         skipped=skipped,
         fallback_erased_count=fallback_erased_count,
         copied_image_asset_text_erased_count=copied_image_asset_text_erased_count,
+        copied_image_asset_internal_erased_count=copied_image_asset_internal_erased_count,
         options=options,
         structure_report=structure_report,
     )

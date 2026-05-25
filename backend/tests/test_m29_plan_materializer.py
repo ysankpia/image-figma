@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.plan_materializer import build_plan_driven_dsl
-from app.png_tools import PngPixels, decode_png_pixels, encode_rgb_png, read_png_metadata
+from app.png_tools import PngPixels, decode_png_pixels, encode_rgb_png, encode_rgba_png, read_png_metadata
 
 
 def test_m29_plan_materializer_requires_m295_plan(tmp_path: Path) -> None:
@@ -77,6 +77,48 @@ def test_m29_plan_materializer_samples_source_background_instead_of_fixed_white(
     assert result.dsl["page"]["background"]["value"] == "#090D1B"
 
 
+def test_promoted_internal_icon_uses_m295_authorized_transparent_asset(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(80, 60, fill=(255, 255, 255), marks=[([20, 20, 16, 16], (0, 0, 0))]),
+    )
+    transparent_asset = tmp_path / "m29_transparent_assets" / "assets" / "transparent" / "promoted_icon.png"
+    transparent_asset.parent.mkdir(parents=True, exist_ok=True)
+    transparent_asset.write_bytes(encode_rgb_png(16, 16, [b"\x11\x22\x33" * 16 for _ in range(16)]))
+    m292 = m292_document(
+        [
+            m292_object(
+                "promoted_icon",
+                [20, 20, 16, 16],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                m29_ids=["raw_icon"],
+                source_evidence={
+                    "promotionSource": "m29_6_internal_icon_candidate",
+                    "mediaSourceObjectId": "media",
+                    "transparentAssetPath": "assets/transparent/promoted_icon.png",
+                },
+            ),
+        ]
+    )
+    plan = m295_plan([m295_item("plan_icon", "promoted_icon", [20, 20, 16, 16], "icon_replay", "m29_symbol")])
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("raw_icon", "symbol", [20, 20, 16, 16])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    symbol_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "m29_symbol")
+    assert (tmp_path / "out" / symbol_asset["url"]).read_bytes() == transparent_asset.read_bytes()
+    symbol_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_symbol")
+    assert symbol_node["meta"]["m29TransparentAssetPath"] == str(transparent_asset)
+
+
 def test_copied_media_cleanup_requires_m295_cleanup_target(tmp_path: Path) -> None:
     source = write_png(
         tmp_path / "source.png",
@@ -137,6 +179,82 @@ def test_copied_media_cleanup_requires_m295_cleanup_target(tmp_path: Path) -> No
     copied_without_cleanup = copied_image_pixels(result_without_cleanup.dsl, tmp_path / "out_no_cleanup")
     assert copied_without_cleanup.rows[20][20 * 3 : 20 * 3 + 3] == b"\x00\x00\x00"
     assert result_without_cleanup.report["summary"]["copiedImageAssetTextErasedCount"] == 0
+
+
+def test_promoted_internal_icon_cleans_parent_media_only_with_m295_target(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(120, 90, fill=(240, 240, 240), marks=[([10, 10, 80, 50], (80, 100, 140)), ([30, 28, 20, 16], (0, 0, 0))]),
+    )
+    transparent_asset = tmp_path / "m29_transparent_assets" / "assets" / "transparent" / "promoted_icon.png"
+    transparent_asset.parent.mkdir(parents=True, exist_ok=True)
+    transparent_asset.write_bytes(make_rgba_icon_asset(20, 16, alpha_box=[6, 4, 8, 8]))
+    m292 = m292_document(
+        [
+            m292_object("media", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object(
+                "promoted_icon",
+                [30, 28, 20, 16],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                m29_ids=["raw_icon"],
+                source_evidence={
+                    "promotionSource": "m29_6_internal_icon_candidate",
+                    "mediaSourceObjectId": "media",
+                    "transparentAssetPath": "assets/transparent/promoted_icon.png",
+                },
+            ),
+        ]
+    )
+    authorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 80, 50], "image_replay", "m29_image"),
+            m295_item(
+                "plan_icon",
+                "promoted_icon",
+                [30, 28, 20, 16],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "promoted_internal_asset_contained_by_media"},
+                ],
+            ),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 50]), m29_node("raw_icon", "symbol", [30, 28, 20, 16])]),
+        m292_document=m292,
+        m295_replay_plan=authorized_plan,
+        output_dir=tmp_path / "out_icon_cleanup",
+    )
+
+    copied = copied_image_pixels(result.dsl, tmp_path / "out_icon_cleanup")
+    assert copied.rows[22][30 * 3 : 30 * 3 + 3] != b"\x00\x00\x00"
+    assert copied.rows[18][20 * 3 : 20 * 3 + 3] == b"\x00\x00\x00"
+    assert result.report["summary"]["copiedImageAssetInternalErasedCount"] == 1
+
+    unauthorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 80, 50], "image_replay", "m29_image"),
+            m295_item("plan_icon", "promoted_icon", [30, 28, 20, 16], "icon_replay", "m29_symbol"),
+        ]
+    )
+    result_without_cleanup = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 50]), m29_node("raw_icon", "symbol", [30, 28, 20, 16])]),
+        m292_document=m292,
+        m295_replay_plan=unauthorized_plan,
+        output_dir=tmp_path / "out_icon_no_cleanup",
+    )
+    copied_without_cleanup = copied_image_pixels(result_without_cleanup.dsl, tmp_path / "out_icon_no_cleanup")
+    assert copied_without_cleanup.rows[22][30 * 3 : 30 * 3 + 3] == b"\x00\x00\x00"
+    assert result_without_cleanup.report["summary"]["copiedImageAssetInternalErasedCount"] == 0
 
 
 def test_fallback_erasure_requires_m295_fallback_cleanup_target(tmp_path: Path) -> None:
@@ -357,6 +475,17 @@ def write_png(path: Path, pixels: PngPixels) -> Path:
     return path
 
 
+def make_rgba_icon_asset(width: int, height: int, *, alpha_box: list[int]) -> bytes:
+    rows = []
+    for y in range(height):
+        row = bytearray()
+        for x in range(width):
+            alpha = 255 if alpha_box[0] <= x < alpha_box[0] + alpha_box[2] and alpha_box[1] <= y < alpha_box[1] + alpha_box[3] else 0
+            row.extend([17, 34, 51, alpha])
+        rows.append(bytes(row))
+    return encode_rgba_png(width, height, rows)
+
+
 def m29_document(tmp_path: Path, *, nodes: list[dict]) -> dict:
     m29_dir = tmp_path / "m29"
     m29_dir.mkdir(parents=True, exist_ok=True)
@@ -418,21 +547,25 @@ def m292_object(
     *,
     m29_ids: list[str] | None = None,
     ocr_ids: list[str] | None = None,
+    source_evidence: dict | None = None,
 ) -> dict:
+    evidence = {
+        "ocrBoxIds": ocr_ids or [],
+        "m29NodeIds": m29_ids or [],
+        "blockedIds": [],
+        "localBackgroundConfidence": 0.9,
+        "textOverlapRatio": 0.0,
+        "mediaContainmentRatio": 0.0,
+    }
+    if source_evidence:
+        evidence.update(source_evidence)
     return {
         "id": object_id,
         "bbox": bbox,
         "visualKind": visual_kind,
         "pixelOwner": pixel_owner,
         "replayDecision": replay_decision,
-        "sourceEvidence": {
-            "ocrBoxIds": ocr_ids or [],
-            "m29NodeIds": m29_ids or [],
-            "blockedIds": [],
-            "localBackgroundConfidence": 0.9,
-            "textOverlapRatio": 0.0,
-            "mediaContainmentRatio": 0.0,
-        },
+        "sourceEvidence": evidence,
         "confidence": "high",
         "reasons": ["test"],
         "risks": [],

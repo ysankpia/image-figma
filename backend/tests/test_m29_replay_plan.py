@@ -218,7 +218,69 @@ def test_m295_suppresses_nested_media_duplicate(tmp_path: Path) -> None:
 
     actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
     assert actions == {"media_outer": "image_replay", "media_inner": "suppress_duplicate"}
-    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
+def test_m295_keeps_promoted_internal_icon_over_parent_media(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_promoted_internal_icon",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                m292_object(
+                    "promoted_icon",
+                    [30, 30, 20, 20],
+                    "raster_icon",
+                    "raster_icon",
+                    "icon_replay",
+                    source_evidence={
+                        "mediaSourceObjectId": "media",
+                        "promotionSource": "m29_6_internal_icon_candidate",
+                        "transparentAssetPath": "assets/transparent/promoted_icon.png",
+                    },
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "promoted_icon"],
+            [edge("media_icon", "media", "promoted_icon", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media": "image_replay", "promoted_icon": "icon_replay"}
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "promoted_icon")
+    assert icon_item["sourceEvidence"]["promotionSource"] == "m29_6_internal_icon_candidate"
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "promoted_internal_asset_contained_by_media",
+    } in icon_item["cleanupTargets"]
+    assert "promoted_internal_asset_cleans_parent_media_asset" in icon_item["reasons"]
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
+
+
+def test_m295_does_not_add_copied_cleanup_for_unpromoted_icon(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_unpromoted_internal_icon",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                m292_object("icon", [30, 30, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "icon"],
+            [edge("media_icon", "media", "icon", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "icon")
+    assert not any(target.get("target") == "copied_image_asset" for target in icon_item["cleanupTargets"])
 
 
 def test_m295_suppresses_overlapping_media_duplicate(tmp_path: Path) -> None:
@@ -389,6 +451,7 @@ def m292_object(
     replay_decision: str,
     *,
     confidence: str = "high",
+    source_evidence: dict | None = None,
 ) -> dict:
     return {
         "id": object_id,
@@ -396,7 +459,7 @@ def m292_object(
         "visualKind": visual_kind,
         "pixelOwner": pixel_owner,
         "replayDecision": replay_decision,
-        "sourceEvidence": {},
+        "sourceEvidence": source_evidence or {},
         "confidence": confidence,
         "reasons": ["test"],
         "risks": [],

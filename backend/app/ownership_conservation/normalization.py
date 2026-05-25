@@ -34,6 +34,7 @@ def normalize_source_objects(raw_objects: Any) -> tuple[list[dict[str, Any]], li
                 "pixelOwner": str(item.get("pixelOwner") or ""),
                 "replayDecision": str(item.get("replayDecision") or ""),
                 "confidence": str(item.get("confidence") or "low"),
+                "sourceEvidence": item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {},
             }
         )
     return sorted(objects, key=lambda item: item["sourceObjectId"]), warnings
@@ -72,7 +73,7 @@ def normalize_plan_items(raw_items: Any) -> tuple[list[dict[str, Any]], list[str
                 "pixelOwner": str(item.get("pixelOwner") or ""),
                 "cleanupTargets": cleanup_targets if isinstance(cleanup_targets, list) else [],
                 "confidence": str(item.get("confidence") or "low"),
+                "sourceEvidence": item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {},
             }
         )
     return sorted(items, key=lambda item: item["planItemId"]), warnings
-

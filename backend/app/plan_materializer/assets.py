@@ -26,16 +26,17 @@ def append_image_replay_node(
     extra_meta: dict[str, Any] | None = None,
     force_crop: bool = False,
     replay_source_id: str | None = None,
+    source_asset_override: Path | None = None,
 ) -> None:
     source_id = str(node.get("id") or f"{role}_unknown")
     replay_kind = "symbol" if role == "m29_symbol" else "image"
     replay_decision = "icon_replay" if role == "m29_symbol" else "image_replay"
     asset_dir = output_dir / "assets" / role
     asset_dir.mkdir(parents=True, exist_ok=True)
-    source_asset = resolve_source_asset(m29_dir, node)
+    source_asset = source_asset_override or resolve_source_asset(m29_dir, node)
     suffix = source_asset.suffix.lower() if source_asset is not None else ".png"
     copied_path = asset_dir / f"{source_id}{suffix or '.png'}"
-    if source_asset is not None and source_asset.exists() and not force_crop:
+    if source_asset is not None and source_asset.exists() and (not force_crop or source_asset_override is not None):
         shutil.copy2(source_asset, copied_path)
     else:
         copied_path.write_bytes(crop_pixels(pixels, bbox))
@@ -56,6 +57,7 @@ def append_image_replay_node(
                 "sourceKind": f"m29_{node.get('type')}",
                 "sourceM29NodeId": source_id,
                 "sourceAssetPath": node.get("assetPath"),
+                "sourceAssetOverridePath": str(source_asset_override) if source_asset_override is not None else None,
             },
         }
     )
@@ -76,6 +78,7 @@ def append_image_replay_node(
                 "sourceM29NodeId": source_id,
                 "sourceBBox": bbox,
                 "sourceAssetPath": node.get("assetPath"),
+                "sourceAssetOverridePath": str(source_asset_override) if source_asset_override is not None else None,
                 "replayDecision": replay_decision,
                 "replayReasons": ["m29_visual_primitive_replay"],
                 **(extra_meta or {}),

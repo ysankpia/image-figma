@@ -14,6 +14,7 @@ def build_summary(
     skipped: list[dict[str, Any]],
     fallback_erased_count: int,
     copied_image_asset_text_erased_count: int,
+    copied_image_asset_internal_erased_count: int,
     options: PlanMaterializerOptions,
     structure_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -36,6 +37,7 @@ def build_summary(
         "skippedDuplicateCount": skipped_counts.get("duplicate_bbox", 0),
         "fallbackErasedBBoxCount": fallback_erased_count,
         "copiedImageAssetTextErasedCount": copied_image_asset_text_erased_count,
+        "copiedImageAssetInternalErasedCount": copied_image_asset_internal_erased_count,
         "visibleNodeCount": len(replayed),
         "controlledStructureGroupCount": int(structure_summary.get("acceptedGroupCount") or 0),
         "controlledStructureRejectedGroupCount": int(structure_summary.get("rejectedGroupCount") or 0),

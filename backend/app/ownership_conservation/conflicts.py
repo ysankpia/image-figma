@@ -149,6 +149,15 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
     actions = {left["finalReplayAction"], right["finalReplayAction"]}
     if "shape_replay" in actions and actions & {"text_replay", "icon_replay", "image_replay"}:
         return True
+    if actions == {"image_replay", "icon_replay"}:
+        icon = left if left["finalReplayAction"] == "icon_replay" else right
+        image = right if icon is left else left
+        evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
+        return (
+            evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
+            and evidence.get("mediaSourceObjectId") == image["sourceObjectId"]
+            and bool(evidence.get("transparentAssetPath"))
+        )
     if actions == {"image_replay", "text_replay"}:
         text = left if left["finalReplayAction"] == "text_replay" else right
         image = right if text is left else left

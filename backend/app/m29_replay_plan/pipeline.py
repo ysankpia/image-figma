@@ -67,6 +67,7 @@ def build_m295_replay_plan(
             "relationEdgeIds": relation_edge_ids,
             "clusterIds": cluster_ids,
             "confidence": item["confidence"],
+            "sourceEvidence": item.get("sourceEvidence", {}),
             "reasons": reasons_for(item, action, duplicate_ids, cluster_ids, cleanup_targets),
             "risks": list(item["risks"]),
         }

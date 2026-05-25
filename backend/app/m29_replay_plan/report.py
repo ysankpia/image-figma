@@ -19,8 +19,11 @@ def reasons_for(
         reasons.append("near_equal_duplicate_suppression")
     if cluster_ids:
         reasons.append("m29_4_cluster_supported")
-    if any(target.get("target") == "copied_image_asset" for target in cleanup_targets):
+    copied_reasons = {str(target.get("reason") or "") for target in cleanup_targets if target.get("target") == "copied_image_asset"}
+    if "editable_text_contained_by_media" in copied_reasons:
         reasons.append("editable_text_cleans_containing_media_asset")
+    if "promoted_internal_asset_contained_by_media" in copied_reasons:
+        reasons.append("promoted_internal_asset_cleans_parent_media_asset")
     return dedupe_preserve_order(reasons)
 
 

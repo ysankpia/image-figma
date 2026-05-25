@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import zlib
 from pathlib import Path
 from typing import Any
 
 from ..m29_materialization_utils import list_dicts, map_page_bbox_to_asset_pixels, sample_outer_bbox_ring_rgb
-from ..png_tools import PngPixels, decode_png_pixels, encode_rgb_png
+from ..png_tools import PngPixels, UnsupportedPngCropError, decode_png_pixels, encode_rgb_png, parse_chunks, read_png_metadata, unfilter_rows
 from ..visual_primitive_graph import bbox_clamp
 from .background import sample_canvas_background
 from .types import ReplayNode
@@ -68,6 +69,61 @@ def clean_text_from_copied_image_assets(
     return erased_count
 
 
+def clean_internal_assets_from_copied_image_assets(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    replayed: list[ReplayNode],
+    *,
+    plan_items: list[dict[str, Any]] | None = None,
+) -> int:
+    symbol_nodes = [item for item in replayed if item.role == "m29_symbol" and item.replay_decision == "icon_replay" and item.asset_url]
+    image_nodes = [item for item in replayed if item.role == "m29_image" and item.asset_url]
+    if not symbol_nodes or not image_nodes:
+        return 0
+
+    assets = {
+        str(asset.get("assetId")): asset
+        for asset in list_dicts(dsl.get("assets"))
+        if asset.get("assetId") and asset.get("role") in {"m29_image", "m29_symbol"}
+    }
+    erased_count = 0
+    for image_node in image_nodes:
+        if image_node.asset_id and image_node.asset_id not in assets:
+            continue
+        image_path = (output_dir / str(image_node.asset_url)).resolve()
+        if not image_path.exists():
+            continue
+        try:
+            pixels = decode_png_pixels(image_path.read_bytes())
+        except Exception:
+            continue
+
+        scale_x = pixels.width / max(1, image_node.bbox[2])
+        scale_y = pixels.height / max(1, image_node.bbox[3])
+        rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        for symbol_node in symbol_nodes:
+            if not plan_allows_internal_asset_copied_image_cleanup(plan_items or [], symbol_node.source_id, image_node.source_id):
+                continue
+            local_bbox = map_page_bbox_to_asset_pixels(symbol_node.bbox, image_node.bbox, pixels.width, pixels.height, scale_x, scale_y)
+            if local_bbox is None:
+                continue
+            try:
+                fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
+            except Exception:
+                fill = sample_canvas_background(pixels)
+            try:
+                alpha = read_png_alpha_mask((output_dir / str(symbol_node.asset_url)).resolve())
+            except Exception:
+                alpha = None
+            erase_with_alpha_mask(rows, local_bbox, fill, alpha)
+            modified = True
+            erased_count += 1
+        if modified:
+            image_path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows]))
+    return erased_count
+
+
 def plan_allows_copied_image_cleanup(plan_items: list[dict[str, Any]], text_source_id: str, image_source_id: str) -> bool:
     for item in plan_items:
         if str(item.get("sourceObjectId") or "") != text_source_id:
@@ -82,6 +138,72 @@ def plan_allows_copied_image_cleanup(plan_items: list[dict[str, Any]], text_sour
             ):
                 return True
     return False
+
+
+def plan_allows_internal_asset_copied_image_cleanup(plan_items: list[dict[str, Any]], symbol_source_id: str, image_source_id: str) -> bool:
+    for item in plan_items:
+        if str(item.get("sourceObjectId") or "") != symbol_source_id:
+            continue
+        if item.get("finalReplayAction") != "icon_replay":
+            return False
+        for target in item.get("cleanupTargets", []) if isinstance(item.get("cleanupTargets"), list) else []:
+            if (
+                isinstance(target, dict)
+                and target.get("target") == "copied_image_asset"
+                and target.get("reason") == "promoted_internal_asset_contained_by_media"
+                and str(target.get("targetSourceObjectId") or "") == image_source_id
+            ):
+                return True
+    return False
+
+
+def erase_with_alpha_mask(
+    rows: list[bytearray],
+    local_bbox: list[int],
+    fill: tuple[int, int, int],
+    alpha: tuple[int, int, bytes] | None,
+) -> None:
+    x, y, width, height = local_bbox
+    alpha_width = alpha[0] if alpha is not None else width
+    alpha_height = alpha[1] if alpha is not None else height
+    alpha_data = alpha[2] if alpha is not None else None
+    for row_offset in range(height):
+        row_idx = y + row_offset
+        row = rows[row_idx]
+        for col_offset in range(width):
+            should_erase = True
+            if alpha_data is not None:
+                alpha_x = min(alpha_width - 1, round(col_offset * alpha_width / max(1, width)))
+                alpha_y = min(alpha_height - 1, round(row_offset * alpha_height / max(1, height)))
+                should_erase = alpha_data[alpha_y * alpha_width + alpha_x] > 32
+            if not should_erase:
+                continue
+            col_idx = x + col_offset
+            offset = col_idx * 3
+            row[offset] = fill[0]
+            row[offset + 1] = fill[1]
+            row[offset + 2] = fill[2]
+
+
+def read_png_alpha_mask(path: Path) -> tuple[int, int, bytes] | None:
+    if not path.exists():
+        return None
+    data = path.read_bytes()
+    metadata = read_png_metadata(data)
+    if metadata is None or metadata.bit_depth != 8 or metadata.color_type != 6 or metadata.interlace != 0:
+        return None
+    chunks = parse_chunks(data)
+    idat = b"".join(chunk_data for chunk_type, chunk_data in chunks if chunk_type == b"IDAT")
+    try:
+        raw = zlib.decompress(idat)
+    except zlib.error as error:
+        raise UnsupportedPngCropError("PNG IDAT data could not be decompressed.") from error
+    rows = unfilter_rows(raw, metadata.width, metadata.height, 4)
+    alpha = bytearray(metadata.width * metadata.height)
+    for row_idx, row in enumerate(rows):
+        for col_idx in range(metadata.width):
+            alpha[row_idx * metadata.width + col_idx] = row[col_idx * 4 + 3]
+    return metadata.width, metadata.height, bytes(alpha)
 
 
 def erase_replayed_bboxes_from_fallback(
