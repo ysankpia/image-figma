@@ -226,6 +226,9 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
         "dsl": root / "materialized_design" / "design.dsl.json",
         "materializationReport": root / "materialized_design" / "materialization_report.json",
         "ownershipConservationReport": root / "m29_ownership_conservation" / "ownership_conservation_report.json",
+        "mediaInternalDecompositionReport": root / "m29_media_internal_decomposition" / "media_internal_decomposition_report.json",
+        "transparentAssetReport": root / "m29_transparent_assets" / "transparent_asset_report.json",
+        "internalSourcePromotionReport": root / "m29_internal_source_promotion" / "internal_source_promotion_report.json",
         "hierarchyCandidateReport": root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json",
         "siblingGroupCandidateReport": root / "m29_sibling_groups" / "sibling_group_candidate_report.json",
         "layoutEnergyReport": root / "m29_layout_energy" / "layout_energy_report.json",
@@ -245,6 +248,9 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str) 
     load_summary(record, "stageTimings", artifact_paths["stageTimings"])
     load_summary(record, "materialization", artifact_paths["materializationReport"])
     load_summary(record, "ownershipConservation", artifact_paths["ownershipConservationReport"])
+    load_summary(record, "mediaInternalDecomposition", artifact_paths["mediaInternalDecompositionReport"])
+    load_summary(record, "transparentAssets", artifact_paths["transparentAssetReport"])
+    load_summary(record, "internalSourcePromotion", artifact_paths["internalSourcePromotionReport"])
     load_summary(record, "hierarchyCandidates", artifact_paths["hierarchyCandidateReport"])
     load_summary(record, "siblingGroups", artifact_paths["siblingGroupCandidateReport"])
     load_summary(record, "layoutEnergy", artifact_paths["layoutEnergyReport"])
@@ -282,6 +288,15 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     missing_artifacts = 0
     total_visible_claims = 0
     total_visible_overlap_conflicts = 0
+    total_composite_media = 0
+    total_internal_candidates = 0
+    total_accepted_internal_candidates = 0
+    total_rejected_internal_fragments = 0
+    total_matched_internal_groups = 0
+    total_transparent_asset_candidates = 0
+    total_transparent_asset_allowed = 0
+    total_transparent_asset_rejected = 0
+    total_promoted_internal_source_objects = 0
     total_sibling_group_candidates = 0
     total_layout_energy_candidates = 0
     total_auto_layout_allow_candidates = 0
@@ -297,6 +312,18 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         missing_artifacts += sum(1 for error in record.get("errors", []) if error.get("type") == "missing_artifact")
         ownership_summary = record.get("summaries", {}).get("ownershipConservation", {})
         total_visible_claims += int(ownership_summary.get("visibleReplayClaimCount") or 0)
+        media_internal_summary = record.get("summaries", {}).get("mediaInternalDecomposition", {})
+        total_composite_media += int(media_internal_summary.get("compositeMediaCount") or 0)
+        total_internal_candidates += int(media_internal_summary.get("internalCandidateCount") or 0)
+        total_accepted_internal_candidates += int(media_internal_summary.get("acceptedInternalCandidateCount") or 0)
+        total_rejected_internal_fragments += int(media_internal_summary.get("rejectedFragmentCount") or 0)
+        total_matched_internal_groups += int(media_internal_summary.get("matchedInternalGroupCount") or 0)
+        transparent_summary = record.get("summaries", {}).get("transparentAssets", {})
+        total_transparent_asset_candidates += int(transparent_summary.get("candidateCount") or 0)
+        total_transparent_asset_allowed += int(transparent_summary.get("allowedCount") or 0)
+        total_transparent_asset_rejected += int(transparent_summary.get("rejectedCount") or 0)
+        promotion_summary = record.get("summaries", {}).get("internalSourcePromotion", {})
+        total_promoted_internal_source_objects += int(promotion_summary.get("promotedSourceObjectCount") or 0)
         sibling_summary = record.get("summaries", {}).get("siblingGroups", {})
         total_sibling_group_candidates += int(sibling_summary.get("siblingGroupCandidateCount") or 0)
         layout_summary = record.get("summaries", {}).get("layoutEnergy", {})
@@ -332,6 +359,15 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "missingArtifactCount": missing_artifacts,
         "totalVisibleReplayClaimCount": total_visible_claims,
         "totalVisibleOwnershipOverlapConflicts": total_visible_overlap_conflicts,
+        "totalCompositeMediaCount": total_composite_media,
+        "totalInternalCandidateCount": total_internal_candidates,
+        "totalAcceptedInternalCandidateCount": total_accepted_internal_candidates,
+        "totalRejectedInternalFragmentCount": total_rejected_internal_fragments,
+        "totalMatchedInternalGroupCount": total_matched_internal_groups,
+        "totalTransparentAssetCandidateCount": total_transparent_asset_candidates,
+        "totalTransparentAssetAllowedCount": total_transparent_asset_allowed,
+        "totalTransparentAssetRejectedCount": total_transparent_asset_rejected,
+        "totalPromotedInternalSourceObjectCount": total_promoted_internal_source_objects,
         "totalSiblingGroupCandidateCount": total_sibling_group_candidates,
         "totalLayoutEnergyCandidateCount": total_layout_energy_candidates,
         "totalAutoLayoutAllowCandidateCount": total_auto_layout_allow_candidates,
