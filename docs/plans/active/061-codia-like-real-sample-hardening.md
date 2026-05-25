@@ -102,7 +102,7 @@ Do not restore old product paths.
 Use this folder as the main real-image benchmark:
 
 ```text
-/Users/luhui/Downloads/测试
+/Users/luhui/Downloads/测试/images
 ```
 
 Requirements:
@@ -111,16 +111,18 @@ Requirements:
 * If non-PNG files exist and the current product only accepts PNG, record them as `unsupported_input_format` in the ledger. Do not silently skip them.
 * Do not test one image and claim completion.
 * Single-image testing is allowed only for diagnosis.
-* Final acceptance for each stage requires rerunning the full batch.
+* Final acceptance for each stage requires rerunning this 40-image primary batch.
+* Do not recursively include sibling folders such as `images 2` or `images 3` in the primary stage gate unless this plan is explicitly updated.
 
 If these folders exist locally, run them as secondary regression sets after the primary set:
 
 ```text
+/Users/luhui/Downloads/测试/525测试
 /Users/luhui/Downloads/m29
 /Users/luhui/Downloads/525测试
 ```
 
-If they do not exist, record `not_found` and continue with `/Users/luhui/Downloads/测试`.
+If they do not exist, record `not_found` and continue with `/Users/luhui/Downloads/测试/images`.
 
 ---
 
@@ -336,7 +338,7 @@ Work through these areas in order of highest impact from the batch ledger.
 
 ### A. Real Sample Batch Ledger
 
-Create or improve a batch ledger for `/Users/luhui/Downloads/测试`.
+Create or improve a batch ledger for `/Users/luhui/Downloads/测试/images`.
 
 Each image must record:
 
@@ -383,7 +385,7 @@ The ledger must make failures and degraded cases visible. Do not hide them in co
 Acceptance:
 
 ```text
-all supported images in /Users/luhui/Downloads/测试 complete upload-preview
+all supported images in /Users/luhui/Downloads/测试/images complete upload-preview
 backend crash count = 0
 batch process does not stop on a single bad input
 each supported input produces a DSL or explicit failed/degraded record
@@ -582,14 +584,14 @@ Suggested stages:
 Goal:
 
 ```text
-Run /Users/luhui/Downloads/测试 through upload-preview and produce a real batch ledger.
+Run /Users/luhui/Downloads/测试/images through upload-preview and produce a real batch ledger.
 ```
 
 Required:
 
 ```text
 discover input images
-run full batch
+run the 40-image primary batch
 record completed/failed/degraded
 record all artifact paths
 record missing artifacts
@@ -601,7 +603,7 @@ Validation:
 
 ```bash
 cd backend
-uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images
 git diff --check
 ```
 
@@ -653,7 +655,7 @@ Required:
 add focused regression test first or with the fix
 do not patch downstream layers to hide upstream evidence problems
 run targeted pytest
-rerun full batch
+rerun the 40-image primary batch
 compare before/after ledger
 commit if accepted
 ```
@@ -667,7 +669,7 @@ select next highest-impact generic defect
 add focused regression
 implement smallest general fix
 targeted pytest
-full batch
+40-image primary batch
 visual diff / artifact comparison
 commit
 continue
@@ -712,7 +714,7 @@ A stage passes only if:
 ```text
 1. The stage goal is completed.
 2. All stage-scoped tests pass.
-3. Full /Users/luhui/Downloads/测试 batch has been rerun.
+3. Full /Users/luhui/Downloads/测试/images primary batch has been rerun.
 4. Batch ledger is updated.
 5. No backend crash occurs on supported inputs.
 6. No public contract is changed.
@@ -733,7 +735,7 @@ feat(stage-061-<n>): <short summary>
 
 validated:
 - <targeted pytest command>
-- batch: /Users/luhui/Downloads/测试
+- batch: /Users/luhui/Downloads/测试/images
 result:
 - <completed>/<total> completed
 - <failed> failed
@@ -750,7 +752,7 @@ ledger:
 The task is complete only when:
 
 ```text
-1. /Users/luhui/Downloads/测试 has a complete batch ledger.
+1. /Users/luhui/Downloads/测试/images has a complete batch ledger.
 2. All supported images complete upload-preview without backend crash.
 3. Every completed task exposes /api/tasks/{taskId}/dsl.
 4. Every DSL-referenced asset is fetchable.
@@ -872,3 +874,82 @@ List all stage commits.
 ```
 
 Ready for goal execution.
+
+---
+
+## 16. Stage Reports
+
+### Stage 1: Batch Baseline And Ledger
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Improved the upload-preview batch validation ledger and locked the primary stage gate to
+/Users/luhui/Downloads/测试/images without recursively pulling sibling sample folders.
+No replay, ownership, materializer, renderer, plugin, API, or DSL behavior was changed.
+```
+
+Validation:
+
+```bash
+python3 -m py_compile backend/scripts/run_upload_preview_batch_validation.py backend/tests/test_upload_preview_batch_validation_script.py
+cd backend && uv run pytest tests/test_upload_preview_batch_validation_script.py tests/test_upload_preview_pipeline.py -q
+cd backend && uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+git diff --check
+```
+
+Result:
+
+```text
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_031541/upload_preview_batch_validation.json
+```
+
+Key baseline metrics:
+
+```text
+visible replay claims: 4917
+composite media count: 215
+internal candidates: 3441
+accepted internal candidates: 2402
+transparent asset candidates: 4541
+transparent asset allowed: 102
+promoted internal source objects: 18
+average DSL visual normalized mean absolute error: 0.042053
+max DSL visual changed pixel ratio @10: 0.208299
+```
+
+Anti-overfitting check:
+
+```text
+No filename, path, sample id, fixed coordinate, visible text, brand, theme color,
+or single-screenshot rule was added. The script discovers generic image inputs,
+records unsupported formats explicitly, and treats single images as diagnosis only.
+```
+
+Next:
+
+```text
+Stage 2 should inspect this ledger and classify the first quality issues by owning layer
+before changing any M29 algorithm.
+```
