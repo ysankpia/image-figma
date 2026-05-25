@@ -9,13 +9,14 @@
 - 当前项目演进路线图：[roadmap.md](roadmap.md)
 - 当前主链架构入口：[architecture/backend.md](architecture/backend.md)
 - 当前主线代码地图：[engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
+- Image math 边界：[architecture/image_math_boundary.md](architecture/image_math_boundary.md)
 - M29 数学合同：[architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)
 - M29 入门数学推演：[architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)
 - M29 之后 Codia 级数学草案：[architecture/m29-to-codia-math-contract-v0.1.md](architecture/m29-to-codia-math-contract-v0.1.md)
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：[plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)；525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。
+- 当前 active plan：[plans/active/059-image-math-dependencies-and-boundary-hardening.md](plans/active/059-image-math-dependencies-and-boundary-hardening.md)；M29 internal icon evidence contract 见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。
 
 ## By Task Type
 
@@ -42,6 +43,7 @@
 - [architecture/renderer.md](architecture/renderer.md)：Image-to-Figma Renderer 边界。
 - [architecture/frontend.md](architecture/frontend.md)：Figma 插件 UI 与 Main。
 - [architecture/backend.md](architecture/backend.md)：后端 API 与处理管线。
+- [architecture/image_math_boundary.md](architecture/image_math_boundary.md)：Pillow/NumPy/scikit-image image math execution layer 的职责、import 边界和禁止越权事项。
 - [architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)：M29 主链的 bbox、ownership、relation、cluster、replay plan 和 plan-driven materialization 数学合同。
 - [architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)：面向初中数学基础读者的 M29 bbox、pixelOwner、region relation、cluster 和 replay plan 推演。
 - [architecture/m29-to-codia-math-contract-v0.1.md](architecture/m29-to-codia-math-contract-v0.1.md)：M29 之后 hierarchy、layout、component、token、vectorization、materialization 和 quality metrics 的未来数学草案；不是当前 runtime 合同。
@@ -74,6 +76,7 @@
 - Pre-M29 历史实验计划归档：[plans/archive/pre_m29/](plans/archive/pre_m29/)
 - ADR 是历史决策记录，不等于全部仍是 active runtime。M31-M39/M39.1 相关 ADR 当前仅作历史追溯。
 - ADR 模板：[decisions/adr-template.md](decisions/adr-template.md)
+- Image math execution dependencies 决策：[decisions/0074-introduce-image-math-execution-dependencies.md](decisions/0074-introduce-image-math-execution-dependencies.md)
 - Monorepo 初始化决策：[decisions/0003-initialize-pnpm-monorepo.md](decisions/0003-initialize-pnpm-monorepo.md)
 - Renderer Adapter 决策：[decisions/0004-renderer-uses-figma-adapter.md](decisions/0004-renderer-uses-figma-adapter.md)
 - M3 插件 UI 决策：[decisions/0005-use-static-html-for-m3-plugin-ui.md](decisions/0005-use-static-html-for-m3-plugin-ui.md)
