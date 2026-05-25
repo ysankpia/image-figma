@@ -263,6 +263,34 @@ def test_invalid_copied_cleanup_target_is_reported(tmp_path: Path) -> None:
     assert report["summary"]["errorCount"] == 1
 
 
+def test_shape_background_copied_cleanup_target_is_valid_when_contained_by_media(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 100, 60], "media_region", "preserve_raster", "image_replay"),
+            m292_object("shape", [20, 20, 40, 20], "control_background", "shape_geometry", "shape_replay"),
+        ],
+        edges=[edge("edge_media_shape", "media", "shape", "contains")],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 100, 60], "image_replay", "m29_image"),
+            plan_item(
+                "plan_shape",
+                "shape",
+                [20, 20, 40, 20],
+                "shape_replay",
+                "m29_shape",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "shape_background_contained_by_media"},
+                ],
+            ),
+        ],
+    )
+
+    assert not [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+    assert report["summary"]["errorCount"] == 0
+
+
 def test_shape_behind_text_overlap_is_explainable_background_foreground_overlap(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,

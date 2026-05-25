@@ -24,6 +24,8 @@ def reasons_for(
         reasons.append("editable_text_cleans_containing_media_asset")
     if "promoted_internal_asset_contained_by_media" in copied_reasons:
         reasons.append("promoted_internal_asset_cleans_parent_media_asset")
+    if "shape_background_contained_by_media" in copied_reasons:
+        reasons.append("shape_background_cleans_containing_media_asset")
     return dedupe_preserve_order(reasons)
 
 

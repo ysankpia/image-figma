@@ -143,6 +143,8 @@ def detect_invalid_cleanup_claims(
             continue
         if copied_cleanup_is_valid_for_promoted_internal_asset(plan_item, claim, target_id, edge_lookup):
             continue
+        if copied_cleanup_is_valid_for_shape_background(plan_item, claim, target_id, edge_lookup):
+            continue
         conflicts.append(
             invalid_copied_cleanup_conflict(
                 claim,
@@ -180,6 +182,20 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
     if evidence.get("mediaSourceObjectId") != target_id:
         return False
     if not evidence.get("transparentAssetPath"):
+        return False
+    edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
+    return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
+
+
+def copied_cleanup_is_valid_for_shape_background(
+    plan_item: dict[str, Any],
+    claim: dict[str, Any],
+    target_id: str,
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> bool:
+    if plan_item["finalReplayAction"] != "shape_replay":
+        return False
+    if claim.get("reason") != "shape_background_contained_by_media":
         return False
     edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
     return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)

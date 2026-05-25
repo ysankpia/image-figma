@@ -124,6 +124,64 @@ def clean_internal_assets_from_copied_image_assets(
     return erased_count
 
 
+def clean_shape_backgrounds_from_copied_image_assets(
+    dsl: dict[str, Any],
+    output_dir: Path,
+    replayed: list[ReplayNode],
+    *,
+    plan_items: list[dict[str, Any]] | None = None,
+) -> int:
+    shape_nodes = [item for item in replayed if item.role == "m29_shape" and item.replay_decision == "simple_shape_replay"]
+    image_nodes = [item for item in replayed if item.role == "m29_image" and item.asset_url]
+    if not shape_nodes or not image_nodes:
+        return 0
+
+    assets = {
+        str(asset.get("assetId")): asset
+        for asset in list_dicts(dsl.get("assets"))
+        if asset.get("assetId") and asset.get("role") == "m29_image"
+    }
+    erased_count = 0
+    for image_node in image_nodes:
+        if image_node.asset_id and image_node.asset_id not in assets:
+            continue
+        image_path = (output_dir / str(image_node.asset_url)).resolve()
+        if not image_path.exists():
+            continue
+        try:
+            pixels = decode_png_pixels(image_path.read_bytes())
+        except Exception:
+            continue
+
+        scale_x = pixels.width / max(1, image_node.bbox[2])
+        scale_y = pixels.height / max(1, image_node.bbox[3])
+        rows = [bytearray(row) for row in pixels.rows]
+        modified = False
+        for shape_node in shape_nodes:
+            if not plan_allows_shape_copied_image_cleanup(plan_items or [], shape_node.source_id, image_node.source_id):
+                continue
+            local_bbox = map_page_bbox_to_asset_pixels(shape_node.bbox, image_node.bbox, pixels.width, pixels.height, scale_x, scale_y)
+            if local_bbox is None:
+                continue
+            try:
+                fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
+            except Exception:
+                fill = sample_canvas_background(pixels)
+            x, y, width, height = local_bbox
+            for row_idx in range(y, y + height):
+                row = rows[row_idx]
+                for col_idx in range(x, x + width):
+                    offset = col_idx * 3
+                    row[offset] = fill[0]
+                    row[offset + 1] = fill[1]
+                    row[offset + 2] = fill[2]
+            modified = True
+            erased_count += 1
+        if modified:
+            image_path.write_bytes(encode_rgb_png(pixels.width, pixels.height, [bytes(row) for row in rows]))
+    return erased_count
+
+
 def plan_allows_copied_image_cleanup(plan_items: list[dict[str, Any]], text_source_id: str, image_source_id: str) -> bool:
     for item in plan_items:
         if str(item.get("sourceObjectId") or "") != text_source_id:
@@ -151,6 +209,23 @@ def plan_allows_internal_asset_copied_image_cleanup(plan_items: list[dict[str, A
                 isinstance(target, dict)
                 and target.get("target") == "copied_image_asset"
                 and target.get("reason") == "promoted_internal_asset_contained_by_media"
+                and str(target.get("targetSourceObjectId") or "") == image_source_id
+            ):
+                return True
+    return False
+
+
+def plan_allows_shape_copied_image_cleanup(plan_items: list[dict[str, Any]], shape_source_id: str, image_source_id: str) -> bool:
+    for item in plan_items:
+        if str(item.get("sourceObjectId") or "") != shape_source_id:
+            continue
+        if item.get("finalReplayAction") != "shape_replay":
+            return False
+        for target in item.get("cleanupTargets", []) if isinstance(item.get("cleanupTargets"), list) else []:
+            if (
+                isinstance(target, dict)
+                and target.get("target") == "copied_image_asset"
+                and target.get("reason") == "shape_background_contained_by_media"
                 and str(target.get("targetSourceObjectId") or "") == image_source_id
             ):
                 return True

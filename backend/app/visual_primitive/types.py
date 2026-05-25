@@ -175,7 +175,7 @@ class M29VisualPrimitiveOptions:
     low_contrast_support_max_edge_delta: int = 80
     text_support_background_enabled: bool = True
     text_support_background_min_area_ratio: float = 1.15
-    text_support_background_max_area_ratio: float = 4.00
+    text_support_background_max_area_ratio: float = 8.00
     text_support_background_min_aspect: float = 1.8
     text_support_background_padding_x_ratio: float = 0.55
     text_support_background_padding_y_ratio: float = 0.45
@@ -248,4 +248,3 @@ class M29VisualPrimitiveGraphDocument:
             "warnings": self.warnings,
             "meta": self.meta,
         }
-

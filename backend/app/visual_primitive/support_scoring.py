@@ -153,6 +153,9 @@ def find_text_support_background_bbox(
             max(6, round(height * 0.85)),
             max(8, round(width * 0.20)),
             max(10, round(width * 0.30)),
+            max(12, round(width * 0.55)),
+            max(14, round(width * 0.80)),
+            max(16, round(width * 1.10)),
             max(10, round(height * 1.20)),
         }
     )
@@ -210,8 +213,6 @@ def score_text_support_background_candidate(
     min_boundary_delta = min(boundary_deltas.values())
     edge_delta = round(sum(boundary_deltas.values()) / len(boundary_deltas))
     if min_boundary_delta < options.low_contrast_support_min_edge_delta:
-        return None
-    if edge_delta > options.low_contrast_support_max_edge_delta:
         return None
     return round(
         edge_delta

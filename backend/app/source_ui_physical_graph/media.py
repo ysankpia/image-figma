@@ -6,6 +6,7 @@ from ..m29_materialization_utils import bbox_overlap_ratio
 from ..png_tools import PngPixels
 from ..visual_primitive_graph import bbox_area, bbox_in_bounds, measure_region
 from .artifacts import local_background_confidence, parse_bbox
+from .controls import CONTROL_BACKGROUND_SUBTYPES, classify_control_like_unknown
 from .types import M292SourceObject, M292SourcePhysicalOptions, make_object, unique_strings
 
 
@@ -28,6 +29,10 @@ def detect_media_objects(
         text_overlap = max((bbox_overlap_ratio(box.bbox, bbox) for box in ocr_boxes), default=0.0)
         node_type = str(node.get("type") or "")
         subtype = str(node.get("subtype") or "")
+        if classify_control_like_unknown(node, bbox, ocr_boxes, pixels, width, height, options) is not None:
+            continue
+        if is_control_shape_supported_low_confidence_unknown(node, bbox, m29_nodes):
+            continue
         low_confidence_media = (
             node_type == "unknown"
             and subtype == "image_like_low_confidence"
@@ -63,3 +68,23 @@ def detect_media_objects(
                 )
             )
     return objects
+
+
+def is_control_shape_supported_low_confidence_unknown(node: dict[str, Any], bbox: list[int], m29_nodes: list[dict[str, Any]]) -> bool:
+    if str(node.get("type") or "") != "unknown":
+        return False
+    if str(node.get("subtype") or "") != "image_like_low_confidence":
+        return False
+    for candidate in m29_nodes:
+        if candidate is node:
+            continue
+        if str(candidate.get("type") or "") != "shape":
+            continue
+        if str(candidate.get("subtype") or "") not in CONTROL_BACKGROUND_SUBTYPES:
+            continue
+        candidate_bbox = parse_bbox(candidate.get("bbox"))
+        if candidate_bbox is None:
+            continue
+        if bbox_overlap_ratio(bbox, candidate_bbox) >= 0.65:
+            return True
+    return False

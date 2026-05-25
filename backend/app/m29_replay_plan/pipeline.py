@@ -77,6 +77,15 @@ def build_m295_replay_plan(
             plan_items.append(plan_item)
 
     replay_candidates, visible_overlap_suppressed = suppress_visible_overlap_duplicates(replay_candidates, edge_lookup)
+    suppressed_visible_source_ids = {
+        str(item.get("sourceObjectId") or "")
+        for item in visible_overlap_suppressed
+        if item.get("sourceObjectId")
+    }
+    replay_candidates = [
+        prune_cleanup_targets_to_suppressed_visible_sources(item, suppressed_visible_source_ids)
+        for item in replay_candidates
+    ]
     accepted, node_budget_suppressed = apply_node_budget(replay_candidates, options.max_visible_nodes)
     plan_items.extend(accepted)
     plan_items.extend(visible_overlap_suppressed)
@@ -110,3 +119,30 @@ def build_m295_replay_plan(
     validate_replay_plan(report)
     (output_dir / "replay_plan.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return M295ReplayPlanResult(report=report, output_dir=output_dir)
+
+
+def prune_cleanup_targets_to_suppressed_visible_sources(item: dict[str, Any], suppressed_source_ids: set[str]) -> dict[str, Any]:
+    if not suppressed_source_ids:
+        return item
+    cleanup_targets = item.get("cleanupTargets")
+    if not isinstance(cleanup_targets, list):
+        return item
+    kept_targets = [
+        target
+        for target in cleanup_targets
+        if not (isinstance(target, dict) and str(target.get("targetSourceObjectId") or "") in suppressed_source_ids)
+    ]
+    if len(kept_targets) == len(cleanup_targets):
+        return item
+    pruned = dict(item)
+    pruned["cleanupTargets"] = kept_targets
+    pruned["reasons"] = [
+        reason
+        for reason in pruned.get("reasons", [])
+        if reason not in {"editable_text_cleans_containing_media_asset", "promoted_internal_asset_cleans_parent_media_asset", "shape_background_cleans_containing_media_asset"}
+    ]
+    pruned["risks"] = [
+        *pruned.get("risks", []),
+        "copied_image_cleanup_target_suppressed",
+    ]
+    return pruned

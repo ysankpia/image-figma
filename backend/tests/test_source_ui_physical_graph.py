@@ -348,6 +348,126 @@ def test_large_image_like_unknown_becomes_preserved_media_region(tmp_path: Path)
     assert "low_confidence_media_region" in media["risks"]
 
 
+def test_low_confidence_unknown_yields_to_overlapping_control_shape(tmp_path: Path) -> None:
+    source = make_png(
+        600,
+        400,
+        fill=(248, 248, 248),
+        marks=[
+            ([34, 48, 190, 44], (82, 148, 76)),
+            ([96, 60, 72, 16], (255, 255, 255)),
+        ],
+    )
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_button_like",
+                "unknown",
+                [34, 48, 190, 44],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 50, "textureScore": 0.19, "edgeScore": 0.15, "fillRatio": 0.63},
+            ),
+            m29_node(
+                "shape_button_support",
+                "shape",
+                [32, 46, 194, 48],
+                subtype="text_support_background",
+                metrics={"colorCount": 1, "textureScore": 0.04, "edgeScore": 0.02, "fillRatio": 0.70, "meanRgb": [82, 148, 76]},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_cta", "Action", [96, 58, 72, 20])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    text = only_object(result, "editable_ui_text")
+    assert shape["pixelOwner"] == "shape_geometry"
+    assert shape["replayDecision"] == "shape_replay"
+    assert shape["sourceEvidence"]["m29NodeIds"] == ["shape_button_support"]
+    assert text["replayDecision"] == "text_replay"
+    assert not [item for item in result["sourceObjects"] if item["visualKind"] == "media_region"]
+
+
+def test_low_confidence_unknown_with_finite_control_evidence_becomes_control_background(tmp_path: Path) -> None:
+    source = make_png(
+        600,
+        400,
+        fill=(248, 248, 248),
+        marks=[
+            ([34, 48, 190, 44], (82, 148, 76)),
+            ([96, 60, 72, 16], (255, 255, 255)),
+        ],
+    )
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_button_like",
+                "unknown",
+                [34, 48, 190, 44],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 50, "textureScore": 0.19, "edgeScore": 0.15, "fillRatio": 0.63, "meanRgb": [94, 121, 90]},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_cta", "Action", [96, 58, 72, 20])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    text = only_object(result, "editable_ui_text")
+    assert shape["bbox"] == [34, 48, 190, 44]
+    assert shape["pixelOwner"] == "shape_geometry"
+    assert shape["replayDecision"] == "shape_replay"
+    assert shape["sourceEvidence"]["m29NodeIds"] == ["unknown_button_like"]
+    assert shape["sourceEvidence"]["ocrBoxIds"] == ["ocr_cta"]
+    assert shape["sourceEvidence"]["shapeFillOverride"] == "#52944C"
+    assert shape["sourceEvidence"]["shapeRadiusOverride"] == 22
+    assert "low_confidence_unknown_control_background" in shape["reasons"]
+    assert "shape_from_low_confidence_unknown" in shape["risks"]
+    assert text["replayDecision"] == "text_replay"
+    assert not [item for item in result["sourceObjects"] if item["visualKind"] == "media_region"]
+
+
+def test_large_low_confidence_unknown_with_text_stays_preserved_media(tmp_path: Path) -> None:
+    source = make_textured_png(320, 220, [20, 30, 260, 100])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_banner_like",
+                "unknown",
+                [20, 30, 260, 100],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 120, "textureScore": 0.19, "edgeScore": 0.16, "fillRatio": 0.70},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_banner", "Long label", [60, 58, 120, 24])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    media = only_object(result, "media_region")
+    assert media["pixelOwner"] == "preserve_raster"
+    assert media["replayDecision"] == "image_replay"
+    assert media["sourceEvidence"]["m29NodeIds"] == ["unknown_banner_like"]
+    assert not [item for item in result["sourceObjects"] if item["visualKind"] == "control_background"]
+
+
 def test_high_iou_duplicate_keeps_higher_priority_candidate(tmp_path: Path) -> None:
     source = make_png(140, 100)
     m29 = m29_document(

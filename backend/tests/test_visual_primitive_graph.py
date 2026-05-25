@@ -189,6 +189,28 @@ def test_text_support_background_region_is_detected_from_text_only_pill(tmp_path
     assert is_protective_shape(support_node)
 
 
+def test_text_support_background_region_finds_short_text_wide_pill(tmp_path: Path) -> None:
+    canvas = make_canvas(280, 120, (248, 248, 248))
+    draw_rounded_rect(canvas, 36, 34, 204, 44, 22, (82, 148, 76))
+    draw_rect(canvas, 104, 46, 68, 16, (255, 255, 255))
+
+    document = extract_m29_visual_primitive_graph(
+        png_data=pixels_to_png(canvas),
+        source_image="synthetic.png",
+        output_dir=tmp_path,
+        text_boxes=[M29TextBox("ocr_cta", [104, 44, 68, 20], text="Action", source="test", kind="line")],
+    )
+
+    support = [node for node in document.nodes if node.type == "shape" and node.subtype == "text_support_background"]
+    assert support
+    support_node = next(node for node in support if bbox_contains(node.bbox, [104, 44, 68, 20]))
+    assert support_node.geometry is not None
+    assert support_node.geometry["kind"] in {"pill", "rounded_rect"}
+    assert support_node.bbox[2] >= 160
+    assert support_node.style["fill"] == "#52944C"
+    assert "finite_outer_ring" in support_node.reasons
+
+
 def test_text_support_background_region_is_not_for_plain_page_text(tmp_path: Path) -> None:
     canvas = make_canvas(180, 90, (248, 248, 248))
     draw_rect(canvas, 54, 40, 60, 10, (252, 72, 76))

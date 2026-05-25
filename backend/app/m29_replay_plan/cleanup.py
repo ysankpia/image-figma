@@ -12,6 +12,9 @@ def cleanup_targets_for(
     if item["replayDecision"] == "icon_replay":
         targets.extend(promoted_internal_asset_cleanup_targets(item, source_objects, edge_lookup))
         return targets
+    if item["replayDecision"] == "shape_replay":
+        targets.extend(shape_cleanup_targets(item, source_objects, edge_lookup))
+        return targets
     if item["replayDecision"] != "text_replay":
         return targets
     for other in source_objects:
@@ -28,6 +31,29 @@ def cleanup_targets_for(
                     "target": "copied_image_asset",
                     "targetSourceObjectId": other["id"],
                     "reason": "editable_text_contained_by_media",
+                }
+            )
+    return targets
+
+
+def shape_cleanup_targets(
+    item: dict[str, Any],
+    source_objects: list[dict[str, Any]],
+    edge_lookup: dict[frozenset[str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    targets: list[dict[str, Any]] = []
+    for other in source_objects:
+        if other["id"] == item["id"]:
+            continue
+        if other["replayDecision"] != "image_replay" or other["pixelOwner"] != "preserve_raster":
+            continue
+        edge = edge_lookup.get(frozenset({item["id"], other["id"]}))
+        if shape_is_contained_by_media(item["id"], other["id"], edge):
+            targets.append(
+                {
+                    "target": "copied_image_asset",
+                    "targetSourceObjectId": other["id"],
+                    "reason": "shape_background_contained_by_media",
                 }
             )
     return targets
@@ -101,6 +127,21 @@ def internal_asset_is_contained_by_media(asset_id: str, media_id: str, edge: dic
         return primary == "contained_by" or text_overlap_ratio(edge, text_on_left=True) >= 0.20
     if left == media_id and right == asset_id:
         return primary == "contains" or text_overlap_ratio(edge, text_on_left=False) >= 0.20
+    return False
+
+
+def shape_is_contained_by_media(shape_id: str, media_id: str, edge: dict[str, Any] | None) -> bool:
+    if not edge:
+        return False
+    primary = edge.get("primarySetRelation")
+    left = str(edge.get("leftObjectId") or "")
+    right = str(edge.get("rightObjectId") or "")
+    if primary == "near_equal":
+        return True
+    if left == shape_id and right == media_id:
+        return primary == "contained_by" or text_overlap_ratio(edge, text_on_left=True) >= 0.70
+    if left == media_id and right == shape_id:
+        return primary == "contains" or text_overlap_ratio(edge, text_on_left=False) >= 0.70
     return False
 
 

@@ -114,7 +114,7 @@ def fit_low_contrast_support_geometry(pixels: PngPixels, bbox: list[int], ignore
         "edgeFillRatio": round(edge, 4),
     }
 
-    if center >= 0.82 and edge >= 0.72 and corner_missing >= 0.75:
+    if center >= 0.82 and edge >= 0.65 and corner_missing >= 0.75:
         radius = estimate_support_radius_from_occupancy(pixels, bbox, fill, ignored)
         half_short_edge = max(1, round(min(width, height) / 2))
         if radius >= round(half_short_edge * 0.75):

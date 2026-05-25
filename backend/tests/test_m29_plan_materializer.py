@@ -344,6 +344,108 @@ def test_shape_replay_samples_missing_fill_from_source_pixels(tmp_path: Path) ->
     assert shape["style"]["fill"] != "#F7F8FA"
 
 
+def test_shape_replay_uses_source_shape_inference_overrides(tmp_path: Path) -> None:
+    source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(240, 240, 240), marks=[([20, 20, 80, 30], (82, 148, 76)), ([44, 28, 32, 8], (255, 255, 255))]))
+    m292 = m292_document(
+        [
+            m292_object(
+                "shape",
+                [20, 20, 80, 30],
+                "control_background",
+                "shape_geometry",
+                "shape_replay",
+                m29_ids=["unknown_button"],
+                source_evidence={"shapeFillOverride": "#52944C", "shapeRadiusOverride": 15},
+            )
+        ]
+    )
+    plan = m295_plan([m295_item("plan_shape", "shape", [20, 20, 80, 30], "shape_replay", "m29_shape")])
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("unknown_button", "unknown", [20, 20, 80, 30])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_shape")
+    assert shape["style"]["fill"] == "#52944C"
+    assert shape["style"]["radius"] == 15
+    assert shape["meta"]["m29ShapeStyleSource"] == "source_shape_inference"
+
+
+def test_shape_background_cleans_parent_media_only_with_m295_target(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(120, 90, fill=(240, 240, 240), marks=[([10, 10, 90, 60], (40, 80, 120)), ([30, 28, 42, 20], (82, 148, 76))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object("media", [10, 10, 90, 60], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object(
+                "shape",
+                [30, 28, 42, 20],
+                "control_background",
+                "shape_geometry",
+                "shape_replay",
+                m29_ids=["unknown_button"],
+                source_evidence={"shapeFillOverride": "#52944C", "shapeRadiusOverride": 10},
+            ),
+        ]
+    )
+    authorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 90, 60], "image_replay", "m29_image"),
+            m295_item(
+                "plan_shape",
+                "shape",
+                [30, 28, 42, 20],
+                "shape_replay",
+                "m29_shape",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "shape_background_contained_by_media"},
+                ],
+            ),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 90, 60]), m29_node("unknown_button", "unknown", [30, 28, 42, 20])]),
+        m292_document=m292,
+        m295_replay_plan=authorized_plan,
+        output_dir=tmp_path / "out_shape_cleanup",
+    )
+
+    copied = copied_image_pixels(result.dsl, tmp_path / "out_shape_cleanup")
+    assert copied.rows[18][20 * 3 : 20 * 3 + 3] != b"\x52\x94\x4c"
+    assert copied.rows[0][0:3] == b"(\x50\x78"
+    assert result.report["summary"]["copiedImageAssetShapeErasedCount"] == 1
+
+    unauthorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 90, 60], "image_replay", "m29_image"),
+            m295_item("plan_shape", "shape", [30, 28, 42, 20], "shape_replay", "m29_shape"),
+        ]
+    )
+    result_without_cleanup = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 90, 60]), m29_node("unknown_button", "unknown", [30, 28, 42, 20])]),
+        m292_document=m292,
+        m295_replay_plan=unauthorized_plan,
+        output_dir=tmp_path / "out_shape_no_cleanup",
+    )
+
+    copied_without_cleanup = copied_image_pixels(result_without_cleanup.dsl, tmp_path / "out_shape_no_cleanup")
+    assert copied_without_cleanup.rows[18][20 * 3 : 20 * 3 + 3] == b"\x52\x94\x4c"
+    assert result_without_cleanup.report["summary"]["copiedImageAssetShapeErasedCount"] == 0
+
+
 def test_controlled_structure_materialization_groups_contiguous_high_confidence_members(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(248, 248, 248), marks=[([20, 20, 40, 20], (235, 235, 235)), ([70, 20, 40, 20], (20, 20, 20))]))
     m292 = m292_document(

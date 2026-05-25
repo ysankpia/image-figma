@@ -53,6 +53,19 @@ class M292SourcePhysicalOptions:
     textured_foreground_color_threshold: int = 24
     textured_foreground_texture_threshold: float = 0.18
     textured_foreground_edge_threshold: float = 0.30
+    control_unknown_min_width: int = 44
+    control_unknown_min_height: int = 24
+    control_unknown_max_height: int = 96
+    control_unknown_min_aspect_ratio: float = 1.25
+    control_unknown_max_aspect_ratio: float = 8.00
+    control_unknown_max_area_ratio: float = 0.035
+    control_unknown_min_text_containment: float = 0.85
+    control_unknown_min_text_area_ratio: float = 0.04
+    control_unknown_max_text_area_ratio: float = 0.45
+    control_unknown_max_color_count: int = 96
+    control_unknown_max_texture_score: float = 0.22
+    control_unknown_max_edge_score: float = 0.24
+    control_unknown_min_fill_ratio: float = 0.35
     duplicate_iou_threshold: float = 0.88
 
     def to_dict(self) -> dict[str, Any]:
@@ -100,6 +113,7 @@ def make_object(
     confidence: Literal["high", "medium", "low"],
     reasons: list[str],
     risks: list[str],
+    extra_evidence: dict[str, Any] | None = None,
 ) -> M292SourceObject:
     return M292SourceObject(
         id="pending",
@@ -114,6 +128,7 @@ def make_object(
             "localBackgroundConfidence": round(local_bg_confidence, 4),
             "textOverlapRatio": round(text_overlap, 4),
             "mediaContainmentRatio": round(media_containment, 4),
+            **(extra_evidence or {}),
         },
         confidence=confidence,
         reasons=unique_strings(reasons),

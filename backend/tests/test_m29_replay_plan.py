@@ -199,6 +199,34 @@ def test_m295_adds_copied_cleanup_for_text_overlapping_media(tmp_path: Path) -> 
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
 
 
+def test_m295_shape_inside_media_declares_copied_asset_cleanup(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_shape_media_cleanup",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                m292_object("shape", [20, 20, 50, 24], "control_background", "shape_geometry", "shape_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "shape"],
+            [edge("media_shape", "media", "shape", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    shape_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "shape")
+    assert shape_item["finalReplayAction"] == "shape_replay"
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "shape_background_contained_by_media",
+    } in shape_item["cleanupTargets"]
+    assert "shape_background_cleans_containing_media_asset" in shape_item["reasons"]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
+
+
 def test_m295_suppresses_nested_media_duplicate(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_nested_media",

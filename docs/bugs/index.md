@@ -4,6 +4,7 @@
 
 当前 open bug：
 
+- [011-finite-control-backgrounds-can-be-preserved-as-media.md](open/011-finite-control-backgrounds-can-be-preserved-as-media.md)：部分有限按钮/控件背景被 low-confidence image-like unknown 抢成 `media_region / preserve_raster`，导致背景不可作为 shape 层编辑。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
 

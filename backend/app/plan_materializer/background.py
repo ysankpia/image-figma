@@ -85,7 +85,9 @@ def build_shape_replay_style(
     source_node: dict[str, Any] | None,
     m292_object: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    style: dict[str, Any] = {"fill": sampled_shape_fill(pixels, bbox)}
+    evidence = m292_object.get("sourceEvidence") if isinstance(m292_object, dict) and isinstance(m292_object.get("sourceEvidence"), dict) else {}
+    fill_override = str(evidence.get("shapeFillOverride") or "").strip()
+    style: dict[str, Any] = {"fill": fill_override if fill_override.startswith("#") else sampled_shape_fill(pixels, bbox)}
     style_source = "sampled_fill_only"
     radius: int | None = None
     geometry = source_node.get("geometry") if isinstance(source_node, dict) and isinstance(source_node.get("geometry"), dict) else {}
@@ -97,6 +99,14 @@ def build_shape_replay_style(
     if geometry_kind in {"rounded_rect", "pill", "circle", "ellipse"} and geometry_confidence != "low" and geometry_radius is not None:
         radius = clamp_radius(geometry_radius, bbox)
         style_source = "shape_geometry_fit"
+
+    radius_override = numeric_radius(evidence.get("shapeRadiusOverride"))
+    if radius_override is not None:
+        radius = clamp_radius(radius_override, bbox)
+        style_source = "source_shape_inference"
+
+    if fill_override.startswith("#"):
+        style_source = "source_shape_inference"
 
     if radius is not None:
         style["radius"] = radius

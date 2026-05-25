@@ -6,6 +6,7 @@ from ..m29_materialization_utils import bbox_overlap_ratio
 from ..png_tools import PngPixels
 from ..visual_primitive_graph import bbox_area, bbox_in_bounds
 from .artifacts import local_background_confidence, parse_bbox
+from .controls import CONTROL_BACKGROUND_SUBTYPES, classify_control_like_unknown
 from .types import M292SourceObject, M292SourcePhysicalOptions, M292VisualKind, make_object
 
 
@@ -19,6 +20,35 @@ def classify_shape_objects(
     options: M292SourcePhysicalOptions,
 ) -> list[M292SourceObject]:
     objects: list[M292SourceObject] = []
+    for node in m29_nodes:
+        bbox = parse_bbox(node.get("bbox"))
+        if bbox is None or not bbox_in_bounds(bbox, width, height):
+            continue
+        evidence = classify_control_like_unknown(node, bbox, ocr_boxes, pixels, width, height, options)
+        if evidence is None:
+            continue
+        objects.append(
+            make_object(
+                bbox=bbox,
+                visual_kind="control_background",
+                pixel_owner="shape_geometry",
+                replay_decision="shape_replay",
+                m29_ids=[str(node.get("id") or "")],
+                ocr_ids=evidence.text_ids,
+                local_bg_confidence=local_background_confidence(pixels, bbox),
+                text_overlap=max((bbox_overlap_ratio(bbox, box.bbox) for box in ocr_boxes), default=0.0),
+                media_containment=max((bbox_overlap_ratio(bbox, media.bbox) for media in media_objects), default=0.0),
+                confidence=evidence.confidence,
+                reasons=["low_confidence_unknown_control_background", "finite_control_bbox", "contains_ocr_text"],
+                risks=["shape_from_low_confidence_unknown"],
+                extra_evidence={
+                    "sourceShapeInference": "finite_control_low_confidence_unknown",
+                    "shapeFillOverride": evidence.fill,
+                    **({"shapeRadiusOverride": evidence.radius} if evidence.radius is not None else {}),
+                    "controlTextAreaRatio": evidence.text_area_ratio,
+                },
+            )
+        )
     for node in m29_nodes:
         if str(node.get("type") or "") != "shape":
             continue
@@ -73,7 +103,7 @@ def classify_shape_objects(
         elif subtype in {"card_background", "container_background", "background", "large_container"}:
             visual_kind = "card_background"
             reasons = ["container_background_shape"]
-        elif subtype in {"search_field_background", "low_contrast_support", "text_support_background", "small_rounded_rect", "badge_background", "icon_button_background", "small_ellipse"}:
+        elif subtype in CONTROL_BACKGROUND_SUBTYPES:
             visual_kind = "control_background"
             reasons = ["control_background_shape"]
         else:
@@ -123,13 +153,7 @@ def is_shape_replay_safe(
         "container_background",
         "background",
         "large_container",
-        "search_field_background",
-        "low_contrast_support",
-        "text_support_background",
-        "small_rounded_rect",
-        "badge_background",
-        "icon_button_background",
-        "small_ellipse",
+        *CONTROL_BACKGROUND_SUBTYPES,
     }:
         return True
     return True
