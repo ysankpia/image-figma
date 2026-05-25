@@ -1076,3 +1076,136 @@ coverage, transparent asset rejection reasons, and bottom-tab/internal-icon
 diagnostic-only outcomes. Do not patch downstream materializer/Renderer/plugin
 to invent source ownership.
 ```
+
+### Stage 3: Internal Icon Transparent Asset Stabilization
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Selected the highest-impact M29 quality issue from Stage 2: internal UI icon
+candidates inside composite media could be detected by M29.6 but were often
+rejected by transparent asset extraction because their foreground bbox was too
+tight for reliable edge-background sampling. The fix stays in the evidence
+chain: M29.6 internal candidates use a parent-media-clamped analysis bbox and
+dominant background cluster for alpha evidence; internal source promotion uses
+that analysis bbox so the RGBA asset and visible source object keep matching
+geometry.
+
+During first 40-image validation, artifact inspection found false positives:
+generic non-OCR foreground lines from maps/floor plans/underlines could pass
+alpha extraction and evidence scoring. The stage was not accepted at that
+point. The evidence contract was tightened so generic `pixel_component /
+non_ocr_foreground` remains report/reject only and cannot directly become
+visible replay. Raw symbol evidence and OCR-anchor pixel foreground evidence
+remain eligible when the full evidence contract allows it.
+
+No DSL, API, Renderer, Figma plugin protocol, materializer ownership logic, or
+M29.5 cleanup authorization contract was changed.
+```
+
+First-principles classification:
+
+```text
+real goal: make true internal UI icons/action markers selectable without promoting media texture fragments
+source truth: source PNG pixels + M29.6 internal candidates + transparent alpha evidence + evidence contract
+information-loss point: tight foreground bbox edge sampling confuses foreground pixels for background
+owning layer: transparent asset alpha evidence and evidence contract replay authorization
+do-not-do: do not lower thresholds blindly, do not promote from alpha allow alone, do not patch materializer/Renderer/plugin
+next verification: targeted tests + 40-image primary upload-preview batch + promoted-crop inspection
+```
+
+Fix:
+
+```text
+M29.6 internal transparent candidates:
+  source bbox -> parent-media-clamped analysis bbox
+  edge pixels -> dominant background cluster when context expansion is used
+  report records analysisBbox and backgroundCoverage
+
+Internal source promotion:
+  promoted bbox uses transparent asset analysisBbox when present
+  original candidate bbox is preserved in sourceEvidence.candidateBbox
+
+Evidence contract:
+  generic pixel_component/non_ocr_foreground cannot directly allow visible replay
+  such evidence remains available for reports and future stronger grouping logic
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_m29_evidence_contract.py tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 91 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_045958/upload_preview_batch_validation.json
+```
+
+Stage 2 -> Stage 3 key metric comparison:
+
+```text
+visible replay claims: 4917 -> 4921
+transparent asset allowed: 102 -> 131
+promoted internal source objects: 18 -> 23
+average DSL visual gate normalized mean absolute error: 0.004658 -> 0.004586
+max DSL visual gate changed pixel ratio @10: 0.134558 -> 0.135227
+ownership conflict type counts: {} -> {}
+```
+
+Artifact inspection:
+
+```text
+Generated and inspected promoted internal icon crops from the final 40-image
+batch. The earlier false positives from map route strokes, floor-plan lines,
+and underline-like generic foreground no longer promote after the evidence
+contract tightening. Remaining promotions are raw symbol or OCR-anchor internal
+foreground candidates with transparent asset allow and evidence contract
+allow_visible_replay.
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, or one-screenshot rule was added. The new gates
+are source-type and evidence-contract based: tight internal foreground bboxes
+get contextual alpha analysis, while generic non-OCR foreground remains
+non-visible until stronger independent evidence exists.
+```
+
+Next:
+
+```text
+Continue Stage 4 with the next highest-impact generic defect. Current remaining
+areas include raw M29 blocked-fragment recovery for label-anchored icons,
+further false-positive control for internal media candidates, and finite-control
+background/editability improvements. Do not change materializer, Renderer, or
+plugin to invent source ownership.
+```

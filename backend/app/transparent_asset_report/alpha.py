@@ -5,6 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from ..png_tools import PngPixels, PngRegion, UnsupportedPngCropError, crop_mask_pixels_to_rgba_png
+from ..region_relation_kernel import x2, y2
+
+MIN_DOMINANT_BACKGROUND_COVERAGE = 0.36
+MAX_BACKGROUND_CLUSTER_VARIANCE = 18.0
+MAX_EDGE_VARIANCE_FALLBACK = 38.0
 
 
 def analyze_transparent_asset_candidate(
@@ -13,23 +18,27 @@ def analyze_transparent_asset_candidate(
     bbox: list[int],
     output_path: str | None = None,
     write_asset: bool = False,
+    expand_context: bool = False,
+    container_bbox: list[int] | None = None,
 ) -> dict[str, Any]:
-    edge_pixels = sample_edge_pixels(pixels, bbox)
+    analysis_bbox = expanded_analysis_bbox(bbox, pixels, container_bbox) if expand_context else bbox
+    edge_pixels = sample_edge_pixels(pixels, analysis_bbox)
     if not edge_pixels:
         return reject("empty_edge_samples")
-    background = dominant_rgb(edge_pixels)
-    bg_variance = channel_variance(edge_pixels, background)
-    if bg_variance > 38:
-        return reject("unstable_background", background, bg_variance)
-    distances = pixel_distances(pixels, bbox, background)
+    background_sample = dominant_background_sample(edge_pixels) if expand_context else edge_background_sample(edge_pixels)
+    background = background_sample["rgb"]
+    bg_variance = background_sample["variance"]
+    if not background_sample["stable"]:
+        return reject("unstable_background", background, bg_variance, background_sample=background_sample)
+    distances = pixel_distances(pixels, analysis_bbox, background)
     foreground = [value for value in distances if value >= 72]
     foreground_ratio = len(foreground) / max(1, len(distances))
     if foreground_ratio < 0.04:
-        return reject("weak_foreground_contrast", background, bg_variance, foreground_ratio=foreground_ratio)
+        return reject("weak_foreground_contrast", background, bg_variance, foreground_ratio=foreground_ratio, background_sample=background_sample)
     if foreground_ratio > 0.88:
-        return reject("foreground_fills_crop", background, bg_variance, foreground_ratio=foreground_ratio)
-    mask_data, alpha_coverage = build_alpha_mask(pixels, bbox, background)
-    edge_alpha = edge_alpha_metrics(mask_data, bbox[2], bbox[3])
+        return reject("foreground_fills_crop", background, bg_variance, foreground_ratio=foreground_ratio, background_sample=background_sample)
+    mask_data, alpha_coverage = build_alpha_mask(pixels, analysis_bbox, background)
+    edge_alpha = edge_alpha_metrics(mask_data, analysis_bbox[2], analysis_bbox[3])
     if edge_alpha["edgeAlphaCoverageGt32"] > 0.12 or edge_alpha["edgeAlphaMean"] > 28:
         return reject(
             "edge_alpha_risk",
@@ -38,8 +47,10 @@ def analyze_transparent_asset_candidate(
             foreground_ratio=foreground_ratio,
             alpha_coverage=alpha_coverage,
             edge_alpha=edge_alpha,
+            background_sample=background_sample,
+            analysis_bbox=analysis_bbox,
         )
-    largest_ratio = largest_component_ratio(mask_data, bbox[2], bbox[3])
+    largest_ratio = largest_component_ratio(mask_data, analysis_bbox[2], analysis_bbox[3])
     if largest_ratio < 0.35:
         return reject(
             "fragmented_foreground_mask",
@@ -49,10 +60,12 @@ def analyze_transparent_asset_candidate(
             alpha_coverage=alpha_coverage,
             largest_component_ratio=largest_ratio,
             edge_alpha=edge_alpha,
+            background_sample=background_sample,
+            analysis_bbox=analysis_bbox,
         )
     asset_path = None
     if write_asset and output_path:
-        region = PngRegion("transparent_asset", bbox[0], bbox[1], bbox[2], bbox[3])
+        region = PngRegion("transparent_asset", analysis_bbox[0], analysis_bbox[1], analysis_bbox[2], analysis_bbox[3])
         asset_path = output_path
         try:
             output = Path(output_path)
@@ -67,11 +80,16 @@ def analyze_transparent_asset_candidate(
                 alpha_coverage=alpha_coverage,
                 largest_component_ratio=largest_ratio,
                 edge_alpha=edge_alpha,
+                background_sample=background_sample,
+                analysis_bbox=analysis_bbox,
             )
     return {
         "decision": "allow",
+        "analysisBbox": analysis_bbox,
+        "sourceBbox": bbox,
         "backgroundRgb": list(background),
         "bgVariance": round(bg_variance, 3),
+        "backgroundCoverage": background_sample["coverage"],
         "foregroundAreaRatio": round(foreground_ratio, 4),
         "alphaCoverage": round(alpha_coverage, 4),
         "largestComponentRatio": round(largest_ratio, 4),
@@ -92,12 +110,17 @@ def reject(
     alpha_coverage: float = 0.0,
     largest_component_ratio: float = 0.0,
     edge_alpha: dict[str, Any] | None = None,
+    background_sample: dict[str, Any] | None = None,
+    analysis_bbox: list[int] | None = None,
 ) -> dict[str, Any]:
     edge_alpha = edge_alpha or {"edgeAlphaMean": 0.0, "edgeAlphaCoverageGt32": 0.0}
     return {
         "decision": "reject",
+        "analysisBbox": analysis_bbox,
+        "sourceBbox": None,
         "backgroundRgb": list(background or (0, 0, 0)),
         "bgVariance": round(bg_variance, 3),
+        "backgroundCoverage": round(float((background_sample or {}).get("coverage") or 0.0), 4),
         "foregroundAreaRatio": round(foreground_ratio, 4),
         "alphaCoverage": round(alpha_coverage, 4),
         "largestComponentRatio": round(largest_component_ratio, 4),
@@ -107,6 +130,20 @@ def reject(
         "reasons": [reason],
         "risks": ["transparent_asset_rejected"],
     }
+
+
+def expanded_analysis_bbox(bbox: list[int], pixels: PngPixels, container_bbox: list[int] | None = None) -> list[int]:
+    x, y, width, height = bbox
+    container = container_bbox or [0, 0, pixels.width, pixels.height]
+    short_edge = max(1, min(width, height))
+    padding = max(4, min(12, round(short_edge * 0.45)))
+    left = max(0, container[0], x - padding)
+    top = max(0, container[1], y - padding)
+    right = min(pixels.width, x2(container), x + width + padding)
+    bottom = min(pixels.height, y2(container), y + height + padding)
+    if right <= left or bottom <= top:
+        return bbox
+    return [left, top, right - left, bottom - top]
 
 
 def sample_edge_pixels(pixels: PngPixels, bbox: list[int]) -> list[tuple[int, int, int]]:
@@ -120,6 +157,40 @@ def sample_edge_pixels(pixels: PngPixels, bbox: list[int]) -> list[tuple[int, in
             offset = col * 3
             samples.append((row[offset], row[offset + 1], row[offset + 2]))
     return samples
+
+
+def edge_background_sample(samples: list[tuple[int, int, int]]) -> dict[str, Any]:
+    rgb = dominant_rgb(samples)
+    variance = channel_variance(samples, rgb)
+    return {
+        "rgb": rgb,
+        "variance": round(variance, 3),
+        "coverage": 1.0,
+        "clusterVariance": round(variance, 3),
+        "edgeVariance": round(variance, 3),
+        "stable": variance <= MAX_EDGE_VARIANCE_FALLBACK,
+    }
+
+
+def dominant_background_sample(samples: list[tuple[int, int, int]]) -> dict[str, Any]:
+    buckets: Counter[tuple[int, int, int]] = Counter((r // 16, g // 16, b // 16) for r, g, b in samples)
+    bucket, count = buckets.most_common(1)[0]
+    members = [sample for sample in samples if (sample[0] // 16, sample[1] // 16, sample[2] // 16) == bucket]
+    rgb = tuple(round(sum(sample[channel] for sample in members) / len(members)) for channel in range(3))
+    cluster_variance = channel_variance(members, rgb)
+    all_edge_variance = channel_variance(samples, rgb)
+    coverage = count / max(1, len(samples))
+    stable = (coverage >= MIN_DOMINANT_BACKGROUND_COVERAGE and cluster_variance <= MAX_BACKGROUND_CLUSTER_VARIANCE) or (
+        all_edge_variance <= MAX_EDGE_VARIANCE_FALLBACK
+    )
+    return {
+        "rgb": rgb,
+        "variance": round(cluster_variance if coverage >= MIN_DOMINANT_BACKGROUND_COVERAGE else all_edge_variance, 3),
+        "coverage": round(coverage, 4),
+        "clusterVariance": round(cluster_variance, 3),
+        "edgeVariance": round(all_edge_variance, 3),
+        "stable": stable,
+    }
 
 
 def dominant_rgb(samples: list[tuple[int, int, int]]) -> tuple[int, int, int]:

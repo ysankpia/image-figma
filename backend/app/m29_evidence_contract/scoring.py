@@ -210,6 +210,8 @@ def hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dict[str,
         reasons.append("not_internal_icon_candidate")
     if candidate.get("candidateDecision") != "accepted_report_candidate":
         reasons.append("internal_candidate_not_accepted")
+    if candidate.get("rawType") == "pixel_component" and candidate.get("rawSubtype") == "non_ocr_foreground":
+        reasons.append("generic_foreground_not_visible_replay")
     if parent_media is None:
         reasons.append("missing_parent_media_source_object")
     if text_overlap > 0.30:

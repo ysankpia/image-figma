@@ -324,12 +324,12 @@ types.py: report-only constants and result type
 normalization.py: OCR/M29.2/M29.6 normalization
 geometry.py: bbox/image-bound and overlap helpers
 candidates.py: allowed candidate-source selection and preflight gates
-alpha.py: edge background sampling, alpha mask metrics, edge-alpha risk gate, and diagnostic RGBA output
+alpha.py: edge/context background sampling, dominant background cluster, alpha mask metrics, edge-alpha risk gate, and diagnostic RGBA output
 report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
+这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；内部 media 候选使用 parent-media-clamped `analysisBbox` 做上下文 alpha 分析，避免 tight foreground bbox 的边缘采样把主体误当背景。alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
 
 ### M29 Evidence Contract
 
@@ -357,7 +357,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent asset allow、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
+这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent asset allow、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha allow 直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
 
 ### M29 Internal Source Promotion
 
@@ -384,7 +384,7 @@ pipeline.py: internal icon promotion and promoted M29.2 document write
 types.py: promotion result and invariant metadata
 ```
 
-这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 evidence contract `allow_visible_replay` 的对象。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha allow 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 evidence contract `allow_visible_replay` 的对象。若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha allow 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
 
 ### M29 Hierarchy Candidates
 

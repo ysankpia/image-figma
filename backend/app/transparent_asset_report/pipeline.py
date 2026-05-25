@@ -82,6 +82,8 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
             bbox=candidate["bbox"],
             output_path=str(asset_path),
             write_asset=True,
+            expand_context=candidate["source"] == "m29_6_internal_icon_candidate",
+            container_bbox=candidate.get("mediaBbox") if candidate["source"] == "m29_6_internal_icon_candidate" else None,
         )
     return {
         "candidateId": candidate["candidateId"],
@@ -89,10 +91,12 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
         "sourceObjectId": candidate["sourceObjectId"],
         "mediaSourceObjectId": candidate["mediaSourceObjectId"],
         "bbox": candidate["bbox"],
+        "analysisBbox": analysis.get("analysisBbox"),
         "decision": analysis["decision"],
         "assetPath": relative_asset_path(analysis.get("assetPath"), "m29_transparent_assets"),
         "backgroundRgb": analysis["backgroundRgb"],
         "bgVariance": analysis["bgVariance"],
+        "backgroundCoverage": analysis.get("backgroundCoverage", 0.0),
         "foregroundAreaRatio": analysis["foregroundAreaRatio"],
         "alphaCoverage": analysis["alphaCoverage"],
         "largestComponentRatio": analysis["largestComponentRatio"],

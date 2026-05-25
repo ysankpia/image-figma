@@ -52,6 +52,28 @@ def test_internal_source_promotion_promotes_group_supported_medium_internal_icon
     assert "evidence_contract_allow_visible_replay" in promoted["reasons"]
 
 
+def test_internal_source_promotion_uses_transparent_asset_analysis_bbox(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[internal_icon("candidate", [20, 20, 24, 24], confidence="high", text_anchor=0.82)],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 24, 24],
+                decision="allow",
+                analysis_bbox=[16, 16, 32, 32],
+            )
+        ],
+        evidence_contract_items=[evidence_contract_item("contract", "candidate", decision="allow_visible_replay", evidence_score=0.82)],
+    )
+
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["bbox"] == [16, 16, 32, 32]
+    assert promoted["sourceEvidence"]["candidateBbox"] == [20, 20, 24, 24]
+    assert promoted["sourceEvidence"]["transparentAssetBbox"] == [16, 16, 32, 32]
+
+
 def test_internal_source_promotion_requires_evidence_contract_even_when_alpha_allows(tmp_path: Path) -> None:
     result = promotion_report(
         tmp_path,
@@ -127,13 +149,14 @@ def internal_icon(candidate_id: str, bbox: list[int], *, confidence: str, text_a
     }
 
 
-def transparent_item(item_id: str, source_object_id: str, bbox: list[int], *, decision: str) -> dict:
+def transparent_item(item_id: str, source_object_id: str, bbox: list[int], *, decision: str, analysis_bbox: list[int] | None = None) -> dict:
     return {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
         "sourceObjectId": source_object_id,
         "mediaSourceObjectId": "media",
         "bbox": bbox,
+        "analysisBbox": analysis_bbox,
         "decision": decision,
         "assetPath": "assets/transparent/debug.png" if decision == "allow" else None,
         "textOverlap": 0.0,

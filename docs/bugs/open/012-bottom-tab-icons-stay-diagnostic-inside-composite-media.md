@@ -1,6 +1,6 @@
 # Bug: 底部 tab 图标在 composite media 内停留为 diagnostic
 
-- 状态：open
+- 状态：open, partial
 - 创建日期：2026-05-25
 - 影响范围：raw M29 blocked evidence、M29.2 source ownership、M29.5 replay plan、真实上传样本底部导航可编辑质量
 
@@ -180,11 +180,41 @@ EvidenceScore 低或负证据强 -> reject
 
 ## Validation Evidence
 
-待修复后补充：
+Stage 061-3 已完成一个通用的部分修复：M29.6 internal icon 的 transparent asset alpha gate 不再只用 tight foreground bbox 边缘采样，而是对内部候选使用 parent-media-clamped analysis bbox 和 dominant background cluster；promotion 使用同一个 `analysisBbox`，避免透明 PNG 与 visible source bbox 缩放不一致。
+
+同时补上一个关键负证据：generic `pixel_component / non_ocr_foreground` 即使 alpha 允许，也不能直接通过 evidence contract 变成 visible replay。这个 gate 阻止了地图路线、楼层图线段、下划线这类非图标 foreground fragment 被误升成内部图标。
+
+已验证：
 
 ```bash
 cd backend
-uv run pytest tests/test_source_ui_physical_graph.py -q
-uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+uv run pytest tests/test_m29_evidence_contract.py tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
 git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Stage 061-3 结果：
+
+```text
+targeted tests: 91 passed
+primary batch: 40/40 completed
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+transparent asset allowed: 102 -> 131
+promoted internal source objects: 18 -> 23
+average DSL visual gate normalized mean absolute error: 0.004658 -> 0.004586
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_045958/upload_preview_batch_validation.json
+```
+
+Remaining:
+
+```text
+This bug is not fully closed. Raw M29 blocked-fragment recovery for already-detected label-anchored bottom tab icons remains a separate upstream source-ownership issue. The next fix must still happen in raw M29 / M29.2 / evidence contract, not in materializer, Renderer, or plugin.
 ```

@@ -21,12 +21,13 @@ def collect_transparent_asset_candidates(
     image_size: dict[str, int],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
+    media_lookup = {str(source["sourceObjectId"]): source for source in source_objects}
     for source in source_objects:
         if is_m292_icon_candidate(source):
             candidates.append(build_m292_candidate(source, ocr_blocks, image_size, len(candidates) + 1))
     for internal in media_internal_candidates:
         if is_m296_internal_icon_candidate(internal):
-            candidates.append(build_m296_candidate(internal, ocr_blocks, image_size, len(candidates) + 1))
+            candidates.append(build_m296_candidate(internal, ocr_blocks, image_size, len(candidates) + 1, media_lookup))
     return candidates
 
 
@@ -70,7 +71,13 @@ def build_m292_candidate(source: dict[str, Any], ocr_blocks: list[dict[str, Any]
     }
 
 
-def build_m296_candidate(internal: dict[str, Any], ocr_blocks: list[dict[str, Any]], image_size: dict[str, int], index: int) -> dict[str, Any]:
+def build_m296_candidate(
+    internal: dict[str, Any],
+    ocr_blocks: list[dict[str, Any]],
+    image_size: dict[str, int],
+    index: int,
+    media_lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
     bbox = internal["bbox"]
     breakdown = internal.get("scoreBreakdown", {})
     hero_penalty = float(breakdown.get("heroGraphicPenalty") or 0.0)
@@ -101,6 +108,7 @@ def build_m296_candidate(internal: dict[str, Any], ocr_blocks: list[dict[str, An
         "source": "m29_6_internal_icon_candidate",
         "sourceObjectId": internal["candidateId"],
         "mediaSourceObjectId": internal.get("mediaSourceObjectId") or None,
+        "mediaBbox": (media_lookup.get(str(internal.get("mediaSourceObjectId") or "")) or {}).get("bbox"),
         "bbox": bbox,
         "inputConfidence": internal.get("confidence") or "low",
         "inputScore": internal.get("score"),

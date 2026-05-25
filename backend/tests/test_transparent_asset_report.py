@@ -124,6 +124,41 @@ def test_group_supported_medium_internal_icon_uses_alpha_gate(tmp_path: Path) ->
     assert "internal_candidate_not_execution_supported" not in item["risks"]
 
 
+def test_internal_icon_uses_context_bbox_for_stable_action_strip_background(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_png=make_action_strip_png(),
+        source_objects=[media_region("media", [0, 0, 96, 72])],
+        ocr_blocks=[],
+        internal_candidates=[internal_icon("internal_icon", [38, 28, 16, 16], confidence="high", media_source_object_id="media")],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "allow"
+    assert item["bbox"] == [38, 28, 16, 16]
+    assert item["analysisBbox"][2] > item["bbox"][2]
+    assert item["analysisBbox"][3] > item["bbox"][3]
+    assert item["backgroundCoverage"] >= 0.36
+    asset_path = tmp_path / "m29_transparent_assets" / item["assetPath"]
+    pixels = decode_png_pixels(asset_path.read_bytes())
+    assert pixels.width == item["analysisBbox"][2]
+    assert pixels.height == item["analysisBbox"][3]
+
+
+def test_unstable_background_still_rejects_when_no_dominant_background_cluster(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_png=make_no_dominant_background_png(),
+        source_objects=[media_region("media", [0, 0, 96, 72])],
+        ocr_blocks=[],
+        internal_candidates=[internal_icon("internal_icon", [38, 28, 16, 16], confidence="high", media_source_object_id="media")],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "reject"
+    assert "unstable_background" in item["reasons"]
+
+
 def transparent_report(
     tmp_path: Path,
     *,
@@ -165,6 +200,37 @@ def make_icon_png(*, unstable_background: bool = False, edge_alpha_risk: bool = 
     return encode_rgb_png(64, 64, rows)
 
 
+def make_action_strip_png() -> bytes:
+    rows = []
+    for y in range(72):
+        row = bytearray()
+        for x in range(96):
+            rgb = [49, 41, 30]
+            if 38 <= x < 54 and 28 <= y < 44:
+                rgb = [230, 198, 144]
+            if 24 <= x < 32 and 14 <= y < 22:
+                rgb = [232, 198, 145]
+            if 64 <= x < 78 and 48 <= y < 56:
+                rgb = [230, 198, 144]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(96, 72, rows)
+
+
+def make_no_dominant_background_png() -> bytes:
+    colors = ([20, 40, 180], [230, 210, 80], [80, 190, 120], [190, 60, 160])
+    rows = []
+    for y in range(72):
+        row = bytearray()
+        for x in range(96):
+            rgb = list(colors[((x // 3) + (y // 3)) % len(colors)])
+            if 38 <= x < 54 and 28 <= y < 44:
+                rgb = [0, 0, 0]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(96, 72, rows)
+
+
 def raster_icon(object_id: str, bbox: list[int]) -> dict:
     return {
         "id": object_id,
@@ -179,14 +245,28 @@ def raster_icon(object_id: str, bbox: list[int]) -> dict:
     }
 
 
+def media_region(object_id: str, bbox: list[int]) -> dict:
+    return {
+        "id": object_id,
+        "bbox": bbox,
+        "visualKind": "media_region",
+        "pixelOwner": "preserve_raster",
+        "replayDecision": "image_replay",
+        "sourceEvidence": {},
+        "confidence": "medium",
+        "reasons": ["test"],
+        "risks": ["contains_internal_text"],
+    }
+
+
 def ocr_block(block_id: str, bbox: list[int]) -> dict:
     return {"id": block_id, "text": "xx", "bbox": bbox, "confidence": 0.98}
 
 
-def internal_icon(candidate_id: str, bbox: list[int], *, confidence: str, group_supported: bool = False) -> dict:
+def internal_icon(candidate_id: str, bbox: list[int], *, confidence: str, group_supported: bool = False, media_source_object_id: str = "media") -> dict:
     return {
         "candidateId": candidate_id,
-        "mediaSourceObjectId": "media",
+        "mediaSourceObjectId": media_source_object_id,
         "rawNodeId": "raw_icon",
         "role": "internal_icon_candidate",
         "bbox": bbox,

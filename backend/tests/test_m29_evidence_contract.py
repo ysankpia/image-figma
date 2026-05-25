@@ -80,6 +80,28 @@ def test_medium_group_supported_internal_icon_can_allow_with_consistent_evidence
     assert "execution_supported_internal_icon" in item["decision"]["reasons"]
 
 
+def test_generic_non_ocr_foreground_is_not_promoted_even_with_alpha(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 80, 18],
+                confidence="high",
+                text_anchor=0.86,
+                raw_type="pixel_component",
+                raw_subtype="non_ocr_foreground",
+            )
+        ],
+        transparent_items=[transparent_item("asset_candidate", "candidate", [20, 20, 80, 18], decision="allow")],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "reject"
+    assert item["decision"]["promotionAllowed"] is False
+    assert "generic_foreground_not_visible_replay" in item["decision"]["reasons"]
+
+
 def test_label_anchored_blocked_icon_is_audit_only_not_promotion_contract(tmp_path: Path) -> None:
     report = evidence_report(
         tmp_path,
@@ -166,11 +188,15 @@ def internal_icon(
     text_overlap: float = 0.0,
     hero_penalty: float = 0.1,
     group_supported: bool = False,
+    raw_type: str = "symbol",
+    raw_subtype: str = "icon",
 ) -> dict:
     return {
         "candidateId": candidate_id,
         "mediaSourceObjectId": "media",
         "rawNodeId": "raw_icon",
+        "rawType": raw_type,
+        "rawSubtype": raw_subtype,
         "matchedOcrBoxId": "ocr_label",
         "role": "internal_icon_candidate",
         "bbox": bbox,

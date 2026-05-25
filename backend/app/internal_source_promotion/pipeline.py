@@ -143,7 +143,8 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
     candidate_id = str(candidate["candidateId"])
     media_id = str(candidate["mediaSourceObjectId"])
     raw_node_id = str(candidate.get("rawNodeId") or "")
-    bbox = normalize_bbox(candidate["bbox"], "candidate.bbox")
+    candidate_bbox = normalize_bbox(candidate["bbox"], "candidate.bbox")
+    bbox = normalize_bbox(transparent_item.get("analysisBbox") or candidate_bbox, "transparent_item.analysisBbox")
     decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}
     return {
         "id": f"m292_promoted_internal_icon_{index:04d}",
@@ -156,8 +157,10 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             "ocrBoxIds": [],
             "blockedIds": [],
             "mediaSourceObjectId": media_id,
+            "candidateBbox": candidate_bbox,
             "mediaInternalCandidateId": candidate_id,
             "transparentAssetPath": transparent_item.get("assetPath"),
+            "transparentAssetBbox": bbox,
             "transparentAssetCandidateId": transparent_item.get("candidateId"),
             "evidenceContractId": evidence_contract.get("contractId"),
             "evidenceContractDecision": decision.get("mode"),
