@@ -17,9 +17,12 @@ from .stages import (
     run_m29_auto_layout_permission_stage,
     run_m29_b_stage_quality_stage,
     run_m29_hierarchy_candidate_stage,
+    run_m29_internal_source_promotion_stage,
     run_m29_layout_energy_stage,
+    run_m29_media_internal_decomposition_stage,
     run_m29_ownership_conservation_stage,
     run_m29_sibling_group_candidate_stage,
+    run_m29_transparent_asset_stage,
     run_m29_design_token_stage,
     run_m29_dsl_visual_comparison_stage,
     run_m29_visual_primitive_stage,
@@ -136,7 +139,106 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_hierarchy_candidates", 31, "Building M29 hierarchy candidate report.")
+    update_task(task_id, "m29_media_internal_decomposition", 30, "Checking M29 media internal decomposition.")
+    media_internal_result = run_stage(
+        paths,
+        timings,
+        "m29_media_internal_decomposition",
+        lambda: run_m29_media_internal_decomposition_stage(
+            task_id=task_id,
+            png_data=png_data,
+            paths=paths,
+            m29_document=m29_document,
+            ocr_document=ocr_document,
+            m292_document=m292_document,
+            m2931_report=m2931_result.report,
+            m295_report=m295_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_transparent_assets", 31, "Checking M29 transparent asset candidates.")
+    transparent_asset_result = run_stage(
+        paths,
+        timings,
+        "m29_transparent_assets",
+        lambda: run_m29_transparent_asset_stage(
+            task_id=task_id,
+            png_data=png_data,
+            paths=paths,
+            ocr_document=ocr_document,
+            m292_document=m292_document,
+            media_internal_report=media_internal_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_internal_source_promotion", 32, "Promoting execution-supported M29 internal source objects.")
+    promotion_result = run_stage(
+        paths,
+        timings,
+        "m29_internal_source_promotion",
+        lambda: run_m29_internal_source_promotion_stage(
+            task_id=task_id,
+            paths=paths,
+            m292_document=m292_document,
+            media_internal_report=media_internal_result.report,
+            transparent_asset_report=transparent_asset_result.report,
+        ),
+    )
+    m292_document = promotion_result.m292_document
+
+    update_task(task_id, "m29_3_relation_graph_report", 33, "Rebuilding M29.3.1 source relation graph report.")
+    m2931_result = run_stage(
+        paths,
+        timings,
+        "m29_3_relation_graph_report_promoted",
+        lambda: run_m2931_relation_stage(
+            task_id=task_id,
+            paths=paths,
+            m292_document=m292_document,
+        ),
+    )
+
+    update_task(task_id, "m29_4_stable_design_cluster", 34, "Rebuilding M29.4 stable design cluster report.")
+    m294_result = run_stage(
+        paths,
+        timings,
+        "m29_4_stable_design_cluster_promoted",
+        lambda: run_m294_cluster_stage(
+            task_id=task_id,
+            paths=paths,
+            m2931_report=m2931_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_5_replay_plan", 35, "Rebuilding M29.5 replay quality plan.")
+    m295_result = run_stage(
+        paths,
+        timings,
+        "m29_5_replay_plan_promoted",
+        lambda: run_m295_replay_plan_stage(
+            task_id=task_id,
+            paths=paths,
+            m292_document=m292_document,
+            m2931_report=m2931_result.report,
+            m294_report=m294_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_ownership_conservation", 36, "Rechecking M29 ownership conservation.")
+    ownership_result = run_stage(
+        paths,
+        timings,
+        "m29_ownership_conservation_promoted",
+        lambda: run_m29_ownership_conservation_stage(
+            task_id=task_id,
+            paths=paths,
+            m292_document=m292_document,
+            m2931_report=m2931_result.report,
+            m295_report=m295_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_hierarchy_candidates", 37, "Building M29 hierarchy candidate report.")
     hierarchy_result = run_stage(
         paths,
         timings,
@@ -150,7 +252,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_sibling_groups", 34, "Building M29 sibling group candidate report.")
+    update_task(task_id, "m29_sibling_groups", 39, "Building M29 sibling group candidate report.")
     sibling_group_result = run_stage(
         paths,
         timings,
@@ -165,7 +267,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_layout_energy", 37, "Computing M29 layout energy report.")
+    update_task(task_id, "m29_layout_energy", 42, "Computing M29 layout energy report.")
     layout_energy_result = run_stage(
         paths,
         timings,
@@ -179,7 +281,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_auto_layout_permission", 40, "Building M29 Auto Layout permission report.")
+    update_task(task_id, "m29_auto_layout_permission", 45, "Building M29 Auto Layout permission report.")
     auto_layout_permission_result = run_stage(
         paths,
         timings,

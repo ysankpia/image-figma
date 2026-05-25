@@ -11,7 +11,9 @@ from ..design_token_report import extract_m29_design_token_report
 from ..dsl_visual_comparison import extract_dsl_visual_comparison
 from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
+from ..internal_source_promotion import extract_m29_internal_source_promotion_report
 from ..layout_energy_report import extract_m29_layout_energy_report
+from ..media_internal_decomposition import extract_m29_media_internal_decomposition_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
 from ..plan_materializer import build_plan_driven_dsl
@@ -21,6 +23,7 @@ from ..sibling_group_candidate_report import extract_m29_sibling_group_candidate
 from ..source_ui_physical_graph import extract_source_ui_physical_graph
 from ..stable_design_cluster import extract_m294_stable_design_cluster_report
 from ..state import state
+from ..transparent_asset_report import extract_m29_transparent_asset_report
 from ..visual_primitive_graph import extract_m29_visual_primitive_graph
 from .paths import UploadPreviewPaths
 from .types import UploadPreviewArtifactPolicy, UploadPreviewPipelineError
@@ -126,6 +129,65 @@ def run_m29_ownership_conservation_stage(
         m2931_report=m2931_report,
         m295_report=m295_report,
         output_dir=paths.m29_ownership_conservation,
+    )
+
+
+def run_m29_media_internal_decomposition_stage(
+    *,
+    task_id: str,
+    png_data: bytes,
+    paths: UploadPreviewPaths,
+    m29_document: Any,
+    ocr_document: Any,
+    m292_document: dict[str, Any],
+    m2931_report: dict[str, Any],
+    m295_report: dict[str, Any],
+):
+    return extract_m29_media_internal_decomposition_report(
+        task_id=task_id,
+        source_png=png_data,
+        m29_document=m29_document.to_dict(),
+        ocr_document=ocr_document.to_dict(),
+        m292_document=m292_document,
+        m2931_report=m2931_report,
+        m295_report=m295_report,
+        output_dir=paths.m29_media_internal_decomposition,
+    )
+
+
+def run_m29_transparent_asset_stage(
+    *,
+    task_id: str,
+    png_data: bytes,
+    paths: UploadPreviewPaths,
+    ocr_document: Any,
+    m292_document: dict[str, Any],
+    media_internal_report: dict[str, Any],
+):
+    return extract_m29_transparent_asset_report(
+        task_id=task_id,
+        source_png=png_data,
+        ocr_document=ocr_document.to_dict(),
+        m292_document=m292_document,
+        media_internal_report=media_internal_report,
+        output_dir=paths.m29_transparent_assets,
+    )
+
+
+def run_m29_internal_source_promotion_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    m292_document: dict[str, Any],
+    media_internal_report: dict[str, Any],
+    transparent_asset_report: dict[str, Any],
+):
+    return extract_m29_internal_source_promotion_report(
+        task_id=task_id,
+        m292_document=m292_document,
+        media_internal_report=media_internal_report,
+        transparent_asset_report=transparent_asset_report,
+        output_dir=paths.m29_internal_source_promotion,
     )
 
 

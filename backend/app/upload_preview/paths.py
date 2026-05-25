@@ -16,6 +16,9 @@ class UploadPreviewPaths:
     m29_4: Path
     m29_5: Path
     m29_ownership_conservation: Path
+    m29_media_internal_decomposition: Path
+    m29_transparent_assets: Path
+    m29_internal_source_promotion: Path
     m29_hierarchy_candidates: Path
     m29_sibling_groups: Path
     m29_layout_energy: Path
@@ -37,6 +40,9 @@ def pipeline_paths(task_id: str) -> UploadPreviewPaths:
         m29_4=root / "m29_4",
         m29_5=root / "m29_5",
         m29_ownership_conservation=root / "m29_ownership_conservation",
+        m29_media_internal_decomposition=root / "m29_media_internal_decomposition",
+        m29_transparent_assets=root / "m29_transparent_assets",
+        m29_internal_source_promotion=root / "m29_internal_source_promotion",
         m29_hierarchy_candidates=root / "m29_hierarchy_candidates",
         m29_sibling_groups=root / "m29_sibling_groups",
         m29_layout_energy=root / "m29_layout_energy",

@@ -1,0 +1,334 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.media_internal_decomposition import extract_m29_media_internal_decomposition_report
+from app.png_tools import encode_rgb_png
+
+
+def test_media_internal_decomposition_empty_is_report_only(tmp_path: Path) -> None:
+    report = media_report(tmp_path, source_objects=[], raw_nodes=[], ocr_blocks=[])
+
+    assert report["summary"]["compositeMediaCount"] == 0
+    assert report["summary"]["internalCandidateCount"] == 0
+    assert report["summary"]["dslChanged"] is False
+    assert report["summary"]["assetChanged"] is False
+    assert report["summary"]["createdVisibleNodeCount"] == 0
+    assert report["meta"]["reportOnly"] is True
+
+
+def test_composite_media_with_internal_ocr_and_symbol_reports_candidate(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 240, 140], risks=["contains_internal_text"])],
+        raw_nodes=[raw_symbol("icon", [94, 48, 28, 28], fill_ratio=0.62)],
+        ocr_blocks=[ocr_block("label", [88, 86, 42, 16])],
+    )
+
+    assert report["summary"]["compositeMediaCount"] == 1
+    assert report["summary"]["textMaskCount"] == 1
+    assert report["summary"]["internalCandidateCount"] == 1
+    candidate = report["internalCandidates"][0]
+    assert candidate["role"] == "internal_icon_candidate"
+    assert candidate["candidateDecision"] == "accepted_report_candidate"
+    assert candidate["matchedOcrBoxId"] == "label"
+    assert candidate["scoreBreakdown"]["textAnchorScore"] > 0
+
+
+def test_text_mask_rejects_raw_component_overlapping_internal_ocr(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 240, 140])],
+        raw_nodes=[raw_symbol("glyph_piece", [91, 87, 30, 12])],
+        ocr_blocks=[ocr_block("label", [88, 86, 42, 16])],
+    )
+
+    candidate = report["internalCandidates"][0]
+    assert candidate["candidateDecision"] == "rejected_fragment"
+    assert "overlaps_internal_text_mask" in candidate["risks"]
+    assert report["rejectedFragments"][0]["reason"] == "overlaps_internal_text_mask"
+
+
+def test_large_hero_fragment_is_rejected(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 300, 180])],
+        raw_nodes=[raw_symbol("hero", [76, 25, 150, 90], texture=0.32, color_count=80, fill_ratio=0.28)],
+        ocr_blocks=[ocr_block("label", [40, 146, 50, 18])],
+    )
+
+    candidate = report["internalCandidates"][0]
+    assert candidate["candidateDecision"] == "rejected_fragment"
+    assert "large_media_fragment" in candidate["risks"] or "hero_or_texture_fragment" in candidate["risks"]
+
+
+def test_repeated_icon_label_row_builds_matched_group_without_text_literal_rule(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 360, 160])],
+        raw_nodes=[
+            raw_symbol("icon_a", [38, 55, 28, 28]),
+            raw_symbol("icon_b", [138, 55, 28, 28]),
+            raw_symbol("icon_c", [238, 55, 28, 28]),
+        ],
+        ocr_blocks=[
+            ocr_block("text_a", [34, 95, 36, 16]),
+            ocr_block("text_b", [134, 95, 36, 16]),
+            ocr_block("text_c", [234, 95, 36, 16]),
+        ],
+    )
+
+    assert report["summary"]["matchedInternalGroupCount"] == 1
+    group = report["matchedInternalGroups"][0]
+    assert group["role"] == "action_row"
+    assert group["layoutModel"] == "row"
+    assert len(group["items"]) == 3
+    assert report["meta"]["noSpecializedTextFilenameThemeOrFixedBboxRules"] is True
+
+
+def test_ocr_anchor_foreground_uses_multiple_relations_not_only_above_text(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_anchor_relation_png(),
+        source_objects=[source_object("media", [0, 0, 180, 140])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("label", [78, 62, 24, 14])],
+    )
+
+    candidates = [
+        item
+        for item in report["internalCandidates"]
+        if item["rawType"] == "pixel_component" and item["candidateDecision"] == "accepted_report_candidate"
+    ]
+    relations = {item["anchorRelation"] for item in candidates}
+    assert {"above_text", "below_text", "left_of_text", "right_of_text"}.issubset(relations)
+    assert all("ocr_anchor_foreground_component" in item["reasons"] for item in candidates)
+
+
+def test_non_ocr_foreground_component_inside_media_reports_candidate(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_non_ocr_foreground_png(),
+        source_objects=[source_object("media", [0, 0, 220, 140])],
+        raw_nodes=[],
+        ocr_blocks=[],
+    )
+
+    candidates = [
+        item
+        for item in report["internalCandidates"]
+        if item["rawSubtype"] == "non_ocr_foreground" and item["candidateDecision"] == "accepted_report_candidate"
+    ]
+    assert candidates
+    assert any(contained_bbox([146, 48, 28, 24], item["bbox"]) for item in candidates)
+    assert all("non_ocr_internal_foreground_component" in item["reasons"] for item in candidates)
+    assert all(item["matchedOcrBoxId"] is None for item in candidates)
+    assert report["meta"]["noSpecializedTextFilenameThemeOrFixedBboxRules"] is True
+
+
+def test_non_ocr_foreground_still_respects_internal_text_mask(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_non_ocr_foreground_png(),
+        source_objects=[source_object("media", [0, 0, 220, 140])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("label", [146, 48, 28, 24])],
+    )
+
+    accepted = [
+        item
+        for item in report["internalCandidates"]
+        if item["rawSubtype"] == "non_ocr_foreground" and item["candidateDecision"] == "accepted_report_candidate"
+    ]
+    assert not any(overlaps_bbox(item["bbox"], [146, 48, 28, 24]) for item in accepted)
+
+
+def test_non_ocr_large_hero_foreground_is_rejected_not_promoted(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_non_ocr_foreground_png(hero=True),
+        source_objects=[source_object("media", [0, 0, 220, 140])],
+        raw_nodes=[],
+        ocr_blocks=[],
+    )
+
+    rejected = [
+        item
+        for item in report["internalCandidates"]
+        if item["rawSubtype"] == "non_ocr_foreground" and item["candidateDecision"] == "rejected_fragment"
+    ]
+    assert rejected
+    assert any("large_media_fragment" in item["risks"] or "hero_or_texture_fragment" in item["risks"] for item in rejected)
+
+
+def test_action_row_group_support_marks_medium_candidates_without_text_literal_rule(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 420, 180])],
+        raw_nodes=[
+            raw_symbol("icon_a", [42, 55, 26, 24], color_count=86, fill_ratio=0.36),
+            raw_symbol("icon_b", [142, 55, 26, 24], color_count=86, fill_ratio=0.36),
+            raw_symbol("icon_c", [242, 55, 26, 24], color_count=86, fill_ratio=0.36),
+        ],
+        ocr_blocks=[
+            ocr_block("text_a", [38, 95, 36, 16]),
+            ocr_block("text_b", [138, 95, 36, 16]),
+            ocr_block("text_c", [238, 95, 36, 16]),
+        ],
+    )
+
+    assert report["summary"]["matchedInternalGroupCount"] == 1
+    supported = [item for item in report["internalCandidates"] if item.get("groupSupportedExecution") is True]
+    assert supported
+    assert all(item["confidence"] in {"high", "medium"} for item in supported)
+
+
+def test_separator_inside_media_is_rejected_not_icon(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 240, 140])],
+        raw_nodes=[raw_shape("separator", [120, 50, 1, 50], subtype="separator")],
+        ocr_blocks=[ocr_block("label", [88, 86, 42, 16])],
+    )
+
+    candidate = report["internalCandidates"][0]
+    assert candidate["role"] == "internal_separator_candidate"
+    assert candidate["candidateDecision"] == "rejected_fragment"
+    assert "separator_not_icon" in candidate["risks"]
+
+
+def media_report(
+    tmp_path: Path,
+    *,
+    source_png: bytes | None = None,
+    source_objects: list[dict],
+    raw_nodes: list[dict],
+    ocr_blocks: list[dict],
+) -> dict:
+    result = extract_m29_media_internal_decomposition_report(
+        task_id="task_media_internal",
+        source_png=source_png,
+        m29_document={"version": "0.1", "imageSize": {"width": 400, "height": 300}, "nodes": raw_nodes, "blocked": []},
+        ocr_document={"version": "0.1", "imageSize": {"width": 400, "height": 300}, "blocks": ocr_blocks},
+        m292_document={"schemaName": "M292SourceUiPhysicalGraph", "schemaVersion": "0.1", "sourceObjects": source_objects},
+        m2931_report={"schemaName": "M2931RegionRelationGraphReport", "schemaVersion": "0.1", "edges": []},
+        m295_report={"schemaName": "M295ReplayPlan", "schemaVersion": "0.1", "planItems": []},
+        output_dir=tmp_path / "m29_media_internal_decomposition",
+    )
+    assert (tmp_path / "m29_media_internal_decomposition" / "media_internal_decomposition_report.json").exists()
+    return result.report
+
+
+def source_object(object_id: str, bbox: list[int], *, risks: list[str] | None = None) -> dict:
+    return {
+        "id": object_id,
+        "bbox": bbox,
+        "visualKind": "media_region",
+        "pixelOwner": "preserve_raster",
+        "replayDecision": "image_replay",
+        "sourceEvidence": {},
+        "confidence": "medium",
+        "reasons": ["test"],
+        "risks": risks or [],
+    }
+
+
+def ocr_block(block_id: str, bbox: list[int]) -> dict:
+    return {
+        "id": block_id,
+        "text": "xx",
+        "bbox": bbox,
+        "confidence": 0.96,
+        "lineId": f"{block_id}_line",
+        "blockId": f"{block_id}_block",
+    }
+
+
+def raw_symbol(
+    node_id: str,
+    bbox: list[int],
+    *,
+    texture: float = 0.08,
+    color_count: int = 18,
+    fill_ratio: float = 0.56,
+) -> dict:
+    return raw_node(node_id, bbox, "symbol", "foreground", texture=texture, color_count=color_count, fill_ratio=fill_ratio)
+
+
+def raw_shape(node_id: str, bbox: list[int], *, subtype: str = "rect") -> dict:
+    return raw_node(node_id, bbox, "shape", subtype, texture=0.04, color_count=4, fill_ratio=1.0)
+
+
+def raw_node(
+    node_id: str,
+    bbox: list[int],
+    node_type: str,
+    subtype: str,
+    *,
+    texture: float,
+    color_count: int,
+    fill_ratio: float,
+) -> dict:
+    return {
+        "id": node_id,
+        "type": node_type,
+        "subtype": subtype,
+        "bbox": bbox,
+        "confidence": 0.82,
+        "source": "test",
+        "sourceOrder": 1,
+        "layerHint": "content",
+        "reasons": ["test"],
+        "metrics": {
+            "colorCount": color_count,
+            "textureScore": texture,
+            "edgeScore": 0.1,
+            "fillRatio": fill_ratio,
+            "aspectRatio": round(bbox[2] / bbox[3], 4),
+            "brightness": 120,
+            "meanRgb": [80, 120, 200],
+        },
+    }
+
+
+def make_anchor_relation_png() -> bytes:
+    rows = []
+    icon_color = [20, 80, 220]
+    icon_boxes = [
+        [80, 34, 18, 18],
+        [80, 96, 18, 18],
+        [42, 60, 18, 18],
+        [120, 60, 18, 18],
+    ]
+    for y in range(140):
+        row = bytearray()
+        for x in range(180):
+            rgb = [255, 255, 255]
+            if any(box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3] for box in icon_boxes):
+                rgb = icon_color
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(180, 140, rows)
+
+
+def make_non_ocr_foreground_png(*, hero: bool = False) -> bytes:
+    rows = []
+    for y in range(140):
+        row = bytearray()
+        for x in range(220):
+            rgb = [18, 22, 38]
+            if 146 <= x < 174 and 48 <= y < 72:
+                rgb = [40, 150, 240]
+            if hero and 44 <= x < 176 and 30 <= y < 112:
+                rgb = [20 + (x + y) % 70, 90 + (x * 3 + y) % 120, 150 + (x + y * 2) % 90]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(220, 140, rows)
+
+
+def contained_bbox(inner: list[int], outer: list[int]) -> bool:
+    return outer[0] <= inner[0] and outer[1] <= inner[1] and outer[0] + outer[2] >= inner[0] + inner[2] and outer[1] + outer[3] >= inner[1] + inner[3]
+
+
+def overlaps_bbox(left: list[int], right: list[int]) -> bool:
+    return max(left[0], right[0]) < min(left[0] + left[2], right[0] + right[2]) and max(left[1], right[1]) < min(left[1] + left[3], right[1] + right[3])
