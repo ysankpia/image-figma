@@ -953,3 +953,126 @@ Next:
 Stage 2 should inspect this ledger and classify the first quality issues by owning layer
 before changing any M29 algorithm.
 ```
+
+### Stage 2: Text-Excluded DSL Visual Gate
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Inspected the Stage 1 batch ledger and worst visual-diff artifacts before changing M29.
+The first high-impact issue was not source ownership or media decomposition math:
+the report-only DSL visual comparison gate was dominated by dependency-free
+approximate text rendering noise. Full-image diff metrics remain unchanged for
+diagnostics, but structural regression gating now uses text-excluded metrics.
+No DSL, Renderer, Figma plugin, API, M29.5 replay plan, materializer behavior,
+source ownership, promotion, or cleanup authorization was changed.
+```
+
+First-principles classification:
+
+```text
+real goal: pick the next M29 repair by real visual structure regression, not by diagnostic renderer font noise
+source truth: source PNG + final materialized DSL + report-only approximate DSL renderer
+information-loss point: approximate text rasterization cannot reproduce real UI/Figma font glyph pixels
+owning layer: dsl_visual_comparison report metrics and batch ledger summary
+do-not-do: do not add font/model dependencies, identify fonts, or relax OCR/source ownership gates
+next verification: targeted tests + 40-image primary upload-preview batch
+```
+
+Fix:
+
+```text
+visible DSL text bboxes -> text exclusion mask -> nonText/gate diff metrics
+full diff metrics are preserved unchanged
+gate metrics fall back to full diff when the mask leaves no non-text pixels
+```
+
+New report fields:
+
+```text
+nonTextPixelComparedCount
+nonTextMeanAbsChannelError
+nonTextNormalizedMeanAbsError
+nonTextChangedPixelRatio10
+gateNormalizedMeanAbsError
+gateChangedPixelRatio10
+gateFallbackReason
+textExcludedPixelCount
+textExcludedCoverage
+```
+
+Validation:
+
+```bash
+python3 -m py_compile backend/app/dsl_visual_comparison/render.py backend/app/dsl_visual_comparison/pipeline.py backend/tests/test_dsl_visual_comparison.py backend/scripts/run_upload_preview_batch_validation.py backend/tests/test_upload_preview_batch_validation_script.py
+cd backend && uv run pytest tests/test_dsl_visual_comparison.py tests/test_upload_preview_batch_validation_script.py tests/test_upload_preview_pipeline.py -q
+cd backend && uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+git diff --check
+```
+
+Result:
+
+```text
+targeted tests: 15 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+gate fallback count: 0
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_040404/upload_preview_batch_validation.json
+```
+
+Key metrics:
+
+```text
+average DSL visual normalized mean absolute error: 0.042053
+max DSL visual changed pixel ratio @10: 0.208299
+average DSL visual gate normalized mean absolute error: 0.004658
+max DSL visual gate changed pixel ratio @10: 0.134558
+```
+
+Worst gate samples:
+
+```text
+39-e588b6e980a0e5b7a5e58e82.png: gateChangedPixelRatio10=0.134558, gateNormalizedMeanAbsError=0.010781
+37-e59296e595a1e88cb6e9a5ae.png: gateChangedPixelRatio10=0.122730, gateNormalizedMeanAbsError=0.012324
+12-e5908ce59f8ee8b791e885bf.png: gateChangedPixelRatio10=0.120685, gateNormalizedMeanAbsError=0.010810
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, visible text, brand, theme color,
+or single-screenshot rule was added. The mask is derived from generic visible
+DSL text bboxes, and all-pixel metrics remain available to catch text-specific
+diagnostic failures. Text-excluded gate metrics must not be used to claim text
+quality is correct; OCR/source ownership/cleanup and Figma-visible text quality
+remain separate validation concerns.
+```
+
+Next:
+
+```text
+Stage 3 should use the Stage 2 ledger to select the first actual M29 quality
+issue by owning layer. Candidate areas are low internal-source promotion
+coverage, transparent asset rejection reasons, and bottom-tab/internal-icon
+diagnostic-only outcomes. Do not patch downstream materializer/Renderer/plugin
+to invent source ownership.
+```

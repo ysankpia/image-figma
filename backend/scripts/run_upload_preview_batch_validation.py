@@ -521,8 +521,10 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_b_stage_repair_cost = 0
     total_controlled_structure_groups = 0
     total_dsl_visual_mean_error = 0.0
+    total_dsl_visual_gate_mean_error = 0.0
     dsl_visual_count = 0
     max_dsl_visual_changed_pixel_ratio10 = 0.0
+    max_dsl_visual_gate_changed_pixel_ratio10 = 0.0
     for record in records:
         if record.get("uploadSupported"):
             supported += 1
@@ -570,9 +572,16 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         dsl_visual_summary = record.get("summaries", {}).get("dslVisualComparison", {})
         if dsl_visual_summary:
             total_dsl_visual_mean_error += float(dsl_visual_summary.get("normalizedMeanAbsError") or 0.0)
+            total_dsl_visual_gate_mean_error += float(
+                dsl_visual_summary.get("gateNormalizedMeanAbsError", dsl_visual_summary.get("normalizedMeanAbsError")) or 0.0
+            )
             max_dsl_visual_changed_pixel_ratio10 = max(
                 max_dsl_visual_changed_pixel_ratio10,
                 float(dsl_visual_summary.get("changedPixelRatio10") or 0.0),
+            )
+            max_dsl_visual_gate_changed_pixel_ratio10 = max(
+                max_dsl_visual_gate_changed_pixel_ratio10,
+                float(dsl_visual_summary.get("gateChangedPixelRatio10", dsl_visual_summary.get("changedPixelRatio10")) or 0.0),
             )
             dsl_visual_count += 1
         conflict_type_counts = ownership_summary.get("conflictTypeCounts", {})
@@ -611,6 +620,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalControlledStructureGroupCount": total_controlled_structure_groups,
         "averageDslVisualNormalizedMeanAbsError": round(total_dsl_visual_mean_error / max(1, dsl_visual_count), 6),
         "maxDslVisualChangedPixelRatio10": round(max_dsl_visual_changed_pixel_ratio10, 6),
+        "averageDslVisualGateNormalizedMeanAbsError": round(total_dsl_visual_gate_mean_error / max(1, dsl_visual_count), 6),
+        "maxDslVisualGateChangedPixelRatio10": round(max_dsl_visual_gate_changed_pixel_ratio10, 6),
         "ownershipConflictTypeCounts": dict(sorted(conflict_counts.items())),
     }
 

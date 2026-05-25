@@ -96,9 +96,19 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     completed = script.base_record(tmp_path / "ok.png", tmp_path)
     completed["status"] = "completed"
     completed["assetFetchFailedCount"] = 1
+    completed["summaries"]["dslVisualComparison"] = {
+        "normalizedMeanAbsError": 0.20,
+        "changedPixelRatio10": 0.30,
+        "gateNormalizedMeanAbsError": 0.10,
+        "gateChangedPixelRatio10": 0.15,
+    }
     failed = script.base_record(tmp_path / "bad.png", tmp_path)
     failed["status"] = "error"
     failed["errors"].append({"type": "missing_artifact"})
+    failed["summaries"]["dslVisualComparison"] = {
+        "normalizedMeanAbsError": 0.40,
+        "changedPixelRatio10": 0.50,
+    }
     unsupported = script.unsupported_record(tmp_path / "photo.webp", tmp_path)
 
     summary = script.build_summary([completed, failed, unsupported])
@@ -112,3 +122,7 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     assert summary["supportedFailedCount"] == 1
     assert summary["missingArtifactCount"] == 1
     assert summary["assetFetchFailedCount"] == 1
+    assert summary["averageDslVisualNormalizedMeanAbsError"] == 0.3
+    assert summary["maxDslVisualChangedPixelRatio10"] == 0.5
+    assert summary["averageDslVisualGateNormalizedMeanAbsError"] == 0.25
+    assert summary["maxDslVisualGateChangedPixelRatio10"] == 0.5

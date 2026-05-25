@@ -598,7 +598,18 @@ pipeline.py: DSL render/diff orchestration, report write, summary metrics
 render.py: standard-library approximate DSL rasterization for image/shape/text/group/frame
 ```
 
-这个 package 不改 DSL，不参与 Figma rendering。它给 `/Users/luhui/Downloads/m29` batch validation 提供最终 DSL 与原图的可审计视觉差异指标。
+这个 package 不改 DSL，不参与 Figma rendering。它给 real-sample batch validation 提供最终 DSL 与原图的可审计视觉差异指标。
+
+报告保留两类指标：
+
+```text
+full-image diff: normalizedMeanAbsError / changedPixelRatio10
+non-text gate diff: gateNormalizedMeanAbsError / gateChangedPixelRatio10
+```
+
+full-image diff 是诊断面，包含 report-only approximate text renderer 的字体/字形误差。`gate*` 指标会根据 visible DSL text bboxes 构建 exclusion mask，用于判断非文字视觉结构是否退化；如果文本 mask 覆盖后没有任何 non-text 像素，gate 指标回退到 full-image diff，并记录 `gateFallbackReason=no_non_text_pixels`，避免 all-text 样本产生假 0。
+
+这不是字体识别、OCR 修复或 text quality acceptance。文字正确性仍必须由 OCR/source ownership/cleanup/Figma-visible validation 证明。
 
 ### Historical M29 Audit Packages
 

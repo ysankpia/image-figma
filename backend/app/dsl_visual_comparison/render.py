@@ -37,6 +37,51 @@ def render_dsl_to_pixels(
     return PngPixels(width=width, height=height, rows=[bytes(row) for row in rows]), warnings
 
 
+def build_text_exclusion_mask(dsl: dict[str, Any], *, width: int, height: int, padding: int = 1) -> tuple[bytes, int]:
+    mask = bytearray(width * height)
+    root = dsl.get("root")
+    if not isinstance(root, dict) or width <= 0 or height <= 0:
+        return bytes(mask), 0
+    for bbox in collect_visible_text_bboxes(root, parent_offset=(0, 0), is_root=True):
+        mark_bbox(mask, width, height, bbox, padding=padding)
+    return bytes(mask), sum(1 for value in mask if value)
+
+
+def collect_visible_text_bboxes(
+    element: dict[str, Any],
+    *,
+    parent_offset: tuple[int, int],
+    is_root: bool = False,
+) -> list[list[int]]:
+    if not is_visible(element):
+        return []
+    layout = parse_layout(element.get("layout"))
+    if layout is None:
+        return []
+    x = parent_offset[0] + layout[0]
+    y = parent_offset[1] + layout[1]
+    bbox = [x, y, layout[2], layout[3]]
+    result: list[list[int]] = []
+    if not is_root and str(element.get("type") or "") == "text":
+        result.append(bbox)
+    for child in list_dicts(element.get("children")):
+        result.extend(collect_visible_text_bboxes(child, parent_offset=(x, y)))
+    return result
+
+
+def mark_bbox(mask: bytearray, width: int, height: int, bbox: list[int], *, padding: int) -> None:
+    left = max(0, bbox[0] - padding)
+    top = max(0, bbox[1] - padding)
+    right = min(width, bbox[0] + bbox[2] + padding)
+    bottom = min(height, bbox[1] + bbox[3] + padding)
+    if right <= left or bottom <= top:
+        return
+    fill = b"\x01" * (right - left)
+    for row_index in range(top, bottom):
+        start = row_index * width + left
+        mask[start : start + right - left] = fill
+
+
 def render_element(
     *,
     rows: list[bytearray],
