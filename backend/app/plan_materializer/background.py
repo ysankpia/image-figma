@@ -87,8 +87,17 @@ def build_shape_replay_style(
 ) -> dict[str, Any]:
     evidence = m292_object.get("sourceEvidence") if isinstance(m292_object, dict) and isinstance(m292_object.get("sourceEvidence"), dict) else {}
     fill_override = str(evidence.get("shapeFillOverride") or "").strip()
-    style: dict[str, Any] = {"fill": fill_override if fill_override.startswith("#") else sampled_shape_fill(pixels, bbox)}
-    style_source = "sampled_fill_only"
+    source_fill = source_shape_fill(source_node)
+    if fill_override.startswith("#"):
+        fill = fill_override
+        style_source = "source_shape_inference"
+    elif source_fill is not None:
+        fill = source_fill
+        style_source = "source_shape_style"
+    else:
+        fill = sampled_shape_fill(pixels, bbox)
+        style_source = "sampled_fill_only"
+    style: dict[str, Any] = {"fill": fill}
     radius: int | None = None
     geometry = source_node.get("geometry") if isinstance(source_node, dict) and isinstance(source_node.get("geometry"), dict) else {}
     geometry_kind = str(geometry.get("kind") or "")
@@ -105,9 +114,6 @@ def build_shape_replay_style(
         radius = clamp_radius(radius_override, bbox)
         style_source = "source_shape_inference"
 
-    if fill_override.startswith("#"):
-        style_source = "source_shape_inference"
-
     if radius is not None:
         style["radius"] = radius
     style["meta"] = {
@@ -115,6 +121,23 @@ def build_shape_replay_style(
         **({"m29ShapeRadius": radius} if radius is not None else {}),
     }
     return style
+
+
+def source_shape_fill(source_node: dict[str, Any] | None) -> str | None:
+    style = source_node.get("style") if isinstance(source_node, dict) and isinstance(source_node.get("style"), dict) else {}
+    fill = str(style.get("fill") or "").strip()
+    if not fill.startswith("#"):
+        return None
+    text = fill[1:]
+    if len(text) == 3:
+        text = "".join(char + char for char in text)
+    if len(text) != 6:
+        return None
+    try:
+        int(text, 16)
+    except ValueError:
+        return None
+    return f"#{text.upper()}"
 
 
 def numeric_radius(value: Any) -> int | None:

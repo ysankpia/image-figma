@@ -741,7 +741,7 @@ Package responsibilities:
 
 ```text
 builder.py: entry flow, output write, base DSL namespacing
-background.py: source background, text background, foreground, shape fill/radius sampling
+background.py: source background, text background, foreground, shape fill/radius evidence consumption and fallback sampling
 replay.py: M29.5 plan item to DSL node conversion
 assets.py: raster/icon asset crop, copy, local URL helpers
 cleanup.py: plan-authorized fallback and copied image cleanup execution
@@ -761,6 +761,16 @@ plan-authorized copied image asset text cleanup
 plan-authorized copied image asset promoted-internal alpha-mask cleanup
 report building
 ```
+
+Shape replay style priority is:
+
+```text
+M29.2 sourceEvidence.shapeFillOverride / shapeRadiusOverride
+-> raw M29 source node style.fill and geometry radius
+-> fallback pixel sampling from the source PNG bbox
+```
+
+The materializer must not discard raw M29 `style.fill` and resample the whole bbox when a source shape already provided stable fill evidence. Bbox mean sampling is only a fallback, because support/control bboxes commonly contain text, icons, photos, or darker foreground pixels that would contaminate the replayed shape color.
 
 It must not own:
 

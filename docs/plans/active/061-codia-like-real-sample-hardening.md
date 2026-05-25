@@ -1564,3 +1564,118 @@ the remaining top components are structural and not text residue, choose the
 next owning layer from artifact evidence. Do not recover diagnostic fragments
 or promote more internal icons until independent UI evidence supports it.
 ```
+
+### Stage 7: Source Shape Fill Consumption
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Inspected the Stage 6 top gate-diff components and aligned them with M29.2,
+M29.5, and materialized DSL artifacts. After source-text masking, the largest
+remaining structural diffs were not missing internal icons. They mostly
+overlapped `control_background` source objects replayed as `m29_shape`.
+
+The owning layer was the plan materializer's shape style consumption. Raw M29
+shape/support detectors already carried stable `style.fill` values computed
+while ignoring foreground text/content evidence. The materializer was throwing
+that away and recomputing shape fill as the mean over the full bbox. For
+text-support rows, product cards, and controls, that bbox includes text, icons,
+photos, or darker foreground content, so the replayed shape color became dirty.
+
+The fix is materializer-only style consumption: `shapeFillOverride` remains
+highest priority, then source M29 node `style.fill`, then the old source-pixel
+bbox mean fallback. No source ownership, M29.5 replay decision, cleanup
+authorization, Renderer, Figma plugin, or detection heuristic changed.
+```
+
+First-principles classification:
+
+```text
+real goal: replay already-approved shape backgrounds with the source-derived fill evidence that M29 already computed
+source truth: raw M29 shape node style.fill + M29.5-authorized shape_replay
+information-loss point: materializer replaced upstream stable fill evidence with full-bbox mean sampling
+owning layer: plan_materializer shape style consumption
+do-not-do: do not alter M29.2 owner decisions, recover diagnostic fragments, or add sample-specific color rules
+next verification: focused materializer tests + 40-image HTTP batch + gate metric comparison
+```
+
+Fix:
+
+```text
+build_shape_replay_style now uses source shape node style.fill when present
+source shape fill is validated as a hex color and normalized to uppercase
+shapeFillOverride still wins over source node style.fill
+sampled_shape_fill remains fallback for source nodes without style.fill
+shape style meta records m29ShapeStyleSource=source_shape_style
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+git diff --check
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 23 passed
+primary inputs: 40
+supported inputs: 40
+unsupported inputs: 0
+completed: 40
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+shape style sources in batch DSL:
+  source_shape_style: 555
+  source_shape_inference: 28
+  shape_geometry_fit: 4
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_063815/upload_preview_batch_validation.json
+```
+
+Stage 6 -> Stage 7 key metric comparison:
+
+```text
+visible replay claims: 4921 -> 4921
+promoted internal source objects: 22 -> 22
+average DSL visual normalized mean absolute error: 0.041999 -> 0.039127
+max DSL visual changed pixel ratio @10: 0.208853 -> 0.111889
+average DSL visual gate normalized mean absolute error: 0.004264 -> 0.001449
+max DSL visual gate changed pixel ratio @10: 0.129967 -> 0.018258
+ownership conflict type counts: {} -> {}
+```
+
+Anti-overfitting check:
+
+```text
+No filename, sample id, fixed coordinate, fixed screenshot size, literal text,
+brand, theme color, industry, account, or one-screenshot rule was added. The
+new rule is a generic evidence-priority rule: consume source M29 shape style
+when it exists, fall back to pixel sampling only when it does not. It does not
+create new visible nodes or change which shapes are replayed.
+```
+
+Next:
+
+```text
+Use the Stage 7 ledger as the new baseline. The top gate ratio is now 0.018258,
+so future stages should inspect the remaining top gate components for actual
+structural misses instead of continuing to optimize text/shape validation noise.
+```

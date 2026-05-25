@@ -344,6 +344,28 @@ def test_shape_replay_samples_missing_fill_from_source_pixels(tmp_path: Path) ->
     assert shape["style"]["fill"] != "#F7F8FA"
 
 
+def test_shape_replay_prefers_source_shape_fill_over_bbox_mean(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(100, 80, fill=(248, 248, 248), marks=[([20, 20, 50, 24], (252, 252, 252)), ([44, 28, 18, 8], (20, 20, 20))]),
+    )
+    m292 = m292_document([m292_object("shape", [20, 20, 50, 24], "control_background", "shape_geometry", "shape_replay", m29_ids=["shape_001"])])
+    plan = m295_plan([m295_item("plan_shape", "shape", [20, 20, 50, 24], "shape_replay", "m29_shape")])
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("shape_001", "shape", [20, 20, 50, 24], style={"fill": "#FCFCFC"})]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out",
+    )
+
+    shape = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_shape")
+    assert shape["style"]["fill"] == "#FCFCFC"
+    assert shape["meta"]["m29ShapeStyleSource"] == "source_shape_style"
+
+
 def test_shape_replay_uses_source_shape_inference_overrides(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(120, 90, fill=(240, 240, 240), marks=[([20, 20, 80, 30], (82, 148, 76)), ([44, 28, 32, 8], (255, 255, 255))]))
     m292 = m292_document(
@@ -605,7 +627,15 @@ def m29_document(tmp_path: Path, *, nodes: list[dict]) -> dict:
     }
 
 
-def m29_node(node_id: str, node_type: str, bbox: list[int], *, subtype: str | None = None, geometry: dict | None = None) -> dict:
+def m29_node(
+    node_id: str,
+    node_type: str,
+    bbox: list[int],
+    *,
+    subtype: str | None = None,
+    geometry: dict | None = None,
+    style: dict | None = None,
+) -> dict:
     data = {
         "id": node_id,
         "type": node_type,
@@ -620,6 +650,8 @@ def m29_node(node_id: str, node_type: str, bbox: list[int], *, subtype: str | No
     }
     if geometry is not None:
         data["geometry"] = geometry
+    if style is not None:
+        data["style"] = style
     return data
 
 
