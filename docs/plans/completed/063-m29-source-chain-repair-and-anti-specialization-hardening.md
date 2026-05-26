@@ -1,7 +1,8 @@
 # 063 M29 Source-Chain Repair And Anti-Specialization Hardening
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-26
+- 完成日期：2026-05-26
 - 负责人：Codex
 
 ## Goal
@@ -380,7 +381,7 @@ uv run pytest tests/test_internal_source_promotion.py -q
 
 ### Stage 7: Cleanup And Render-Back Risk Gate
 
-状态：completed，提交待创建。
+状态：completed，已提交 `ad15283 feat: gate copied media cleanup risk`。
 
 cleanup 风险检查只用于防止错误擦除，不作为 source truth：
 
@@ -433,7 +434,7 @@ uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py 
 
 ### Stage 8: Legacy / Dead Path Cleanup
 
-状态：completed，提交待创建。
+状态：completed，已提交 `4098ccc refactor: isolate legacy m29 audit imports`。
 
 先做 import/test inventory，标记 active、compat-only、dead-path debt，再单独删除。不得仅凭历史文档或 Gemini 结论删除。
 
@@ -515,6 +516,25 @@ cd backend
 uv run python scripts/run_upload_preview_batch_validation.py \
   --input-dir /Users/luhui/Downloads/测试/images \
   --poll-timeout 300
+```
+
+结果：
+
+```text
+ledger: backend/tmp/validation/upload_preview_batch_20260526_184550/upload_preview_batch_validation.json
+inputCount: 40
+supportedCompletedTaskCount: 40
+supportedFailedCount: 0
+missingArtifactCount: 0
+assetFetchFailedCount: 0
+ownershipConflictTypeCounts: {}
+totalVisibleOwnershipOverlapConflicts: 0
+totalInternalCandidateCount: 1782
+totalAcceptedInternalCandidateCount: 905
+totalPromotedInternalSourceObjectCount: 86
+totalBStageRepairCost: 244
+averageDslVisualGateNormalizedMeanAbsError: 0.002257
+maxDslVisualGateChangedPixelRatio10: 0.038229
 ```
 
 525 回归集：

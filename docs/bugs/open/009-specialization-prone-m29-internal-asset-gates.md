@@ -93,7 +93,7 @@ PromoteInternalAsset(o) =
 
 后续修复应继续按通用证据层推进：
 
-1. 按 `docs/plans/active/063-m29-source-chain-repair-and-anti-specialization-hardening.md` 新增 bridge fate trace report。
+1. 按 `docs/plans/completed/063-m29-source-chain-repair-and-anti-specialization-hardening.md` 新增 bridge fate trace report。
 2. 增加 scale-aware threshold profile，优先处理高风险绝对像素阈值。已完成 Stage 2 第一轮：M29.2 / M29.6 / transparent / selected tab indicator 高风险 gate 已接入内部 scale profile。
 3. 修复 M29.6 fixed top-N / fixed window cap 对小对象的漏检。已完成 Stage 2 第一轮：connected component 固定 top 6 截断已移除，generic scan/candidate budget 改为 scale-aware area-density budget。Stage 3 已补 selected marker / status dot / table marker 的 M29.6 report-only role evidence；后续需要在 evidence/promotion 层决定何时 replay as shape。
 4. 拆分 transparent asset gate，允许 medium + strong independent evidence 的 candidate 进入 alpha analysis，但不绕过 evidence contract。已完成 Stage 4：diagnostic alpha asset 成功不再等同于 visible replay 权限，evidence contract / promotion / bridge fate trace 统一读取 `visibleReplayEligible`。
@@ -276,6 +276,34 @@ uv run pytest tests/test_upload_preview_pipeline.py tests/test_source_ui_physica
 ```text
 29 passed
 48 passed
+```
+
+063 主验收集验证：
+
+```bash
+cd backend
+uv run python scripts/run_upload_preview_batch_validation.py \
+  --input-dir /Users/luhui/Downloads/测试/images \
+  --poll-timeout 300
+```
+
+结果：
+
+```text
+ledger: backend/tmp/validation/upload_preview_batch_20260526_184550/upload_preview_batch_validation.json
+inputCount: 40
+supportedCompletedTaskCount: 40
+supportedFailedCount: 0
+missingArtifactCount: 0
+assetFetchFailedCount: 0
+ownershipConflictTypeCounts: {}
+totalVisibleOwnershipOverlapConflicts: 0
+totalInternalCandidateCount: 1782
+totalAcceptedInternalCandidateCount: 905
+totalPromotedInternalSourceObjectCount: 86
+totalBStageRepairCost: 244
+averageDslVisualGateNormalizedMeanAbsError: 0.002257
+maxDslVisualGateChangedPixelRatio10: 0.038229
 ```
 
 525 批量验证第一轮修复：
