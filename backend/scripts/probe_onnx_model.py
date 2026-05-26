@@ -3,12 +3,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from app.perception_model_report.decoder import decode_yolo_like_output, preprocess_image
+
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 
@@ -20,7 +26,7 @@ def main() -> int:
     overlays_dir = output_dir / "overlays"
     overlays_dir.mkdir(parents=True, exist_ok=True)
 
-    np, ort, image_module, image_draw_module, image_font_module = import_probe_dependencies()
+    ort, image_module, image_draw_module, image_font_module = import_probe_dependencies()
     inputs = discover_inputs(input_path, recursive=args.recursive, max_files=args.max_files)
     if not inputs:
         raise SystemExit(f"No supported images found: {input_path}")
@@ -35,18 +41,18 @@ def main() -> int:
     for index, image_path in enumerate(inputs, start=1):
         print(f"[probe] {index}/{len(inputs)} {image_path}", flush=True)
         image = image_module.open(image_path).convert("RGB")
-        tensor, transform = preprocess_image(np, image_module, image, input_size=args.input_size)
+        tensor, transform = preprocess_image(image, input_size=args.input_size)
         outputs = session.run([output_meta.name], {input_meta.name: tensor})
         raw_output = outputs[0]
         candidates = decode_yolo_like_output(
-            np,
             raw_output,
             transform=transform,
             score_threshold=args.score_threshold,
             min_box_px=args.min_box_px,
+            nms_threshold=args.nms_threshold,
+            top_k=args.top_k,
         )
-        candidates = nms_candidates(candidates, iou_threshold=args.nms_threshold)
-        candidates = candidates[: args.top_k]
+        candidates = strip_raw_anchor_refs(candidates)
         overlay_path = overlays_dir / f"{safe_stem(image_path)}_probe.png"
         draw_overlay(
             image=image,
@@ -125,9 +131,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def import_probe_dependencies() -> tuple[Any, Any, Any, Any, Any]:
+def import_probe_dependencies() -> tuple[Any, Any, Any, Any]:
     try:
-        import numpy as np
         import onnxruntime as ort
         from PIL import Image, ImageDraw, ImageFont
     except ImportError as error:
@@ -136,7 +141,7 @@ def import_probe_dependencies() -> tuple[Any, Any, Any, Any, Any]:
             "  uv run --with onnxruntime --with pillow --with numpy "
             "python scripts/probe_onnx_model.py --model /path/model.onnx --input /path/images"
         ) from error
-    return np, ort, Image, ImageDraw, ImageFont
+    return ort, Image, ImageDraw, ImageFont
 
 
 def resolve_output_dir(value: str) -> Path:
@@ -163,108 +168,6 @@ def create_session(ort: Any, model_path: Path, provider: str) -> Any:
     if "CPUExecutionProvider" not in providers:
         providers.append("CPUExecutionProvider")
     return ort.InferenceSession(str(model_path), providers=providers)
-
-
-def preprocess_image(np: Any, image_module: Any, image: Any, *, input_size: int) -> tuple[Any, dict[str, float]]:
-    width, height = image.size
-    scale = min(input_size / width, input_size / height)
-    resized_width = max(1, round(width * scale))
-    resized_height = max(1, round(height * scale))
-    pad_x = (input_size - resized_width) / 2.0
-    pad_y = (input_size - resized_height) / 2.0
-
-    canvas = image_module.new("RGB", (input_size, input_size), (114, 114, 114))
-    resized = image.resize((resized_width, resized_height))
-    canvas.paste(resized, (round(pad_x), round(pad_y)))
-    array = np.asarray(canvas).astype("float32") / 255.0
-    tensor = np.transpose(array, (2, 0, 1))[None, :, :, :]
-    return tensor, {
-        "scale": float(scale),
-        "padX": float(pad_x),
-        "padY": float(pad_y),
-        "imageWidth": float(width),
-        "imageHeight": float(height),
-    }
-
-
-def decode_yolo_like_output(
-    np: Any,
-    raw_output: Any,
-    *,
-    transform: dict[str, float],
-    score_threshold: float,
-    min_box_px: float,
-) -> list[dict[str, Any]]:
-    data = np.asarray(raw_output)
-    if data.ndim != 3 or data.shape[0] != 1:
-        raise RuntimeError(f"Unsupported output shape {list(data.shape)}; expected [1, 5, anchors] or [1, anchors, 5].")
-    if data.shape[1] == 5:
-        rows = data[0].T
-    elif data.shape[2] == 5:
-        rows = data[0]
-    else:
-        raise RuntimeError(f"Unsupported output shape {list(data.shape)}; expected one dimension of size 5.")
-
-    scale = transform["scale"]
-    pad_x = transform["padX"]
-    pad_y = transform["padY"]
-    image_width = transform["imageWidth"]
-    image_height = transform["imageHeight"]
-    candidates: list[dict[str, Any]] = []
-    scores = rows[:, 4]
-    if float(scores.min(initial=0.0)) < 0.0 or float(scores.max(initial=0.0)) > 1.0:
-        scores = 1.0 / (1.0 + np.exp(-scores))
-
-    for row, score_value in zip(rows, scores, strict=False):
-        score = float(score_value)
-        if score < score_threshold:
-            continue
-        cx, cy, width, height = [float(value) for value in row[:4]]
-        x1 = (cx - width / 2.0 - pad_x) / scale
-        y1 = (cy - height / 2.0 - pad_y) / scale
-        x2 = (cx + width / 2.0 - pad_x) / scale
-        y2 = (cy + height / 2.0 - pad_y) / scale
-        x1 = clamp(x1, 0.0, image_width)
-        y1 = clamp(y1, 0.0, image_height)
-        x2 = clamp(x2, 0.0, image_width)
-        y2 = clamp(y2, 0.0, image_height)
-        box_width = x2 - x1
-        box_height = y2 - y1
-        if box_width < min_box_px or box_height < min_box_px:
-            continue
-        area_ratio = (box_width * box_height) / max(1.0, image_width * image_height)
-        candidates.append(
-            {
-                "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
-                "score": round(score, 6),
-                "areaRatio": round(area_ratio, 6),
-            }
-        )
-    candidates.sort(key=lambda item: item["score"], reverse=True)
-    return candidates
-
-
-def nms_candidates(candidates: list[dict[str, Any]], *, iou_threshold: float) -> list[dict[str, Any]]:
-    kept: list[dict[str, Any]] = []
-    for candidate in candidates:
-        if all(iou(candidate["bbox"], kept_candidate["bbox"]) < iou_threshold for kept_candidate in kept):
-            kept.append(candidate)
-    return kept
-
-
-def iou(a: list[float], b: list[float]) -> float:
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-    intersection = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
-    if intersection <= 0.0:
-        return 0.0
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    return intersection / max(1e-6, area_a + area_b - intersection)
 
 
 def draw_overlay(
@@ -309,8 +212,8 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def clamp(value: float, lower: float, upper: float) -> float:
-    return min(max(value, lower), upper)
+def strip_raw_anchor_refs(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{key: value for key, value in candidate.items() if key != "rawAnchorIndex"} for candidate in candidates]
 
 
 if __name__ == "__main__":

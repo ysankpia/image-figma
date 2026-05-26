@@ -385,6 +385,22 @@ Acceptance:
 - Report is read-only: `createdVisibleNodeCount=0`, `dslChanged=false`, `materializationChanged=false`.
 - No upload-preview behavior changes by default.
 
+Implementation status:
+
+```text
+backend/app/perception_model_report/ added as report-only package.
+backend/tests/test_perception_model_report.py covers decoder, report-only invariant, missing model/raw-output guard, and optional onnxruntime import behavior.
+backend/scripts/probe_onnx_model.py now reuses the package decoder/preprocess logic to avoid probe/runtime drift.
+```
+
+Stage 1 smoke:
+
+```text
+image: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+report: backend/tmp/perception_model_stage1_smoke/perception_model_report.json
+summary: candidateCount=13, reportOnly=true, sourceOwnershipChanged=false, materializationChanged=false
+```
+
 ### Stage 2: Upload Pipeline Report-Only Integration
 
 Add an opt-in pipeline stage:
