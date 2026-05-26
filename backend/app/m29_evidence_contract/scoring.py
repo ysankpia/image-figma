@@ -208,8 +208,11 @@ def build_m296_shape_contract_item(
     bbox = normalize_bbox(candidate.get("bbox"), "candidate.bbox")
     media_bbox = normalize_bbox(parent_media.get("bbox"), "parent_media.bbox") if parent_media is not None else None
     breakdown = candidate.get("scoreBreakdown") if isinstance(candidate.get("scoreBreakdown"), dict) else {}
+    role = str(candidate.get("role") or "")
     text_overlap = float_value(breakdown.get("textMaskOverlap"))
+    text_overlap_penalty = shape_text_overlap_penalty(role, text_overlap)
     hero_penalty = float_value(breakdown.get("heroGraphicPenalty"))
+    effective_hero_penalty = shape_effective_hero_penalty(role, hero_penalty, breakdown)
     media_containment = containment_ratio(bbox, media_bbox) if media_bbox is not None else 0.0
     role_supported = shape_role_supported(candidate)
     claim_proposed = foreground_claim_proposed(candidate)
@@ -227,10 +230,11 @@ def build_m296_shape_contract_item(
         "sameMediaContainment": round(media_containment, 4),
         "repetition": clamp01(float_value(breakdown.get("repetitionScore"))),
         "relationConsistency": clamp01(float_value(breakdown.get("relationConsistencyScore"))),
+        "textContainment": clamp01(float_value(breakdown.get("textContainmentScore"))),
     }
     negative = {
-        "textOverlapPenalty": round(min(1.0, text_overlap / MAX_TEXT_OVERLAP_FOR_VISIBLE), 4),
-        "heroGraphicPenalty": round(hero_penalty, 4),
+        "textOverlapPenalty": text_overlap_penalty,
+        "heroGraphicPenalty": round(effective_hero_penalty, 4),
         "repairCostPenalty": 0.10 if role_supported else 0.28,
     }
     evidence_score = score_shape_evidence(positive, negative)
@@ -238,7 +242,7 @@ def build_m296_shape_contract_item(
         candidate=candidate,
         parent_media=parent_media,
         text_overlap=text_overlap,
-        hero_penalty=hero_penalty,
+        hero_penalty=effective_hero_penalty,
         role_supported=role_supported,
     )
     mode = shape_decision_mode(
@@ -248,7 +252,7 @@ def build_m296_shape_contract_item(
         foreground_claim=claim_proposed,
         media_containment=media_containment,
         text_overlap=text_overlap,
-        hero_penalty=hero_penalty,
+        hero_penalty=effective_hero_penalty,
     )
     reasons = shape_decision_reasons(
         mode=mode,
@@ -324,6 +328,7 @@ def score_shape_evidence(positive: dict[str, float], negative: dict[str, float])
         + positive["sameMediaContainment"] * 0.16
         + positive["repetition"] * 0.12
         + positive["relationConsistency"] * 0.08
+        + positive.get("textContainment", 0.0) * 0.10
         - negative["textOverlapPenalty"] * 0.18
         - negative["heroGraphicPenalty"] * 0.18
         - negative["repairCostPenalty"] * 0.08
@@ -368,7 +373,7 @@ def shape_decision_mode(*, evidence_score: float, hard_reasons: list[str], role_
         evidence_score >= ALLOW_VISIBLE_THRESHOLD
         and role_supported
         and media_containment >= MIN_MEDIA_CONTAINMENT_FOR_VISIBLE
-        and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
+        and (text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE or foreground_claim)
         and hero_penalty <= MAX_HERO_PENALTY_FOR_VISIBLE
     ):
         if foreground_claim:
@@ -407,7 +412,7 @@ def shape_hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dic
         reasons.append("missing_parent_media_source_object")
     if not role_supported and role not in {"internal_control_background", "internal_overlay_badge", "internal_pill_button", "internal_circle_control"}:
         reasons.append("shape_role_support_missing")
-    if text_overlap > 0.30:
+    if text_overlap > 0.30 and role not in {"internal_control_background", "internal_overlay_badge", "internal_pill_button"}:
         reasons.append("text_overlap_too_high")
     if hero_penalty > 0.62:
         reasons.append("hero_or_texture_risk_too_high")
@@ -444,6 +449,21 @@ def shape_role_supported(candidate: dict[str, Any]) -> bool:
             and claim_score >= 0.60
         )
     return False
+
+
+def shape_text_overlap_penalty(role: str, text_overlap: float) -> float:
+    if role in {"internal_control_background", "internal_overlay_badge", "internal_pill_button"}:
+        return round(min(1.0, text_overlap) * 0.08, 4)
+    return round(min(1.0, text_overlap / MAX_TEXT_OVERLAP_FOR_VISIBLE), 4)
+
+
+def shape_effective_hero_penalty(role: str, hero_penalty: float, breakdown: dict[str, Any]) -> float:
+    if role not in {"internal_control_background", "internal_overlay_badge", "internal_pill_button"}:
+        return hero_penalty
+    text_containment = clamp01(float_value(breakdown.get("textContainmentScore")))
+    overlay_geometry = clamp01(float_value(breakdown.get("overlayGeometryScore")))
+    mitigation = min(0.24, text_containment * 0.16 + overlay_geometry * 0.08)
+    return clamp01(hero_penalty - mitigation)
 
 
 def is_unanchored_generic_foreground(candidate: dict[str, Any], *, text_overlap: float, hero_penalty: float) -> bool:

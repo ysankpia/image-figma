@@ -411,6 +411,55 @@ def test_non_ocr_overlay_pill_can_propose_foreground_claim_without_text_anchor(t
     assert report["meta"]["noSpecializedTextFilenameThemeOrFixedBboxRules"] is True
 
 
+def test_text_contained_overlay_pill_is_foreground_claim_not_text_fragment(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 660, 140], risks=["contains_internal_text"])],
+        raw_nodes=[raw_shape("button_bg", [78, 36, 500, 58], subtype="text_support_background", fill_ratio=0.52)],
+        ocr_blocks=[ocr_block("button_label", [236, 49, 220, 30])],
+        image_size={"width": 660, "height": 140},
+    )
+
+    candidate = report["internalCandidates"][0]
+    assert candidate["role"] == "internal_pill_button"
+    assert candidate["candidateDecision"] == "accepted_report_candidate"
+    assert candidate["claimDecision"] == "propose_foreground_claim"
+    assert candidate["maskKind"] == "rounded_rect"
+    assert "overlaps_internal_text_mask" not in candidate["risks"]
+    assert "large_media_fragment" not in candidate["risks"]
+    assert candidate["scoreBreakdown"]["textContainmentScore"] > 0.7
+    assert "overlay_control_foreground_claim" in candidate["reasons"]
+
+
+def test_text_support_control_background_is_inferred_without_raw_shape(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_text_support_control_png(),
+        source_objects=[source_object("media", [0, 0, 660, 180], risks=["contains_internal_text"])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("button_label", [242, 72, 176, 28])],
+        image_size={"width": 660, "height": 180},
+    )
+
+    inferred = [
+        item
+        for item in report["internalCandidates"]
+        if item["rawType"] == "inferred_shape" and item["matchedOcrBoxId"] == "button_label"
+    ]
+    assert inferred
+    candidate = max(inferred, key=lambda item: item["claimScore"])
+    assert candidate["role"] == "internal_pill_button"
+    assert candidate["candidateDecision"] == "accepted_report_candidate"
+    assert candidate["claimDecision"] == "propose_foreground_claim"
+    assert candidate["maskKind"] == "rounded_rect"
+    assert contained_bbox([242, 72, 176, 28], candidate["bbox"])
+    assert candidate["bbox"][2] >= 480
+    assert candidate["bbox"][3] >= 58
+    assert "inferred_text_support_control_background" in candidate["reasons"]
+    assert "overlay_control_foreground_claim" in candidate["reasons"]
+    assert report["meta"]["noSpecializedTextFilenameThemeOrFixedBboxRules"] is True
+
+
 def media_report(
     tmp_path: Path,
     *,
@@ -628,6 +677,29 @@ def make_overlay_pill_png() -> bytes:
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(280, 180, rows)
+
+
+def make_text_support_control_png() -> bytes:
+    rows = []
+    for y in range(180):
+        row = bytearray()
+        for x in range(660):
+            rgb = [8, 10, 24]
+            if 86 <= x < 574 and 46 <= y < 128:
+                radius = 41
+                left_cx = 86 + radius
+                right_cx = 574 - radius - 1
+                cy = 46 + radius
+                in_center = 86 + radius <= x < 574 - radius
+                in_left = (x - left_cx) ** 2 + (y - cy) ** 2 <= radius**2
+                in_right = (x - right_cx) ** 2 + (y - cy) ** 2 <= radius**2
+                if in_center or in_left or in_right:
+                    rgb = [18, 18, 48]
+            if 242 <= x < 418 and 72 <= y < 100:
+                rgb = [235, 238, 255]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(660, 180, rows)
 
 
 def contained_bbox(inner: list[int], outer: list[int]) -> bool:
