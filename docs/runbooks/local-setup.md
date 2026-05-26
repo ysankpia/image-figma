@@ -36,11 +36,26 @@ uv sync
 
 ## Run Backend
 
-默认 fake OCR、本地文件存储、M29 production artifact profile：
+默认 fake OCR、本地文件存储、M29 production artifact profile、model-first perception：
 
 ```bash
 cd backend
 UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+默认模型路径：
+
+```text
+/Volumes/WorkDrive/Models/model_fp16.onnx
+```
+
+临时隔离旧 M29 兼容链路时才关闭模型：
+
+```bash
+cd backend
+M29_PERCEPTION_MODEL_ENABLED=false \
+UPLOAD_PREVIEW_PROFILE=production \
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 开发诊断 profile：

@@ -194,6 +194,63 @@ def test_upload_preview_can_emit_opt_in_perception_model_report(tmp_path: Path, 
     assert "m29_perception_fate_trace" in stages_seen
 
 
+def test_upload_preview_emits_perception_model_report_by_default(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.delenv("M29_PERCEPTION_MODEL_ENABLED", raising=False)
+    monkeypatch.delenv("M29_PERCEPTION_MODEL_PATH", raising=False)
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    config = importlib.import_module("app.config")
+    stages = importlib.import_module("app.upload_preview.stages")
+    monkeypatch.setattr(stages, "extract_perception_model_report", fake_perception_model_report)
+
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert (task_root / "m29_perception_model" / "perception_model_report.json").exists()
+    assert (task_root / "m29_perception_source_compiler" / "perception_source_compiler_report.json").exists()
+    assert (task_root / "m29_perception_fate_trace" / "perception_fate_trace_report.json").exists()
+    perception_report = json.loads(
+        (task_root / "m29_perception_model" / "perception_model_report.json").read_text(encoding="utf-8")
+    )
+    assert perception_report["model"]["modelPath"] == config.DEFAULT_M29_PERCEPTION_MODEL_PATH
+
+
+def test_upload_preview_can_disable_perception_model_report(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "false")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    assert not (task_root / "m29_perception_model").exists()
+    assert not (task_root / "m29_perception_source_compiler").exists()
+    assert not (task_root / "m29_perception_fate_trace").exists()
+
+
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("STORAGE_ROOT", str(storage_root))

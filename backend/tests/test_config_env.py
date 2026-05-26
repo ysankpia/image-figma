@@ -68,6 +68,30 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     assert settings.m29_perception_model_path == "/tmp/model.onnx"
 
 
+def test_get_settings_enables_perception_model_by_default(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.delenv("M29_PERCEPTION_MODEL_ENABLED", raising=False)
+    monkeypatch.delenv("M29_PERCEPTION_MODEL_PATH", raising=False)
+    monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
+
+    settings = config.get_settings()
+
+    assert settings.m29_perception_model_enabled is True
+    assert settings.m29_perception_model_path == config.DEFAULT_M29_PERCEPTION_MODEL_PATH
+
+
+def test_get_settings_can_disable_perception_model(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
+    monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "false")
+    monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
+
+    settings = config.get_settings()
+
+    assert settings.m29_perception_model_enabled is False
+
+
 def test_parse_bool_supports_common_env_values() -> None:
     assert config.parse_bool("true", default=False) is True
     assert config.parse_bool("1", default=False) is True

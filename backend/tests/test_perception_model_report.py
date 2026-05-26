@@ -98,7 +98,7 @@ def test_perception_model_report_requires_model_path_or_raw_output(tmp_path: Pat
         )
 
 
-def test_onnx_runtime_dependency_is_optional(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_onnx_runtime_dependency_error_mentions_backend_sync(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     original_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
@@ -108,7 +108,7 @@ def test_onnx_runtime_dependency_is_optional(monkeypatch: pytest.MonkeyPatch, tm
 
     monkeypatch.setattr(builtins, "__import__", guarded_import)
 
-    with pytest.raises(RuntimeError, match="onnxruntime is not installed"):
+    with pytest.raises(RuntimeError, match="uv sync"):
         run_onnx_model(
             model_path=tmp_path / "missing.onnx",
             tensor=np.zeros((1, 3, 8, 8), dtype=np.float32),

@@ -19,6 +19,7 @@ def pytest_configure() -> None:
 def deterministic_test_environment(monkeypatch) -> Iterator[None]:
     monkeypatch.setenv("IMAGE_FIGMA_LOAD_LOCAL_ENV", "false")
     monkeypatch.setenv("OCR_PROVIDER", "fake")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "false")
     monkeypatch.delenv("BAIDU_PADDLE_OCR_TOKEN", raising=False)
     monkeypatch.delenv("BAIDU_PADDLE_OCR_MODEL", raising=False)
     yield

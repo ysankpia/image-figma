@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 _LOCAL_ENV_LOADED = False
+DEFAULT_M29_PERCEPTION_MODEL_PATH = "/Volumes/WorkDrive/Models/model_fp16.onnx"
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,8 @@ class Settings:
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
     upload_preview_profile: str = "production"
-    m29_perception_model_enabled: bool = False
-    m29_perception_model_path: str | None = None
+    m29_perception_model_enabled: bool = True
+    m29_perception_model_path: str | None = DEFAULT_M29_PERCEPTION_MODEL_PATH
 
 
 def get_settings() -> Settings:
@@ -51,8 +52,10 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         upload_preview_profile=parse_upload_preview_profile(os.getenv("UPLOAD_PREVIEW_PROFILE", "production")),
-        m29_perception_model_enabled=parse_bool(os.getenv("M29_PERCEPTION_MODEL_ENABLED"), default=False),
-        m29_perception_model_path=normalized_optional_string(os.getenv("M29_PERCEPTION_MODEL_PATH")),
+        m29_perception_model_enabled=parse_bool(os.getenv("M29_PERCEPTION_MODEL_ENABLED"), default=True),
+        m29_perception_model_path=normalized_optional_string(
+            os.getenv("M29_PERCEPTION_MODEL_PATH", DEFAULT_M29_PERCEPTION_MODEL_PATH)
+        ),
     )
 
 

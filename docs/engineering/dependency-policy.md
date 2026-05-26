@@ -41,6 +41,7 @@
 - `numpy`：后端 image math execution layer 的数组、mask、距离图、纹理和 alpha 计算。
 - `scikit-image`：后端 image math execution layer 的连通域和形态学执行依赖。
 - `orjson`：通过 `backend/app/json_tools.py` 封装的大型 JSON 序列化执行依赖。
+- `onnxruntime`：默认 M29 model-first perception report 的本地 ONNX 推理 runtime；只产出 proposal evidence，不能直接创建 DSL、source ownership、replay 或 cleanup。
 - `pytest`、`httpx`：后端 API 测试。
 - `rich`：后端 dev/script-only 输出格式化依赖，不进入 `backend/app/` runtime。
 
@@ -75,16 +76,15 @@ M8 当前只有可选 OpenAI provider：
 
 M10 OCR provider 默认仍是 `fake`，可选 `baidu_ppocrv5` 通过 HTTP 调用百度 AI Studio PP-OCRv5 异步 API。
 
-当前不引入本地 OCR / proposal 重依赖：
+当前不引入本地 OCR 重依赖：
 
 - 不引入 `paddleocr`。
 - 不引入 `paddlepaddle`。
 - 不引入 `rapidocr`。
-- 不引入 `onnxruntime`。
 
-M39/ONNX proposer 已从当前 backend runtime 删除。不要为了恢复历史 downstream experiment 把 `onnxruntime`、PyTorch、SAM、OpenCV 或本地 OCR 重依赖加回主依赖。若未来重新评估模型 proposer，必须先写新计划，证明它只提供 proposal evidence，不能绕过 M29 source truth。
+M29 model-first perception 当前使用 `onnxruntime` 运行 `/Volumes/WorkDrive/Models/model_fp16.onnx`，只提供 proposal evidence。它不是已删除的 M39/ONNX proposer，不能绕过 M29 source truth、M29.2 ownership、M29.5 replay plan 或 materializer 权限边界。
 
-`numpy` 和 `Pillow` 进入主依赖只服务 ADR 0074 的 image math execution layer，不得作为 M39/ONNX proposer、模型 inference、source ownership 或 materialization 决策依赖。
+`numpy` 和 `Pillow` 进入主依赖主要服务 ADR 0074 的 image math execution layer，也被 model-first perception preprocessing/decoder 复用。业务决策仍必须落在 M29 source ownership、replay plan、cleanup authorization 和 materializer 合同内。
 
 M26 perception benchmark 的 OpenCV/SAM2/UIED 依赖是可选实验依赖，不进入主 dependencies：
 

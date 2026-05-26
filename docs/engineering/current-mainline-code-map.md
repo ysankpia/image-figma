@@ -8,10 +8,10 @@
 Plugin upload
 -> backend/app/upload_preview/
 -> OCR
--> optional M29 perception model report (opt-in)
+-> M29 perception model report
 -> raw M29 primitive graph
 -> M29.2 ownership
--> optional M29 perception source compiler (opt-in M29.2 enhancement)
+-> M29 perception source compiler
 -> M29.3 relation
 -> M29.4 weak cluster
 -> M29.5 replay plan
@@ -27,7 +27,7 @@ Plugin upload
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> M29 bridge fate trace report
--> optional M29 perception fate trace report (opt-in)
+-> M29 perception fate trace report
 -> M29 design token report
 -> M29 B-stage quality report
 -> DSL v0.1
@@ -57,9 +57,9 @@ backend/app/routes/assets.py
 validate upload
 save source PNG
 run OCR
-optionally run M29 perception model report
+run M29 perception model report by default
 run M29/M29.2/M29.3/M29.4/M29.5
-optionally compile perception candidates into enhanced M29.2 source ownership
+compile perception candidates into enhanced M29.2 source ownership by default
 run M29 ownership conservation report
 run M29.6 media internal decomposition report
 run M29 transparent asset report
@@ -72,7 +72,7 @@ run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
 run M29 bridge fate trace report
-optionally run M29 perception fate trace report
+run M29 perception fate trace report by default
 run M29 design token report
 run M29 B-stage quality report
 publish M29 assets
@@ -97,12 +97,12 @@ OCR document to M29 text-box conversion is owned by `backend/app/ocr.py` via `te
 
 ## Source Truth Layer
 
-### Opt-In M29 Model-First Perception
+### Default M29 Model-First Perception
 
-`backend/app/perception_model_report/` is an opt-in report-only perception proposal layer. It runs only when:
+`backend/app/perception_model_report/` is the default report-only perception proposal layer. It runs when:
 
 ```text
-M29_PERCEPTION_MODEL_ENABLED=true
+M29_PERCEPTION_MODEL_ENABLED=true  # default
 M29_PERCEPTION_MODEL_PATH=<local ONNX model path>
 ```
 
@@ -112,9 +112,9 @@ It consumes the source PNG and emits normalized model candidates:
 storage/upload_previews/{taskId}/m29_perception_model/perception_model_report.json
 ```
 
-It does not create DSL nodes, assets, source ownership, replay authorization, or cleanup authorization. `onnxruntime` is not a default backend dependency; real HTTP batch validation supplies it with `uv --with onnxruntime`.
+It does not create DSL nodes, assets, source ownership, replay authorization, or cleanup authorization. `onnxruntime` is a backend dependency because the model-first path is now the normal local runtime. Compatibility isolation can set `M29_PERCEPTION_MODEL_ENABLED=false`.
 
-`backend/app/perception_source_compiler/` is the M29.2 ownership compiler for opt-in model-first candidates. It consumes:
+`backend/app/perception_source_compiler/` is the M29.2 ownership compiler for model-first candidates. It consumes:
 
 ```text
 OCR document
@@ -141,7 +141,7 @@ small indicator shape / shape_geometry / shape_replay
 
 The compiler is upstream of final M29.3/M29.4/M29.5. It does not create DSL nodes, does not authorize cleanup directly, and does not let materializer consume raw model output. M29.5 remains the only visible replay and cleanup authority.
 
-`backend/app/m29_perception_fate_trace/` is an opt-in read-only diagnostic surface after materialization. It joins:
+`backend/app/m29_perception_fate_trace/` is a read-only diagnostic surface after materialization. It joins:
 
 ```text
 perception candidate

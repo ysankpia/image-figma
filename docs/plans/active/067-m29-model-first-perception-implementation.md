@@ -403,7 +403,7 @@ summary: candidateCount=13, reportOnly=true, sourceOwnershipChanged=false, mater
 
 ### Stage 2: Upload Pipeline Report-Only Integration
 
-Add an opt-in pipeline stage:
+Add a report-only pipeline stage, initially guarded by env and now enabled by default:
 
 ```text
 perception_model_report
@@ -416,7 +416,7 @@ M29_PERCEPTION_MODEL_ENABLED=true
 M29_PERCEPTION_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
 ```
 
-Default must remain off until dependency and batch evidence are stable.
+This was initially kept off while dependency and batch evidence stabilized; Stage 15 makes it default-on.
 
 Acceptance:
 
@@ -429,8 +429,8 @@ Implementation status:
 
 ```text
 M29_PERCEPTION_MODEL_ENABLED and M29_PERCEPTION_MODEL_PATH added to backend settings and env docs.
-upload-preview can emit m29_perception_model/perception_model_report.json when explicitly enabled.
-default production behavior remains unchanged and does not create m29_perception_model artifacts.
+upload-preview can emit m29_perception_model/perception_model_report.json.
+historical note: Stage 2 initially kept default production behavior unchanged; Stage 15 later changes the default to model-first.
 ```
 
 Stage 2 smoke:
@@ -525,9 +525,9 @@ git diff --check
 result: passed
 ```
 
-### Stage 4: Opt-In Upload Preview Source Compiler Integration
+### Stage 4: Upload Preview Source Compiler Integration
 
-Change upload-preview ordering under the opt-in flag so model proposals enter source ownership before relation/replay planning:
+Change upload-preview ordering so model proposals can enter source ownership before relation/replay planning:
 
 ```text
 perception_model_report
@@ -543,15 +543,13 @@ Implementation status:
 upload-preview now stores m29_perception_source_compiler artifacts when M29_PERCEPTION_MODEL_ENABLED=true.
 The compiler receives OCR, perception_model_report, source PNG pixels, and the current M29.2 document.
 The enhanced M29.2 document feeds the subsequent M29.3/M29.4/M29.5 chain.
-Default production behavior remains unchanged because M29_PERCEPTION_MODEL_ENABLED=false by default.
+historical note: Stage 4 initially kept production unchanged; Stage 15 later changes the default to model-first.
 ```
 
 Dependency status:
 
 ```text
-onnxruntime is still not a project dependency.
-Runtime model execution currently requires uv --with onnxruntime or an environment that already has onnxruntime.
-Do not add onnxruntime to backend dependencies until dependency size/runtime impact is approved.
+historical note: onnxruntime was not a project dependency in Stage 4; Stage 15 adds it because model-first is now the default local runtime.
 ```
 
 Acceptance:
@@ -713,14 +711,13 @@ Direct validation still uses OCR_PROVIDER=fake because real OCR credentials are 
 
 ### Stage 7: Real Sample Batch And Figma-Facing Inspection
 
-Enhance the HTTP batch validation script so it can run the opt-in model-first path without making `onnxruntime` a project dependency.
+Enhance the HTTP batch validation script so it can run the model-first path and record perception evidence.
 
 Script requirements:
 
 ```text
---enable-perception-model
 --perception-model-path /Volumes/WorkDrive/Models/model_fp16.onnx
---uv-with onnxruntime
+# --disable-perception-model is available only for compatibility isolation
 ```
 
 The ledger must record perception/compiler/replay/materializer metrics, not just task success:
@@ -747,9 +744,7 @@ uv run python scripts/run_upload_preview_batch_validation.py \
   --max-files 10 \
   --poll-timeout 300 \
   --startup-timeout 60 \
-  --enable-perception-model \
-  --perception-model-path /Volumes/WorkDrive/Models/model_fp16.onnx \
-  --uv-with onnxruntime
+  --perception-model-path /Volumes/WorkDrive/Models/model_fp16.onnx
 ```
 
 Run the hard regression image by copying it into a temporary one-image input directory and using the same command without `--max-files`.
@@ -786,10 +781,9 @@ Acceptance:
 Implementation status:
 
 ```text
-backend/scripts/run_upload_preview_batch_validation.py now supports opt-in model-first runtime with --enable-perception-model, --perception-model-path, and repeatable/comma-separated --uv-with packages.
+backend/scripts/run_upload_preview_batch_validation.py supports model-first runtime by default with --perception-model-path and a --disable-perception-model compatibility switch.
 Ledger schemaVersion is 0.3 and records runtimeOptions plus perception/compiler/replay/materializer counters.
-Perception artifacts are required only when --enable-perception-model is set, so default batch validation remains compatible with non-model runs.
-No backend dependency was added; onnxruntime is still supplied only by uv --with during model-first validation.
+Perception artifacts are required by default model-first validation. Compatibility isolation can disable them with --disable-perception-model. Stage 15 later adds onnxruntime as a backend dependency.
 ```
 
 Stage 7 validation:
@@ -1391,7 +1385,7 @@ backend/app/upload_preview/pipeline.py still runs the M29.6 compatibility chain:
   -> final promoted M29.3/M29.4/M29.5 reports
   -> bridge fate trace
 
-backend/app/upload_preview/pipeline.py also runs the opt-in model-first chain:
+backend/app/upload_preview/pipeline.py also runs the model-first chain:
   perception model report
   -> perception source compiler
   -> final M29.3/M29.4/M29.5
@@ -1401,9 +1395,9 @@ backend/app/upload_preview/pipeline.py also runs the opt-in model-first chain:
 Inventory evidence:
 
 ```text
-backend/app/upload_preview/stages.py imports wrappers for both the compatibility M29.6 chain and opt-in perception chain.
+backend/app/upload_preview/stages.py imports wrappers for both the compatibility M29.6 chain and model-first perception chain.
 backend/tests/test_upload_preview_pipeline.py still asserts default M29.6 artifacts exist.
-backend/tests/test_upload_preview_pipeline.py asserts perception artifacts are absent by default and present only when explicitly enabled.
+historical note: Stage 13 tests still asserted opt-in behavior; Stage 15 replaces this with default-on and explicit-disable tests.
 ```
 
 Boundary update:
@@ -1419,7 +1413,7 @@ Acceptance:
 
 - No runtime path is deleted in this stage.
 - Default upload behavior remains compatible with existing M29.6 artifacts.
-- Model-first perception is documented as opt-in and report/source-compiler bounded.
+- Model-first perception is documented as default-on and report/source-compiler bounded after Stage 15.
 - `internal_source_promotion` is documented as the compatibility bridge for the old M29.6 evidence chain, not the model-first bridge.
 - Legacy ONNX proposer remains forbidden and is not confused with the current opt-in perception model report.
 
@@ -1541,13 +1535,48 @@ It does not solve missing model proposals such as a model that never emits an in
 The next repair should inspect remaining high-value perception fate blockers before widening compiler gates.
 ```
 
+### Stage 15: Default Model-First Runtime
+
+Problem:
+
+```text
+The model-first chain existed, but normal backend starts still used the old rule-first path unless the caller remembered M29_PERCEPTION_MODEL_ENABLED=true plus uv --with onnxruntime.
+That made live manual upload tests misleading and kept pushing repairs back toward hand-written visual recognition.
+```
+
+Change:
+
+```text
+M29_PERCEPTION_MODEL_ENABLED defaults to true.
+M29_PERCEPTION_MODEL_PATH defaults to /Volumes/WorkDrive/Models/model_fp16.onnx.
+onnxruntime is now a backend dependency instead of a temporary uv --with package.
+batch validation defaults to model-first and provides --disable-perception-model only for compatibility isolation.
+unit tests explicitly disable the model unless the test is asserting default model-first behavior with a fake extractor.
+```
+
+Boundary:
+
+```text
+The model report is still proposal evidence only.
+The compiler is still the only bridge into M29.2 ownership.
+M29.5 is still the only visible replay and cleanup authority.
+The legacy M39/ONNX proposer remains deleted and forbidden.
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_config_env.py tests/test_upload_preview_pipeline.py tests/test_upload_preview_batch_validation_script.py tests/test_perception_model_report.py -q
+```
+
 ## Validation Commands
 
 Probe validation:
 
 ```bash
 cd backend
-uv run --with onnxruntime --with pillow --with numpy python scripts/probe_onnx_model.py \
+uv run python scripts/probe_onnx_model.py \
   --model /Volumes/WorkDrive/Models/model_fp16.onnx \
   --input /Users/luhui/Downloads/m29 \
   --output-dir tmp/model_probe_m29 \
@@ -1589,8 +1618,8 @@ git status --short --branch
 ## Stage-Gated Execution Rules
 
 - Each stage gets a separate commit.
-- Each commit must state whether it is report-only, runtime opt-in, or runtime mainline.
-- Do not enable model-first runtime by default until report-only and compiler tests pass.
+- Each commit must state whether it is report-only, compatibility isolation, or runtime mainline.
+- Model-first runtime is now the default; use `M29_PERCEPTION_MODEL_ENABLED=false` only to isolate compatibility regressions.
 - Do not treat single-image success as final acceptance.
 - Do not hide regressions by lowering thresholds for one sample.
 - When a stage fails, inspect the relevant artifact first: perception report, compiler report, M29.5 replay plan, materialization report, bridge/model fate trace.
@@ -1601,7 +1630,7 @@ git status --short --branch
 - The ONNX model is single-class. It cannot tell button/icon/text/card roles by itself.
 - OCR still decides text content; model boxes alone cannot produce editable text.
 - Source-crop icon replay may be visually useful but less clean than transparent alpha assets.
-- Adding `onnxruntime` as a backend dependency may affect deploy size/startup; keep it opt-in until proven.
+- `onnxruntime` increases backend dependency size, but is accepted for the default local model-first runtime.
 - Model candidates may over-detect text/link blocks; compiler must prefer safe source ownership over node explosion.
 
 ## Notes

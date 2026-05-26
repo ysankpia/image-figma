@@ -80,8 +80,8 @@ def run_onnx_model(*, model_path: Path, tensor: Any, provider: str) -> tuple[Any
         import onnxruntime as ort
     except ImportError as error:
         raise RuntimeError(
-            "onnxruntime is not installed. Run with `uv run --with onnxruntime ...` "
-            "or add the dependency only when model-first runtime integration is approved."
+            "onnxruntime is not installed. Run `uv sync` in backend before starting "
+            "the default M29 model-first perception runtime."
         ) from error
     if not model_path.is_file():
         raise FileNotFoundError(f"perception model file does not exist: {model_path}")

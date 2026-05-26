@@ -15,6 +15,7 @@ from typing import Any, TextIO
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_DIR = Path("/Users/luhui/Downloads/m29")
+DEFAULT_PERCEPTION_MODEL_PATH = Path("/Volumes/WorkDrive/Models/model_fp16.onnx")
 CANDIDATE_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_UPLOAD_SUFFIXES = {".png"}
 CONTENT_TYPES = {
@@ -40,7 +41,7 @@ def main() -> int:
     log_path = output_dir / "backend.log"
     if args.enable_perception_model:
         if not args.perception_model_path.strip():
-            raise SystemExit("--perception-model-path is required when --enable-perception-model is set")
+            raise SystemExit("--perception-model-path is required when perception model validation is enabled")
         perception_model_path = Path(args.perception_model_path).expanduser().resolve()
         if not perception_model_path.is_file():
             raise SystemExit(f"Perception model file does not exist: {perception_model_path}")
@@ -123,8 +124,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--poll-timeout", type=float, default=180.0)
     parser.add_argument("--recursive", action="store_true", help="Discover candidate images recursively under input-dir.")
     parser.add_argument("--max-files", type=int, default=0, help="Limit discovered candidate images after sorting. 0 means no limit.")
-    parser.add_argument("--enable-perception-model", action="store_true", help="Enable the opt-in M29 perception model upload-preview path.")
-    parser.add_argument("--perception-model-path", default="", help="Local ONNX model path used when --enable-perception-model is set.")
+    parser.add_argument(
+        "--enable-perception-model",
+        dest="enable_perception_model",
+        action="store_true",
+        default=True,
+        help="Enable the M29 model-first perception upload-preview path. This is the default.",
+    )
+    parser.add_argument(
+        "--disable-perception-model",
+        dest="enable_perception_model",
+        action="store_false",
+        help="Disable the M29 model-first perception path for compatibility isolation.",
+    )
+    parser.add_argument(
+        "--perception-model-path",
+        default=str(DEFAULT_PERCEPTION_MODEL_PATH),
+        help="Local ONNX model path used when model-first perception is enabled.",
+    )
     parser.add_argument(
         "--uv-with",
         action="append",

@@ -6,7 +6,7 @@
 Figma plugin
 -> /api/upload-preview
 -> OCR
--> optional M29 perception model report / source compiler
+-> M29 perception model report / source compiler
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
 -> M29 ownership conservation / M29.6 media internal decomposition / M29 transparent asset report / B-stage reports
 -> M29 plan-driven materializer
@@ -169,9 +169,9 @@ Required evidence coverage:
 - fallback erasure is executed only with M29.5 fallback cleanup target.
 - copied image asset text cleanup is executed only with M29.5 copied image asset cleanup target.
 - copied image asset promoted-internal cleanup is executed only with M29.5 copied image asset cleanup target and transparent asset alpha mask.
-- opt-in M29 perception model report is report-only and absent by default.
-- opt-in perception source compiler may enhance M29.2 ownership only before final M29.3/M29.4/M29.5, never by creating DSL nodes or cleanup authorization.
-- opt-in perception fate trace is diagnostic-only and is not consumed by materializer, Renderer, or plugin.
+- M29 perception model report is enabled by default, but remains report-only.
+- perception source compiler may enhance M29.2 ownership only before final M29.3/M29.4/M29.5, never by creating DSL nodes or cleanup authorization.
+- perception fate trace is diagnostic-only and is not consumed by materializer, Renderer, or plugin.
 - complex model-proposed controls that are unsafe as flat shapes may replay as selectable foreground image crops, while ordinary overlapping media duplicates remain suppressible.
 
 ## Static Pruning Checks
