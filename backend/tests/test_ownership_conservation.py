@@ -237,7 +237,7 @@ def test_control_row_source_crop_promoted_icon_overlap_is_explainable_without_co
     assert not [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
 
 
-def test_control_row_source_crop_promoted_icon_cannot_claim_copied_cleanup_without_transparent_asset(tmp_path: Path) -> None:
+def test_control_row_source_crop_promoted_icon_can_claim_bbox_copied_cleanup(tmp_path: Path) -> None:
     source_evidence = {
         "promotionSource": "m29_6_internal_icon_candidate",
         "mediaSourceObjectId": "media",
@@ -273,9 +273,9 @@ def test_control_row_source_crop_promoted_icon_cannot_claim_copied_cleanup_witho
         ],
     )
 
-    conflicts = [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
-    assert conflicts
-    assert report["summary"]["errorCount"] == 1
+    assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 1}
+    assert not [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+    assert report["summary"]["errorCount"] == 0
 
 
 def test_promoted_internal_icon_low_label_overlap_is_explainable_when_both_cleanup_same_media(tmp_path: Path) -> None:
@@ -615,7 +615,7 @@ def test_foreground_claim_residual_cleanup_target_is_valid_when_contained_by_med
     assert report["summary"]["errorCount"] == 0
 
 
-def test_perception_source_crop_icon_cannot_claim_copied_cleanup_without_transparent_asset(tmp_path: Path) -> None:
+def test_perception_source_crop_icon_can_claim_bbox_copied_cleanup(tmp_path: Path) -> None:
     source_evidence = {
         "promotionSource": "perception_model_foreground_claim",
         "mediaSourceObjectId": "media",
@@ -656,8 +656,8 @@ def test_perception_source_crop_icon_cannot_claim_copied_cleanup_without_transpa
     )
 
     assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 1}
-    assert [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
-    assert report["summary"]["errorCount"] == 1
+    assert not [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+    assert report["summary"]["errorCount"] == 0
 
 
 def test_shape_behind_text_overlap_is_explainable_background_foreground_overlap(tmp_path: Path) -> None:

@@ -190,7 +190,7 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
         return False
     if evidence.get("mediaSourceObjectId") != target_id:
         return False
-    if not evidence.get("transparentAssetPath"):
+    if not evidence.get("transparentAssetPath") and evidence.get("controlRowSourceCropEligible") is not True:
         return False
     edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
     return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)

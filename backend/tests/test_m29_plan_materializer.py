@@ -257,6 +257,67 @@ def test_promoted_internal_icon_cleans_parent_media_only_with_m295_target(tmp_pa
     assert result_without_cleanup.report["summary"]["copiedImageAssetInternalErasedCount"] == 0
 
 
+def test_source_crop_icon_cleans_parent_media_with_m295_bbox_target(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(120, 90, fill=(240, 240, 240), marks=[([10, 10, 80, 50], (80, 100, 140)), ([30, 28, 20, 16], (0, 0, 0))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object("media", [10, 10, 80, 50], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object(
+                "source_crop_icon",
+                [30, 28, 20, 16],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                source_evidence={
+                    "promotionSource": "perception_model_foreground_claim",
+                    "mediaSourceObjectId": "media",
+                    "controlRowSourceCropEligible": True,
+                    "foregroundClaimId": "model_icon:foreground_claim",
+                    "claimMaskKind": "bbox",
+                },
+            ),
+        ]
+    )
+    authorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 80, 50], "image_replay", "m29_image"),
+            m295_item(
+                "plan_icon",
+                "source_crop_icon",
+                [30, 28, 20, 16],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "foreground_claim_removed_from_residual_media",
+                        "foregroundClaimId": "model_icon:foreground_claim",
+                        "maskKind": "bbox",
+                    },
+                ],
+            ),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 80, 50])]),
+        m292_document=m292,
+        m295_replay_plan=authorized_plan,
+        output_dir=tmp_path / "out_source_crop_icon_cleanup",
+    )
+
+    copied = copied_image_pixels(result.dsl, tmp_path / "out_source_crop_icon_cleanup")
+    assert copied.rows[24][30 * 3 : 30 * 3 + 3] != b"\x00\x00\x00"
+    assert result.report["summary"]["copiedImageAssetInternalErasedCount"] == 1
+
+
 def test_fallback_erasure_requires_m295_fallback_cleanup_target(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(80, 60, fill=(240, 240, 240), marks=[([20, 20, 20, 10], (0, 0, 0))]))
     m292 = m292_document([m292_object("text", [20, 20, 20, 10], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"])])

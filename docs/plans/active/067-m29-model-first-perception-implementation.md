@@ -933,7 +933,80 @@ The next quality owner remains residual cleanup and media-parent assignment:
   source-crop icon cleanup remains blocked without transparent/safe replacement.
 ```
 
-### Stage 9: Legacy Pruning Plan
+### Stage 9: Source-Crop Icon Residual Cleanup
+
+Second Stage 7 repair:
+
+```text
+problem:
+  Source-crop icons were visible/selectable but often left duplicated pixels inside their parent copied media because M29.5 required a transparentAssetPath before authorizing copied-image cleanup.
+
+first-principles owner:
+  M29.5 cleanup authority + ownership conservation contract
+
+reason:
+  A source-crop icon asset is itself a bbox replacement owner.
+  If M29.5 has already accepted the icon as visible replay and the icon is contained by its parent media, bbox cleanup is a valid residual media operation.
+  Materializer must still consume only M29.5 cleanupTargets; it must not infer this cleanup itself.
+
+fix:
+  Allow promoted/perception foreground icon cleanup when sourceEvidence.controlRowSourceCropEligible=true, even without transparentAssetPath.
+  Keep text-overlap, parent-media, alpha-risk, and relation containment checks.
+  Ownership conservation now accepts this bbox replacement cleanup instead of reporting invalid_copied_image_asset_cleanup.
+```
+
+Validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_m29_plan_materializer.py -q
+  result: 70 passed
+
+py_compile:
+  python3 -m py_compile app/m29_replay_plan/cleanup.py app/ownership_conservation/conflicts.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_m29_plan_materializer.py
+  result: passed
+
+first ten HTTP batch after repair:
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_032053/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCopiedImageAssetCleanupTargetCount: 178
+  previous Stage 8 value: 173
+  totalCopiedImageAssetInternalErasedCount: 14
+  previous Stage 8 value: 9
+  totalCompiledSourceObjectCount: 125
+  totalCompiledControlBackgroundCount: 104
+  totalCompiledRasterIconCount: 21
+  totalMaterializedVisibleNodeCount: 1591
+  averageDslVisualGateNormalizedMeanAbsError: 0.013117
+
+hard regression HTTP batch after repair:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_032659/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCopiedImageAssetCleanupTargetCount: 18
+  previous Stage 8 value: 17
+  totalCopiedImageAssetInternalErasedCount: 1
+  previous Stage 8 value: 0
+  totalMaterializedVisibleNodeCount: 35
+  averageDslVisualGateNormalizedMeanAbsError: 0.007875
+```
+
+Conclusion:
+
+```text
+Source-crop icon residual cleanup is now authorized through M29.5 and audited by ownership conservation.
+This improves copied-media residual cleanup without adding materializer, Renderer, plugin, sample, text, brand, or coordinate special cases.
+The remaining first-ten image (8) copiedImageAssetCleanupTargetCount=0 is not a materializer failure: its compiled controls have no parent media region to erase, so fallback cleanup is the correct current target.
+```
+
+### Stage 10: Legacy Pruning Plan
 
 Only after Stage 7 shows stable improvement:
 

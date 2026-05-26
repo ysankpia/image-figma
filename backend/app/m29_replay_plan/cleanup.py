@@ -223,7 +223,7 @@ def promoted_internal_icon_cleanup_risk_reason(item: dict[str, Any], media: dict
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
     if evidence.get("mediaSourceObjectId") != media["id"]:
         return "cleanup_rejected_parent_media_mismatch"
-    if not evidence.get("transparentAssetPath"):
+    if not evidence.get("transparentAssetPath") and evidence.get("controlRowSourceCropEligible") is not True:
         return "cleanup_rejected_missing_transparent_replacement"
     text_overlap = safe_float(evidence.get("textOverlapRatio"))
     if text_overlap > MAX_INTERNAL_ICON_CLEANUP_TEXT_OVERLAP:

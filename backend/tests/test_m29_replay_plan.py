@@ -488,7 +488,7 @@ def test_m295_keeps_promoted_internal_icon_replay_when_cleanup_risk_is_high(tmp_
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
 
 
-def test_m295_keeps_control_row_source_crop_promoted_icon_without_copied_cleanup(tmp_path: Path) -> None:
+def test_m295_allows_control_row_source_crop_promoted_icon_bbox_cleanup(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_control_row_source_crop_icon",
         m292_document=m292_document(
@@ -516,9 +516,13 @@ def test_m295_keeps_control_row_source_crop_promoted_icon_without_copied_cleanup
     assert icon_item["finalReplayAction"] == "icon_replay"
     assert icon_item["targetRole"] == "m29_symbol"
     assert icon_item["sourceEvidence"]["controlRowSourceCropEligible"] is True
-    assert not any(target.get("target") == "copied_image_asset" for target in icon_item["cleanupTargets"])
-    assert "cleanup_rejected_missing_transparent_replacement" in icon_item["risks"]
-    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "promoted_internal_asset_contained_by_media",
+    } in icon_item["cleanupTargets"]
+    assert "cleanup_rejected_missing_transparent_replacement" not in icon_item["risks"]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
 
 
 def test_m295_keeps_higher_evidence_promoted_internal_icon_for_near_equal_candidates(tmp_path: Path) -> None:
