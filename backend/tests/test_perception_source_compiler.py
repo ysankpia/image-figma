@@ -98,6 +98,95 @@ def test_compact_non_text_candidate_compiles_to_source_crop_icon(tmp_path: Path)
     assert next(item for item in replay["planItems"] if item["sourceObjectId"] == icon["id"])["finalReplayAction"] == "icon_replay"
 
 
+def test_geometry_control_candidate_is_not_suppressed_by_parent_media_duplicate(tmp_path: Path) -> None:
+    source = make_png(
+        260,
+        600,
+        fill=(20, 24, 68),
+        marks=[
+            ([30, 280, 200, 42], (45, 48, 102)),
+            ([52, 292, 28, 18], (255, 255, 255)),
+            ([96, 294, 78, 14], (255, 255, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_media_button",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([]),
+        perception_model_report=perception_report([candidate("model_full_button", [30, 280, 230, 322], 0.44)]),
+        m292_document=m292_document([m292_object("media_button", [30, 280, 200, 42], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    assert shape["bbox"] == [30, 280, 200, 42]
+    assert shape["sourceEvidence"]["mediaSourceObjectId"] == "media_button"
+    assert shape["sourceEvidence"]["internalRole"] == "internal_control_background"
+    assert shape["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_control_geometry"]
+
+
+def test_geometry_control_candidate_compiles_without_complete_ocr_containment(tmp_path: Path) -> None:
+    source = make_png(
+        320,
+        700,
+        fill=(248, 248, 248),
+        marks=[
+            ([48, 296, 224, 48], (33, 88, 190)),
+            ([78, 312, 24, 16], (255, 255, 255)),
+            ([124, 312, 98, 16], (255, 255, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_geometry_control",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_outside", "Continue", [124, 351, 98, 16])]),
+        perception_model_report=perception_report([candidate("model_button_bg", [48, 296, 272, 344], 0.39)]),
+        m292_document=m292_document([m292_object("media", [0, 0, 320, 700], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    assert shape["bbox"] == [48, 296, 224, 48]
+    assert shape["sourceEvidence"]["ocrBoxIds"] == []
+    assert shape["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_control_geometry"]
+    assert shape["sourceEvidence"]["shapeFillOverride"] == "#2158BE"
+
+
+def test_low_score_icon_candidate_compiles_only_inside_compiled_control(tmp_path: Path) -> None:
+    source = make_png(
+        320,
+        700,
+        fill=(248, 248, 248),
+        marks=[
+            ([48, 296, 224, 48], (33, 88, 190)),
+            ([78, 312, 24, 16], (255, 255, 255)),
+            ([124, 312, 98, 16], (255, 255, 255)),
+            ([280, 40, 18, 18], (20, 20, 20)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_control_child_icon",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([]),
+        perception_model_report=perception_report(
+            [
+                candidate("model_button_bg", [48, 296, 272, 344], 0.42),
+                candidate("model_button_icon", [76, 310, 104, 330], 0.11),
+                candidate("model_loose_low_score_fragment", [280, 40, 298, 58], 0.11),
+            ]
+        ),
+        m292_document=m292_document([m292_object("media", [0, 0, 320, 700], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    icon = only_compiled(result.report, "raster_icon")
+    assert icon["sourceEvidence"]["parentControlSourceObjectId"] == shape["id"]
+    assert icon["sourceEvidence"]["iconInferenceReasons"] == ["perception_candidate_inside_compiled_control"]
+    rejected = {item["candidateId"]: item["reason"] for item in result.report["rejectedCandidates"]}
+    assert rejected["model_loose_low_score_fragment"] == "insufficient_ownership_evidence"
+
+
 def test_tiny_stable_circle_candidate_compiles_to_shape_not_icon(tmp_path: Path) -> None:
     source = make_png(120, 90, fill=(248, 248, 248), marks=[([40, 30, 10, 10], (45, 115, 235))])
     result = extract_perception_source_compiler_report(

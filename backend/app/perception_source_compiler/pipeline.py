@@ -141,10 +141,6 @@ def classify_candidate(
     area_ratio = candidate["areaRatio"]
     if area_ratio >= options.max_report_only_area_ratio:
         return rejected(candidate, "large_perception_candidate_preserved_as_media_residual", bbox=bbox)
-    if overlaps_existing_replay_owner(bbox, [*base_objects, *compiled_objects], options):
-        return rejected(candidate, "duplicate_or_near_equal_existing_source_object", bbox=bbox)
-    if near_equal_media_region(bbox, base_objects, options):
-        return rejected(candidate, "near_equal_parent_media_candidate", bbox=bbox)
 
     contained_text = contained_ocr_boxes(bbox, ocr_boxes, options)
     text_area_ratio = sum(overlap_area_for_box(bbox, box) for box in contained_text) / max(1, bbox_area(bbox))
@@ -152,6 +148,9 @@ def classify_candidate(
     media_source_id = str(media_parent.get("id") or "") if media_parent else ""
     text_overlap = max((overlap_ratio(bbox, getattr(box, "bbox", [])) for box in ocr_boxes), default=0.0)
     metrics = measure_region(pixels, bbox)
+
+    if overlaps_existing_replay_owner(bbox, [*base_objects, *compiled_objects], options):
+        return rejected(candidate, "duplicate_or_near_equal_existing_source_object", bbox=bbox)
 
     if contained_text and score >= options.min_control_score and area_ratio <= options.max_control_area_ratio:
         if text_area_ratio < options.min_control_text_area_ratio or text_area_ratio > options.max_control_text_area_ratio:
@@ -166,6 +165,28 @@ def classify_candidate(
                 pixels=pixels,
                 media_source_id=media_source_id,
                 text_area_ratio=text_area_ratio,
+                inference_reasons=["perception_candidate_contains_ocr_text"],
+            ),
+        }
+
+    if score >= options.min_geometry_control_score and geometry_supports_control_background(
+        bbox=bbox,
+        metrics=metrics,
+        image_width=image_width,
+        image_height=image_height,
+        options=options,
+    ):
+        return {
+            "mode": "compile_source_object",
+            "sourceObject": build_control_background_object(
+                index=len([item for item in compiled_objects if item.get("visualKind") == "control_background"]) + 1,
+                candidate=candidate,
+                bbox=bbox,
+                ocr_boxes=contained_text,
+                pixels=pixels,
+                media_source_id=media_source_id,
+                text_area_ratio=text_area_ratio,
+                inference_reasons=["perception_candidate_control_geometry"],
             ),
         }
 
@@ -190,8 +211,34 @@ def classify_candidate(
                 pixels=pixels,
                 media_source_id=media_source_id,
                 text_overlap=text_overlap,
+                inference_reasons=["perception_candidate_compact_foreground"],
+                parent_control_id=None,
             ),
         }
+
+    parent_control = parent_control_for_candidate(bbox, compiled_objects, options)
+    if (
+        parent_control is not None
+        and score >= options.min_control_child_icon_score
+        and area_ratio <= options.max_icon_area_ratio
+        and text_overlap <= options.max_icon_text_overlap
+    ):
+        return {
+            "mode": "compile_source_object",
+            "sourceObject": build_raster_icon_object(
+                index=len([item for item in compiled_objects if item.get("visualKind") == "raster_icon"]) + 1,
+                candidate=candidate,
+                bbox=bbox,
+                pixels=pixels,
+                media_source_id=media_source_id,
+                text_overlap=text_overlap,
+                inference_reasons=["perception_candidate_inside_compiled_control"],
+                parent_control_id=str(parent_control.get("id") or ""),
+            ),
+        }
+
+    if near_equal_media_region(bbox, base_objects, options):
+        return rejected(candidate, "near_equal_parent_media_candidate", bbox=bbox)
 
     return rejected(candidate, "insufficient_ownership_evidence", bbox=bbox)
 
@@ -205,6 +252,7 @@ def build_control_background_object(
     pixels: Any,
     media_source_id: str,
     text_area_ratio: float,
+    inference_reasons: list[str],
 ) -> dict[str, Any]:
     fill = source_fill_excluding_text(pixels, bbox, ocr_boxes)
     radius = inferred_radius(bbox, role="control")
@@ -215,7 +263,7 @@ def build_control_background_object(
         pixel_owner="shape_geometry",
         replay_decision="shape_replay",
         confidence="high",
-        reasons=["perception_candidate_contains_ocr_text", "compiled_before_m29_replay"],
+        reasons=[*inference_reasons, "compiled_before_m29_replay"],
         risks=["model_single_class_role_inferred_from_geometry_and_text"],
         evidence={
             **common_evidence(candidate, bbox, pixels, media_source_id),
@@ -227,6 +275,7 @@ def build_control_background_object(
             "shapeFillOverride": fill,
             "shapeRadiusOverride": radius,
             "controlTextAreaRatio": round(text_area_ratio, 4),
+            "controlInferenceReasons": inference_reasons,
         },
     )
 
@@ -262,6 +311,8 @@ def build_raster_icon_object(
     pixels: Any,
     media_source_id: str,
     text_overlap: float,
+    inference_reasons: list[str],
+    parent_control_id: str | None,
 ) -> dict[str, Any]:
     return source_object(
         object_id=f"m292_perception_icon_{index:04d}",
@@ -270,7 +321,7 @@ def build_raster_icon_object(
         pixel_owner="raster_icon",
         replay_decision="icon_replay",
         confidence="medium",
-        reasons=["perception_candidate_compact_foreground", "compiled_before_m29_replay"],
+        reasons=[*inference_reasons, "compiled_before_m29_replay"],
         risks=["source_crop_icon_without_transparent_asset"],
         evidence={
             **common_evidence(candidate, bbox, pixels, media_source_id),
@@ -280,6 +331,8 @@ def build_raster_icon_object(
             "internalRole": "internal_icon_candidate",
             "textOverlapRatio": round(text_overlap, 4),
             "controlRowSourceCropEligible": True,
+            "iconInferenceReasons": inference_reasons,
+            **({"parentControlSourceObjectId": parent_control_id} if parent_control_id else {}),
         },
     )
 
@@ -368,6 +421,8 @@ def overlaps_existing_replay_owner(bbox: list[int], objects: list[dict[str, Any]
     for item in objects:
         if item.get("replayDecision") in {"preserve_in_parent_raster", "skip"}:
             continue
+        if item.get("visualKind") == "media_region" and item.get("pixelOwner") == "preserve_raster":
+            continue
         existing_bbox = parse_xywh_bbox(item.get("bbox"))
         if existing_bbox is None:
             continue
@@ -384,6 +439,53 @@ def near_equal_media_region(bbox: list[int], objects: list[dict[str, Any]], opti
         if media_bbox is not None and bbox_iou(bbox, media_bbox) >= options.media_near_equal_iou_threshold:
             return True
     return False
+
+
+def parent_control_for_candidate(bbox: list[int], objects: list[dict[str, Any]], options: PerceptionSourceCompilerOptions) -> dict[str, Any] | None:
+    matches: list[tuple[float, int, dict[str, Any]]] = []
+    for item in objects:
+        if item.get("visualKind") != "control_background" or item.get("pixelOwner") != "shape_geometry":
+            continue
+        control_bbox = parse_xywh_bbox(item.get("bbox"))
+        if control_bbox is None:
+            continue
+        ratio = containment_ratio(bbox, control_bbox)
+        if ratio < options.min_control_child_containment:
+            continue
+        matches.append((ratio, bbox_area(control_bbox), item))
+    if not matches:
+        return None
+    return sorted(matches, key=lambda value: (-value[0], value[1]))[0][2]
+
+
+def geometry_supports_control_background(
+    *,
+    bbox: list[int],
+    metrics: Any,
+    image_width: int,
+    image_height: int,
+    options: PerceptionSourceCompilerOptions,
+) -> bool:
+    area_ratio = bbox_area(bbox) / max(1, image_width * image_height)
+    if area_ratio < options.min_geometry_control_area_ratio or area_ratio > options.max_control_area_ratio:
+        return False
+    aspect = bbox[2] / max(1, bbox[3])
+    if aspect < options.min_control_aspect_ratio or aspect > options.max_control_aspect_ratio:
+        return False
+    if bbox[2] < round(image_width * options.min_control_width_ratio):
+        return False
+    if bbox[3] < round(image_height * options.min_control_height_ratio):
+        return False
+    if bbox[3] > round(image_height * options.max_control_height_ratio):
+        return False
+    fill_ratio = float(getattr(metrics, "fill_ratio", 0.0))
+    texture_score = float(getattr(metrics, "texture_score", 1.0))
+    edge_score = float(getattr(metrics, "edge_score", 1.0))
+    return (
+        fill_ratio >= options.min_geometry_control_fill_ratio
+        and texture_score <= options.max_geometry_control_texture_score
+        and edge_score <= options.max_geometry_control_edge_score
+    )
 
 
 def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:

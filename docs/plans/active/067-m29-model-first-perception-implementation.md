@@ -597,6 +597,53 @@ Acceptance:
 - Rejected candidates carry actionable compiler reasons, not generic mystery failures.
 - M29.5 consumes compiler-created source objects through normal replay planning.
 
+Implementation status:
+
+```text
+perception_source_compiler now treats preserve_raster media as residual-capable parent ownership, not a duplicate that suppresses foreground control claims.
+Generic horizontal control geometry can compile to control_background / shape_replay when score, area, aspect, fill, texture, edge, and image-scale gates pass.
+Low-score compact candidates can compile to raster_icon only when they are strongly contained by an already compiled control background.
+Loose low-score fragments remain report_only.
+```
+
+Stage 5 validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+  result: 74 passed
+
+py_compile:
+  python3 -m py_compile backend/app/perception_source_compiler/*.py backend/tests/test_perception_source_compiler.py
+  result: passed
+
+hard regression direct pipeline:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  output root: backend/tmp/stage5_hard_smoke_storage/upload_previews/stage5_hard_smoke
+  perceptionCandidateCount: 13
+  compiledSourceObjectCount: 8
+  compiledControlBackgroundCount: 4
+  compiledRasterIconCount: 4
+  plannedShapeReplayCount: 7
+  plannedIconReplayCount: 31
+  dslRootChildCount: 35
+
+first ten direct pipeline:
+  summary: backend/tmp/stage5_first10_direct_summary.json
+  failed: 0 / 10
+  Stage 4 totals: compiled=60, controls=1, icons=59
+  Stage 5 totals: compiled=118, controls=28, icons=90
+```
+
+Remaining risk:
+
+```text
+Stage 5 uses OCR_PROVIDER=fake in direct pipeline validation because real OCR credentials are environment-dependent.
+The compiler still needs artifact inspection for the one first-ten image with compiledControlBackgroundCount=0.
+Cleanup quality remains Stage 6; this stage proves source ownership and replay path improvement, not final residual erasure.
+```
+
 ### Stage 6: Asset And Residual Cleanup
 
 Use existing M29.5 cleanup authority for model-proposed foreground objects.
