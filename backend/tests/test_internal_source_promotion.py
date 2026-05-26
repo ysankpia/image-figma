@@ -138,6 +138,73 @@ def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(
     ]
 
 
+def test_internal_source_promotion_promotes_selected_marker_as_shape(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "selected_marker",
+                [24, 72, 36, 6],
+                role="selected_marker_candidate",
+                text_anchor=0.82,
+                relation="below_text",
+            )
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            evidence_contract_item(
+                "contract",
+                "selected_marker",
+                decision="allow_visible_replay",
+                evidence_score=0.80,
+                source_kind="m29_6_internal_shape_candidate",
+            )
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["id"] == "m292_promoted_internal_shape_0001"
+    assert promoted["visualKind"] == "separator"
+    assert promoted["pixelOwner"] == "shape_geometry"
+    assert promoted["replayDecision"] == "shape_replay"
+    assert promoted["sourceEvidence"]["promotionSource"] == "m29_6_internal_shape_candidate"
+    assert promoted["sourceEvidence"]["internalRole"] == "selected_marker_candidate"
+
+
+def test_internal_source_promotion_promotes_table_marker_as_rounded_shape(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "table_marker",
+                [32, 44, 8, 8],
+                role="table_marker_candidate",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                repetition=0.72,
+            )
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            evidence_contract_item(
+                "contract",
+                "table_marker",
+                decision="allow_visible_replay",
+                evidence_score=0.78,
+                source_kind="m29_6_internal_shape_candidate",
+            )
+        ],
+    )
+
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["visualKind"] == "control_background"
+    assert promoted["pixelOwner"] == "shape_geometry"
+    assert promoted["sourceEvidence"]["internalRole"] == "table_marker_candidate"
+    assert promoted["sourceEvidence"]["shapeRadiusOverride"] == 4
+    assert promoted["sourceEvidence"]["shapeFillOverride"] == "#2D73EB"
+
+
 def promotion_report(
     tmp_path: Path,
     *,
@@ -210,6 +277,40 @@ def internal_icon(
     }
 
 
+def internal_shape_candidate(
+    candidate_id: str,
+    bbox: list[int],
+    *,
+    role: str,
+    text_anchor: float,
+    relation: str,
+    repetition: float = 0.0,
+    confidence: str = "high",
+    media_source_object_id: str = "media",
+) -> dict:
+    return {
+        "candidateId": candidate_id,
+        "mediaSourceObjectId": media_source_object_id,
+        "rawNodeId": "raw_shape",
+        "role": role,
+        "bbox": bbox,
+        "candidateDecision": "accepted_report_candidate",
+        "confidence": confidence,
+        "score": 0.84 if confidence == "high" else 0.62,
+        "scoreBreakdown": {
+            "heroGraphicPenalty": 0.1,
+            "textMaskOverlap": 0.0,
+            "textAnchorScore": text_anchor,
+            "repetitionScore": repetition,
+        },
+        "matchedOcrBoxId": "ocr_label" if text_anchor > 0 else None,
+        "anchorRelation": relation,
+        "metrics": {
+            "meanRgb": [45, 115, 235],
+        },
+    }
+
+
 def transparent_item(
     item_id: str,
     source_object_id: str,
@@ -242,11 +343,18 @@ def transparent_item(
     return item
 
 
-def evidence_contract_item(item_id: str, candidate_id: str, *, decision: str, evidence_score: float) -> dict:
+def evidence_contract_item(
+    item_id: str,
+    candidate_id: str,
+    *,
+    decision: str,
+    evidence_score: float,
+    source_kind: str = "m29_6_internal_icon_candidate",
+) -> dict:
     return {
         "contractId": item_id,
         "candidateId": candidate_id,
-        "sourceKind": "m29_6_internal_icon_candidate",
+        "sourceKind": source_kind,
         "decision": {
             "mode": decision,
             "evidenceScore": evidence_score,

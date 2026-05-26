@@ -12,6 +12,13 @@ from .validation import validate_m29_bridge_fate_trace_report
 
 
 VISIBLE_REPLAY_ACTIONS = {"text_replay", "image_replay", "icon_replay", "shape_replay"}
+SHAPE_CANDIDATE_ROLES = {
+    "selected_marker_candidate",
+    "status_dot_candidate",
+    "table_marker_candidate",
+    "internal_shape_candidate",
+    "internal_control_background",
+}
 
 
 def extract_m29_bridge_fate_trace_report(
@@ -98,7 +105,7 @@ def build_trace(
     plan_item = plan_by_source.get(promoted_source_id) if promoted_source_id else None
     replayed_item = replayed_by_source.get(promoted_source_id) if promoted_source_id else None
     skipped_item = skipped_by_source.get(promoted_source_id) if promoted_source_id else None
-    transparent_decision = decision_value(transparent_item, "decision", "missing_transparent_asset_item")
+    transparent_decision = "not_required_for_shape_replay" if shape_candidate(candidate) else decision_value(transparent_item, "decision", "missing_transparent_asset_item")
     contract_decision = nested_decision_mode(contract_item)
     promotion_decision = "promoted" if promoted_item is not None else str((rejected_promotion or {}).get("reason") or "missing_promotion_candidate")
     final_replay_decision = str((plan_item or {}).get("finalReplayAction") or ("missing_final_m29_5_plan_item" if promoted_item is not None else "not_applicable"))
@@ -167,10 +174,11 @@ def first_blocking_stage(
 ) -> tuple[str, str]:
     if candidate.get("candidateDecision") != "accepted_report_candidate":
         return ("m29_media_internal_decomposition", str(candidate.get("candidateDecision") or "internal_candidate_not_accepted"))
-    if transparent_item is None:
-        return ("m29_transparent_assets", "missing_transparent_asset_item")
-    if not visible_replay_eligible(transparent_item):
-        return ("m29_transparent_assets", visible_replay_block_reason(transparent_item))
+    if not shape_candidate(candidate):
+        if transparent_item is None:
+            return ("m29_transparent_assets", "missing_transparent_asset_item")
+        if not visible_replay_eligible(transparent_item):
+            return ("m29_transparent_assets", visible_replay_block_reason(transparent_item))
     if contract_item is None:
         return ("m29_evidence_contract", "missing_evidence_contract")
     decision = contract_item.get("decision") if isinstance(contract_item.get("decision"), dict) else {}
@@ -186,6 +194,10 @@ def first_blocking_stage(
     if replayed_item is not None:
         return ("none", "visible_replay_materialized")
     return ("m29_materialization", str((skipped_item or {}).get("reason") or "missing_materialized_node"))
+
+
+def shape_candidate(candidate: dict[str, Any]) -> bool:
+    return str(candidate.get("role") or "") in SHAPE_CANDIDATE_ROLES
 
 
 def first_reason(item: dict[str, Any], *, fallback: str) -> str:

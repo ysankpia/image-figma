@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .report import build_summary
-from .scoring import build_label_anchored_blocked_contract_item, build_m296_contract_item
+from .scoring import PROMOTABLE_SHAPE_ROLES, build_label_anchored_blocked_contract_item, build_m296_contract_item, build_m296_shape_contract_item
 from .types import M29EvidenceContractResult, REPORT_ONLY_META
 from .validation import validate_m29_evidence_contract_report
 
@@ -73,19 +73,27 @@ def build_contract_items(
     transparent_by_source = {str(item.get("sourceObjectId") or ""): item for item in transparent_items if item.get("sourceObjectId")}
     items: list[dict[str, Any]] = []
     for candidate in internal_candidates:
-        if candidate.get("role") != "internal_icon_candidate":
-            continue
+        role = str(candidate.get("role") or "")
         try:
-            items.append(
-                build_m296_contract_item(
-                    contract_id=f"m29_evidence_contract_{len(items) + 1:04d}",
-                    candidate=candidate,
-                    parent_media=media_lookup.get(str(candidate.get("mediaSourceObjectId") or "")),
-                    transparent_item=transparent_by_source.get(str(candidate.get("candidateId") or "")),
+            if role == "internal_icon_candidate":
+                items.append(
+                    build_m296_contract_item(
+                        contract_id=f"m29_evidence_contract_{len(items) + 1:04d}",
+                        candidate=candidate,
+                        parent_media=media_lookup.get(str(candidate.get("mediaSourceObjectId") or "")),
+                        transparent_item=transparent_by_source.get(str(candidate.get("candidateId") or "")),
+                    )
                 )
-            )
+            elif role in PROMOTABLE_SHAPE_ROLES:
+                items.append(
+                    build_m296_shape_contract_item(
+                        contract_id=f"m29_evidence_contract_{len(items) + 1:04d}",
+                        candidate=candidate,
+                        parent_media=media_lookup.get(str(candidate.get("mediaSourceObjectId") or "")),
+                    )
+                )
         except ValueError as error:
-            warnings.append(f"skipped_invalid_internal_icon_candidate:{candidate.get('candidateId')}:{error}")
+            warnings.append(f"skipped_invalid_internal_candidate:{candidate.get('candidateId')}:{error}")
     for source in source_objects:
         if not is_label_anchored_blocked_icon(source):
             continue

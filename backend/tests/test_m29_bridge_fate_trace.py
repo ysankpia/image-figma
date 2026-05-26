@@ -170,6 +170,59 @@ def test_bridge_fate_trace_reports_analysis_only_transparent_gate_blocker(tmp_pa
     assert trace["promotionDecision"] == "analysis_only_without_visible_replay_support"
 
 
+def test_bridge_fate_trace_does_not_require_transparent_asset_for_shape_candidate(tmp_path: Path) -> None:
+    result = trace_report(
+        tmp_path,
+        internal_candidates=[internal_candidate("selected_marker", [20, 40, 32, 6], role="selected_marker_candidate")],
+        transparent_items=[],
+        evidence_contract_items=[
+            {
+                "contractId": "contract",
+                "candidateId": "selected_marker",
+                "sourceKind": "m29_6_internal_shape_candidate",
+                "decision": {
+                    "mode": "allow_visible_replay",
+                    "evidenceScore": 0.82,
+                    "reasons": ["allow_visible_replay_contract"],
+                },
+            }
+        ],
+        promoted_source_objects=[
+            {
+                "id": "m292_promoted_internal_shape_0001",
+                "bbox": [20, 40, 32, 6],
+                "sourceEvidence": {"mediaInternalCandidateId": "selected_marker"},
+                "reasons": ["internal_source_promotion"],
+            }
+        ],
+        rejected_candidates=[],
+        final_plan_items=[
+            {
+                "id": "m295_plan_0001",
+                "sourceObjectId": "m292_promoted_internal_shape_0001",
+                "finalReplayAction": "shape_replay",
+                "reasons": ["m29_5_action_shape_replay"],
+            }
+        ],
+        replayed_nodes=[
+            {
+                "id": "m29_shape_0001",
+                "kind": "shape",
+                "source_id": "m292_promoted_internal_shape_0001",
+            }
+        ],
+        skipped_items=[],
+    )
+
+    trace = result.report["traces"][0]
+    assert trace["firstBlockingStage"] == "none"
+    assert trace["firstBlockingReason"] == "visible_replay_materialized"
+    assert trace["transparentDecision"] == "not_required_for_shape_replay"
+    assert trace["transparentAssetPath"] is None
+    assert trace["promotionDecision"] == "promoted"
+    assert trace["finalReplayDecision"] == "shape_replay"
+
+
 def trace_report(
     tmp_path: Path,
     *,
@@ -220,11 +273,11 @@ def trace_report(
     )
 
 
-def internal_candidate(candidate_id: str, bbox: list[int]) -> dict:
+def internal_candidate(candidate_id: str, bbox: list[int], *, role: str = "internal_icon_candidate") -> dict:
     return {
         "candidateId": candidate_id,
         "mediaSourceObjectId": "media",
-        "role": "internal_icon_candidate",
+        "role": role,
         "bbox": bbox,
         "candidateDecision": "accepted_report_candidate",
         "confidence": "medium",

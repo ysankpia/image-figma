@@ -301,7 +301,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。Pixel candidates 可以携带 report-only roles，例如 `internal_icon_candidate`、`selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`。这些 role 只是 source-chain 证据；当前 transparent/evidence/promotion 主路径仍只消费 icon candidate。它不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。后续如果要让内部 icon/image/marker 可选，必须先经过 source ownership promotion 和 M29.5 replay/cleanup 授权。
+这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。Pixel candidates 可以携带 report-only roles，例如 `internal_icon_candidate`、`selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`。这些 role 只是 source-chain 证据；M29.6 本身不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。内部 icon 必须继续经过 transparent asset、evidence contract、internal source promotion 和 final M29.5；内部 marker/status/table shape role 不要求 transparent PNG，但仍必须经过 evidence contract、internal source promotion 写回 M29.2，并由 final M29.5 授权 visible replay。
 
 M29.6 report meta 记录 `scaleProfile`。Text mask padding、pixel component min/max area、short-edge gate、generic scan window size、generic candidate budget、connected component return budget 都使用该内部 scale profile 或面积密度预算。比例证据仍保持比例形式：overlap ratio、containment ratio、aspect ratio、coverage、text overlap、hero penalty 和 cleanup risk 不应被改成固定样本规则。
 
@@ -377,7 +377,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent visible replay eligibility、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha asset 生成成功直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
+这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent visible replay eligibility、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。它也把 M29.6 明确标注的 shape role，例如 `selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`，用 role support、compactness、repetition、same-media containment、text-overlap 和 hero/texture penalty 合成 shape replay 合同；shape role 不要求 transparent PNG。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha asset 生成成功直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标或 shape。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
 
 ### M29 Internal Source Promotion
 
@@ -404,7 +404,7 @@ pipeline.py: internal icon promotion and promoted M29.2 document write
 types.py: promotion result and invariant metadata
 ```
 
-这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent `visibleReplayEligible=true`，以及 evidence contract `allow_visible_replay` 的对象。若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha asset generation 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+这个 package 提升两类 M29.6 internal candidate。Icon path 仍只提升同时满足 M29.6 accepted `internal_icon_candidate`、transparent `visibleReplayEligible=true`，以及 evidence contract `allow_visible_replay` 的对象；若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。Shape path 只提升 evidence contract `allow_visible_replay` 的明确 shape role，例如 selected marker、table marker 和 status dot，写回 `shape_geometry` / `shape_replay` source object；shape path 不要求 transparent asset，也不把普通内部图块猜成按钮背景。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha asset generation 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
 
 ### M29 Bridge Fate Trace
 
@@ -434,7 +434,7 @@ report.py: summary counts by blocking stage/reason/role
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只解释 internal candidate 的命运：第一阻断层、阻断原因、transparent/evidence/promotion/final replay/materializer decision。Trace 会显示 `transparentVisibleReplayEligible` 和 `transparentGateDecision`，用于区分“诊断 alpha asset 已生成”和“可见回放证据已授权”。它不创建 source objects，不改 M29.5 plan，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 消费。它的目的是避免后续调阈值时手动翻多个 report。
+这个 package 只解释 internal candidate 的命运：第一阻断层、阻断原因、transparent/evidence/promotion/final replay/materializer decision。Trace 会显示 `transparentVisibleReplayEligible` 和 `transparentGateDecision`，用于区分“诊断 alpha asset 已生成”和“可见回放证据已授权”。对 shape candidate，trace 会把 transparent decision 标记为 `not_required_for_shape_replay`，避免把 marker/status/table shape path 误诊断为缺失透明资产。它不创建 source objects，不改 M29.5 plan，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 消费。它的目的是避免后续调阈值时手动翻多个 report。
 
 ### M29 Hierarchy Candidates
 

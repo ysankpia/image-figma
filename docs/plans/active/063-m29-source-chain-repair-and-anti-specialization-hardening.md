@@ -247,7 +247,7 @@ uv run pytest tests/test_media_internal_decomposition.py tests/test_transparent_
 
 ### Stage 4: Transparent Asset Gate Split
 
-状态：completed，提交待创建。
+状态：completed，提交 `deb9414 feat: split transparent asset replay gates`。
 
 拆分当前透明资产硬门：
 
@@ -298,6 +298,8 @@ uv run pytest tests/test_transparent_asset_report.py tests/test_m29_evidence_con
 
 ### Stage 5: Evidence Contract And Promotion Role Expansion
 
+状态：completed，提交待创建。
+
 promotion 从 internal icon 单一路径扩展为多角色 source promotion：
 
 ```text
@@ -309,6 +311,42 @@ status_dot / indicator_shape -> shape_geometry / shape_replay
 ```
 
 不新增 public DSL 类型；通过 existing source object kind、replay decision 和 `sourceEvidence.role` 表达内部语义。
+
+Stage 5 实现边界：
+
+```text
+internal_icon_candidate 仍走 raster_icon / icon_replay，且仍要求 transparent visibleReplayEligible=true；
+selected_marker_candidate / table_marker_candidate / status_dot_candidate 走 shape_geometry / shape_replay；
+shape role 不要求 transparent PNG，style 由 source pixels / promoted sourceEvidence 进入现有 shape materialization；
+bridge fate trace 对 shape candidate 不再误报 missing transparent asset；
+internal_control_background 只保留 role contract，不从普通内部图块硬造按钮背景。
+```
+
+Stage 5 不改变：
+
+```text
+public API / DSL / Renderer / plugin protocol；
+materializer visible-node source truth；
+M29.5 replay / cleanup 授权边界；
+transparent asset report 对 marker/status/table 的 report-only 边界；
+promotion exact bbox dedupe 仍留给 Stage 6。
+```
+
+Stage 5 验证：
+
+```bash
+python -m py_compile backend/app/m29_evidence_contract/scoring.py backend/app/m29_evidence_contract/pipeline.py backend/app/internal_source_promotion/pipeline.py backend/app/m29_bridge_fate_trace/pipeline.py backend/tests/test_m29_evidence_contract.py backend/tests/test_internal_source_promotion.py backend/tests/test_m29_bridge_fate_trace.py backend/tests/test_m29_replay_plan.py
+cd backend
+uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_bridge_fate_trace.py -q
+uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_bridge_fate_trace.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+```
+
+结果：
+
+```text
+25 passed
+71 passed
+```
 
 ### Stage 6: Promotion Dedupe And Overlap Merge
 

@@ -227,6 +227,35 @@ def test_m295_shape_inside_media_declares_copied_asset_cleanup(tmp_path: Path) -
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
 
 
+def test_m295_promoted_internal_shape_marker_replays_as_shape(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_promoted_internal_shape",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape("marker", [24, 64, 32, 6], "media", internal_role="selected_marker_candidate", evidence_score=0.82),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "marker"],
+            [edge("media_marker", "media", "marker", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    marker_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "marker")
+    assert marker_item["finalReplayAction"] == "shape_replay"
+    assert marker_item["targetRole"] == "m29_shape"
+    assert marker_item["sourceEvidence"]["promotionSource"] == "m29_6_internal_shape_candidate"
+    assert marker_item["sourceEvidence"]["internalRole"] == "selected_marker_candidate"
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "shape_background_contained_by_media",
+    } in marker_item["cleanupTargets"]
+
+
 def test_m295_suppresses_nested_media_duplicate(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_nested_media",
@@ -610,6 +639,22 @@ def promoted_internal_icon(object_id: str, bbox: list[int], media_id: str, *, ev
             "transparentAssetPath": f"assets/transparent/{object_id}.png",
             "evidenceScore": evidence_score,
             "textOverlapRatio": text_overlap_ratio,
+        },
+    )
+
+
+def promoted_internal_shape(object_id: str, bbox: list[int], media_id: str, *, internal_role: str, evidence_score: float) -> dict:
+    return m292_object(
+        object_id,
+        bbox,
+        "separator",
+        "shape_geometry",
+        "shape_replay",
+        source_evidence={
+            "mediaSourceObjectId": media_id,
+            "promotionSource": "m29_6_internal_shape_candidate",
+            "internalRole": internal_role,
+            "evidenceScore": evidence_score,
         },
     )
 

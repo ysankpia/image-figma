@@ -205,6 +205,52 @@ def test_label_anchored_blocked_icon_is_audit_only_not_promotion_contract(tmp_pa
     assert item["decision"]["requiredForPromotion"] is False
 
 
+def test_selected_marker_candidate_can_allow_shape_visible_replay_without_transparent_asset(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "selected_marker",
+                [28, 76, 36, 6],
+                role="selected_marker_candidate",
+                text_anchor=0.82,
+                relation="below_text",
+            )
+        ],
+        transparent_items=[],
+    )
+
+    item = report["contractItems"][0]
+    assert item["sourceKind"] == "m29_6_internal_shape_candidate"
+    assert item["candidateRole"] == "selected_marker_candidate"
+    assert item["decision"]["mode"] == "allow_visible_replay"
+    assert item["decision"]["promotionAllowed"] is True
+    assert "shape_role_supported" in item["decision"]["reasons"]
+
+
+def test_repeated_table_marker_candidate_can_allow_shape_visible_replay(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "table_marker",
+                [32, 44, 8, 8],
+                role="table_marker_candidate",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                repetition=0.72,
+            )
+        ],
+        transparent_items=[],
+    )
+
+    item = report["contractItems"][0]
+    assert item["sourceKind"] == "m29_6_internal_shape_candidate"
+    assert item["candidateRole"] == "table_marker_candidate"
+    assert item["decision"]["mode"] == "allow_visible_replay"
+    assert item["positiveEvidence"]["repetition"] == 0.72
+
+
 def evidence_report(
     tmp_path: Path,
     *,
@@ -286,6 +332,49 @@ def internal_icon(
             "textMaskOverlap": text_overlap,
         },
         **({"groupSupportedExecution": True} if group_supported else {}),
+    }
+
+
+def internal_shape_candidate(
+    candidate_id: str,
+    bbox: list[int],
+    *,
+    role: str,
+    text_anchor: float,
+    relation: str,
+    repetition: float = 0.0,
+    confidence: str = "high",
+    text_overlap: float = 0.0,
+    hero_penalty: float = 0.10,
+) -> dict:
+    return {
+        "candidateId": candidate_id,
+        "mediaSourceObjectId": "media",
+        "rawNodeId": "raw_shape",
+        "rawType": "pixel_component",
+        "rawSubtype": "non_ocr_foreground",
+        "matchedOcrBoxId": "ocr_label" if text_anchor > 0 else None,
+        "anchorRelation": relation,
+        "role": role,
+        "bbox": bbox,
+        "candidateDecision": "accepted_report_candidate",
+        "confidence": confidence,
+        "score": 0.84 if confidence == "high" else 0.62,
+        "scoreBreakdown": {
+            "sizeScore": 1.0,
+            "compactnessScore": 0.82,
+            "colorCoherenceScore": 0.72,
+            "textAnchorScore": text_anchor,
+            "relationConsistencyScore": text_anchor * 0.8,
+            "repetitionScore": repetition,
+            "heroGraphicPenalty": hero_penalty,
+            "textMaskOverlap": text_overlap,
+        },
+        "metrics": {
+            "fillRatio": 0.82,
+            "colorCount": 2,
+            "meanRgb": [45, 115, 235],
+        },
     }
 
 
