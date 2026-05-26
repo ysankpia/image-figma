@@ -670,6 +670,45 @@ def test_m295_suppresses_overlapping_media_duplicate(tmp_path: Path) -> None:
     assert actions == {"media_large": "image_replay", "media_overlap": "suppress_duplicate"}
 
 
+def test_m295_keeps_perception_control_image_crop_over_parent_media(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_perception_control_image_crop",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 320, 200], "media_region", "preserve_raster", "image_replay"),
+                m292_object(
+                    "control_crop",
+                    [48, 118, 224, 56],
+                    "media_region",
+                    "preserve_raster",
+                    "image_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "promotionSource": "perception_model_foreground_claim",
+                        "mediaSourceObjectId": "media",
+                        "foregroundClaimId": "model_button:foreground_claim",
+                        "claimMaskKind": "bbox",
+                        "internalRole": "internal_control_raster_background",
+                    },
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "control_crop"],
+            [edge("media_control_crop", "media", "control_crop", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media": "image_replay", "control_crop": "image_replay"}
+    crop_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "control_crop")
+    assert crop_item["targetRole"] == "m29_image"
+    assert crop_item["sourceEvidence"]["internalRole"] == "internal_control_raster_background"
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
+
+
 def test_m295_suppresses_small_overlapping_text_duplicate(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_text_overlap",

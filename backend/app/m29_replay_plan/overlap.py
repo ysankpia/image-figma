@@ -71,6 +71,8 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
     if left_action == right_action:
         if left["pixelOwner"] != right["pixelOwner"]:
             return False
+        if left_action == "image_replay" and is_perception_foreground_image_over_parent_media(left, right):
+            return False
         if left_action in {"icon_replay", "shape_replay"}:
             threshold = 0.20 if left_action == "icon_replay" else 0.20
             return containment_ratio >= threshold
@@ -120,6 +122,30 @@ def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dic
         evidence.get("promotionSource") in INTERNAL_ICON_PROMOTION_SOURCES
         and evidence.get("mediaSourceObjectId") == media["sourceObjectId"]
         and (bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True)
+    )
+
+
+def is_perception_foreground_image_over_parent_media(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return perception_foreground_image_child(left, right) is not None
+
+
+def perception_foreground_image_child(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any] | None:
+    if left.get("finalReplayAction") != "image_replay" or right.get("finalReplayAction") != "image_replay":
+        return None
+    if is_perception_control_raster_child(child=left, parent=right):
+        return left
+    if is_perception_control_raster_child(child=right, parent=left):
+        return right
+    return None
+
+
+def is_perception_control_raster_child(*, child: dict[str, Any], parent: dict[str, Any]) -> bool:
+    evidence = child.get("sourceEvidence") if isinstance(child.get("sourceEvidence"), dict) else {}
+    return (
+        evidence.get("promotionSource") == "perception_model_foreground_claim"
+        and evidence.get("internalRole") == "internal_control_raster_background"
+        and evidence.get("mediaSourceObjectId") == parent.get("sourceObjectId")
+        and bool(evidence.get("foregroundClaimId"))
     )
 
 

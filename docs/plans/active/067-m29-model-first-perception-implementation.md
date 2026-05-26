@@ -1241,7 +1241,138 @@ It closes the diagnostic gap for model-first perception so the next repair can t
 On the hard image and first-ten gate set, remaining model-first blockers are now visible in m29_perception_source_compiler, not hidden behind M29.6/transparent/bridge fate reports.
 ```
 
-### Stage 12: Legacy Pruning Plan
+### Stage 12: Complex Control Raster Crop Preservation
+
+After Stage 11, the fate trace showed one hard-image model candidate still blocked by:
+
+```text
+content_region_too_large_for_control_background
+```
+
+An attempted fix that compiled this kind of tall/single-line control as a flat `shape_replay` increased selectable nodes but worsened visual fidelity by flattening complex/glowing button backgrounds.
+
+First-principles owner:
+
+```text
+perception_source_compiler
+M29.5 visible overlap suppression
+ownership_conservation
+```
+
+Reason:
+
+```text
+Simple solid controls should replay as shape_geometry.
+Complex/textured/glowing controls should replay as selectable foreground image crops.
+The parent large media remains residual raster.
+Materializer must still execute only final M29.5 plan items.
+```
+
+Fix:
+
+```text
+When a text-containing candidate is too tall for safe flat control shape replay,
+but still passes generic control geometry evidence,
+compile it as:
+  visualKind = media_region
+  pixelOwner = preserve_raster
+  replayDecision = image_replay
+  sourceEvidence.internalRole = internal_control_raster_background
+  sourceEvidence.promotionSource = perception_model_foreground_claim
+
+Allow this exact foreground crop relation to overlap its parent residual media in:
+  M29.5 visible overlap suppression
+  ownership conservation conflict analysis
+
+Keep normal overlapping media duplicates suppressed.
+```
+
+Batch ledger enhancement:
+
+```text
+compiledControlImageCount
+totalCompiledControlImageCount
+```
+
+This separates complex selectable control crops from flat `control_background` shape replay.
+
+Validation:
+
+```text
+focused tests:
+  cd backend
+  python3 -m py_compile app/perception_source_compiler/*.py app/m29_replay_plan/*.py app/ownership_conservation/*.py scripts/run_upload_preview_batch_validation.py tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py tests/test_upload_preview_batch_validation_script.py
+  result: passed
+
+  cd backend
+  uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_m29_perception_fate_trace.py tests/test_upload_preview_batch_validation_script.py -q
+  result: 95 passed
+
+hard regression HTTP batch:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_204621_437550_33237/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCompiledSourceObjectCount: 5
+  totalCompiledControlBackgroundCount: 3
+  totalCompiledControlImageCount: 1
+  totalCompiledRasterIconCount: 1
+  totalPerceptionFateTraceCount: 13
+  totalPerceptionFateBlockedCount: 8
+  totalMaterializedVisibleNodeCount: 35
+  averageDslVisualGateNormalizedMeanAbsError: 0.005637
+  maxDslVisualGateChangedPixelRatio10: 0.039108
+
+hard regression trace:
+  task: task_3884ad47f2ea
+  perception_candidate_0001 -> m292_perception_control_image_0001
+  compiledRole: media_region
+  compiledReplayDecision: image_replay
+  internalRole: internal_control_raster_background
+  finalReplayDecision: image_replay
+  materializerDecision: replayed
+  firstBlockingStage: none
+
+first ten HTTP batch:
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_204857_044541_35386/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalPerceptionCandidateCount: 659
+  totalCompiledSourceObjectCount: 72
+  totalCompiledControlBackgroundCount: 60
+  totalCompiledControlImageCount: 3
+  totalCompiledRasterIconCount: 9
+  totalPerceptionFateTraceCount: 659
+  totalPerceptionFateBlockedCount: 609
+  totalMaterializedVisibleNodeCount: 1617
+  averageDslVisualGateNormalizedMeanAbsError: 0.004690
+  maxDslVisualGateChangedPixelRatio10: 0.043956
+```
+
+Anti-specialization check:
+
+```text
+No production branch uses image filename, path, task id, brand, visible text, theme color, fixed coordinate, or fixed bbox.
+The new allow path requires generic sourceEvidence:
+  perception_model_foreground_claim
+  internal_control_raster_background
+  foregroundClaimId
+  mediaSourceObjectId == parent sourceObjectId
+```
+
+Conclusion:
+
+```text
+This stage fixes a real model-first source-chain blocker without flattening complex controls into unsafe shapes.
+It improves selectable control coverage through normal M29.2 -> M29.5 -> materializer flow.
+Remaining blockers are still in perception_source_compiler and cleanup quality, not Renderer/plugin.
+```
+
+### Stage 13: Legacy Pruning Plan
 
 Only after Stage 7 shows stable improvement:
 

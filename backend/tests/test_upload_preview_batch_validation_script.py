@@ -153,6 +153,7 @@ def test_collect_artifacts_can_require_perception_model_outputs(tmp_path: Path, 
                 "summary": {
                     "compiledSourceObjectCount": 5,
                     "compiledControlBackgroundCount": 2,
+                    "compiledControlImageCount": 1,
                     "compiledRasterIconCount": 3,
                 }
             }
@@ -177,6 +178,7 @@ def test_collect_artifacts_can_require_perception_model_outputs(tmp_path: Path, 
     assert record["perceptionCandidateCount"] == 11
     assert record["compiledSourceObjectCount"] == 5
     assert record["compiledControlBackgroundCount"] == 2
+    assert record["compiledControlImageCount"] == 1
     assert record["compiledRasterIconCount"] == 3
     assert record["perceptionFateTraceCount"] == 11
     assert record["perceptionFateBlockedCount"] == 6
@@ -196,6 +198,7 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     completed["perceptionCandidateCount"] = 11
     completed["compiledSourceObjectCount"] = 5
     completed["compiledControlBackgroundCount"] = 2
+    completed["compiledControlImageCount"] = 1
     completed["compiledRasterIconCount"] = 3
     completed["perceptionFateTraceCount"] = 11
     completed["perceptionFateBlockedCount"] = 6
@@ -238,6 +241,7 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     assert summary["totalPerceptionCandidateCount"] == 11
     assert summary["totalCompiledSourceObjectCount"] == 5
     assert summary["totalCompiledControlBackgroundCount"] == 2
+    assert summary["totalCompiledControlImageCount"] == 1
     assert summary["totalCompiledRasterIconCount"] == 3
     assert summary["totalPerceptionFateTraceCount"] == 11
     assert summary["totalPerceptionFateBlockedCount"] == 6

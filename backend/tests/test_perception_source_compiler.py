@@ -165,7 +165,7 @@ def test_text_candidate_near_equal_to_parent_media_remains_report_only(tmp_path:
 def test_large_text_content_region_is_not_compiled_as_control_background(tmp_path: Path) -> None:
     source = make_png(
         360,
-        720,
+        900,
         fill=(248, 248, 248),
         marks=[
             ([28, 260, 304, 170], (255, 255, 255)),
@@ -193,6 +193,35 @@ def test_large_text_content_region_is_not_compiled_as_control_background(tmp_pat
 
     assert result.report["summary"]["compiledSourceObjectCount"] == 0
     assert result.report["rejectedCandidates"][0]["reason"] == "content_region_too_large_for_control_background"
+
+
+def test_complex_single_line_text_control_compiles_to_selectable_image_crop(tmp_path: Path) -> None:
+    source = make_png(
+        360,
+        900,
+        fill=(16, 18, 42),
+        marks=[
+            ([48, 310, 264, 100], (28, 24, 58)),
+            ([118, 348, 124, 20], (248, 248, 248)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_tall_single_line_control",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_button", "Continue", [118, 348, 124, 20])]),
+        perception_model_report=perception_report([candidate("model_tall_button", [48, 310, 312, 410], 0.46)]),
+        m292_document=m292_document([m292_object("media", [0, 0, 360, 900], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    control = only_compiled(result.report, "media_region")
+    assert control["bbox"] == [48, 310, 264, 100]
+    assert control["pixelOwner"] == "preserve_raster"
+    assert control["replayDecision"] == "image_replay"
+    assert control["sourceEvidence"]["ocrBoxIds"] == ["ocr_button"]
+    assert control["sourceEvidence"]["internalRole"] == "internal_control_raster_background"
+    assert control["sourceEvidence"]["mediaSourceObjectId"] == "media"
+    assert control["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_complex_text_control_raster_crop"]
 
 
 def test_geometry_control_candidate_compiles_without_complete_ocr_containment(tmp_path: Path) -> None:

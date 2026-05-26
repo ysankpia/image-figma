@@ -76,6 +76,13 @@ def extract_perception_source_compiler_report(
             "finalSourceObjectCount": len(base_objects) + len(compiled_objects),
             "rejectedCandidateCount": len(rejected_candidates),
             "compiledControlBackgroundCount": sum(1 for item in compiled_objects if item.get("visualKind") == "control_background"),
+            "compiledControlImageCount": sum(
+                1
+                for item in compiled_objects
+                if item.get("visualKind") == "media_region"
+                and (item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}).get("internalRole")
+                == "internal_control_raster_background"
+            ),
             "compiledRasterIconCount": sum(1 for item in compiled_objects if item.get("visualKind") == "raster_icon"),
             "warningCount": len(ocr_warnings),
             "dslChanged": False,
@@ -161,6 +168,26 @@ def classify_candidate(
             image_height=image_height,
             options=options,
         ):
+            if geometry_supports_control_background(
+                bbox=bbox,
+                metrics=metrics,
+                image_width=image_width,
+                image_height=image_height,
+                options=options,
+            ):
+                return {
+                    "mode": "compile_source_object",
+                    "sourceObject": build_control_image_object(
+                        index=len([item for item in compiled_objects if item.get("visualKind") == "media_region"]) + 1,
+                        candidate=candidate,
+                        bbox=bbox,
+                        ocr_boxes=contained_text,
+                        pixels=pixels,
+                        media_source_id=media_source_id,
+                        text_area_ratio=text_area_ratio,
+                        inference_reasons=["perception_candidate_complex_text_control_raster_crop"],
+                    ),
+                }
             return rejected(candidate, "content_region_too_large_for_control_background", bbox=bbox)
         if text_area_ratio < options.min_control_text_area_ratio or text_area_ratio > options.max_control_text_area_ratio:
             return rejected(candidate, "contained_text_area_ratio_outside_control_range", bbox=bbox)
@@ -284,6 +311,39 @@ def build_control_background_object(
             "internalRole": "internal_control_background",
             "shapeFillOverride": fill,
             "shapeRadiusOverride": radius,
+            "controlTextAreaRatio": round(text_area_ratio, 4),
+            "controlInferenceReasons": inference_reasons,
+        },
+    )
+
+
+def build_control_image_object(
+    *,
+    index: int,
+    candidate: dict[str, Any],
+    bbox: list[int],
+    ocr_boxes: list[Any],
+    pixels: Any,
+    media_source_id: str,
+    text_area_ratio: float,
+    inference_reasons: list[str],
+) -> dict[str, Any]:
+    return source_object(
+        object_id=f"m292_perception_control_image_{index:04d}",
+        bbox=bbox,
+        visual_kind="media_region",
+        pixel_owner="preserve_raster",
+        replay_decision="image_replay",
+        confidence="medium",
+        reasons=[*inference_reasons, "compiled_before_m29_replay"],
+        risks=["model_single_class_complex_control_kept_as_selectable_raster"],
+        evidence={
+            **common_evidence(candidate, bbox, pixels, media_source_id),
+            "ocrBoxIds": [str(box.id) for box in ocr_boxes if getattr(box, "id", None)],
+            "promotionSource": "perception_model_foreground_claim",
+            "foregroundClaimId": f"{candidate['candidateId']}:foreground_claim",
+            "claimMaskKind": "bbox",
+            "internalRole": "internal_control_raster_background",
             "controlTextAreaRatio": round(text_area_ratio, 4),
             "controlInferenceReasons": inference_reasons,
         },
@@ -507,6 +567,8 @@ def content_region_too_large_for_text_control(
     image_height: int,
     options: PerceptionSourceCompilerOptions,
 ) -> bool:
+    if text_count > options.max_text_control_ocr_count:
+        return True
     text_heights = []
     for box in contained_text:
         text_bbox = parse_xywh_bbox(getattr(box, "bbox", None))
@@ -515,7 +577,7 @@ def content_region_too_large_for_text_control(
     median_text_height = sorted(text_heights)[len(text_heights) // 2] if text_heights else 0
     if median_text_height > 0 and bbox[3] > round(median_text_height * options.max_text_control_height_to_text_height):
         return True
-    return text_count > options.max_text_control_ocr_count
+    return False
 
 
 def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:

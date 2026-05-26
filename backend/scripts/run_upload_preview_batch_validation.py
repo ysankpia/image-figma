@@ -302,6 +302,7 @@ def base_record(image_path: Path, input_dir: Path) -> dict[str, Any]:
         "perceptionCandidateCount": 0,
         "compiledSourceObjectCount": 0,
         "compiledControlBackgroundCount": 0,
+        "compiledControlImageCount": 0,
         "compiledRasterIconCount": 0,
         "perceptionFateTraceCount": 0,
         "perceptionFateBlockedCount": 0,
@@ -544,6 +545,7 @@ def derive_record_metrics(record: dict[str, Any]) -> None:
     if isinstance(compiler_summary, dict):
         record["compiledSourceObjectCount"] = int(compiler_summary.get("compiledSourceObjectCount") or 0)
         record["compiledControlBackgroundCount"] = int(compiler_summary.get("compiledControlBackgroundCount") or 0)
+        record["compiledControlImageCount"] = int(compiler_summary.get("compiledControlImageCount") or 0)
         record["compiledRasterIconCount"] = int(compiler_summary.get("compiledRasterIconCount") or 0)
     if isinstance(fate_summary, dict):
         record["perceptionFateTraceCount"] = int(fate_summary.get("traceCount") or 0)
@@ -676,6 +678,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_perception_candidates = 0
     total_compiled_source_objects = 0
     total_compiled_controls = 0
+    total_compiled_control_images = 0
     total_compiled_icons = 0
     total_perception_fate_traces = 0
     total_perception_fate_blocked = 0
@@ -699,6 +702,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         total_perception_candidates += int(record.get("perceptionCandidateCount") or 0)
         total_compiled_source_objects += int(record.get("compiledSourceObjectCount") or 0)
         total_compiled_controls += int(record.get("compiledControlBackgroundCount") or 0)
+        total_compiled_control_images += int(record.get("compiledControlImageCount") or 0)
         total_compiled_icons += int(record.get("compiledRasterIconCount") or 0)
         total_perception_fate_traces += int(record.get("perceptionFateTraceCount") or 0)
         total_perception_fate_blocked += int(record.get("perceptionFateBlockedCount") or 0)
@@ -793,6 +797,7 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalPerceptionCandidateCount": total_perception_candidates,
         "totalCompiledSourceObjectCount": total_compiled_source_objects,
         "totalCompiledControlBackgroundCount": total_compiled_controls,
+        "totalCompiledControlImageCount": total_compiled_control_images,
         "totalCompiledRasterIconCount": total_compiled_icons,
         "totalPerceptionFateTraceCount": total_perception_fate_traces,
         "totalPerceptionFateBlockedCount": total_perception_fate_blocked,

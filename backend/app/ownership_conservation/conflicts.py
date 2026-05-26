@@ -250,6 +250,8 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
             icon,
             image["sourceObjectId"],
         )
+    if actions == {"image_replay"} and perception_foreground_image_child(left, right) is not None:
+        return True
     if actions == {"image_replay", "text_replay"}:
         text = left if left["finalReplayAction"] == "text_replay" else right
         image = right if text is left else left
@@ -282,6 +284,26 @@ def is_promoted_internal_icon_label_overlap(icon: dict[str, Any], text: dict[str
     if not has_copied_cleanup_target(icon, media_id) or not has_copied_cleanup_target(text, media_id):
         return False
     return True
+
+
+def perception_foreground_image_child(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any] | None:
+    if left.get("finalReplayAction") != "image_replay" or right.get("finalReplayAction") != "image_replay":
+        return None
+    if is_perception_control_raster_child(child=left, parent=right):
+        return left
+    if is_perception_control_raster_child(child=right, parent=left):
+        return right
+    return None
+
+
+def is_perception_control_raster_child(*, child: dict[str, Any], parent: dict[str, Any]) -> bool:
+    evidence = child.get("sourceEvidence") if isinstance(child.get("sourceEvidence"), dict) else {}
+    return (
+        evidence.get("promotionSource") == "perception_model_foreground_claim"
+        and evidence.get("internalRole") == "internal_control_raster_background"
+        and evidence.get("mediaSourceObjectId") == parent.get("sourceObjectId")
+        and bool(evidence.get("foregroundClaimId"))
+    )
 
 
 def optional_float(value: Any) -> float | None:

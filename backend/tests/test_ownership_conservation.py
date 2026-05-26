@@ -694,6 +694,39 @@ def test_shape_behind_image_overlap_is_explainable_background_foreground_overlap
     assert report["summary"]["conflictCount"] == 0
 
 
+def test_perception_foreground_image_crop_overlap_with_parent_media_is_explainable(tmp_path: Path) -> None:
+    source_evidence = {
+        "promotionSource": "perception_model_foreground_claim",
+        "mediaSourceObjectId": "media",
+        "foregroundClaimId": "model_button:foreground_claim",
+        "claimMaskKind": "bbox",
+        "internalRole": "internal_control_raster_background",
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 320, 200], "media_region", "preserve_raster", "image_replay"),
+            m292_object("control_crop", [48, 118, 224, 56], "media_region", "preserve_raster", "image_replay", source_evidence=source_evidence),
+        ],
+        edges=[edge("edge_media_control_crop", "media", "control_crop", "contains")],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 320, 200], "image_replay", "m29_image"),
+            plan_item(
+                "plan_control_crop",
+                "control_crop",
+                [48, 118, 224, 56],
+                "image_replay",
+                "m29_image",
+                cleanup_targets=[{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}],
+                source_evidence=source_evidence,
+            ),
+        ],
+    )
+
+    assert not [item for item in report["conflicts"] if item["type"] == "visible_ownership_overlap"]
+    assert report["summary"]["conflictCount"] == 0
+
+
 def test_near_equal_visible_claims_are_reported_as_overlap(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,
