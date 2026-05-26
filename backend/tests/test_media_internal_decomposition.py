@@ -183,6 +183,39 @@ def test_action_row_group_support_marks_medium_candidates_without_text_literal_r
     assert all(item["confidence"] in {"high", "medium"} for item in supported)
 
 
+def test_fragmented_icon_parts_with_same_text_anchor_get_union_candidate(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 520, 180])],
+        raw_nodes=[
+            raw_symbol("icon_a", [42, 55, 30, 34], color_count=22, fill_ratio=0.50),
+            raw_symbol("icon_b", [162, 54, 30, 34], color_count=22, fill_ratio=0.50),
+            raw_symbol("icon_c_top", [281, 54, 30, 17], color_count=22, fill_ratio=0.42),
+            raw_symbol("icon_c_bottom", [280, 69, 32, 17], color_count=22, fill_ratio=0.42),
+            raw_symbol("icon_d", [402, 55, 30, 34], color_count=22, fill_ratio=0.50),
+        ],
+        ocr_blocks=[
+            ocr_block("text_a", [38, 108, 38, 16]),
+            ocr_block("text_b", [158, 108, 38, 16]),
+            ocr_block("text_c", [278, 108, 38, 16]),
+            ocr_block("text_d", [398, 108, 38, 16]),
+        ],
+    )
+
+    merged = [
+        item
+        for item in report["internalCandidates"]
+        if "merged_anchor_icon_fragments" in item["reasons"] and item["matchedOcrBoxId"] == "text_c"
+    ]
+    assert merged
+    assert merged[0]["candidateDecision"] == "accepted_report_candidate"
+    assert merged[0]["bbox"] == [280, 54, 32, 32]
+    assert merged[0]["groupSupportedExecution"] is True
+    assert len(merged[0]["sourceFragmentCandidateIds"]) == 2
+    group_items = [item for group in report["matchedInternalGroups"] for item in group["items"]]
+    assert {item["ocrBoxId"] for item in group_items} == {"text_a", "text_b", "text_c", "text_d"}
+
+
 def test_separator_inside_media_is_rejected_not_icon(tmp_path: Path) -> None:
     report = media_report(
         tmp_path,

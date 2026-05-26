@@ -148,6 +148,7 @@ def score_internal_candidates(
             )
         )
     apply_repetition_scores(candidates)
+    candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1))
     return candidates
 
 
@@ -376,6 +377,156 @@ def apply_repetition_scores(candidates: list[dict[str, Any]]) -> None:
             item["reasons"].append("repeated_icon_text_row_geometry")
             item["groupSupportedExecution"] = item["confidence"] in {"high", "medium"}
         item["confidence"] = confidence_label(item["score"], item["scoreBreakdown"]["textAnchorScore"], item["candidateDecision"])
+
+
+def merge_anchor_icon_fragments(
+    media: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    text_masks: list[dict[str, Any]],
+    text_inside: list[dict[str, Any]],
+    start_index: int,
+) -> list[dict[str, Any]]:
+    fragments_by_anchor: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        if candidate["candidateDecision"] != "accepted_report_candidate" or candidate["role"] != "internal_icon_candidate":
+            continue
+        ocr_id = candidate.get("matchedOcrBoxId")
+        relation = candidate.get("anchorRelation")
+        if not ocr_id or relation not in {"above_text", "below_text", "left_of_text", "right_of_text"}:
+            continue
+        fragments_by_anchor.setdefault((ocr_id, relation), []).append(candidate)
+
+    merged: list[dict[str, Any]] = []
+    existing_bboxes = [item["bbox"] for item in candidates if item["candidateDecision"] == "accepted_report_candidate"]
+    for (ocr_id, relation), fragments in fragments_by_anchor.items():
+        if len(fragments) < 2:
+            continue
+        ordered = sorted(fragments, key=lambda item: item["score"], reverse=True)
+        for first_index, first in enumerate(ordered):
+            for second in ordered[first_index + 1 :]:
+                if not mergeable_icon_fragments(first["bbox"], second["bbox"], relation):
+                    continue
+                bbox = union_bbox(first["bbox"], second["bbox"])
+                if any(is_near_equal(bbox, existing, 0.92) or containment_ratio(bbox, existing) >= 0.94 for existing in existing_bboxes):
+                    continue
+                candidate = score_merged_anchor_candidate(
+                    media=media,
+                    bbox=bbox,
+                    fragments=[first, second],
+                    ocr_id=ocr_id,
+                    anchor_relation=relation,
+                    text_masks=text_masks,
+                    text_inside=text_inside,
+                    index=start_index + len(merged),
+                )
+                if candidate["candidateDecision"] == "accepted_report_candidate":
+                    existing_bboxes.append(candidate["bbox"])
+                merged.append(candidate)
+                break
+            if merged and merged[-1].get("sourceFragmentCandidateIds") and first["candidateId"] in merged[-1]["sourceFragmentCandidateIds"]:
+                break
+    return merged
+
+
+def mergeable_icon_fragments(left: list[int], right: list[int], relation: str) -> bool:
+    union = union_bbox(left, right)
+    if bbox_area(union) > 12000 or long_thin(union):
+        return False
+    if relation in {"above_text", "below_text"}:
+        horizontal_overlap = intersection_1d(left[0], x2(left), right[0], x2(right)) / max(1, min(left[2], right[2]))
+        horizontal_center_delta = abs(center_x(left) - center_x(right))
+        vertical_gap = max(0, max(left[1], right[1]) - min(y2(left), y2(right)))
+        return horizontal_overlap >= 0.25 and horizontal_center_delta <= max(left[2], right[2]) * 0.60 and vertical_gap <= max(8, min(left[3], right[3]) * 0.65)
+    vertical_overlap = intersection_1d(left[1], y2(left), right[1], y2(right)) / max(1, min(left[3], right[3]))
+    vertical_center_delta = abs(center_y(left) - center_y(right))
+    horizontal_gap = max(0, max(left[0], right[0]) - min(x2(left), x2(right)))
+    return vertical_overlap >= 0.25 and vertical_center_delta <= max(left[3], right[3]) * 0.60 and horizontal_gap <= max(8, min(left[2], right[2]) * 0.65)
+
+
+def score_merged_anchor_candidate(
+    *,
+    media: dict[str, Any],
+    bbox: list[int],
+    fragments: list[dict[str, Any]],
+    ocr_id: str,
+    anchor_relation: str,
+    text_masks: list[dict[str, Any]],
+    text_inside: list[dict[str, Any]],
+    index: int,
+) -> dict[str, Any]:
+    text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
+    anchor_block = next((block for block in text_inside if block["ocrBoxId"] == ocr_id), None)
+    union_anchor = directional_anchor_score(bbox, anchor_block["bbox"], anchor_relation) if anchor_block else {"score": 0.0, "relationScore": 0.0}
+    anchor_score = max(union_anchor["score"], max((fragment["scoreBreakdown"]["textAnchorScore"] for fragment in fragments), default=0.0))
+    fill_ratio = min(1.0, sum(bbox_area(fragment["bbox"]) * float(fragment["metrics"].get("fillRatio") or 0.0) for fragment in fragments) / max(1, bbox_area(bbox)))
+    texture = sum(float(fragment["metrics"].get("textureScore") or 0.0) for fragment in fragments) / len(fragments)
+    color_count = max(int(fragment["metrics"].get("colorCount") or 0) for fragment in fragments)
+    metrics = {"fillRatio": round(fill_ratio, 4), "textureScore": round(texture, 4), "colorCount": color_count}
+    size = size_score(bbox, media["bbox"])
+    compact = compactness_score(bbox, metrics)
+    color = color_coherence_score(metrics)
+    hero = hero_graphic_penalty(bbox, media["bbox"], metrics, anchor_score)
+    score = round(size * 0.18 + compact * 0.16 + color * 0.12 + anchor_score * 0.34 - hero * 0.20 + 0.06, 3)
+    decision = "accepted_report_candidate"
+    risks: list[str] = []
+    if text_overlap > 0.30:
+        decision = "rejected_fragment"
+        risks.append("overlaps_internal_text_mask")
+    if area_ratio(bbox, media["bbox"]) > 0.12:
+        decision = "rejected_fragment"
+        risks.append("large_media_fragment")
+    if hero >= 0.62 and anchor_score < 0.35:
+        decision = "rejected_fragment"
+        risks.append("hero_or_texture_fragment")
+    if score < 0.50 and anchor_score < 0.45:
+        decision = "rejected_fragment"
+        risks.append("weak_merged_fragment_score")
+    return {
+        "candidateId": f"{media['sourceObjectId']}:internal_candidate_{index:04d}",
+        "mediaSourceObjectId": media["sourceObjectId"],
+        "rawNodeId": "merged_" + "_".join(fragment["rawNodeId"] for fragment in fragments),
+        "rawType": "merged_fragment",
+        "rawSubtype": anchor_relation,
+        "role": "internal_icon_candidate",
+        "bbox": bbox,
+        "candidateDecision": decision,
+        "confidence": confidence_label(score, anchor_score, decision),
+        "score": score,
+        "scoreBreakdown": {
+            "sizeScore": size,
+            "compactnessScore": compact,
+            "colorCoherenceScore": color,
+            "textAnchorScore": round(anchor_score, 3),
+            "relationConsistencyScore": round(max(float(union_anchor["relationScore"]), anchor_score), 3),
+            "repetitionScore": 0.0,
+            "heroGraphicPenalty": hero,
+            "textMaskOverlap": text_overlap,
+        },
+        "matchedOcrBoxId": ocr_id,
+        "anchorRelation": anchor_relation,
+        "metrics": {
+            "areaRatioInMedia": area_ratio(bbox, media["bbox"]),
+            "rawConfidence": round(sum(float(fragment["metrics"].get("rawConfidence") or 0.0) for fragment in fragments) / len(fragments), 3),
+            "fillRatio": round(fill_ratio, 4),
+            "textureScore": round(texture, 4),
+            "colorCount": color_count,
+        },
+        "sourceFragmentCandidateIds": [fragment["candidateId"] for fragment in fragments],
+        "reasons": ["merged_anchor_icon_fragments", "text_anchor_geometry"],
+        "risks": risks,
+        "reportOnly": True,
+        "groupSupportedExecution": decision == "accepted_report_candidate",
+    }
+
+
+def union_bbox(left: list[int], right: list[int]) -> list[int]:
+    left_x = min(left[0], right[0])
+    top = min(left[1], right[1])
+    return [left_x, top, max(x2(left), x2(right)) - left_x, max(y2(left), y2(right)) - top]
+
+
+def intersection_1d(left_start: int, left_end: int, right_start: int, right_end: int) -> int:
+    return max(0, min(left_end, right_end) - max(left_start, right_start))
 
 
 def build_matched_internal_groups(
