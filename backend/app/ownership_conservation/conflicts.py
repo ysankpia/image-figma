@@ -7,6 +7,11 @@ from .relations import edge_between, edge_is_near_equal, relation_contains_objec
 from .types import NON_VISIBLE_REPLAY_ACTIONS, VISIBLE_REPLAY_ACTIONS
 
 MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO = 0.14
+INTERNAL_ICON_FOREGROUND_SOURCES = {
+    "m29_6_internal_icon_candidate",
+    "m29_6_foreground_claim",
+    "perception_model_foreground_claim",
+}
 
 
 def detect_conflicts(
@@ -181,7 +186,7 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
     if claim.get("reason") not in {"promoted_internal_asset_contained_by_media", "foreground_claim_removed_from_residual_media"}:
         return False
     evidence = plan_item.get("sourceEvidence") if isinstance(plan_item.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") not in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}:
+    if evidence.get("promotionSource") not in INTERNAL_ICON_FOREGROUND_SOURCES:
         return False
     if evidence.get("mediaSourceObjectId") != target_id:
         return False
@@ -223,7 +228,7 @@ def copied_cleanup_is_valid_for_shape_background(
 
 
 def promoted_internal_icon_has_visible_replay_evidence(evidence: dict[str, Any]) -> bool:
-    return evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"} and (
+    return evidence.get("promotionSource") in INTERNAL_ICON_FOREGROUND_SOURCES and (
         bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True
     )
 

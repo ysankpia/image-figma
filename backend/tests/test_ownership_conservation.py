@@ -615,6 +615,51 @@ def test_foreground_claim_residual_cleanup_target_is_valid_when_contained_by_med
     assert report["summary"]["errorCount"] == 0
 
 
+def test_perception_source_crop_icon_cannot_claim_copied_cleanup_without_transparent_asset(tmp_path: Path) -> None:
+    source_evidence = {
+        "promotionSource": "perception_model_foreground_claim",
+        "mediaSourceObjectId": "media",
+        "foregroundClaimId": "model_icon:foreground_claim",
+        "claimMaskKind": "bbox",
+        "internalRole": "internal_icon_candidate",
+        "controlRowSourceCropEligible": True,
+        "textOverlapRatio": 0.03,
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 120, 80], "media_region", "preserve_raster", "image_replay"),
+            m292_object("icon", [20, 20, 24, 24], "raster_icon", "raster_icon", "icon_replay", source_evidence=source_evidence),
+        ],
+        edges=[edge("edge_media_icon", "media", "icon", "contains")],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 120, 80], "image_replay", "m29_image"),
+            plan_item(
+                "plan_icon",
+                "icon",
+                [20, 20, 24, 24],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "foreground_claim_removed_from_residual_media",
+                        "foregroundClaimId": "model_icon:foreground_claim",
+                        "maskKind": "bbox",
+                    },
+                ],
+                source_evidence=source_evidence,
+            ),
+        ],
+    )
+
+    assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 1}
+    assert [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+    assert report["summary"]["errorCount"] == 1
+
+
 def test_shape_behind_text_overlap_is_explainable_background_foreground_overlap(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,

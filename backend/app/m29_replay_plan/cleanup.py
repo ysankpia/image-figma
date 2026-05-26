@@ -10,6 +10,18 @@ MAX_INTERNAL_ICON_CLEANUP_ALPHA_COVERAGE = 0.88
 MIN_INTERNAL_ICON_CLEANUP_LARGEST_COMPONENT = 0.35
 MAX_SHAPE_CLEANUP_TEXT_OVERLAP = 0.24
 MIN_SHAPE_CLEANUP_EVIDENCE_SCORE = 0.68
+FOREGROUND_CLAIM_PROMOTION_SOURCES = {
+    "m29_6_foreground_claim",
+    "perception_model_foreground_claim",
+}
+INTERNAL_ICON_PROMOTION_SOURCES = {
+    "m29_6_internal_icon_candidate",
+    *FOREGROUND_CLAIM_PROMOTION_SOURCES,
+}
+INTERNAL_SHAPE_PROMOTION_SOURCES = {
+    "m29_6_internal_shape_candidate",
+    *FOREGROUND_CLAIM_PROMOTION_SOURCES,
+}
 
 
 def cleanup_targets_for(
@@ -91,7 +103,7 @@ def promoted_internal_asset_cleanup_targets(
     edge_lookup: dict[frozenset[str], dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") not in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}:
+    if evidence.get("promotionSource") not in INTERNAL_ICON_PROMOTION_SOURCES:
         return [], []
     media_id = str(evidence.get("mediaSourceObjectId") or "")
     if not media_id:
@@ -246,7 +258,7 @@ def shape_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge:
     text_overlap = safe_float(evidence.get("textOverlapRatio"))
     if text_overlap > MAX_SHAPE_CLEANUP_TEXT_OVERLAP:
         return "cleanup_rejected_text_overlap_risk"
-    if evidence.get("promotionSource") in {"m29_6_internal_shape_candidate", "m29_6_foreground_claim"}:
+    if evidence.get("promotionSource") in INTERNAL_SHAPE_PROMOTION_SOURCES:
         score = safe_float(evidence.get("evidenceScore"))
         if score < MIN_SHAPE_CLEANUP_EVIDENCE_SCORE:
             return "cleanup_rejected_low_shape_evidence"
@@ -265,7 +277,7 @@ def cleanup_reason_for_shape(item: dict[str, Any]) -> str:
 
 
 def is_foreground_claim_source(evidence: dict[str, Any]) -> bool:
-    return str(evidence.get("promotionSource") or "") == "m29_6_foreground_claim" or bool(evidence.get("foregroundClaimId"))
+    return str(evidence.get("promotionSource") or "") in FOREGROUND_CLAIM_PROMOTION_SOURCES or bool(evidence.get("foregroundClaimId"))
 
 
 def foreground_claim_cleanup_fields(evidence: dict[str, Any]) -> dict[str, Any]:

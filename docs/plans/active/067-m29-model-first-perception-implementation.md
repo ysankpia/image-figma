@@ -487,6 +487,44 @@ Acceptance:
 - False-positive hero/texture candidates remain media/report-only.
 - M29.3/M29.5 can consume the enhanced M29.2 document without schema changes.
 
+Implementation status:
+
+```text
+backend/app/perception_source_compiler/ added as an independent compiler prototype.
+It consumes OCR + perception_model_report + source PNG + current M29.2 and writes an enhanced M29.2 document plus perception_source_compiler_report.json.
+It does not create DSL nodes, assets, cleanup authorization, or materializer shortcuts.
+```
+
+Compiler contract:
+
+```text
+model candidate with contained OCR -> control_background / shape_replay source object
+compact non-text model candidate -> raster_icon / icon_replay source object with source-crop visible replay evidence
+large full-media/hero candidate -> report_only
+```
+
+M29.5/ownership support:
+
+```text
+perception_model_foreground_claim is recognized as an upstream foreground claim for replay overlap decisions.
+Source-crop icon replay may stay visible over parent media.
+Copied-image cleanup still requires M29.5 cleanupTargets and remains blocked when no transparent/safe replacement mask exists.
+```
+
+Stage 3 validation:
+
+```text
+cd backend
+uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+result: 71 passed
+
+python3 -m py_compile backend/app/perception_source_compiler/*.py backend/app/m29_replay_plan/*.py backend/app/ownership_conservation/*.py backend/tests/test_perception_source_compiler.py backend/tests/test_ownership_conservation.py
+result: passed
+
+git diff --check
+result: passed
+```
+
 ### Stage 4: Replace M29.6 Primary Candidate Flow
 
 Change upload-preview ordering under the opt-in flag:
