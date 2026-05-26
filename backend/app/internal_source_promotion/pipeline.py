@@ -17,7 +17,11 @@ PROMOTABLE_SHAPE_ROLES = {
     "table_marker_candidate",
     "internal_shape_candidate",
     "internal_control_background",
+    "internal_overlay_badge",
+    "internal_pill_button",
+    "internal_circle_control",
 }
+ALLOW_PROMOTION_MODES = {"allow_visible_replay", "allow_foreground_claim"}
 PROMOTION_DUPLICATE_IOU_THRESHOLD = 0.72
 PROMOTION_DUPLICATE_CONTAINMENT_THRESHOLD = 0.82
 PROMOTION_DUPLICATE_CENTER_SHIFT_RATIO = 0.25
@@ -293,8 +297,8 @@ def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, 
     if evidence_contract is None:
         return "missing_evidence_contract"
     decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}
-    if decision.get("mode") != "allow_visible_replay":
-        return "evidence_contract_not_allowing_visible_replay"
+    if decision.get("mode") not in ALLOW_PROMOTION_MODES:
+        return "evidence_contract_not_allowing_foreground_claim"
     return ""
 
 
@@ -339,7 +343,12 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             "evidenceContractId": evidence_contract.get("contractId"),
             "evidenceContractDecision": decision.get("mode"),
             "evidenceScore": decision.get("evidenceScore"),
-            "promotionSource": "m29_6_internal_icon_candidate",
+            "promotionSource": "m29_6_foreground_claim" if decision.get("mode") == "allow_foreground_claim" else "m29_6_internal_icon_candidate",
+            "internalRole": str(candidate.get("role") or ""),
+            "parentMediaSourceObjectId": media_id,
+            "foregroundClaimId": candidate.get("foregroundClaimId"),
+            "claimMaskKind": candidate.get("maskKind"),
+            "claimScore": candidate.get("claimScore"),
             "localBackgroundConfidence": 0.0,
             "textOverlapRatio": round(float(transparent_item.get("textOverlap") or 0.0), 4),
             "mediaContainmentRatio": 1.0,
@@ -350,7 +359,7 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             if candidate.get("confidence") == "high"
             else "m29_6_group_supported_internal_icon_candidate",
             "transparent_asset_allow" if transparent_asset_path else "control_row_source_crop_visible_replay",
-            "evidence_contract_allow_visible_replay",
+            "evidence_contract_allow_foreground_claim" if decision.get("mode") == "allow_foreground_claim" else "evidence_contract_allow_visible_replay",
             "internal_source_promotion",
         ],
         "risks": ["promoted_internal_media_foreground"],
@@ -381,8 +390,12 @@ def promoted_shape_object(candidate: dict[str, Any], evidence_contract: dict[str
             "evidenceContractId": evidence_contract.get("contractId"),
             "evidenceContractDecision": decision.get("mode"),
             "evidenceScore": decision.get("evidenceScore"),
-            "promotionSource": "m29_6_internal_shape_candidate",
+            "promotionSource": "m29_6_foreground_claim" if decision.get("mode") == "allow_foreground_claim" else "m29_6_internal_shape_candidate",
             "internalRole": role,
+            "parentMediaSourceObjectId": media_id,
+            "foregroundClaimId": candidate.get("foregroundClaimId"),
+            "claimMaskKind": candidate.get("maskKind"),
+            "claimScore": candidate.get("claimScore"),
             "localBackgroundConfidence": 0.0,
             "textOverlapRatio": round(float_score(candidate, "textMaskOverlap"), 4),
             "mediaContainmentRatio": 1.0,
@@ -392,7 +405,7 @@ def promoted_shape_object(candidate: dict[str, Any], evidence_contract: dict[str
         "reasons": [
             "m29_6_internal_shape_candidate",
             f"{role}_shape_role",
-            "evidence_contract_allow_visible_replay",
+            "evidence_contract_allow_foreground_claim" if decision.get("mode") == "allow_foreground_claim" else "evidence_contract_allow_visible_replay",
             "internal_source_promotion",
         ],
         "risks": ["promoted_internal_media_shape"],
@@ -407,8 +420,10 @@ def visual_kind_for_shape_role(role: str) -> str:
 
 def shape_style_evidence(candidate: dict[str, Any], role: str, bbox: list[int]) -> dict[str, Any]:
     evidence: dict[str, Any] = {}
-    if role in {"status_dot_candidate", "table_marker_candidate"}:
+    if role in {"status_dot_candidate", "table_marker_candidate", "internal_circle_control"}:
         evidence["shapeRadiusOverride"] = max(1, min(bbox[2], bbox[3]) // 2)
+    elif role in {"internal_pill_button", "internal_overlay_badge", "internal_control_background"}:
+        evidence["shapeRadiusOverride"] = max(2, min(bbox[2], bbox[3]) // 2)
     metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
     mean_rgb = metrics.get("meanRgb")
     if isinstance(mean_rgb, list) and len(mean_rgb) == 3:

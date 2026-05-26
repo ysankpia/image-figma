@@ -91,7 +91,7 @@ def is_promoted_internal_icon(item: dict[str, Any]) -> bool:
     if item.get("finalReplayAction") != "icon_replay":
         return False
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and (
+    return evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"} and (
         bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True
     )
 
@@ -112,7 +112,7 @@ def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dic
         return False
     evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
     return (
-        evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
+        evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}
         and evidence.get("mediaSourceObjectId") == media["sourceObjectId"]
         and (bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True)
     )

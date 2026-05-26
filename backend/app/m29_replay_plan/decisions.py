@@ -86,7 +86,7 @@ def is_promoted_internal_icon(item: dict[str, Any]) -> bool:
     return (
         item.get("pixelOwner") == "raster_icon"
         and item.get("replayDecision") == "icon_replay"
-        and evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
+        and evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}
     )
 
 

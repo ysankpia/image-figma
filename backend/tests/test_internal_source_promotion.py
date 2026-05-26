@@ -34,7 +34,7 @@ def test_internal_source_promotion_rejects_medium_without_group_support_internal
     )
 
     assert result.report["summary"]["promotedSourceObjectCount"] == 0
-    assert result.report["rejectedCandidates"][0]["reason"] == "evidence_contract_not_allowing_visible_replay"
+    assert result.report["rejectedCandidates"][0]["reason"] == "evidence_contract_not_allowing_foreground_claim"
 
 
 def test_internal_source_promotion_promotes_group_supported_medium_internal_icon(tmp_path: Path) -> None:
@@ -201,7 +201,7 @@ def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(
             "reason": "duplicate_promoted_internal_bbox",
             "bbox": [20, 20, 24, 24],
             "keptCandidateId": "candidate_b",
-            "keptRole": "m29_6_internal_icon_candidate",
+            "keptRole": "internal_icon_candidate",
             "keptBy": "highest_evidence_role_compatible_spatial_merge",
             "overlapMetrics": {
                 "intersectionArea": 576,
@@ -404,6 +404,47 @@ def test_internal_source_promotion_promotes_table_marker_as_rounded_shape(tmp_pa
     assert promoted["sourceEvidence"]["shapeFillOverride"] == "#2D73EB"
 
 
+def test_internal_source_promotion_promotes_overlay_pill_foreground_claim_as_shape(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "pill",
+                [24, 44, 68, 28],
+                role="internal_pill_button",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                claim_decision="propose_foreground_claim",
+                claim_score=0.72,
+                mask_kind="rounded_rect",
+            )
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            evidence_contract_item(
+                "contract",
+                "pill",
+                decision="allow_foreground_claim",
+                evidence_score=0.80,
+                source_kind="m29_6_internal_shape_candidate",
+            )
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["visualKind"] == "control_background"
+    assert promoted["pixelOwner"] == "shape_geometry"
+    assert promoted["replayDecision"] == "shape_replay"
+    assert promoted["sourceEvidence"]["promotionSource"] == "m29_6_foreground_claim"
+    assert promoted["sourceEvidence"]["internalRole"] == "internal_pill_button"
+    assert promoted["sourceEvidence"]["foregroundClaimId"] == "pill:foreground_claim"
+    assert promoted["sourceEvidence"]["claimMaskKind"] == "rounded_rect"
+    assert promoted["sourceEvidence"]["claimScore"] == 0.72
+    assert promoted["sourceEvidence"]["shapeRadiusOverride"] == 14
+    assert "evidence_contract_allow_foreground_claim" in promoted["reasons"]
+
+
 def promotion_report(
     tmp_path: Path,
     *,
@@ -488,8 +529,11 @@ def internal_shape_candidate(
     repetition: float = 0.0,
     confidence: str = "high",
     media_source_object_id: str = "media",
+    claim_decision: str | None = None,
+    claim_score: float = 0.0,
+    mask_kind: str | None = None,
 ) -> dict:
-    return {
+    candidate = {
         "candidateId": candidate_id,
         "mediaSourceObjectId": media_source_object_id,
         "rawNodeId": "raw_shape",
@@ -510,6 +554,12 @@ def internal_shape_candidate(
             "meanRgb": [45, 115, 235],
         },
     }
+    if claim_decision is not None:
+        candidate["claimDecision"] = claim_decision
+        candidate["claimScore"] = claim_score
+        candidate["maskKind"] = mask_kind or "bbox"
+        candidate["foregroundClaimId"] = f"{candidate_id}:foreground_claim"
+    return candidate
 
 
 def transparent_item(
@@ -565,6 +615,6 @@ def evidence_contract_item(
         "decision": {
             "mode": decision,
             "evidenceScore": evidence_score,
-            "promotionAllowed": decision == "allow_visible_replay",
+            "promotionAllowed": decision in {"allow_visible_replay", "allow_foreground_claim"},
         },
     }

@@ -636,6 +636,7 @@ def apply_foreground_claim_fields(candidates: list[dict[str, Any]]) -> None:
         role = str(item.get("role") or "")
         claim_score = foreground_claim_score(item, foreground_layer, overlay_geometry, text_overlap, hero)
         item["parentMediaSourceObjectId"] = item.get("mediaSourceObjectId")
+        item["foregroundClaimId"] = f"{item.get('candidateId')}:foreground_claim"
         item["foregroundLayerEvidence"] = round(foreground_layer, 4)
         item["claimScore"] = claim_score
         item["maskKind"] = mask_kind_for_candidate(item)

@@ -19,7 +19,12 @@ PROMOTABLE_SHAPE_ROLES = {
     "table_marker_candidate",
     "internal_shape_candidate",
     "internal_control_background",
+    "internal_overlay_badge",
+    "internal_pill_button",
+    "internal_circle_control",
 }
+ALLOW_PROMOTION_MODES = {"allow_visible_replay", "allow_foreground_claim"}
+FOREGROUND_CLAIM_DECISION = "propose_foreground_claim"
 
 
 def build_m296_contract_item(
@@ -41,6 +46,10 @@ def build_m296_contract_item(
 
     positive = {
         "sourceCandidateScore": clamp01(float_value(candidate.get("score"))),
+        "claimScore": clamp01(float_value(candidate.get("claimScore"))),
+        "foregroundClaim": 1.0 if foreground_claim_proposed(candidate) else 0.0,
+        "foregroundLayer": clamp01(float_value(candidate.get("foregroundLayerEvidence")) or float_value(breakdown.get("foregroundLayerEvidence"))),
+        "overlayGeometry": clamp01(float_value(breakdown.get("overlayGeometryScore"))),
         "sizeCompactness": round((float_value(breakdown.get("sizeScore")) + float_value(breakdown.get("compactnessScore"))) / 2, 4),
         "textAnchor": clamp01(float_value(breakdown.get("textAnchorScore"))),
         "sameMediaContainment": round(media_containment, 4),
@@ -79,6 +88,7 @@ def build_m296_contract_item(
         transparent_allowed=transparent_allowed,
         execution_supported=execution_supported,
         control_row_supported=control_row_supported,
+        foreground_claim=foreground_claim_proposed(candidate),
         media_containment=media_containment,
         text_overlap=text_overlap,
         hero_penalty=hero_penalty,
@@ -90,6 +100,7 @@ def build_m296_contract_item(
         transparent_allowed=transparent_allowed,
         execution_supported=execution_supported,
         control_row_supported=control_row_supported,
+        foreground_claim=foreground_claim_proposed(candidate),
         media_containment=media_containment,
         evidence_score=evidence_score,
     )
@@ -120,7 +131,7 @@ def build_m296_contract_item(
             "evidenceScore": evidence_score,
             "reasons": reasons,
             "requiredForPromotion": True,
-            "promotionAllowed": mode == "allow_visible_replay",
+            "promotionAllowed": mode in ALLOW_PROMOTION_MODES,
         },
         "reportOnly": True,
     }
@@ -201,8 +212,16 @@ def build_m296_shape_contract_item(
     hero_penalty = float_value(breakdown.get("heroGraphicPenalty"))
     media_containment = containment_ratio(bbox, media_bbox) if media_bbox is not None else 0.0
     role_supported = shape_role_supported(candidate)
+    claim_proposed = foreground_claim_proposed(candidate)
+    claim_score = clamp01(float_value(candidate.get("claimScore")))
+    foreground_layer = clamp01(float_value(candidate.get("foregroundLayerEvidence")) or float_value(breakdown.get("foregroundLayerEvidence")))
+    overlay_geometry = clamp01(float_value(breakdown.get("overlayGeometryScore")))
     positive = {
         "sourceCandidateScore": clamp01(float_value(candidate.get("score"))),
+        "claimScore": claim_score,
+        "foregroundClaim": 1.0 if claim_proposed else 0.0,
+        "foregroundLayer": foreground_layer,
+        "overlayGeometry": overlay_geometry,
         "sizeCompactness": round((float_value(breakdown.get("sizeScore")) + float_value(breakdown.get("compactnessScore"))) / 2, 4),
         "shapeRoleSupport": 1.0 if role_supported else 0.0,
         "sameMediaContainment": round(media_containment, 4),
@@ -226,6 +245,7 @@ def build_m296_shape_contract_item(
         evidence_score=evidence_score,
         hard_reasons=hard_reasons,
         role_supported=role_supported,
+        foreground_claim=claim_proposed,
         media_containment=media_containment,
         text_overlap=text_overlap,
         hero_penalty=hero_penalty,
@@ -234,6 +254,7 @@ def build_m296_shape_contract_item(
         mode=mode,
         hard_reasons=hard_reasons,
         role_supported=role_supported,
+        foreground_claim=claim_proposed,
         media_containment=media_containment,
         evidence_score=evidence_score,
     )
@@ -263,7 +284,7 @@ def build_m296_shape_contract_item(
             "evidenceScore": evidence_score,
             "reasons": reasons,
             "requiredForPromotion": True,
-            "promotionAllowed": mode == "allow_visible_replay",
+            "promotionAllowed": mode in ALLOW_PROMOTION_MODES,
         },
         "reportOnly": True,
     }
@@ -272,6 +293,10 @@ def build_m296_shape_contract_item(
 def score_evidence(positive: dict[str, float], negative: dict[str, float]) -> float:
     score = (
         positive["sourceCandidateScore"] * 0.20
+        + positive.get("foregroundClaim", 0.0) * 0.08
+        + positive.get("claimScore", 0.0) * 0.08
+        + positive.get("foregroundLayer", 0.0) * 0.06
+        + positive.get("overlayGeometry", 0.0) * 0.04
         + positive["sizeCompactness"] * 0.12
         + positive["textAnchor"] * 0.16
         + positive["sameMediaContainment"] * 0.12
@@ -290,6 +315,10 @@ def score_evidence(positive: dict[str, float], negative: dict[str, float]) -> fl
 def score_shape_evidence(positive: dict[str, float], negative: dict[str, float]) -> float:
     score = (
         positive["sourceCandidateScore"] * 0.18
+        + positive.get("foregroundClaim", 0.0) * 0.10
+        + positive.get("claimScore", 0.0) * 0.10
+        + positive.get("foregroundLayer", 0.0) * 0.08
+        + positive.get("overlayGeometry", 0.0) * 0.08
         + positive["sizeCompactness"] * 0.18
         + positive["shapeRoleSupport"] * 0.22
         + positive["sameMediaContainment"] * 0.16
@@ -309,6 +338,7 @@ def decision_mode(
     transparent_allowed: bool,
     execution_supported: bool,
     control_row_supported: bool,
+    foreground_claim: bool,
     media_containment: float,
     text_overlap: float,
     hero_penalty: float,
@@ -323,13 +353,15 @@ def decision_mode(
         and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
         and hero_penalty <= MAX_HERO_PENALTY_FOR_VISIBLE
     ):
+        if foreground_claim:
+            return "allow_foreground_claim"
         return "allow_visible_replay"
     if evidence_score >= REPORT_ONLY_THRESHOLD:
         return "report_only"
     return "reject"
 
 
-def shape_decision_mode(*, evidence_score: float, hard_reasons: list[str], role_supported: bool, media_containment: float, text_overlap: float, hero_penalty: float) -> str:
+def shape_decision_mode(*, evidence_score: float, hard_reasons: list[str], role_supported: bool, foreground_claim: bool, media_containment: float, text_overlap: float, hero_penalty: float) -> str:
     if hard_reasons:
         return "reject"
     if (
@@ -339,6 +371,8 @@ def shape_decision_mode(*, evidence_score: float, hard_reasons: list[str], role_
         and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
         and hero_penalty <= MAX_HERO_PENALTY_FOR_VISIBLE
     ):
+        if foreground_claim:
+            return "allow_foreground_claim"
         return "allow_visible_replay"
     if evidence_score >= REPORT_ONLY_THRESHOLD:
         return "report_only"
@@ -364,13 +398,14 @@ def hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dict[str,
 
 def shape_hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dict[str, Any] | None, text_overlap: float, hero_penalty: float, role_supported: bool) -> list[str]:
     reasons: list[str] = []
-    if candidate.get("role") not in PROMOTABLE_SHAPE_ROLES:
+    role = str(candidate.get("role") or "")
+    if role not in PROMOTABLE_SHAPE_ROLES:
         reasons.append("not_internal_shape_candidate")
     if candidate.get("candidateDecision") != "accepted_report_candidate":
         reasons.append("internal_candidate_not_accepted")
     if parent_media is None:
         reasons.append("missing_parent_media_source_object")
-    if not role_supported:
+    if not role_supported and role not in {"internal_control_background", "internal_overlay_badge", "internal_pill_button", "internal_circle_control"}:
         reasons.append("shape_role_support_missing")
     if text_overlap > 0.30:
         reasons.append("text_overlap_too_high")
@@ -396,8 +431,18 @@ def shape_role_supported(candidate: dict[str, Any]) -> bool:
         return confidence == "high" and compactness >= 0.55 and color >= 0.45
     if role == "internal_shape_candidate":
         return candidate.get("rawType") == "shape" and confidence in {"high", "medium"}
-    if role == "internal_control_background":
-        return confidence in {"high", "medium"} and compactness >= 0.50
+    if role in {"internal_control_background", "internal_overlay_badge", "internal_pill_button", "internal_circle_control"}:
+        foreground_layer = clamp01(float_value(candidate.get("foregroundLayerEvidence")) or float_value(breakdown.get("foregroundLayerEvidence")))
+        overlay_geometry = clamp01(float_value(breakdown.get("overlayGeometryScore")))
+        claim_score = clamp01(float_value(candidate.get("claimScore")))
+        return (
+            foreground_claim_proposed(candidate)
+            and confidence in {"high", "medium"}
+            and compactness >= 0.45
+            and foreground_layer >= 0.52
+            and overlay_geometry >= 0.58
+            and claim_score >= 0.60
+        )
     return False
 
 
@@ -424,6 +469,7 @@ def decision_reasons(
     transparent_allowed: bool,
     execution_supported: bool,
     control_row_supported: bool,
+    foreground_claim: bool,
     media_containment: float,
     evidence_score: float,
 ) -> list[str]:
@@ -440,14 +486,18 @@ def decision_reasons(
         reasons.append("execution_support_missing")
     if control_row_supported:
         reasons.append("control_row_supported_internal_icon")
+    if foreground_claim:
+        reasons.append("foreground_claim_proposed")
     if media_containment >= MIN_MEDIA_CONTAINMENT_FOR_VISIBLE:
         reasons.append("same_media_containment")
+    if mode == "allow_foreground_claim":
+        reasons.append("allow_foreground_claim_contract")
     if mode == "allow_visible_replay":
         reasons.append("allow_visible_replay_contract")
     return reasons
 
 
-def shape_decision_reasons(*, mode: str, hard_reasons: list[str], role_supported: bool, media_containment: float, evidence_score: float) -> list[str]:
+def shape_decision_reasons(*, mode: str, hard_reasons: list[str], role_supported: bool, foreground_claim: bool, media_containment: float, evidence_score: float) -> list[str]:
     if mode == "reject":
         return hard_reasons or ["weak_evidence_contract_score"]
     reasons: list[str] = ["evidence_contract_score_threshold_met"] if evidence_score >= REPORT_ONLY_THRESHOLD else []
@@ -455,8 +505,12 @@ def shape_decision_reasons(*, mode: str, hard_reasons: list[str], role_supported
         reasons.append("shape_role_supported")
     else:
         reasons.append("shape_role_support_missing")
+    if foreground_claim:
+        reasons.append("foreground_claim_proposed")
     if media_containment >= MIN_MEDIA_CONTAINMENT_FOR_VISIBLE:
         reasons.append("same_media_containment")
+    if mode == "allow_foreground_claim":
+        reasons.append("allow_foreground_claim_contract")
     if mode == "allow_visible_replay":
         reasons.append("allow_visible_replay_contract")
     return reasons
@@ -503,6 +557,10 @@ def risks_for(*, hard_reasons: list[str], transparent_allowed: bool, execution_s
     if not execution_supported:
         risks.append("internal_candidate_not_execution_supported")
     return dedupe(risks)
+
+
+def foreground_claim_proposed(candidate: dict[str, Any]) -> bool:
+    return str(candidate.get("claimDecision") or "") == FOREGROUND_CLAIM_DECISION
 
 
 def containment_ratio(bbox: list[int], container: list[int] | None) -> float:

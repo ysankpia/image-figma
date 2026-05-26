@@ -38,7 +38,7 @@ def validate_contract_item(item: dict[str, Any]) -> None:
     decision = item.get("decision")
     if not isinstance(decision, dict):
         raise ValueError("evidence contract item decision must be an object")
-    if decision.get("mode") not in {"allow_visible_replay", "report_only", "reject"}:
+    if decision.get("mode") not in {"allow_visible_replay", "allow_foreground_claim", "report_only", "reject"}:
         raise ValueError("invalid evidence contract decision mode")
     if item.get("reportOnly") is not True:
         raise ValueError("evidence contract item must be report-only")

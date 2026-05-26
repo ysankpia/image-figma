@@ -291,6 +291,62 @@ def test_repeated_table_marker_candidate_can_allow_shape_visible_replay(tmp_path
     assert item["positiveEvidence"]["repetition"] == 0.72
 
 
+def test_overlay_pill_foreground_claim_allows_ownership_gate(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "pill",
+                [24, 44, 68, 28],
+                role="internal_pill_button",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                claim_decision="propose_foreground_claim",
+                claim_score=0.72,
+                foreground_layer=0.68,
+                overlay_geometry=0.88,
+                mask_kind="rounded_rect",
+            )
+        ],
+        transparent_items=[],
+    )
+
+    item = report["contractItems"][0]
+    assert item["sourceKind"] == "m29_6_internal_shape_candidate"
+    assert item["candidateRole"] == "internal_pill_button"
+    assert item["decision"]["mode"] == "allow_foreground_claim"
+    assert item["decision"]["promotionAllowed"] is True
+    assert item["positiveEvidence"]["foregroundClaim"] == 1.0
+    assert item["positiveEvidence"]["claimScore"] == 0.72
+    assert "allow_foreground_claim_contract" in item["decision"]["reasons"]
+
+
+def test_overlay_pill_without_foreground_claim_stays_report_only(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "pill",
+                [24, 44, 68, 28],
+                role="internal_pill_button",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                claim_decision="report_only",
+                claim_score=0.72,
+                foreground_layer=0.68,
+                overlay_geometry=0.88,
+                mask_kind="rounded_rect",
+            )
+        ],
+        transparent_items=[],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "report_only"
+    assert item["decision"]["promotionAllowed"] is False
+    assert "shape_role_support_missing" in item["risk"]["risks"]
+
+
 def evidence_report(
     tmp_path: Path,
     *,
@@ -388,8 +444,13 @@ def internal_shape_candidate(
     confidence: str = "high",
     text_overlap: float = 0.0,
     hero_penalty: float = 0.10,
+    claim_decision: str | None = None,
+    claim_score: float = 0.0,
+    foreground_layer: float = 0.0,
+    overlay_geometry: float = 0.0,
+    mask_kind: str | None = None,
 ) -> dict:
-    return {
+    candidate = {
         "candidateId": candidate_id,
         "mediaSourceObjectId": "media",
         "rawNodeId": "raw_shape",
@@ -411,6 +472,8 @@ def internal_shape_candidate(
             "repetitionScore": repetition,
             "heroGraphicPenalty": hero_penalty,
             "textMaskOverlap": text_overlap,
+            "foregroundLayerEvidence": foreground_layer,
+            "overlayGeometryScore": overlay_geometry,
         },
         "metrics": {
             "fillRatio": 0.82,
@@ -418,6 +481,13 @@ def internal_shape_candidate(
             "meanRgb": [45, 115, 235],
         },
     }
+    if claim_decision is not None:
+        candidate["claimDecision"] = claim_decision
+        candidate["claimScore"] = claim_score
+        candidate["foregroundLayerEvidence"] = foreground_layer
+        candidate["maskKind"] = mask_kind or "bbox"
+        candidate["foregroundClaimId"] = f"{candidate_id}:foreground_claim"
+    return candidate
 
 
 def transparent_item(
