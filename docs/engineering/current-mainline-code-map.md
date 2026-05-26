@@ -301,7 +301,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。它不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。后续如果要让内部 icon/image 可选，必须先经过 source ownership promotion 和 M29.5 replay/cleanup 授权。
+这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。Pixel candidates 可以携带 report-only roles，例如 `internal_icon_candidate`、`selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`。这些 role 只是 source-chain 证据；当前 transparent/evidence/promotion 主路径仍只消费 icon candidate。它不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。后续如果要让内部 icon/image/marker 可选，必须先经过 source ownership promotion 和 M29.5 replay/cleanup 授权。
 
 M29.6 report meta 记录 `scaleProfile`。Text mask padding、pixel component min/max area、short-edge gate、generic scan window size、generic candidate budget、connected component return budget 都使用该内部 scale profile 或面积密度预算。比例证据仍保持比例形式：overlap ratio、containment ratio、aspect ratio、coverage、text overlap、hero penalty 和 cleanup risk 不应被改成固定样本规则。
 

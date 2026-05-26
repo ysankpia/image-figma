@@ -142,7 +142,7 @@ Stage 1 不改变 runtime 行为。
 
 ### Stage 2: Scale Normalization
 
-状态：in progress。
+状态：completed，提交 `526bc73 feat: add scale-aware m29 internal asset gates`。
 
 新增内部 scale profile：
 
@@ -203,6 +203,8 @@ cleanup risk
 
 ### Stage 3: M29.6 Candidate Extraction Correctness
 
+状态：in progress。
+
 修复 candidate extraction 的固定 cap 和固定窗口问题：
 
 ```text
@@ -210,6 +212,37 @@ cleanup risk
 generic scan window 改成 scale-aware/adaptive
 candidate cap 改成基于区域面积、对象密度、OCR anchor/repetition 的风险预算
 小 marker/status dot/table marker 不被大块 foreground 挤掉
+```
+
+Stage 3 实现边界：
+
+```text
+M29.6 pixel candidate role 从单一 internal_icon_candidate 扩展为 report-only marker roles：
+  selected_marker_candidate
+  status_dot_candidate
+  table_marker_candidate
+
+selected marker thin component 只在 below_text anchor window 中允许进入 component extraction；
+非 marker 的长条 foreground 仍按 separator/long-thin 风险拒绝；
+repeated small marker geometry 只改变 M29.6 report role/reasons，不进入 transparent/evidence/promotion visible replay。
+```
+
+Stage 3 不改变：
+
+```text
+transparent asset candidate source selection；
+evidence contract allow_visible_replay 规则；
+internal source promotion；
+M29.5 replay / cleanup；
+materializer / Renderer / plugin。
+```
+
+Stage 3 验证：
+
+```bash
+cd backend
+uv run pytest tests/test_media_internal_decomposition.py -q
+uv run pytest tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_upload_preview_pipeline.py -q
 ```
 
 ### Stage 4: Transparent Asset Gate Split

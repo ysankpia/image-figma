@@ -287,6 +287,46 @@ def test_many_small_non_ocr_components_are_not_limited_to_top_six(tmp_path: Path
     assert sum(1 for item in components if item["candidateDecision"] == "accepted_report_candidate") >= 8
 
 
+def test_selected_indicator_pixel_component_reports_marker_role_not_icon(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_selected_marker_component_png(),
+        source_objects=[source_object("media", [0, 0, 260, 160])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("tab_label", [96, 80, 68, 24])],
+        image_size={"width": 260, "height": 160},
+    )
+
+    selected = [
+        item
+        for item in report["internalCandidates"]
+        if item["candidateDecision"] == "accepted_report_candidate"
+        and item["role"] == "selected_marker_candidate"
+        and item["matchedOcrBoxId"] == "tab_label"
+    ]
+    assert selected
+    assert all(item["rawType"] == "pixel_component" for item in selected)
+
+
+def test_repeated_small_non_ocr_components_report_table_marker_role(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_table_marker_components_png(),
+        source_objects=[source_object("media", [0, 0, 240, 180])],
+        raw_nodes=[],
+        ocr_blocks=[],
+        image_size={"width": 240, "height": 180},
+    )
+
+    markers = [
+        item
+        for item in report["internalCandidates"]
+        if item["candidateDecision"] == "accepted_report_candidate" and item["role"] == "table_marker_candidate"
+    ]
+    assert len(markers) >= 3
+    assert all("repeated_small_marker_geometry" in item["reasons"] for item in markers)
+
+
 def media_report(
     tmp_path: Path,
     *,
@@ -456,6 +496,33 @@ def make_many_small_components_png() -> bytes:
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(170, 120, rows)
+
+
+def make_selected_marker_component_png() -> bytes:
+    rows = []
+    for y in range(160):
+        row = bytearray()
+        for x in range(260):
+            rgb = [5, 12, 26]
+            if 102 <= x < 158 and 118 <= y < 128:
+                rgb = [42, 96, 255]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(260, 160, rows)
+
+
+def make_table_marker_components_png() -> bytes:
+    boxes = [[26, 28 + row * 44, 10, 10] for row in range(3)]
+    rows = []
+    for y in range(180):
+        row = bytearray()
+        for x in range(240):
+            rgb = [14, 18, 32]
+            if any(box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3] for box in boxes):
+                rgb = [46, 170, 116]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(240, 180, rows)
 
 
 def contained_bbox(inner: list[int], outer: list[int]) -> bool:

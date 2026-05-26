@@ -23,6 +23,8 @@ PIXEL_FOREGROUND_MIN_LUMA = 18
 GENERIC_SCAN_MAX_WINDOWS = 96
 GENERIC_FOREGROUND_MAX_CANDIDATES = 80
 PIXEL_COMPONENT_MIN_RETURNED = 24
+SELECTED_MARKER_MIN_ASPECT_RATIO = 3.2
+SMALL_MARKER_MAX_ASPECT_RATIO = 1.8
 
 
 def build_composite_media_items(
@@ -171,6 +173,7 @@ def score_internal_candidates(
                 scale_profile=scale_profile,
             )
         )
+    apply_marker_repetition_roles(candidates, scale_profile)
     apply_repetition_scores(candidates)
     candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1, scale_profile))
     return candidates
@@ -376,6 +379,58 @@ def candidate_role(node: dict[str, Any], separator: bool) -> str:
     return "internal_decorative_candidate"
 
 
+def pixel_candidate_role(
+    *,
+    bbox: list[int],
+    media_bbox: list[int],
+    component: dict[str, Any],
+    anchor_relation: str,
+    anchor_block: dict[str, Any] | None,
+    scale_profile: ImageScaleProfile,
+) -> str:
+    if anchor_block is not None and selected_marker_geometry(bbox, anchor_block["bbox"], anchor_relation, scale_profile):
+        return "selected_marker_candidate"
+    if small_marker_geometry(bbox, media_bbox, component.get("metrics", {}), scale_profile) and anchor_relation not in {"above_text", "below_text"}:
+        return "status_dot_candidate"
+    return "internal_icon_candidate"
+
+
+def selected_marker_geometry(bbox: list[int], text_bbox: list[int], anchor_relation: str, scale_profile: ImageScaleProfile) -> bool:
+    if anchor_relation != "below_text":
+        return False
+    width = bbox[2]
+    height = bbox[3]
+    if height <= 0 or width / max(1, height) < SELECTED_MARKER_MIN_ASPECT_RATIO:
+        return False
+    if height > max(scale_profile.length(18, minimum=5), round(text_bbox[3] * 0.75)):
+        return False
+    text_center = center_x(text_bbox)
+    marker_center = center_x(bbox)
+    dx = abs(marker_center - text_center)
+    vertical_gap = bbox[1] - y2(text_bbox)
+    width_ratio = width / max(1, text_bbox[2])
+    return (
+        dx <= max(scale_profile.length(12, minimum=4), text_bbox[2] * 0.45)
+        and 0 <= vertical_gap <= max(scale_profile.length(28, minimum=8), text_bbox[3] * 1.15)
+        and 0.45 <= width_ratio <= 2.20
+    )
+
+
+def small_marker_geometry(bbox: list[int], media_bbox: list[int], metrics: dict[str, Any], scale_profile: ImageScaleProfile) -> bool:
+    short = min(bbox[2], bbox[3])
+    long = max(bbox[2], bbox[3])
+    if short < scale_profile.length(4, minimum=3, maximum=18):
+        return False
+    if long > scale_profile.length(28, minimum=12, maximum=80):
+        return False
+    if long / max(1, short) > SMALL_MARKER_MAX_ASPECT_RATIO:
+        return False
+    if area_ratio(bbox, media_bbox) > 0.035:
+        return False
+    fill_ratio = float(metrics.get("fillRatio") or 0.0)
+    return fill_ratio >= 0.35
+
+
 def confidence_label(score: float, anchor: float, decision: str) -> str:
     if decision == "rejected_fragment":
         return "low"
@@ -404,6 +459,57 @@ def apply_repetition_scores(candidates: list[dict[str, Any]]) -> None:
             item["reasons"].append("repeated_icon_text_row_geometry")
             item["groupSupportedExecution"] = item["confidence"] in {"high", "medium"}
         item["confidence"] = confidence_label(item["score"], item["scoreBreakdown"]["textAnchorScore"], item["candidateDecision"])
+
+
+def apply_marker_repetition_roles(candidates: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> None:
+    markers = [
+        item
+        for item in candidates
+        if item["candidateDecision"] == "accepted_report_candidate" and item["role"] == "status_dot_candidate"
+    ]
+    if len(markers) < 3:
+        return
+    repeated_ids: set[str] = set()
+    for cluster in aligned_marker_clusters(markers, scale_profile, axis="x"):
+        if len(cluster) >= 3:
+            repeated_ids.update(item["candidateId"] for item in cluster)
+    for cluster in aligned_marker_clusters(markers, scale_profile, axis="y"):
+        if len(cluster) >= 3:
+            repeated_ids.update(item["candidateId"] for item in cluster)
+    for item in markers:
+        if item["candidateId"] not in repeated_ids:
+            continue
+        item["role"] = "table_marker_candidate"
+        item["scoreBreakdown"]["repetitionScore"] = max(float(item["scoreBreakdown"].get("repetitionScore") or 0.0), 0.72)
+        item["score"] = round(min(1.0, item["score"] + 0.06), 3)
+        item["confidence"] = generic_confidence_label(item["score"], item["candidateDecision"])
+        item["reasons"].append("repeated_small_marker_geometry")
+
+
+def aligned_marker_clusters(markers: list[dict[str, Any]], scale_profile: ImageScaleProfile, *, axis: str) -> list[list[dict[str, Any]]]:
+    threshold = scale_profile.length(10, minimum=5, maximum=40)
+    ordered = sorted(markers, key=lambda item: center_x(item["bbox"]) if axis == "x" else center_y(item["bbox"]))
+    clusters: list[list[dict[str, Any]]] = []
+    for marker in ordered:
+        marker_center = center_x(marker["bbox"]) if axis == "x" else center_y(marker["bbox"])
+        placed = False
+        for cluster in clusters:
+            centers = [center_x(item["bbox"]) if axis == "x" else center_y(item["bbox"]) for item in cluster]
+            if abs(marker_center - median(centers)) <= threshold and marker_size_compatible(marker, cluster):
+                cluster.append(marker)
+                placed = True
+                break
+        if not placed:
+            clusters.append([marker])
+    return clusters
+
+
+def marker_size_compatible(marker: dict[str, Any], cluster: list[dict[str, Any]]) -> bool:
+    marker_area = bbox_area(marker["bbox"])
+    areas = [bbox_area(item["bbox"]) for item in cluster]
+    median_area = median(areas)
+    ratio = marker_area / max(1, median_area)
+    return 0.45 <= ratio <= 2.20
 
 
 def merge_anchor_icon_fragments(
@@ -690,7 +796,13 @@ def pixel_anchor_candidates(
     seen_bboxes = [item["bbox"] for item in existing_candidates if item["candidateDecision"] == "accepted_report_candidate"]
     for block in text_inside:
         for window in anchor_windows(block["bbox"], media["bbox"], pixels.width, pixels.height, scale_profile):
-            for component in foreground_components_in_window(pixels, window["bbox"], text_masks, scale_profile):
+            for component in foreground_components_in_window(
+                pixels,
+                window["bbox"],
+                text_masks,
+                scale_profile,
+                allow_thin_marker=window["relation"] == "below_text",
+            ):
                 bbox = component["bbox"]
                 if any(is_near_equal(bbox, existing, 0.72) or containment_ratio(bbox, existing) >= 0.82 for existing in seen_bboxes):
                     continue
@@ -817,6 +929,14 @@ def score_generic_foreground_candidate(
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
+    role = pixel_candidate_role(
+        bbox=bbox,
+        media_bbox=media["bbox"],
+        component=component,
+        anchor_relation=best_anchor["relation"] or "non_ocr_foreground",
+        anchor_block=None,
+        scale_profile=scale_profile,
+    )
     score = round(size * 0.24 + compact * 0.22 + color * 0.16 + max(0.0, 1.0 - hero) * 0.28 + best_anchor["score"] * 0.10, 3)
     decision = "accepted_report_candidate"
     risks: list[str] = []
@@ -826,7 +946,7 @@ def score_generic_foreground_candidate(
     if area_ratio(bbox, media["bbox"]) > 0.12:
         decision = "rejected_fragment"
         risks.append("large_media_fragment")
-    if long_thin(bbox):
+    if role == "internal_icon_candidate" and long_thin(bbox):
         decision = "rejected_fragment"
         risks.append("separator_not_icon")
     if hero >= 0.60 and best_anchor["score"] < 0.30:
@@ -841,7 +961,7 @@ def score_generic_foreground_candidate(
         "rawNodeId": f"pixel_foreground_{media['sourceObjectId']}_{index:04d}",
         "rawType": "pixel_component",
         "rawSubtype": "non_ocr_foreground",
-        "role": "internal_icon_candidate",
+        "role": role,
         "bbox": bbox,
         "candidateDecision": decision,
         "confidence": generic_confidence_label(score, decision),
@@ -905,7 +1025,14 @@ def anchor_windows(text_bbox: list[int], media_bbox: list[int], image_width: int
     return windows
 
 
-def foreground_components_in_window(pixels: PngPixels, bbox: list[int], text_masks: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
+def foreground_components_in_window(
+    pixels: PngPixels,
+    bbox: list[int],
+    text_masks: list[dict[str, Any]],
+    scale_profile: ImageScaleProfile,
+    *,
+    allow_thin_marker: bool = False,
+) -> list[dict[str, Any]]:
     background = median_edge_rgb(pixels, bbox)
     x, y, width, height = bbox
     mask = bytearray(width * height)
@@ -920,7 +1047,7 @@ def foreground_components_in_window(pixels: PngPixels, bbox: list[int], text_mas
             rgb = (source_row[offset], source_row[offset + 1], source_row[offset + 2])
             if foreground_pixel(rgb, background):
                 mask[row * width + column] = 1
-    return connected_pixel_components(mask, bbox, pixels, scale_profile)
+    return connected_pixel_components(mask, bbox, pixels, scale_profile, allow_thin_marker=allow_thin_marker)
 
 
 def foreground_pixel(rgb: tuple[int, int, int], background: tuple[int, int, int]) -> bool:
@@ -933,7 +1060,14 @@ def foreground_pixel(rgb: tuple[int, int, int], background: tuple[int, int, int]
     )
 
 
-def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: PngPixels, scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
+def connected_pixel_components(
+    mask: bytearray,
+    window_bbox: list[int],
+    pixels: PngPixels,
+    scale_profile: ImageScaleProfile,
+    *,
+    allow_thin_marker: bool = False,
+) -> list[dict[str, Any]]:
     width = window_bbox[2]
     height = window_bbox[3]
     visited = bytearray(width * height)
@@ -964,8 +1098,10 @@ def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: 
             max(xs) - min(xs) + 1,
             max(ys) - min(ys) + 1,
         ]
-        aspect = max(bbox[2], bbox[3]) / max(1, min(bbox[2], bbox[3]))
-        if min(bbox[2], bbox[3]) < pixel_component_min_short_edge(scale_profile) or aspect > PIXEL_COMPONENT_MAX_ASPECT_RATIO:
+        short_edge = min(bbox[2], bbox[3])
+        aspect = max(bbox[2], bbox[3]) / max(1, short_edge)
+        thin_marker = allow_thin_marker and is_thin_marker_component(bbox, scale_profile)
+        if (short_edge < pixel_component_min_short_edge(scale_profile) or aspect > PIXEL_COMPONENT_MAX_ASPECT_RATIO) and not thin_marker:
             continue
         fill_ratio = len(points) / max(1, bbox_area(bbox))
         metrics = measure_pixel_component(pixels, bbox, fill_ratio)
@@ -991,6 +1127,17 @@ def pixel_component_return_budget(window_bbox: list[int], scale_profile: ImageSc
     return min(96, density_budget)
 
 
+def is_thin_marker_component(bbox: list[int], scale_profile: ImageScaleProfile) -> bool:
+    short = min(bbox[2], bbox[3])
+    long = max(bbox[2], bbox[3])
+    return (
+        bbox[2] > bbox[3]
+        and long / max(1, short) >= SELECTED_MARKER_MIN_ASPECT_RATIO
+        and short >= scale_profile.length(4, minimum=3, maximum=18)
+        and long <= scale_profile.length(96, minimum=32, maximum=220)
+    )
+
+
 def score_pixel_anchor_candidate(
     *,
     media: dict[str, Any],
@@ -1011,6 +1158,14 @@ def score_pixel_anchor_candidate(
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, anchor_score)
+    role = pixel_candidate_role(
+        bbox=bbox,
+        media_bbox=media["bbox"],
+        component=component,
+        anchor_relation=anchor_relation,
+        anchor_block=anchor_block,
+        scale_profile=scale_profile,
+    )
     score = round(size * 0.18 + compact * 0.16 + color * 0.12 + anchor_score * 0.34 - hero * 0.20, 3)
     decision = "accepted_report_candidate"
     risks: list[str] = []
@@ -1020,7 +1175,7 @@ def score_pixel_anchor_candidate(
     if area_ratio(bbox, media["bbox"]) > 0.18:
         decision = "rejected_fragment"
         risks.append("large_media_fragment")
-    if long_thin(bbox):
+    if role == "internal_icon_candidate" and long_thin(bbox):
         decision = "rejected_fragment"
         risks.append("separator_not_icon")
     if hero >= 0.62 and anchor_score < 0.35:
@@ -1035,7 +1190,7 @@ def score_pixel_anchor_candidate(
         "rawNodeId": f"pixel_anchor_{anchor_block['ocrBoxId']}_{index:04d}",
         "rawType": "pixel_component",
         "rawSubtype": anchor_relation,
-        "role": "internal_icon_candidate",
+        "role": role,
         "bbox": bbox,
         "candidateDecision": decision,
         "confidence": confidence_label(score, anchor_score, decision),
