@@ -24,6 +24,7 @@ from .stages import (
     run_m29_media_internal_decomposition_stage,
     run_m29_ownership_conservation_stage,
     run_m29_perception_model_stage,
+    run_m29_perception_source_compiler_stage,
     run_m29_sibling_group_candidate_stage,
     run_m29_transparent_asset_stage,
     run_m29_design_token_stage,
@@ -62,9 +63,10 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     ocr_document = run_stage(paths, timings, "ocr", lambda: run_ocr(task_id, image, upload_path, paths.ocr))
     text_boxes, text_warnings = text_boxes_from_ocr_document(ocr_document.to_dict())
 
+    perception_model_result = None
     if state.settings.m29_perception_model_enabled:
         update_task(task_id, "m29_perception_model", 12, "Running report-only M29 perception model.")
-        run_stage(
+        perception_model_result = run_stage(
             paths,
             timings,
             "m29_perception_model",
@@ -102,6 +104,23 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             ocr_document=ocr_document,
         ),
     )
+
+    if state.settings.m29_perception_model_enabled and perception_model_result is not None:
+        update_task(task_id, "m29_perception_source_compiler", 21, "Compiling perception candidates into M29.2 source ownership.")
+        compiler_result = run_stage(
+            paths,
+            timings,
+            "m29_perception_source_compiler",
+            lambda: run_m29_perception_source_compiler_stage(
+                task_id=task_id,
+                png_data=png_data,
+                paths=paths,
+                ocr_document=ocr_document,
+                perception_model_report=perception_model_result.report,
+                m292_document=m292_document,
+            ),
+        )
+        m292_document = compiler_result.m292_document
 
     update_task(task_id, "m29_3_relation_graph_report", 22, "Building M29.3.1 source relation graph report.")
     m2931_result = run_stage(

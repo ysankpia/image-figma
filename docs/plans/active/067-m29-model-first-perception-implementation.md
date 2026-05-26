@@ -525,9 +525,9 @@ git diff --check
 result: passed
 ```
 
-### Stage 4: Replace M29.6 Primary Candidate Flow
+### Stage 4: Opt-In Upload Preview Source Compiler Integration
 
-Change upload-preview ordering under the opt-in flag:
+Change upload-preview ordering under the opt-in flag so model proposals enter source ownership before relation/replay planning:
 
 ```text
 perception_model_report
@@ -535,15 +535,69 @@ perception_model_report
 -> M29.3/M29.4/M29.5 final chain
 ```
 
-M29.6 remains available as fallback/debug but no longer owns primary visual discovery when model-first mode is on.
+M29.6 remains available as fallback/debug in this stage. It still runs later in the current pipeline for compatibility and diagnostics, but model-proposed source objects no longer need the M29.6 -> transparent -> evidence -> promotion loop before they can be consumed by M29.3/M29.5.
+
+Implementation status:
+
+```text
+upload-preview now stores m29_perception_source_compiler artifacts when M29_PERCEPTION_MODEL_ENABLED=true.
+The compiler receives OCR, perception_model_report, source PNG pixels, and the current M29.2 document.
+The enhanced M29.2 document feeds the subsequent M29.3/M29.4/M29.5 chain.
+Default production behavior remains unchanged because M29_PERCEPTION_MODEL_ENABLED=false by default.
+```
+
+Dependency status:
+
+```text
+onnxruntime is still not a project dependency.
+Runtime model execution currently requires uv --with onnxruntime or an environment that already has onnxruntime.
+Do not add onnxruntime to backend dependencies until dependency size/runtime impact is approved.
+```
 
 Acceptance:
 
 - The old M29.6 -> transparent -> evidence -> promotion loop is not required for model-proposed button/icon/control source objects.
 - Bridge/model fate trace can explain model candidate -> source ownership -> replay/materializer outcome.
-- Hard regression image shows Google/Facebook/Snapchat button backgrounds and icons have a source path before materialization.
+- Hard regression image produces perception compiler artifacts and model-proposed source objects before materialization.
+- Stage 4 does not yet claim Codia-like final quality; control background inference is expected to continue in Stage 5.
 
-### Stage 5: Asset And Residual Cleanup
+### Stage 5: Control And Button Role Inference
+
+Improve `perception_source_compiler` so it does not treat most model boxes as isolated icons. The compiler should infer control/background ownership from generic relations:
+
+```text
+candidate contains OCR text
+candidate tightly contains icon/text children
+candidate aligns with nearby OCR in a button-like geometry
+candidate belongs to a repeated row/nav/action structure
+candidate has stable fill/radius/foreground-layer evidence
+```
+
+Allowed output:
+
+```text
+control_background / shape_replay
+raster_icon / icon_replay
+indicator shape / shape_replay
+residual media report_only
+```
+
+Forbidden:
+
+```text
+no brand/text literal/file/path/task-id/fixed-coordinate rules
+no materializer/Renderer/plugin semantic patch
+no direct DSL node creation from model candidates
+```
+
+Acceptance:
+
+- The first ten `/Users/luhui/Downloads/m29` images show improved control/background source ownership without node explosion.
+- The hard regression image has source paths for visible button backgrounds, button icons, and editable OCR text where model/OCR evidence supports them.
+- Rejected candidates carry actionable compiler reasons, not generic mystery failures.
+- M29.5 consumes compiler-created source objects through normal replay planning.
+
+### Stage 6: Asset And Residual Cleanup
 
 Use existing M29.5 cleanup authority for model-proposed foreground objects.
 
@@ -560,7 +614,7 @@ Acceptance:
 - If cleanup is unsafe, final DSL still contains selectable foreground node and the trace records cleanup blocker.
 - Materializer still refuses cleanup not present in M29.5.
 
-### Stage 6: Real Sample Batch And Figma-Facing Inspection
+### Stage 7: Real Sample Batch And Figma-Facing Inspection
 
 Run:
 
@@ -600,9 +654,9 @@ Acceptance:
 - Hard regression image has selectable button backgrounds/icons/text where model evidence supports them.
 - Remaining failures are classified into model miss, OCR miss, ownership compiler blocker, cleanup blocker, or materializer blocker.
 
-### Stage 7: Legacy Pruning Plan
+### Stage 8: Legacy Pruning Plan
 
-Only after Stage 6 shows stable improvement:
+Only after Stage 7 shows stable improvement:
 
 - Move M29.6-only heuristics toward fallback/dead-path status.
 - Update `docs/engineering/current-mainline-code-map.md`.

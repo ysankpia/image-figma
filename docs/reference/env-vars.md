@@ -21,8 +21,8 @@
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
 | `UPLOAD_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
-| `M29_PERCEPTION_MODEL_ENABLED` | 是否在 upload-preview 中生成 report-only M29 perception model report | `false` | 否 |
-| `M29_PERCEPTION_MODEL_PATH` | 本地 ONNX perception model 路径；仅 `M29_PERCEPTION_MODEL_ENABLED=true` 时使用 | 无 | 开启 model report 时需要 |
+| `M29_PERCEPTION_MODEL_ENABLED` | 是否在 upload-preview 中启用 opt-in M29 perception model path，生成模型候选报告并运行 perception source compiler | `false` | 否 |
+| `M29_PERCEPTION_MODEL_PATH` | 本地 ONNX perception model 路径；仅 `M29_PERCEPTION_MODEL_ENABLED=true` 时使用 | 无 | 开启 model path 时需要 |
 
 ## OCR
 
@@ -57,26 +57,35 @@ UPLOAD_PREVIEW_PROFILE=development
 
 `development` keeps raw M29 diagnostics such as overlays and preview sheet for local evidence debugging. This variable affects only artifacts; it does not change OCR, M29 classification, replay plan, DSL schema, or Renderer behavior.
 
-## M29 Perception Model Report
+## M29 Perception Model Path
 
 ```bash
 M29_PERCEPTION_MODEL_ENABLED=false
 ```
 
-默认关闭。开启后，`/api/upload-preview` 会额外写出 report-only artifact：
+默认关闭。关闭时，当前 production upload-preview 行为不运行 ONNX model，不写 perception model artifacts，也不改变 M29 source ownership。
+
+开启后，`/api/upload-preview` 会额外写出模型候选 artifact：
 
 ```text
 storage/upload_previews/{taskId}/m29_perception_model/perception_model_report.json
 ```
 
-该 report 只记录模型候选框，不改变 DSL、source ownership、M29.5 replay plan、cleanup 授权、Renderer 或 Figma plugin 行为。
+并运行 opt-in perception source compiler，写出：
+
+```text
+storage/upload_previews/{taskId}/m29_perception_source_compiler/perception_source_compiler_report.json
+storage/upload_previews/{taskId}/m29_perception_source_compiler/source_ui_physical_graph.perception.json
+```
+
+`perception_model_report` 只记录模型候选框。`perception_source_compiler` 会把模型候选、OCR、source PNG pixels 和当前 M29.2 文档编译成增强版 M29.2 source ownership，然后交给后续 M29.3/M29.4/M29.5 正常处理。它不直接创建 DSL nodes，不授权 cleanup，不绕过 materializer。
 
 ```bash
 M29_PERCEPTION_MODEL_ENABLED=true
 M29_PERCEPTION_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
 ```
 
-当前该阶段仍是 opt-in 探索。不要把模型输出直接接到 materializer、Renderer 或 plugin。
+当前该路径仍是 opt-in 探索。不要把模型输出直接接到 materializer、Renderer 或 plugin。`onnxruntime` 当前不是 backend 项目依赖；本地验证可使用 `uv run --with onnxruntime ...`，正式加入依赖需要单独评估包体、部署和启动影响。
 
 ## Removed Variables
 

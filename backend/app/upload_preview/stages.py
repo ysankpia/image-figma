@@ -19,6 +19,7 @@ from ..media_internal_decomposition import extract_m29_media_internal_decomposit
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
 from ..perception_model_report import PerceptionModelOptions, extract_perception_model_report
+from ..perception_source_compiler import extract_perception_source_compiler_report
 from ..plan_materializer import build_plan_driven_dsl
 from ..png_tools import PngMetadata
 from ..region_relation_graph_report import extract_m2931_region_relation_graph_report
@@ -104,6 +105,25 @@ def run_m292_source_ui_physical_stage(*, png_data: bytes, paths: UploadPreviewPa
         m29_document=m29_document.to_dict(),
         ocr_document=ocr_document.to_dict(),
         output_dir=paths.m29_2,
+    )
+
+
+def run_m29_perception_source_compiler_stage(
+    *,
+    task_id: str,
+    png_data: bytes,
+    paths: UploadPreviewPaths,
+    ocr_document: Any,
+    perception_model_report: dict[str, Any],
+    m292_document: dict[str, Any],
+):
+    return extract_perception_source_compiler_report(
+        task_id=task_id,
+        source_png=png_data,
+        ocr_document=ocr_document.to_dict(),
+        perception_model_report=perception_model_report,
+        m292_document=m292_document,
+        output_dir=paths.m29_perception_source_compiler,
     )
 
 

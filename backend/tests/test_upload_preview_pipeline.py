@@ -175,8 +175,17 @@ def test_upload_preview_can_emit_opt_in_perception_model_report(tmp_path: Path, 
     assert perception_report["summary"]["candidateCount"] == 1
     assert perception_report["summary"]["reportOnly"] is True
     assert perception_report["summary"]["sourceOwnershipChanged"] is False
+    compiler_report_path = task_root / "m29_perception_source_compiler" / "perception_source_compiler_report.json"
+    compiler_m292_path = task_root / "m29_perception_source_compiler" / "source_ui_physical_graph.perception.json"
+    assert compiler_report_path.exists()
+    assert compiler_m292_path.exists()
+    compiler_report = json.loads(compiler_report_path.read_text(encoding="utf-8"))
+    assert compiler_report["summary"]["perceptionCandidateCount"] == 1
+    assert compiler_report["summary"]["sourceOwnershipChanged"] is True
+    assert compiler_report["summary"]["compiledSourceObjectCount"] >= 1
     stages_seen = {item["stage"] for item in report["stageTimings"]["stages"]}
     assert "m29_perception_model" in stages_seen
+    assert "m29_perception_source_compiler" in stages_seen
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:

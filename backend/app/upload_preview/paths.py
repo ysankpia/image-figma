@@ -11,6 +11,7 @@ class UploadPreviewPaths:
     root: Path
     ocr: Path
     m29_perception_model: Path
+    m29_perception_source_compiler: Path
     m29: Path
     m29_2: Path
     m29_3: Path
@@ -38,6 +39,7 @@ def pipeline_paths(task_id: str) -> UploadPreviewPaths:
         root=root,
         ocr=root / "ocr",
         m29_perception_model=root / "m29_perception_model",
+        m29_perception_source_compiler=root / "m29_perception_source_compiler",
         m29=root / "m29",
         m29_2=root / "m29_2",
         m29_3=root / "m29_3",
