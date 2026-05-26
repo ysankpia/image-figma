@@ -6,6 +6,7 @@
 Figma plugin
 -> /api/upload-preview
 -> OCR
+-> optional M29 perception model report / source compiler
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
 -> M29 ownership conservation / M29.6 media internal decomposition / M29 transparent asset report / B-stage reports
 -> M29 plan-driven materializer
@@ -13,7 +14,7 @@ Figma plugin
 -> Renderer
 ```
 
-M30.2.2 已删除 pre-M29 legacy upload chain。M29 backend downstream pruning 已删除 M31-M39/M39.1 和 ONNX proposer runtime。本阶段已下线 M29 Direct compare 产品入口和 legacy M30 materialization 产品路径。测试不再要求这些旧 routes、env、modules 或 reports 存在。
+M30.2.2 已删除 pre-M29 legacy upload chain。M29 backend downstream pruning 已删除 M31-M39/M39.1 和 legacy ONNX proposer runtime。本阶段已下线 M29 Direct compare 产品入口和 legacy M30 materialization 产品路径。测试不再要求这些旧 routes、env、modules 或 reports 存在。
 
 ## Validation Focus
 
@@ -168,6 +169,10 @@ Required evidence coverage:
 - fallback erasure is executed only with M29.5 fallback cleanup target.
 - copied image asset text cleanup is executed only with M29.5 copied image asset cleanup target.
 - copied image asset promoted-internal cleanup is executed only with M29.5 copied image asset cleanup target and transparent asset alpha mask.
+- opt-in M29 perception model report is report-only and absent by default.
+- opt-in perception source compiler may enhance M29.2 ownership only before final M29.3/M29.4/M29.5, never by creating DSL nodes or cleanup authorization.
+- opt-in perception fate trace is diagnostic-only and is not consumed by materializer, Renderer, or plugin.
+- complex model-proposed controls that are unsafe as flat shapes may replay as selectable foreground image crops, while ordinary overlapping media duplicates remain suppressible.
 
 ## Static Pruning Checks
 
@@ -202,7 +207,7 @@ M37 hierarchy readiness
 M38 hierarchy materialization
 M39 content/chrome classification
 M39.1 unit structure readiness
-ONNX proposer
+legacy ONNX proposer
 M29.1.1 pre-OCR lineage audit
 M29.0.6 member boundary quality audit
 M29.0.3.2 residual mixed boundary review

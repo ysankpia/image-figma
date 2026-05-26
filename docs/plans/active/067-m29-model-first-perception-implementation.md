@@ -1372,21 +1372,64 @@ It improves selectable control coverage through normal M29.2 -> M29.5 -> materia
 Remaining blockers are still in perception_source_compiler and cleanup quality, not Renderer/plugin.
 ```
 
-### Stage 13: Legacy Pruning Plan
+### Stage 13: Import/Test Inventory And Documentation Sync
 
-Only after Stage 7 shows stable improvement:
+Decision:
 
-- Move M29.6-only heuristics toward fallback/dead-path status.
-- Update `docs/engineering/current-mainline-code-map.md`.
-- Update `docs/engineering/testing-strategy.md`.
-- Update `docs/engineering/m29-contract-regression-matrix.md`.
-- Archive or delete old audit packages only with import/test inventory.
+```text
+Do not prune M29.6, transparent assets, evidence contract, internal source promotion, or bridge fate trace yet.
+```
+
+Reason:
+
+```text
+backend/app/upload_preview/pipeline.py still runs the M29.6 compatibility chain:
+  M29.6 media internal decomposition
+  -> transparent asset report
+  -> evidence contract report
+  -> internal source promotion
+  -> final promoted M29.3/M29.4/M29.5 reports
+  -> bridge fate trace
+
+backend/app/upload_preview/pipeline.py also runs the opt-in model-first chain:
+  perception model report
+  -> perception source compiler
+  -> final M29.3/M29.4/M29.5
+  -> perception fate trace
+```
+
+Inventory evidence:
+
+```text
+backend/app/upload_preview/stages.py imports wrappers for both the compatibility M29.6 chain and opt-in perception chain.
+backend/tests/test_upload_preview_pipeline.py still asserts default M29.6 artifacts exist.
+backend/tests/test_upload_preview_pipeline.py asserts perception artifacts are absent by default and present only when explicitly enabled.
+```
+
+Boundary update:
+
+```text
+AGENTS.md
+docs/engineering/current-mainline-code-map.md
+docs/engineering/testing-strategy.md
+docs/engineering/m29-contract-regression-matrix.md
+```
 
 Acceptance:
 
-- No old path is deleted without import and test evidence.
-- Mainline docs show model-first perception as primary path.
-- Historical rule-based modules are clearly fallback or archived.
+- No runtime path is deleted in this stage.
+- Default upload behavior remains compatible with existing M29.6 artifacts.
+- Model-first perception is documented as opt-in and report/source-compiler bounded.
+- `internal_source_promotion` is documented as the compatibility bridge for the old M29.6 evidence chain, not the model-first bridge.
+- Legacy ONNX proposer remains forbidden and is not confused with the current opt-in perception model report.
+
+Validation:
+
+```bash
+git diff --check
+cd backend
+uv run pytest tests/test_upload_preview_pipeline.py tests/test_config_env.py tests/test_upload_preview_batch_validation_script.py -q
+```
 
 ## Validation Commands
 

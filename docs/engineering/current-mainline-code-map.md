@@ -8,8 +8,10 @@
 Plugin upload
 -> backend/app/upload_preview/
 -> OCR
+-> optional M29 perception model report (opt-in)
 -> raw M29 primitive graph
 -> M29.2 ownership
+-> optional M29 perception source compiler (opt-in M29.2 enhancement)
 -> M29.3 relation
 -> M29.4 weak cluster
 -> M29.5 replay plan
@@ -25,13 +27,14 @@ Plugin upload
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> M29 bridge fate trace report
+-> optional M29 perception fate trace report (opt-in)
 -> M29 design token report
 -> M29 B-stage quality report
 -> DSL v0.1
 -> Renderer
 ```
 
-M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and ONNX proposer have been pruned from active backend runtime.
+M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and the legacy ONNX proposer have been pruned from active backend runtime.
 
 ## Runtime Entry Surface
 
@@ -54,7 +57,9 @@ backend/app/routes/assets.py
 validate upload
 save source PNG
 run OCR
+optionally run M29 perception model report
 run M29/M29.2/M29.3/M29.4/M29.5
+optionally compile perception candidates into enhanced M29.2 source ownership
 run M29 ownership conservation report
 run M29.6 media internal decomposition report
 run M29 transparent asset report
@@ -67,6 +72,7 @@ run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
 run M29 bridge fate trace report
+optionally run M29 perception fate trace report
 run M29 design token report
 run M29 B-stage quality report
 publish M29 assets
@@ -81,7 +87,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/bridge-fate-trace/design-token/B-stage-quality stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/perception-model/perception-source-compiler/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/bridge-fate-trace/perception-fate-trace/design-token/B-stage-quality stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -90,6 +96,68 @@ assets.py: M29 materialized assets publish
 OCR document to M29 text-box conversion is owned by `backend/app/ocr.py` via `text_boxes_from_ocr_document`. Current mainline packages must import that adapter from `app.ocr`, not from historical M29 audit packages.
 
 ## Source Truth Layer
+
+### Opt-In M29 Model-First Perception
+
+`backend/app/perception_model_report/` is an opt-in report-only perception proposal layer. It runs only when:
+
+```text
+M29_PERCEPTION_MODEL_ENABLED=true
+M29_PERCEPTION_MODEL_PATH=<local ONNX model path>
+```
+
+It consumes the source PNG and emits normalized model candidates:
+
+```text
+storage/upload_previews/{taskId}/m29_perception_model/perception_model_report.json
+```
+
+It does not create DSL nodes, assets, source ownership, replay authorization, or cleanup authorization. `onnxruntime` is not a default backend dependency; real HTTP batch validation supplies it with `uv --with onnxruntime`.
+
+`backend/app/perception_source_compiler/` is the M29.2 ownership compiler for opt-in model-first candidates. It consumes:
+
+```text
+OCR document
+source PNG pixels
+perception_model_report
+current M29.2 source document
+```
+
+It emits:
+
+```text
+storage/upload_previews/{taskId}/m29_perception_source_compiler/perception_source_compiler_report.json
+storage/upload_previews/{taskId}/m29_perception_source_compiler/source_ui_physical_graph.perception.json
+```
+
+Allowed compiled source ownership:
+
+```text
+control_background / shape_geometry / shape_replay
+media_region / preserve_raster / image_replay for complex selectable control crops
+raster_icon / raster_icon / icon_replay
+small indicator shape / shape_geometry / shape_replay
+```
+
+The compiler is upstream of final M29.3/M29.4/M29.5. It does not create DSL nodes, does not authorize cleanup directly, and does not let materializer consume raw model output. M29.5 remains the only visible replay and cleanup authority.
+
+`backend/app/m29_perception_fate_trace/` is an opt-in read-only diagnostic surface after materialization. It joins:
+
+```text
+perception candidate
+-> perception source compiler decision
+-> final M29.5 replay decision
+-> cleanup decision
+-> materializer result
+```
+
+It writes:
+
+```text
+storage/upload_previews/{taskId}/m29_perception_fate_trace/perception_fate_trace_report.json
+```
+
+It must remain diagnostic only. It does not feed promotion, M29.5, materializer, Renderer, or plugin decisions.
 
 ### Raw M29 Primitive Graph
 
@@ -384,7 +452,7 @@ validation.py: report schema and report-only invariant checks
 
 ### M29 Internal Source Promotion
 
-`backend/app/internal_source_promotion/` 是 M29.6/transparent/evidence-contract evidence 回到 M29.2 source ownership 的唯一当前桥。它消费：
+`backend/app/internal_source_promotion/` 是 M29.6/transparent/evidence-contract compatibility evidence 回到 M29.2 source ownership 的当前桥。Opt-in model-first perception 使用 `backend/app/perception_source_compiler/` 在更早的 M29.2 边界完成 source ownership 编译；不要把这两个桥混在一起。`internal_source_promotion` 消费：
 
 ```text
 M29.2 source objects
