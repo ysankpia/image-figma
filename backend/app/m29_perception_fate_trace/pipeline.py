@@ -24,8 +24,10 @@ def extract_m29_perception_fate_trace_report(
 ) -> M29PerceptionFateTraceResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
-    candidates = [item for item in perception_model_report.get("candidates", []) if isinstance(item, dict)]
-    compiled_by_candidate = compiled_source_objects_by_candidate(perception_source_compiler_report.get("compiledSourceObjects", []))
+    model_candidates = [item for item in perception_model_report.get("candidates", []) if isinstance(item, dict)]
+    compiled_objects = [item for item in perception_source_compiler_report.get("compiledSourceObjects", []) if isinstance(item, dict)]
+    candidates = trace_candidates(model_candidates, compiled_objects)
+    compiled_by_candidate = compiled_source_objects_by_candidate(compiled_objects)
     rejected_by_candidate = index_by_key(perception_source_compiler_report.get("rejectedCandidates", []), "candidateId")
     plan_by_source = index_by_key(final_m295_report.get("planItems", []), "sourceObjectId")
     replayed_by_source = index_by_key(materialization_report.get("replayedNodes", []), "source_id")
@@ -99,6 +101,8 @@ def build_trace(
         "bbox": candidate.get("bbox"),
         "score": candidate.get("score"),
         "sourceProvider": candidate.get("sourceProvider"),
+        "traceKind": str(candidate.get("traceKind") or "model_candidate"),
+        "derivedFromPerceptionCandidateId": candidate.get("derivedFromPerceptionCandidateId") or evidence.get("derivedFromPerceptionCandidateId"),
         "compilerDecision": "compiled_source_object" if compiled_item is not None else "report_only",
         "compilerReason": str((rejected_item or {}).get("reason") or "compiled_source_object"),
         "compiledSourceObjectId": compiled_source_id or None,
@@ -202,6 +206,28 @@ def compiled_source_objects_by_candidate(items: Any) -> dict[str, dict[str, Any]
         candidate_id = str(evidence.get("perceptionCandidateId") or "")
         if candidate_id:
             result[candidate_id] = item
+    return result
+
+
+def trace_candidates(model_candidates: list[dict[str, Any]], compiled_source_objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = list(model_candidates)
+    seen_ids = {str(item.get("candidateId") or "") for item in result}
+    for item in compiled_source_objects:
+        evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+        candidate_id = str(evidence.get("perceptionCandidateId") or "")
+        if not candidate_id or candidate_id in seen_ids:
+            continue
+        result.append(
+            {
+                "candidateId": candidate_id,
+                "bbox": evidence.get("candidateBbox") or item.get("bbox"),
+                "score": evidence.get("modelScore") or evidence.get("evidenceScore"),
+                "sourceProvider": evidence.get("perceptionProvider"),
+                "traceKind": "derived_compiled_source_object",
+                "derivedFromPerceptionCandidateId": evidence.get("derivedFromPerceptionCandidateId"),
+            }
+        )
+        seen_ids.add(candidate_id)
     return result
 
 

@@ -1570,6 +1570,68 @@ cd backend
 uv run pytest tests/test_config_env.py tests/test_upload_preview_pipeline.py tests/test_upload_preview_batch_validation_script.py tests/test_perception_model_report.py -q
 ```
 
+### Stage 16: Inferred Leading Icon Inside Proven Controls
+
+Problem:
+
+```text
+The default model-first path can emit a whole button/control bbox without an independent icon bbox.
+In the hard login sample, the Google control compiled as `control_background`, but the model's small child candidate was the text span, not the leading logo.
+The compiler therefore needed a bounded fallback for the common UI relation: icon on the left, OCR text on the right, both inside a proven control.
+```
+
+Change:
+
+```text
+For an already compiled OCR-containing control, the compiler searches only the local region left of the leftmost contained OCR box.
+It extracts a compact high-contrast foreground cluster from source pixels and emits a derived `raster_icon` source object when geometry, contrast, fill, aspect, containment, and text-overlap checks pass.
+Existing child model candidates suppress this inference only when they are real left-of-text icon candidates, not when they overlap the OCR text.
+Perception fate trace now includes derived compiled source objects, so a derived icon has its own trace through M29.5 and materialization.
+```
+
+Boundary:
+
+```text
+No text, brand, filename, task id, fixed coordinate, fixed bbox, or theme-color rule.
+The model candidate still creates only M29.2 source ownership through `perception_source_compiler`.
+M29.5 remains the only visible replay and copied-media cleanup authority.
+The fate trace remains read-only diagnostics.
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_m29_perception_fate_trace.py tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+```
+
+Hard sample validation:
+
+```bash
+cd backend
+uv run python scripts/run_upload_preview_batch_validation.py \
+  --input-dir tmp/default_model_hard_input \
+  --poll-timeout 300 \
+  --startup-timeout 60
+```
+
+Observed hard-sample evidence:
+
+```text
+ledger: backend/tmp/validation/upload_preview_batch_20260526_222146_462248_4999/upload_preview_batch_validation.json
+task: task_d79c5ff2386f
+compiledSourceObjectCount: 8
+compiledRasterIconCount: 4
+perceptionFateTraceCount: 15
+visibleOwnershipOverlapConflicts: 0
+derived Google control icon:
+  perception_candidate_0005:leading_icon
+  -> m292_perception_icon_0002
+  -> bbox [134, 1024, 90, 77]
+  -> finalReplayDecision icon_replay
+  -> materializerDecision replayed
+```
+
 ## Validation Commands
 
 Probe validation:

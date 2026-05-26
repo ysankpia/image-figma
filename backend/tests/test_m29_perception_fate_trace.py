@@ -43,6 +43,71 @@ def test_perception_fate_trace_reports_materialized_compiled_candidate(tmp_path:
     assert (tmp_path / "m29_perception_fate_trace" / "perception_fate_trace_report.json").exists()
 
 
+def test_perception_fate_trace_reports_derived_compiled_source_object(tmp_path: Path) -> None:
+    result = trace_report(
+        tmp_path,
+        perception_candidates=[candidate("model_button", [20, 30, 180, 48])],
+        compiled_source_objects=[
+            compiled_source("m292_perception_control_0001", "model_button", [20, 30, 180, 48]),
+            compiled_source(
+                "m292_perception_icon_0001",
+                "model_button:leading_icon",
+                [42, 42, 18, 18],
+                visual_kind="raster_icon",
+                pixel_owner="raster_icon",
+                replay_decision="icon_replay",
+                internal_role="internal_icon_candidate",
+                source_evidence={
+                    "derivedFromPerceptionCandidateId": "model_button",
+                    "parentControlSourceObjectId": "m292_perception_control_0001",
+                },
+            ),
+        ],
+        rejected_candidates=[],
+        final_plan_items=[
+            {
+                "id": "m295_plan_0001",
+                "sourceObjectId": "m292_perception_control_0001",
+                "finalReplayAction": "shape_replay",
+                "cleanupTargets": [],
+                "reasons": ["m29_5_action_shape_replay"],
+            },
+            {
+                "id": "m295_plan_0002",
+                "sourceObjectId": "m292_perception_icon_0001",
+                "finalReplayAction": "icon_replay",
+                "cleanupTargets": [],
+                "reasons": ["m29_5_action_icon_replay"],
+            },
+        ],
+        replayed_nodes=[
+            {
+                "id": "m29_shape_0001",
+                "kind": "shape",
+                "source_id": "m292_perception_control_0001",
+            },
+            {
+                "id": "m29_image_0001",
+                "kind": "image",
+                "source_id": "m292_perception_icon_0001",
+            },
+        ],
+        skipped_items=[],
+    )
+
+    assert result.report["summary"]["traceCount"] == 2
+    assert result.report["summary"]["compiledCount"] == 2
+    assert result.report["summary"]["materializedCount"] == 2
+    assert result.report["summary"]["compiledRoleCounts"]["raster_icon"] == 1
+    derived_trace = next(item for item in result.report["traces"] if item["candidateId"] == "model_button:leading_icon")
+    assert derived_trace["traceKind"] == "derived_compiled_source_object"
+    assert derived_trace["derivedFromPerceptionCandidateId"] == "model_button"
+    assert derived_trace["compiledSourceObjectId"] == "m292_perception_icon_0001"
+    assert derived_trace["finalReplayDecision"] == "icon_replay"
+    assert derived_trace["materializerDecision"] == "replayed"
+    assert derived_trace["firstBlockingStage"] == "none"
+
+
 def test_perception_fate_trace_reports_compiler_blocker(tmp_path: Path) -> None:
     result = trace_report(
         tmp_path,
@@ -172,18 +237,29 @@ def candidate(candidate_id: str, bbox: list[int], score: float = 0.8) -> dict:
     }
 
 
-def compiled_source(source_id: str, candidate_id: str, bbox: list[int]) -> dict:
+def compiled_source(
+    source_id: str,
+    candidate_id: str,
+    bbox: list[int],
+    *,
+    visual_kind: str = "control_background",
+    pixel_owner: str = "shape_geometry",
+    replay_decision: str = "shape_replay",
+    internal_role: str = "internal_control_background",
+    source_evidence: dict | None = None,
+) -> dict:
     return {
         "id": source_id,
         "bbox": bbox,
-        "visualKind": "control_background",
-        "pixelOwner": "shape_geometry",
-        "replayDecision": "shape_replay",
+        "visualKind": visual_kind,
+        "pixelOwner": pixel_owner,
+        "replayDecision": replay_decision,
         "sourceEvidence": {
             "perceptionCandidateId": candidate_id,
             "foregroundClaimId": f"{candidate_id}:foreground_claim",
             "mediaSourceObjectId": "media",
-            "internalRole": "internal_control_background",
+            "internalRole": internal_role,
+            **(source_evidence or {}),
         },
         "reasons": ["perception_candidate_control_geometry"],
         "risks": [],

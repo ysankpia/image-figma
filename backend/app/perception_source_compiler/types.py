@@ -35,6 +35,12 @@ class PerceptionSourceCompilerOptions:
     min_geometry_control_fill_ratio: float = 0.12
     max_geometry_control_edge_score: float = 0.32
     max_geometry_control_texture_score: float = 0.34
+    min_inferred_leading_icon_area: int = 24
+    max_inferred_leading_icon_text_height_ratio: float = 3.2
+    min_inferred_leading_icon_contrast: int = 54
+    min_inferred_leading_icon_fill_ratio: float = 0.12
+    min_inferred_leading_icon_aspect_ratio: float = 0.35
+    max_inferred_leading_icon_aspect_ratio: float = 3.2
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

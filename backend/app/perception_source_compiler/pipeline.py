@@ -11,7 +11,7 @@ from ..png_tools import UnsupportedPngCropError, decode_png_pixels, read_png_met
 from ..source_ui_physical_graph import local_background_confidence
 from ..source_ui_physical_graph.controls import source_fill_excluding_text
 from ..visual_primitive_graph import measure_region
-from .geometry import bbox_area, bbox_iou, containment_ratio, overlap_ratio, parse_xywh_bbox, parse_xyxy_bbox
+from .geometry import bbox_area, bbox_iou, containment_ratio, intersection_area, overlap_ratio, parse_xywh_bbox, parse_xyxy_bbox, x2, y2
 from .types import PerceptionSourceCompilerOptions, PerceptionSourceCompilerResult
 from .validation import validate_perception_source_compiler_report
 
@@ -38,9 +38,11 @@ def extract_perception_source_compiler_report(
     compiled_objects: list[dict[str, Any]] = []
     rejected_candidates: list[dict[str, Any]] = []
 
-    for candidate in normalized_candidates(perception_model_report, image.width, image.height):
+    candidates = normalized_candidates(perception_model_report, image.width, image.height)
+    for candidate in candidates:
         decision = classify_candidate(
             candidate=candidate,
+            all_candidates=candidates,
             base_objects=base_objects,
             compiled_objects=compiled_objects,
             ocr_boxes=ocr_boxes,
@@ -50,7 +52,7 @@ def extract_perception_source_compiler_report(
             options=options,
         )
         if decision["mode"] == "compile_source_object":
-            compiled_objects.append(decision["sourceObject"])
+            compiled_objects.extend(source_objects_from_decision(decision))
         else:
             rejected_candidates.append(decision["candidateDecision"])
 
@@ -71,7 +73,7 @@ def extract_perception_source_compiler_report(
         "options": options.to_dict(),
         "summary": {
             "baseSourceObjectCount": len(base_objects),
-            "perceptionCandidateCount": len(normalized_candidates(perception_model_report, image.width, image.height)),
+            "perceptionCandidateCount": len(candidates),
             "compiledSourceObjectCount": len(compiled_objects),
             "finalSourceObjectCount": len(base_objects) + len(compiled_objects),
             "rejectedCandidateCount": len(rejected_candidates),
@@ -132,9 +134,18 @@ def normalized_candidates(report: dict[str, Any], image_width: int, image_height
     return sorted(result, key=lambda item: (-item["score"], item["bbox"][1], item["bbox"][0], bbox_area(item["bbox"])))
 
 
+def source_objects_from_decision(decision: dict[str, Any]) -> list[dict[str, Any]]:
+    items = decision.get("sourceObjects")
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    item = decision.get("sourceObject")
+    return [item] if isinstance(item, dict) else []
+
+
 def classify_candidate(
     *,
     candidate: dict[str, Any],
+    all_candidates: list[dict[str, Any]],
     base_objects: list[dict[str, Any]],
     compiled_objects: list[dict[str, Any]],
     ocr_boxes: list[Any],
@@ -191,18 +202,31 @@ def classify_candidate(
             return rejected(candidate, "content_region_too_large_for_control_background", bbox=bbox)
         if text_area_ratio < options.min_control_text_area_ratio or text_area_ratio > options.max_control_text_area_ratio:
             return rejected(candidate, "contained_text_area_ratio_outside_control_range", bbox=bbox)
+        object_index = len([item for item in compiled_objects if item.get("visualKind") == "control_background"]) + 1
+        control = build_control_background_object(
+            index=object_index,
+            candidate=candidate,
+            bbox=bbox,
+            ocr_boxes=contained_text,
+            pixels=pixels,
+            media_source_id=media_source_id,
+            text_area_ratio=text_area_ratio,
+            inference_reasons=["perception_candidate_contains_ocr_text"],
+        )
+        derived = build_inferred_leading_icon_object(
+            index=len([item for item in compiled_objects if item.get("visualKind") == "raster_icon"]) + 1,
+            candidate=candidate,
+            all_candidates=all_candidates,
+            control_bbox=bbox,
+            control_object_id=str(control.get("id") or ""),
+            ocr_boxes=contained_text,
+            pixels=pixels,
+            media_source_id=media_source_id,
+            options=options,
+        )
         return {
             "mode": "compile_source_object",
-            "sourceObject": build_control_background_object(
-                index=len([item for item in compiled_objects if item.get("visualKind") == "control_background"]) + 1,
-                candidate=candidate,
-                bbox=bbox,
-                ocr_boxes=contained_text,
-                pixels=pixels,
-                media_source_id=media_source_id,
-                text_area_ratio=text_area_ratio,
-                inference_reasons=["perception_candidate_contains_ocr_text"],
-            ),
+            "sourceObjects": [control, *([derived] if derived is not None else [])],
         }
 
     if score >= options.min_geometry_control_score and geometry_supports_control_background(
@@ -383,6 +407,7 @@ def build_raster_icon_object(
     text_overlap: float,
     inference_reasons: list[str],
     parent_control_id: str | None,
+    extra_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return source_object(
         object_id=f"m292_perception_icon_{index:04d}",
@@ -403,8 +428,230 @@ def build_raster_icon_object(
             "controlRowSourceCropEligible": True,
             "iconInferenceReasons": inference_reasons,
             **({"parentControlSourceObjectId": parent_control_id} if parent_control_id else {}),
+            **(extra_evidence or {}),
         },
     )
+
+
+def build_inferred_leading_icon_object(
+    *,
+    index: int,
+    candidate: dict[str, Any],
+    all_candidates: list[dict[str, Any]],
+    control_bbox: list[int],
+    control_object_id: str,
+    ocr_boxes: list[Any],
+    pixels: Any,
+    media_source_id: str,
+    options: PerceptionSourceCompilerOptions,
+) -> dict[str, Any] | None:
+    if not ocr_boxes:
+        return None
+    leftmost_text = min(
+        (parse_xywh_bbox(getattr(box, "bbox", None)) for box in ocr_boxes),
+        key=lambda bbox: bbox[0] if bbox is not None else 10**9,
+        default=None,
+    )
+    if leftmost_text is None:
+        return None
+    if candidate_contains_real_child_icon(candidate, all_candidates, leftmost_text):
+        return None
+    roi = leading_icon_search_bbox(control_bbox, leftmost_text)
+    if roi is None:
+        return None
+    icon_bbox = foreground_component_bbox_in_roi(
+        pixels=pixels,
+        roi=roi,
+        control_bbox=control_bbox,
+        text_bbox=leftmost_text,
+        options=options,
+    )
+    if icon_bbox is None:
+        return None
+    return build_raster_icon_object(
+        index=index,
+        candidate={
+            **candidate,
+            "candidateId": f"{candidate['candidateId']}:leading_icon",
+            "bbox": icon_bbox,
+            "areaRatio": bbox_area(icon_bbox) / max(1, pixels.width * pixels.height),
+        },
+        bbox=icon_bbox,
+        pixels=pixels,
+        media_source_id=media_source_id,
+        text_overlap=0.0,
+        inference_reasons=["inferred_leading_icon_inside_compiled_control"],
+        parent_control_id=control_object_id,
+        extra_evidence={
+            "derivedFromPerceptionCandidateId": candidate["candidateId"],
+            "leadingIconSource": "control_pixels_left_of_ocr_text",
+        },
+    )
+
+
+def candidate_contains_real_child_icon(candidate: dict[str, Any], all_candidates: list[dict[str, Any]], text_bbox: list[int]) -> bool:
+    parent_bbox = candidate["bbox"]
+    parent_id = candidate["candidateId"]
+    for item in all_candidates:
+        if item["candidateId"] == parent_id:
+            continue
+        bbox = item["bbox"]
+        text_overlap = intersection_area(bbox, text_bbox) / max(1, bbox_area(bbox))
+        is_left_of_text = x2(bbox) <= text_bbox[0] + max(3, round(text_bbox[3] * 0.25))
+        if (
+            is_left_of_text
+            and text_overlap <= 0.04
+            and containment_ratio(bbox, parent_bbox) >= 0.82
+            and bbox_area(bbox) <= bbox_area(parent_bbox) * 0.32
+        ):
+            return True
+    return False
+
+
+def leading_icon_search_bbox(control_bbox: list[int], text_bbox: list[int]) -> list[int] | None:
+    gap = text_bbox[0] - control_bbox[0]
+    if gap <= max(8, round(text_bbox[3] * 0.75)):
+        return None
+    pad_y = max(3, round(text_bbox[3] * 0.85))
+    inner_pad_x = max(4, round(control_bbox[3] * 0.28))
+    inner_pad_y = max(3, round(control_bbox[3] * 0.12))
+    left = control_bbox[0] + inner_pad_x
+    right = text_bbox[0] - max(3, round(text_bbox[3] * 0.22))
+    top = max(control_bbox[1] + inner_pad_y, text_bbox[1] - pad_y)
+    bottom = min(y2(control_bbox) - inner_pad_y, y2(text_bbox) + pad_y)
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right - left, bottom - top]
+
+
+def foreground_component_bbox_in_roi(
+    *,
+    pixels: Any,
+    roi: list[int],
+    control_bbox: list[int],
+    text_bbox: list[int],
+    options: PerceptionSourceCompilerOptions,
+) -> list[int] | None:
+    bg = dominant_border_rgb(pixels, control_bbox)
+    components = contrast_components(
+        pixels=pixels,
+        roi=roi,
+        bg=bg,
+        threshold=options.min_inferred_leading_icon_contrast,
+        min_area=options.min_inferred_leading_icon_area,
+    )
+    if not components:
+        return None
+    max_edge = max(6, round(text_bbox[3] * options.max_inferred_leading_icon_text_height_ratio))
+    scored: list[tuple[float, list[int]]] = []
+    text_center_y = text_bbox[1] + text_bbox[3] / 2
+    for component in components:
+        bbox = component["bbox"]
+        if bbox[2] > max_edge or bbox[3] > max_edge:
+            continue
+        aspect_ratio = bbox[2] / max(1, bbox[3])
+        if (
+            aspect_ratio < options.min_inferred_leading_icon_aspect_ratio
+            or aspect_ratio > options.max_inferred_leading_icon_aspect_ratio
+        ):
+            continue
+        if bbox[2] < 3 or bbox[3] < 3:
+            continue
+        fill_ratio = component["area"] / max(1, bbox_area(bbox))
+        if fill_ratio < options.min_inferred_leading_icon_fill_ratio:
+            continue
+        if intersection_area(bbox, text_bbox) > 0:
+            continue
+        center_y = bbox[1] + bbox[3] / 2
+        y_score = 1.0 / (1.0 + abs(center_y - text_center_y) / max(1, text_bbox[3]))
+        size_score = min(1.0, (bbox[2] * bbox[3]) / max(1, text_bbox[3] * text_bbox[3]))
+        scored.append((y_score + size_score + fill_ratio, bbox))
+    if not scored:
+        return None
+    return sorted(scored, key=lambda item: (-item[0], item[1][0]))[0][1]
+
+
+def dominant_border_rgb(pixels: Any, bbox: list[int]) -> tuple[int, int, int]:
+    samples: list[tuple[int, int, int]] = []
+    x, y, width, height = bbox
+    for row_idx in {max(0, y), max(0, min(pixels.height - 1, y + height - 1))}:
+        row = pixels.rows[row_idx]
+        for col in range(max(0, x), min(pixels.width, x + width), max(1, width // 24)):
+            offset = col * 3
+            samples.append((row[offset], row[offset + 1], row[offset + 2]))
+    for col in {max(0, x), max(0, min(pixels.width - 1, x + width - 1))}:
+        for row_idx in range(max(0, y), min(pixels.height, y + height), max(1, height // 12)):
+            row = pixels.rows[row_idx]
+            offset = col * 3
+            samples.append((row[offset], row[offset + 1], row[offset + 2]))
+    if not samples:
+        return (255, 255, 255)
+    buckets: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}
+    for rgb in samples:
+        buckets.setdefault((rgb[0] // 16, rgb[1] // 16, rgb[2] // 16), []).append(rgb)
+    best = max(buckets.values(), key=len)
+    return (
+        round(sum(item[0] for item in best) / len(best)),
+        round(sum(item[1] for item in best) / len(best)),
+        round(sum(item[2] for item in best) / len(best)),
+    )
+
+
+def contrast_components(
+    *,
+    pixels: Any,
+    roi: list[int],
+    bg: tuple[int, int, int],
+    threshold: int,
+    min_area: int,
+) -> list[dict[str, Any]]:
+    x, y, width, height = roi
+    visited: set[tuple[int, int]] = set()
+    components: list[dict[str, Any]] = []
+    for row_idx in range(y, y + height):
+        for col in range(x, x + width):
+            point = (col, row_idx)
+            if point in visited or not is_foreground_pixel(pixels, col, row_idx, bg, threshold):
+                continue
+            stack = [point]
+            visited.add(point)
+            points: list[tuple[int, int]] = []
+            while stack:
+                current_x, current_y = stack.pop()
+                points.append((current_x, current_y))
+                for next_x, next_y in (
+                    (current_x - 1, current_y),
+                    (current_x + 1, current_y),
+                    (current_x, current_y - 1),
+                    (current_x, current_y + 1),
+                ):
+                    next_point = (next_x, next_y)
+                    if (
+                        next_x < x
+                        or next_x >= x + width
+                        or next_y < y
+                        or next_y >= y + height
+                        or next_point in visited
+                        or not is_foreground_pixel(pixels, next_x, next_y, bg, threshold)
+                    ):
+                        continue
+                    visited.add(next_point)
+                    stack.append(next_point)
+            if len(points) < min_area:
+                continue
+            left = min(item[0] for item in points)
+            top = min(item[1] for item in points)
+            right = max(item[0] for item in points) + 1
+            bottom = max(item[1] for item in points) + 1
+            components.append({"bbox": [left, top, right - left, bottom - top], "area": len(points)})
+    return components
+
+
+def is_foreground_pixel(pixels: Any, x: int, y: int, bg: tuple[int, int, int], threshold: int) -> bool:
+    row = pixels.rows[y]
+    offset = x * 3
+    rgb = (row[offset], row[offset + 1], row[offset + 2])
+    return abs(rgb[0] - bg[0]) + abs(rgb[1] - bg[1]) + abs(rgb[2] - bg[2]) >= threshold
 
 
 def source_object(
