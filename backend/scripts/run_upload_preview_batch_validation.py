@@ -38,7 +38,25 @@ def main() -> int:
     storage_root = output_dir / "storage"
     database_path = storage_root / "app.db"
     log_path = output_dir / "backend.log"
-    process, log_file = start_backend(port=port, storage_root=storage_root, database_path=database_path, log_path=log_path)
+    if args.enable_perception_model:
+        if not args.perception_model_path.strip():
+            raise SystemExit("--perception-model-path is required when --enable-perception-model is set")
+        perception_model_path = Path(args.perception_model_path).expanduser().resolve()
+        if not perception_model_path.is_file():
+            raise SystemExit(f"Perception model file does not exist: {perception_model_path}")
+    else:
+        perception_model_path = None
+
+    uv_with = normalize_uv_with(args.uv_with)
+    process, log_file = start_backend(
+        port=port,
+        storage_root=storage_root,
+        database_path=database_path,
+        log_path=log_path,
+        enable_perception_model=args.enable_perception_model,
+        perception_model_path=perception_model_path,
+        uv_with=uv_with,
+    )
     base_url = f"http://127.0.0.1:{port}"
     started_at = datetime.now(UTC).isoformat()
     try:
@@ -52,7 +70,14 @@ def main() -> int:
                 print(f"[batch] {index}/{len(inputs)} unsupported_input_format {path}", flush=True)
                 continue
             print(f"[batch] {index}/{len(inputs)} upload-preview {path}", flush=True)
-            record = run_one(base_url, path, input_dir, storage_root, poll_timeout_seconds=args.poll_timeout)
+            record = run_one(
+                base_url,
+                path,
+                input_dir,
+                storage_root,
+                poll_timeout_seconds=args.poll_timeout,
+                expect_perception_artifacts=args.enable_perception_model,
+            )
             records.append(record)
             print(f"[batch] {index}/{len(inputs)} status={record['status']} errors={len(record['errors'])}", flush=True)
             if process.poll() is not None:
@@ -67,7 +92,7 @@ def main() -> int:
     summary = build_summary(records)
     ledger = {
         "schemaName": "UploadPreviewBatchValidationLedger",
-        "schemaVersion": "0.2",
+        "schemaVersion": "0.3",
         "createdAt": datetime.now(UTC).isoformat(),
         "startedAt": started_at,
         "inputDir": str(input_dir),
@@ -75,6 +100,11 @@ def main() -> int:
         "backendBaseUrl": base_url,
         "backendLog": str(log_path),
         "storageRoot": str(storage_root),
+        "runtimeOptions": {
+            "enablePerceptionModel": bool(args.enable_perception_model),
+            "perceptionModelPath": str(perception_model_path) if perception_model_path is not None else None,
+            "uvWith": uv_with,
+        },
         "summary": summary,
         "records": records,
     }
@@ -93,6 +123,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--poll-timeout", type=float, default=180.0)
     parser.add_argument("--recursive", action="store_true", help="Discover candidate images recursively under input-dir.")
     parser.add_argument("--max-files", type=int, default=0, help="Limit discovered candidate images after sorting. 0 means no limit.")
+    parser.add_argument("--enable-perception-model", action="store_true", help="Enable the opt-in M29 perception model upload-preview path.")
+    parser.add_argument("--perception-model-path", default="", help="Local ONNX model path used when --enable-perception-model is set.")
+    parser.add_argument(
+        "--uv-with",
+        action="append",
+        default=[],
+        help="Extra dependency passed to backend startup as `uv run --with <package>`. Repeatable; comma-separated values are also accepted.",
+    )
     return parser.parse_args()
 
 
@@ -129,7 +167,16 @@ def find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def start_backend(*, port: int, storage_root: Path, database_path: Path, log_path: Path) -> tuple[subprocess.Popen[str], TextIO]:
+def start_backend(
+    *,
+    port: int,
+    storage_root: Path,
+    database_path: Path,
+    log_path: Path,
+    enable_perception_model: bool = False,
+    perception_model_path: Path | None = None,
+    uv_with: list[str] | None = None,
+) -> tuple[subprocess.Popen[str], TextIO]:
     env = os.environ.copy()
     env.update(
         {
@@ -138,20 +185,14 @@ def start_backend(*, port: int, storage_root: Path, database_path: Path, log_pat
             "PUBLIC_BASE_URL": f"http://127.0.0.1:{port}",
             "UPLOAD_PREVIEW_PROFILE": "production",
             "IMAGE_FIGMA_LOAD_LOCAL_ENV": "true",
+            "M29_PERCEPTION_MODEL_ENABLED": "true" if enable_perception_model else "false",
         }
     )
+    if perception_model_path is not None:
+        env["M29_PERCEPTION_MODEL_PATH"] = str(perception_model_path)
     log_file = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
-        [
-            "uv",
-            "run",
-            "uvicorn",
-            "app.main:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-        ],
+        build_backend_command(port=port, uv_with=uv_with or []),
         cwd=BACKEND_ROOT,
         env=env,
         text=True,
@@ -159,6 +200,36 @@ def start_backend(*, port: int, storage_root: Path, database_path: Path, log_pat
         stderr=subprocess.STDOUT,
     )
     return process, log_file
+
+
+def normalize_uv_with(values: list[str]) -> list[str]:
+    packages: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for part in str(value).split(","):
+            package = part.strip()
+            if not package or package in seen:
+                continue
+            seen.add(package)
+            packages.append(package)
+    return packages
+
+
+def build_backend_command(*, port: int, uv_with: list[str]) -> list[str]:
+    command = ["uv", "run"]
+    for package in normalize_uv_with(uv_with):
+        command.extend(["--with", package])
+    command.extend(
+        [
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ]
+    )
+    return command
 
 
 def wait_for_health(base_url: str, *, timeout_seconds: float) -> None:
@@ -224,6 +295,16 @@ def base_record(image_path: Path, input_dir: Path) -> dict[str, Any]:
         "visibleImageCount": 0,
         "visibleSymbolCount": 0,
         "fallbackCount": 0,
+        "perceptionCandidateCount": 0,
+        "compiledSourceObjectCount": 0,
+        "compiledControlBackgroundCount": 0,
+        "compiledRasterIconCount": 0,
+        "plannedShapeReplayCount": 0,
+        "plannedIconReplayCount": 0,
+        "copiedImageAssetCleanupTargetCount": 0,
+        "copiedImageAssetShapeErasedCount": 0,
+        "copiedImageAssetInternalErasedCount": 0,
+        "materializedVisibleNodeCount": 0,
         "cleanupTargetCount": 0,
         "executedCleanupCount": 0,
         "ownershipConflictCount": 0,
@@ -245,7 +326,15 @@ def relative_to_or_self(path: Path, root: Path) -> str:
         return str(path)
 
 
-def run_one(base_url: str, image_path: Path, input_dir: Path, storage_root: Path, *, poll_timeout_seconds: float) -> dict[str, Any]:
+def run_one(
+    base_url: str,
+    image_path: Path,
+    input_dir: Path,
+    storage_root: Path,
+    *,
+    poll_timeout_seconds: float,
+    expect_perception_artifacts: bool = False,
+) -> dict[str, Any]:
     record: dict[str, Any] = base_record(image_path, input_dir)
     try:
         upload = upload_png(base_url, image_path)
@@ -254,7 +343,7 @@ def run_one(base_url: str, image_path: Path, input_dir: Path, storage_root: Path
         task = wait_for_task(base_url, task_id, timeout_seconds=poll_timeout_seconds)
         record["status"] = task["data"]["status"]
         record["taskStage"] = task["data"]["stage"]
-        collect_artifacts(record, storage_root, task_id, base_url=base_url)
+        collect_artifacts(record, storage_root, task_id, base_url=base_url, expect_perception_artifacts=expect_perception_artifacts)
         if record["status"] != "completed":
             record["failedStage"] = record["taskStage"]
             record["degradedReason"] = "task_not_completed"
@@ -306,7 +395,7 @@ def wait_for_task(base_url: str, task_id: str, *, timeout_seconds: float) -> dic
     raise RuntimeError(f"task {task_id} did not finish before timeout; last={last_task}")
 
 
-def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, *, base_url: str) -> None:
+def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, *, base_url: str, expect_perception_artifacts: bool = False) -> None:
     root = storage_root / "upload_previews" / task_id
     artifact_paths = {
         "stageTimings": root / "stage_timings.json",
@@ -334,6 +423,14 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
         "sourceGateDiffPng": root / "m29_dsl_visual_comparison" / "source_gate_diff.png",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
+    if expect_perception_artifacts:
+        artifact_paths.update(
+            {
+                "perceptionModelReport": root / "m29_perception_model" / "perception_model_report.json",
+                "perceptionSourceCompilerReport": root / "m29_perception_source_compiler" / "perception_source_compiler_report.json",
+                "perceptionSourceCompilerM292": root / "m29_perception_source_compiler" / "source_ui_physical_graph.perception.json",
+            }
+        )
     for key, path in artifact_paths.items():
         exists = path.exists()
         record["artifacts"][key] = {"path": str(path), "exists": exists}
@@ -364,6 +461,9 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
     load_summary(record, "bStageQuality", artifact_paths["bStageQualityReport"])
     load_summary(record, "dslVisualComparison", artifact_paths["dslVisualComparisonReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
+    if expect_perception_artifacts:
+        load_summary(record, "perceptionModel", artifact_paths["perceptionModelReport"])
+        load_summary(record, "perceptionSourceCompiler", artifact_paths["perceptionSourceCompilerReport"])
     derive_record_metrics(record)
     validate_dsl_assets(record, artifact_paths["dsl"], base_url=base_url)
 
@@ -428,11 +528,25 @@ def derive_record_metrics(record: dict[str, Any]) -> None:
     replay_summary = record.get("summaries", {}).get("replayPlan", {})
     materialization_summary = record.get("summaries", {}).get("materialization", {})
     ownership_summary = record.get("summaries", {}).get("ownershipConservation", {})
+    perception_summary = record.get("summaries", {}).get("perceptionModel", {})
+    compiler_summary = record.get("summaries", {}).get("perceptionSourceCompiler", {})
+    if isinstance(perception_summary, dict):
+        record["perceptionCandidateCount"] = int(perception_summary.get("candidateCount") or 0)
+    if isinstance(compiler_summary, dict):
+        record["compiledSourceObjectCount"] = int(compiler_summary.get("compiledSourceObjectCount") or 0)
+        record["compiledControlBackgroundCount"] = int(compiler_summary.get("compiledControlBackgroundCount") or 0)
+        record["compiledRasterIconCount"] = int(compiler_summary.get("compiledRasterIconCount") or 0)
     if isinstance(replay_summary, dict):
+        record["plannedShapeReplayCount"] = int(replay_summary.get("plannedShapeReplayCount") or 0)
+        record["plannedIconReplayCount"] = int(replay_summary.get("plannedIconReplayCount") or 0)
+        record["copiedImageAssetCleanupTargetCount"] = int(replay_summary.get("copiedImageAssetCleanupTargetCount") or 0)
         record["cleanupTargetCount"] = int(replay_summary.get("fallbackCleanupTargetCount") or 0) + int(
             replay_summary.get("copiedImageAssetCleanupTargetCount") or 0
         )
     if isinstance(materialization_summary, dict):
+        record["copiedImageAssetShapeErasedCount"] = int(materialization_summary.get("copiedImageAssetShapeErasedCount") or 0)
+        record["copiedImageAssetInternalErasedCount"] = int(materialization_summary.get("copiedImageAssetInternalErasedCount") or 0)
+        record["materializedVisibleNodeCount"] = int(materialization_summary.get("visibleNodeCount") or 0)
         record["executedCleanupCount"] = (
             int(materialization_summary.get("fallbackErasedBBoxCount") or 0)
             + int(materialization_summary.get("copiedImageAssetTextErasedCount") or 0)
@@ -528,6 +642,16 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     dsl_visual_count = 0
     max_dsl_visual_changed_pixel_ratio10 = 0.0
     max_dsl_visual_gate_changed_pixel_ratio10 = 0.0
+    total_perception_candidates = 0
+    total_compiled_source_objects = 0
+    total_compiled_controls = 0
+    total_compiled_icons = 0
+    total_planned_shape_replay = 0
+    total_planned_icon_replay = 0
+    total_copied_cleanup_targets = 0
+    total_copied_shape_erased = 0
+    total_copied_internal_erased = 0
+    total_materialized_visible_nodes = 0
     for record in records:
         if record.get("uploadSupported"):
             supported += 1
@@ -539,6 +663,16 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
                 supported_failed += 1
         if record.get("degradedReason"):
             degraded += 1
+        total_perception_candidates += int(record.get("perceptionCandidateCount") or 0)
+        total_compiled_source_objects += int(record.get("compiledSourceObjectCount") or 0)
+        total_compiled_controls += int(record.get("compiledControlBackgroundCount") or 0)
+        total_compiled_icons += int(record.get("compiledRasterIconCount") or 0)
+        total_planned_shape_replay += int(record.get("plannedShapeReplayCount") or 0)
+        total_planned_icon_replay += int(record.get("plannedIconReplayCount") or 0)
+        total_copied_cleanup_targets += int(record.get("copiedImageAssetCleanupTargetCount") or 0)
+        total_copied_shape_erased += int(record.get("copiedImageAssetShapeErasedCount") or 0)
+        total_copied_internal_erased += int(record.get("copiedImageAssetInternalErasedCount") or 0)
+        total_materialized_visible_nodes += int(record.get("materializedVisibleNodeCount") or 0)
         if any(error.get("type") == "backend_process_exited" for error in record.get("errors", [])):
             backend_crash += 1
         missing_artifacts += sum(1 for error in record.get("errors", []) if error.get("type") == "missing_artifact")
@@ -621,6 +755,16 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalDesignTokenCandidateCount": total_design_token_candidates,
         "totalBStageRepairCost": total_b_stage_repair_cost,
         "totalControlledStructureGroupCount": total_controlled_structure_groups,
+        "totalPerceptionCandidateCount": total_perception_candidates,
+        "totalCompiledSourceObjectCount": total_compiled_source_objects,
+        "totalCompiledControlBackgroundCount": total_compiled_controls,
+        "totalCompiledRasterIconCount": total_compiled_icons,
+        "totalPlannedShapeReplayCount": total_planned_shape_replay,
+        "totalPlannedIconReplayCount": total_planned_icon_replay,
+        "totalCopiedImageAssetCleanupTargetCount": total_copied_cleanup_targets,
+        "totalCopiedImageAssetShapeErasedCount": total_copied_shape_erased,
+        "totalCopiedImageAssetInternalErasedCount": total_copied_internal_erased,
+        "totalMaterializedVisibleNodeCount": total_materialized_visible_nodes,
         "averageDslVisualNormalizedMeanAbsError": round(total_dsl_visual_mean_error / max(1, dsl_visual_count), 6),
         "maxDslVisualChangedPixelRatio10": round(max_dsl_visual_changed_pixel_ratio10, 6),
         "averageDslVisualGateNormalizedMeanAbsError": round(total_dsl_visual_gate_mean_error / max(1, dsl_visual_count), 6),

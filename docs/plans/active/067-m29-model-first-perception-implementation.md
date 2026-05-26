@@ -713,14 +713,46 @@ Direct validation still uses OCR_PROVIDER=fake because real OCR credentials are 
 
 ### Stage 7: Real Sample Batch And Figma-Facing Inspection
 
-Run:
+Enhance the HTTP batch validation script so it can run the opt-in model-first path without making `onnxruntime` a project dependency.
+
+Script requirements:
+
+```text
+--enable-perception-model
+--perception-model-path /Volumes/WorkDrive/Models/model_fp16.onnx
+--uv-with onnxruntime
+```
+
+The ledger must record perception/compiler/replay/materializer metrics, not just task success:
+
+```text
+perceptionCandidateCount
+compiledSourceObjectCount
+compiledControlBackgroundCount
+compiledRasterIconCount
+plannedShapeReplayCount
+plannedIconReplayCount
+copiedImageAssetCleanupTargetCount
+copiedImageAssetShapeErasedCount
+copiedImageAssetInternalErasedCount
+materializedVisibleNodeCount
+```
+
+Run the first ten:
 
 ```bash
 cd backend
 uv run python scripts/run_upload_preview_batch_validation.py \
   --input-dir /Users/luhui/Downloads/m29 \
-  --poll-timeout 300
+  --max-files 10 \
+  --poll-timeout 300 \
+  --startup-timeout 60 \
+  --enable-perception-model \
+  --perception-model-path /Volumes/WorkDrive/Models/model_fp16.onnx \
+  --uv-with onnxruntime
 ```
+
+Run the hard regression image by copying it into a temporary one-image input directory and using the same command without `--max-files`.
 
 Inspect:
 
@@ -750,6 +782,82 @@ Acceptance:
 - Meaningful improvement over current M29 on first ten images.
 - Hard regression image has selectable button backgrounds/icons/text where model evidence supports them.
 - Remaining failures are classified into model miss, OCR miss, ownership compiler blocker, cleanup blocker, or materializer blocker.
+
+Implementation status:
+
+```text
+backend/scripts/run_upload_preview_batch_validation.py now supports opt-in model-first runtime with --enable-perception-model, --perception-model-path, and repeatable/comma-separated --uv-with packages.
+Ledger schemaVersion is 0.3 and records runtimeOptions plus perception/compiler/replay/materializer counters.
+Perception artifacts are required only when --enable-perception-model is set, so default batch validation remains compatible with non-model runs.
+No backend dependency was added; onnxruntime is still supplied only by uv --with during model-first validation.
+```
+
+Stage 7 validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_upload_preview_batch_validation_script.py -q
+  result: 6 passed
+
+py_compile:
+  python3 -m py_compile scripts/run_upload_preview_batch_validation.py tests/test_upload_preview_batch_validation_script.py
+  result: passed
+
+diff check:
+  git diff --check
+  result: passed
+
+first ten HTTP batch:
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_025602/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalPerceptionCandidateCount: 659
+  totalCompiledSourceObjectCount: 139
+  totalCompiledControlBackgroundCount: 104
+  totalCompiledRasterIconCount: 35
+  totalPlannedShapeReplayCount: 242
+  totalPlannedIconReplayCount: 380
+  totalCopiedImageAssetCleanupTargetCount: 173
+  totalCopiedImageAssetShapeErasedCount: 39
+  totalCopiedImageAssetInternalErasedCount: 9
+  totalMaterializedVisibleNodeCount: 1593
+  totalVisibleOwnershipOverlapConflicts: 8
+  averageDslVisualGateNormalizedMeanAbsError: 0.013056
+  maxDslVisualGateChangedPixelRatio10: 0.171102
+
+hard regression HTTP batch:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_030126/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalPerceptionCandidateCount: 13
+  totalCompiledSourceObjectCount: 6
+  totalCompiledControlBackgroundCount: 4
+  totalCompiledRasterIconCount: 2
+  totalPlannedShapeReplayCount: 13
+  totalPlannedIconReplayCount: 9
+  totalCopiedImageAssetCleanupTargetCount: 17
+  totalCopiedImageAssetShapeErasedCount: 12
+  totalCopiedImageAssetInternalErasedCount: 0
+  totalMaterializedVisibleNodeCount: 35
+  averageDslVisualGateNormalizedMeanAbsError: 0.007875
+  maxDslVisualGateChangedPixelRatio10: 0.055304
+```
+
+Stage 7 conclusion:
+
+```text
+The model-first path is now reproducible through the real /api/upload-preview HTTP flow.
+Candidate recall is no longer the first blocker on the hard regression image.
+The next owning layer is quality hardening in perception_source_compiler and residual cleanup:
+  first-ten image (8) has compiled controls/icons but copiedImageAssetCleanupTargetCount=0.
+  source-crop icon cleanup still rarely executes because transparent/safe replacement is missing.
+  first-ten batch still has 8 visible ownership overlap conflicts.
+Do not patch Renderer/plugin/materializer to hide these; continue at source ownership/replay cleanup layers.
+```
 
 ### Stage 8: Legacy Pruning Plan
 
