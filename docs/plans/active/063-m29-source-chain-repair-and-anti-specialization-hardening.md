@@ -433,7 +433,56 @@ uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py 
 
 ### Stage 8: Legacy / Dead Path Cleanup
 
+状态：completed，提交待创建。
+
 先做 import/test inventory，标记 active、compat-only、dead-path debt，再单独删除。不得仅凭历史文档或 Gemini 结论删除。
+
+Stage 8 第一性原理判断：
+
+```text
+real goal: 降低 legacy/dead path 对当前 source-chain 修复的误导；
+source truth: 当前 imports、tests、current-mainline code map；
+information-loss point: 旧 audit package 保留了公式和测试，但合同早于当前 M29.2/M29.5/promotion 边界；
+do-not-do: 不凭 Gemini 或目录名直接删除历史 package，不把旧 audit 重新接回 upload-preview 主线；
+safe change: 把当前主线唯一需要的 OCR -> M29TextBox adapter 迁到 app.ocr，legacy text_masked_media_audit 只 re-export 兼容旧测试。
+```
+
+Stage 8 实现边界：
+
+```text
+text_boxes_from_ocr_document 迁入 backend/app/ocr.py；
+upload_preview / source_ui_physical_graph / plan_materializer 改从 app.ocr 导入；
+text_masked_media_audit.ocr_text 保留 re-export，兼容 legacy audit API；
+current-mainline-code-map 标记旧 M29.0.x/M29.1 audit packages 为 compat-only；
+新增 import-boundary guard，阻止 current mainline roots 重新 import legacy audit packages。
+```
+
+Stage 8 不改变：
+
+```text
+public API / DSL / Renderer / plugin protocol；
+OCR provider output schema；
+M29TextBox 类型；
+legacy audit package public imports；
+upload-preview stage order；
+M29 source ownership / replay / cleanup behavior。
+```
+
+Stage 8 验证：
+
+```bash
+python -m py_compile backend/app/ocr.py backend/app/text_masked_media_audit/ocr_text.py backend/app/upload_preview/pipeline.py backend/app/source_ui_physical_graph/pipeline.py backend/app/plan_materializer/builder.py backend/tests/test_image_math_import_boundaries.py backend/tests/test_baidu_ocr.py backend/tests/test_text_masked_media_audit.py
+cd backend
+uv run pytest tests/test_image_math_import_boundaries.py tests/test_baidu_ocr.py tests/test_text_masked_media_audit.py -q
+uv run pytest tests/test_upload_preview_pipeline.py tests/test_source_ui_physical_graph.py tests/test_m29_plan_materializer.py -q
+```
+
+结果：
+
+```text
+29 passed
+48 passed
+```
 
 ## Acceptance
 

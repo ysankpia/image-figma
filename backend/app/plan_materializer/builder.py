@@ -7,8 +7,8 @@ from typing import Any
 
 from ..dsl_factory import build_deterministic_dsl
 from ..m29_materialization_utils import list_dicts
+from ..ocr import text_boxes_from_ocr_document
 from ..png_tools import UnsupportedPngCropError, decode_png_pixels, read_png_metadata
-from ..text_masked_media_audit import text_boxes_from_ocr_document
 from .assets import relative_posix, resolve_m29_dir
 from .background import apply_source_background
 from .cleanup import (

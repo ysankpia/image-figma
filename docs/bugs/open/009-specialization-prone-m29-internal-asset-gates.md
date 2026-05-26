@@ -121,6 +121,7 @@ PromoteInternalAsset(o) =
 - 覆盖 ownership conservation 对 promoted internal icon copied-image cleanup 的解释；普通未提升 icon 仍不得擦 parent media。
 - 覆盖 promotion IoU / containment dedupe，不因 1-2px bbox 漂移重复晋升。
 - 覆盖 cleanup risk gate：promoted icon alpha/text 风险或 promoted shape replacement style 缺失时，M29.5 保留 visible replay 并只拒绝 copied-image cleanup。
+- 覆盖 legacy import boundary：current mainline roots 不得重新 import pre-mainline M29 audit packages；OCR -> M29TextBox adapter 由 `app.ocr` 承担，legacy audit package 只保留兼容 re-export。
 
 Stage 2 新增保护：
 
@@ -142,7 +143,7 @@ Stage 2 新增保护：
 
 ## Validation Evidence
 
-当前 bug 已进入 runtime 修复阶段；Stage 1-7 已改动内部报告、promotion、M29.5 cleanup 授权和对应 tests/docs，但未改 public DSL/API/Renderer/plugin protocol。
+当前 bug 已进入 runtime 修复阶段；Stage 1-8 已改动内部报告、promotion、M29.5 cleanup 授权、legacy import boundary 和对应 tests/docs，但未改 public DSL/API/Renderer/plugin protocol。
 
 已执行的相关验证：
 
@@ -259,6 +260,22 @@ uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py 
 ```text
 37 passed
 66 passed
+```
+
+063 Stage 8 验证：
+
+```bash
+python -m py_compile backend/app/ocr.py backend/app/text_masked_media_audit/ocr_text.py backend/app/upload_preview/pipeline.py backend/app/source_ui_physical_graph/pipeline.py backend/app/plan_materializer/builder.py backend/tests/test_image_math_import_boundaries.py backend/tests/test_baidu_ocr.py backend/tests/test_text_masked_media_audit.py
+cd backend
+uv run pytest tests/test_image_math_import_boundaries.py tests/test_baidu_ocr.py tests/test_text_masked_media_audit.py -q
+uv run pytest tests/test_upload_preview_pipeline.py tests/test_source_ui_physical_graph.py tests/test_m29_plan_materializer.py -q
+```
+
+结果：
+
+```text
+29 passed
+48 passed
 ```
 
 525 批量验证第一轮修复：

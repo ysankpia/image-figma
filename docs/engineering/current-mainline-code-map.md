@@ -87,6 +87,8 @@ assets.py: M29 materialized assets publish
 
 这些模块不承载 owner、relation、cleanup 授权或 materialization 策略。
 
+OCR document to M29 text-box conversion is owned by `backend/app/ocr.py` via `text_boxes_from_ocr_document`. Current mainline packages must import that adapter from `app.ocr`, not from historical M29 audit packages.
+
 ## Source Truth Layer
 
 ### Raw M29 Primitive Graph
@@ -669,6 +671,24 @@ source OCR text bbox 只用于 `dsl_visual_comparison` 的验证 mask，不改�
 
 Some pre-mainline M29 audit modules remain in the repository as regression harnesses and evidence contracts. They are not active product API routes, but their public imports stay stable for tests and archival validation.
 
+Current status:
+
+```text
+active runtime:
+  none of these packages should be imported by upload_preview, source_ui_physical_graph, m29_replay_plan, or plan_materializer
+
+compat-only:
+  text_masked_media_audit
+  text_aware_visual_object_refinement
+  visual_object_candidate_audit
+  symbol_fragment_grouping
+  text_visual_ownership_gate
+  visual_evidence_normalization
+
+deletion rule:
+  delete or archive only in a separate cleanup plan after import/test inventory and migration of any useful formulas into the current M29 source-chain modules
+```
+
 `backend/app/text_aware_visual_object_refinement/` contains the M29.0.5 text-aware visual object refinement harness:
 
 ```text
@@ -721,12 +741,12 @@ validation.py: M29.1 document and artifact validation
 
 `app.symbol_fragment_grouping` continues to export the historical public API, including `extract_m291_symbol_fragment_grouping`, `validate_m291_document`, and the M29.1 dataclasses.
 
-`backend/app/text_masked_media_audit/` contains the M29.0.2 text-masked media audit harness and OCR text-box adapter:
+`backend/app/text_masked_media_audit/` contains the M29.0.2 text-masked media audit harness and a compatibility OCR text-box adapter re-export:
 
 ```text
 pipeline.py: extraction entry, before/after raw M29 runs, document assembly
 types.py: M29.0.2 options/region/evidence/debug/document dataclasses
-ocr_text.py: OCR payload to `M29TextBox` conversion
+ocr_text.py: compatibility re-export of `app.ocr.text_boxes_from_ocr_document`
 regions.py: default regions, text suppression, bbox/metrics parsing, count extraction
 evidence.py: media evidence collection from M29, M29.1, blocked, and text-suppressed outputs
 artifacts.py: text mask, before/after overlays, evidence overlay, preview sheet helpers
@@ -734,7 +754,7 @@ report.py: JSON/Markdown/meta outputs
 validation.py: document and PNG artifact validation
 ```
 
-`app.text_masked_media_audit` continues to export the historical public API. `text_boxes_from_ocr_document` remains a current-mainline dependency for upload preview and plan materialization.
+`app.text_masked_media_audit` continues to export the historical public API. `text_boxes_from_ocr_document` remains available there for legacy audit tests, but current mainline code must import it from `app.ocr`.
 
 `backend/app/text_visual_ownership_gate/` contains the M29.0.7 text/visual ownership routing harness:
 

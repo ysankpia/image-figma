@@ -4,9 +4,9 @@ import json
 from datetime import UTC, datetime
 
 from ..database import json_dumps
+from ..ocr import text_boxes_from_ocr_document
 from ..png_tools import read_png_metadata
 from ..state import state
-from ..text_masked_media_audit import text_boxes_from_ocr_document
 from .assets import publish_m29_assets
 from .paths import UploadPreviewPaths, pipeline_paths
 from .stages import (

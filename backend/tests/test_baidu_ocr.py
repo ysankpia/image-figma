@@ -465,7 +465,7 @@ def test_parse_ppocrv5_rows_tilted_polygon_has_high_angle() -> None:
 
 
 def test_ocr_text_box_conversion_preserves_rotation_meta() -> None:
-    from app.text_masked_media_audit import text_boxes_from_ocr_document
+    from app.ocr import text_boxes_from_ocr_document
 
     boxes, warnings = text_boxes_from_ocr_document(
         {
@@ -499,7 +499,7 @@ def test_ocr_text_box_conversion_preserves_rotation_meta() -> None:
 
 
 def test_ocr_text_box_conversion_keeps_box_without_meta() -> None:
-    from app.text_masked_media_audit import text_boxes_from_ocr_document
+    from app.ocr import text_boxes_from_ocr_document
 
     boxes, warnings = text_boxes_from_ocr_document(
         {

@@ -9,6 +9,26 @@ IMAGE_MATH_ROOT = APP_ROOT / "image_math"
 JSON_TOOLS = APP_ROOT / "json_tools.py"
 
 IMAGE_MATH_DEPS = ("numpy", "PIL", "skimage")
+CURRENT_MAINLINE_ROOTS = (
+    APP_ROOT / "upload_preview",
+    APP_ROOT / "source_ui_physical_graph",
+    APP_ROOT / "m29_replay_plan",
+    APP_ROOT / "plan_materializer",
+)
+LEGACY_AUDIT_PREFIXES = (
+    "app.text_masked_media_audit",
+    "app.visual_object_candidate_audit",
+    "app.visual_evidence_normalization",
+    "app.text_aware_visual_object_refinement",
+    "app.text_visual_ownership_gate",
+    "app.symbol_fragment_grouping",
+    "text_masked_media_audit",
+    "visual_object_candidate_audit",
+    "visual_evidence_normalization",
+    "text_aware_visual_object_refinement",
+    "text_visual_ownership_gate",
+    "symbol_fragment_grouping",
+)
 DOMAIN_IMPORT_PREFIXES = (
     "app.source_ui_physical_graph",
     "app.m29_replay_plan",
@@ -84,12 +104,30 @@ def test_image_math_does_not_contain_domain_decision_terms() -> None:
     assert violations == []
 
 
+def test_current_mainline_does_not_import_legacy_audit_packages() -> None:
+    violations: list[str] = []
+    for path in current_mainline_python_files():
+        for imported in imported_modules(path):
+            if module_matches(imported, LEGACY_AUDIT_PREFIXES):
+                violations.append(f"{relative(path)} imports {imported}")
+
+    assert violations == []
+
+
 def app_python_files() -> list[Path]:
     return sorted(path for path in APP_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
 
 
 def image_math_python_files() -> list[Path]:
     return sorted(path for path in IMAGE_MATH_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
+
+
+def current_mainline_python_files() -> list[Path]:
+    files: list[Path] = []
+    for root in CURRENT_MAINLINE_ROOTS:
+        if root.is_dir():
+            files.extend(path for path in root.rglob("*.py") if "__pycache__" not in path.parts)
+    return sorted(files)
 
 
 def imported_modules(path: Path) -> list[str]:

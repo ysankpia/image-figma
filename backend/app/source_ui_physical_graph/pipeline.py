@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from ..image_math import build_scale_profile
+from ..ocr import text_boxes_from_ocr_document
 from ..png_tools import UnsupportedPngCropError, decode_png_pixels, read_png_metadata
-from ..text_masked_media_audit import text_boxes_from_ocr_document
 from .artifacts import build_summary, render_overlay
 from .blocked import classify_blocked_objects
 from .dedupe import dedupe_objects
