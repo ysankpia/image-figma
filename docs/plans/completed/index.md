@@ -33,6 +33,7 @@
 - [Codia-like Real Sample Hardening](061-codia-like-real-sample-hardening.md) — `completed`
 - [Bottom Tab Selected Icon Anchor Hardening](062-bottom-tab-selected-icon-anchor-hardening.md) — `completed`
 - [M29 Source-Chain Repair And Anti-Specialization Hardening](063-m29-source-chain-repair-and-anti-specialization-hardening.md) — `completed`
+- [M29 Media-Contained Control Icon Source-Chain Hardening](064-m29-media-contained-control-icon-source-chain-hardening.md) — `completed`
 - [M29 Direct Replay Experiment](029-direct-replay-experiment.md) — `completed`
 - [M29 Direct Replay Figma Compare Mode](029-direct-replay-figma-compare-mode.md) — `completed`
 - [M29 Direct Shape Physical Style Preservation](029-direct-shape-physical-style-preservation.md) — `completed`

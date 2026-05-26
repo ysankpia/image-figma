@@ -187,6 +187,97 @@ def test_copied_image_cleanup_is_explainable_for_promoted_internal_icon(tmp_path
     assert report["summary"]["conflictCount"] == 0
 
 
+def test_control_row_source_crop_promoted_icon_overlap_is_explainable_without_copied_cleanup(tmp_path: Path) -> None:
+    source_evidence = {
+        "promotionSource": "m29_6_internal_icon_candidate",
+        "mediaSourceObjectId": "media",
+        "transparentAssetPath": None,
+        "controlRowSourceCropEligible": True,
+        "textOverlapRatio": 0.03,
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 160, 120], "media_region", "preserve_raster", "image_replay"),
+            m292_object("label", [80, 42, 42, 18], "editable_ui_text", "editable_text", "text_replay"),
+            m292_object("promoted_icon", [40, 30, 48, 42], "raster_icon", "raster_icon", "icon_replay", source_evidence=source_evidence),
+        ],
+        edges=[
+            edge("edge_media_label", "media", "label", "contains"),
+            edge("edge_media_icon", "media", "promoted_icon", "contains"),
+            edge("edge_label_icon", "label", "promoted_icon", "overlaps"),
+        ],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 160, 120], "image_replay", "m29_image"),
+            plan_item(
+                "plan_label",
+                "label",
+                [80, 42, 42, 18],
+                "text_replay",
+                "m29_text",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "editable_text_contained_by_media"},
+                ],
+            ),
+            plan_item(
+                "plan_icon",
+                "promoted_icon",
+                [40, 30, 48, 42],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}],
+                source_evidence=source_evidence,
+            ),
+        ],
+    )
+
+    assert report["summary"]["cleanupTargetCounts"] == {"copied_image_asset": 1, "fallback": 2}
+    assert not [item for item in report["conflicts"] if item["type"] == "visible_ownership_overlap"]
+    assert not [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+
+
+def test_control_row_source_crop_promoted_icon_cannot_claim_copied_cleanup_without_transparent_asset(tmp_path: Path) -> None:
+    source_evidence = {
+        "promotionSource": "m29_6_internal_icon_candidate",
+        "mediaSourceObjectId": "media",
+        "transparentAssetPath": None,
+        "controlRowSourceCropEligible": True,
+        "textOverlapRatio": 0.03,
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+            m292_object("promoted_icon", [30, 30, 20, 20], "raster_icon", "raster_icon", "icon_replay", source_evidence=source_evidence),
+        ],
+        edges=[edge("edge_media_icon", "media", "promoted_icon", "contains")],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 100, 80], "image_replay", "m29_image"),
+            plan_item(
+                "plan_icon",
+                "promoted_icon",
+                [30, 30, 20, 20],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "promoted_internal_asset_contained_by_media",
+                    },
+                ],
+                source_evidence=source_evidence,
+            ),
+        ],
+    )
+
+    conflicts = [item for item in report["conflicts"] if item["type"] == "invalid_copied_image_asset_cleanup"]
+    assert conflicts
+    assert report["summary"]["errorCount"] == 1
+
+
 def test_promoted_internal_icon_low_label_overlap_is_explainable_when_both_cleanup_same_media(tmp_path: Path) -> None:
     icon_evidence = {
         "promotionSource": "m29_6_internal_icon_candidate",
@@ -236,6 +327,53 @@ def test_promoted_internal_icon_low_label_overlap_is_explainable_when_both_clean
 
     assert not [item for item in report["conflicts"] if item["type"] == "visible_ownership_overlap"]
     assert report["summary"]["conflictCount"] == 0
+
+
+def test_promoted_internal_icon_transparent_padding_label_overlap_is_explainable_without_copied_cleanup(tmp_path: Path) -> None:
+    icon_evidence = {
+        "promotionSource": "m29_6_internal_icon_candidate",
+        "mediaSourceObjectId": "media",
+        "transparentAssetPath": "assets/transparent/promoted_icon.png",
+        "textOverlapRatio": 0.04,
+    }
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("media", [0, 0, 180, 180], "media_region", "preserve_raster", "image_replay"),
+            m292_object("label", [82, 126, 48, 22], "editable_ui_text", "editable_text", "text_replay"),
+            m292_object("promoted_icon", [56, 42, 96, 96], "raster_icon", "raster_icon", "icon_replay", source_evidence=icon_evidence),
+        ],
+        edges=[
+            edge("edge_media_label", "media", "label", "contains"),
+            edge("edge_media_icon", "media", "promoted_icon", "contains"),
+            edge("edge_label_icon", "label", "promoted_icon", "overlaps", metrics={"leftInRightRatio": 0.24, "rightInLeftRatio": 0.04}),
+        ],
+        plan_items=[
+            plan_item("plan_media", "media", [0, 0, 180, 180], "image_replay", "m29_image"),
+            plan_item(
+                "plan_label",
+                "label",
+                [82, 126, 48, 22],
+                "text_replay",
+                "m29_text",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {"target": "copied_image_asset", "targetSourceObjectId": "media", "reason": "editable_text_contained_by_media"},
+                ],
+            ),
+            plan_item(
+                "plan_icon",
+                "promoted_icon",
+                [56, 42, 96, 96],
+                "icon_replay",
+                "m29_symbol",
+                cleanup_targets=[{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}],
+                source_evidence=icon_evidence,
+            ),
+        ],
+    )
+
+    assert not [item for item in report["conflicts"] if item["type"] == "visible_ownership_overlap"]
 
 
 def test_promoted_internal_icon_high_label_overlap_is_still_reported(tmp_path: Path) -> None:

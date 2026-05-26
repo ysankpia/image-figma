@@ -183,6 +183,35 @@ def test_action_row_group_support_marks_medium_candidates_without_text_literal_r
     assert all(item["confidence"] in {"high", "medium"} for item in supported)
 
 
+def test_single_control_row_icon_text_geometry_supports_execution_without_repetition(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 240, 120])],
+        raw_nodes=[raw_symbol("icon", [42, 42, 36, 34], color_count=12, fill_ratio=0.68)],
+        ocr_blocks=[ocr_block("label", [104, 46, 54, 20])],
+    )
+
+    candidate = next(item for item in report["internalCandidates"] if item["rawNodeId"] == "icon")
+    assert candidate["candidateDecision"] == "accepted_report_candidate"
+    assert candidate["matchedOcrBoxId"] == "label"
+    assert candidate["anchorRelation"] == "left_of_text"
+    assert candidate["controlRowSupportedExecution"] is True
+    assert "single_control_row_icon_text_geometry" in candidate["reasons"]
+    assert candidate.get("groupSupportedExecution") is not True
+
+
+def test_large_hero_fragment_does_not_get_single_control_row_execution_support(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 300, 180])],
+        raw_nodes=[raw_symbol("hero", [34, 34, 138, 86], texture=0.22, color_count=56, fill_ratio=0.42)],
+        ocr_blocks=[ocr_block("label", [190, 62, 48, 18])],
+    )
+
+    candidate = next(item for item in report["internalCandidates"] if item["rawNodeId"] == "hero")
+    assert candidate.get("controlRowSupportedExecution") is not True
+
+
 def test_fragmented_icon_parts_with_same_text_anchor_get_union_candidate(tmp_path: Path) -> None:
     report = media_report(
         tmp_path,

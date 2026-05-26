@@ -222,6 +222,12 @@ def copied_cleanup_is_valid_for_shape_background(
     return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
 
 
+def promoted_internal_icon_has_visible_replay_evidence(evidence: dict[str, Any]) -> bool:
+    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and (
+        bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True
+    )
+
+
 def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_lookup: dict[frozenset[str], dict[str, Any]]) -> bool:
     actions = {left["finalReplayAction"], right["finalReplayAction"]}
     if "shape_replay" in actions and actions & {"text_replay", "icon_replay", "image_replay"}:
@@ -231,9 +237,8 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
         image = right if icon is left else left
         evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
         if (
-            evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
+            promoted_internal_icon_has_visible_replay_evidence(evidence)
             and evidence.get("mediaSourceObjectId") == image["sourceObjectId"]
-            and bool(evidence.get("transparentAssetPath"))
         ):
             return True
         return bool(evidence.get("labelAnchorOcrBoxId")) and bool(evidence.get("blockedIds")) and has_copied_cleanup_target(
@@ -257,18 +262,30 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
 
 def is_promoted_internal_icon_label_overlap(icon: dict[str, Any], text: dict[str, Any]) -> bool:
     evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
-        return False
-    if not evidence.get("transparentAssetPath"):
+    if not promoted_internal_icon_has_visible_replay_evidence(evidence):
         return False
     media_id = str(evidence.get("mediaSourceObjectId") or "")
     if not media_id:
         return False
+    text_overlap = optional_float(evidence.get("textOverlapRatio"))
+    if text_overlap is not None and text_overlap > MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO:
+        return False
+    if text_overlap is not None and evidence.get("transparentAssetPath"):
+        return True
+    if text_overlap is not None and evidence.get("controlRowSourceCropEligible") is True:
+        return True
     if not has_copied_cleanup_target(icon, media_id) or not has_copied_cleanup_target(text, media_id):
         return False
-    if safe_float(evidence.get("textOverlapRatio")) > MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO:
-        return False
     return True
+
+
+def optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def safe_float(value: Any) -> float:

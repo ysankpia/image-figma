@@ -136,6 +136,56 @@ def test_medium_confidence_internal_icon_without_group_support_is_report_rejecte
     assert item["cleanupEligible"] is False
 
 
+def test_control_row_internal_icon_is_execution_supported_without_group_support(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_objects=[],
+        ocr_blocks=[],
+        internal_candidates=[
+            internal_icon(
+                "internal_icon",
+                [18, 18, 24, 24],
+                confidence="medium",
+                control_row_supported=True,
+            )
+        ],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "allow"
+    assert item["visibleReplayEligible"] is True
+    assert item["cleanupEligible"] is False
+    assert item["controlRowSupportedExecution"] is True
+    assert "control_row_supported_internal_candidate" in item["reasons"]
+    assert "internal_candidate_not_execution_supported" not in item["risks"]
+
+
+def test_control_row_internal_icon_with_edge_alpha_risk_allows_visible_source_crop_not_cleanup(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_png=make_icon_png(edge_alpha_risk=True),
+        source_objects=[],
+        ocr_blocks=[],
+        internal_candidates=[
+            internal_icon(
+                "internal_icon",
+                [0, 0, 24, 24],
+                confidence="medium",
+                control_row_supported=True,
+            )
+        ],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "reject"
+    assert item["assetPath"] is None
+    assert item["visibleReplayEligible"] is True
+    assert item["cleanupEligible"] is False
+    assert item["gateDecision"]["controlRowSourceCropEligible"] is True
+    assert item["gateDecision"]["visibleReplayReason"] == "control_row_source_crop_visible_replay_alpha_cleanup_blocked"
+    assert "edge_alpha_risk" in item["reasons"]
+
+
 def test_medium_strong_anchor_internal_icon_can_generate_analysis_only_asset(tmp_path: Path) -> None:
     report = transparent_report(
         tmp_path,
@@ -420,6 +470,7 @@ def internal_icon(
     raw_subtype: str = "icon",
     compactness: float = 0.86,
     color_coherence: float = 0.78,
+    control_row_supported: bool = False,
 ) -> dict:
     return {
         "candidateId": candidate_id,
@@ -443,4 +494,5 @@ def internal_icon(
         "anchorRelation": anchor_relation,
         "metrics": {},
         **({"groupSupportedExecution": True} if group_supported else {}),
+        **({"controlRowSupportedExecution": True} if control_row_supported else {}),
     }

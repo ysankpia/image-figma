@@ -68,6 +68,46 @@ def test_analysis_only_transparent_asset_does_not_allow_visible_replay(tmp_path:
     assert "transparent_asset_not_allowing_visible_replay" in item["decision"]["reasons"]
 
 
+def test_control_row_supported_internal_icon_can_allow_visible_replay_without_alpha_asset(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 52, 44],
+                confidence="medium",
+                text_anchor=0.90,
+                text_overlap=0.02,
+                hero_penalty=0.10,
+                control_row_supported=True,
+                raw_type="pixel_component",
+                raw_subtype="non_ocr_foreground",
+                anchor_relation="left_of_text",
+            )
+        ],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 52, 44],
+                decision="reject",
+                text_overlap=0.02,
+                visible_replay_eligible=True,
+                asset_path=None,
+                visible_replay_reason="control_row_source_crop_visible_replay_alpha_cleanup_blocked",
+            )
+        ],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "allow_visible_replay"
+    assert item["decision"]["promotionAllowed"] is True
+    assert item["positiveEvidence"]["transparentAsset"] == 1.0
+    assert item["positiveEvidence"]["controlRow"] == 1.0
+    assert "control_row_supported_internal_icon" in item["decision"]["reasons"]
+    assert "generic_foreground_not_visible_replay" not in item["decision"]["reasons"]
+
+
 def test_high_text_overlap_rejects_internal_icon_contract(tmp_path: Path) -> None:
     report = evidence_report(
         tmp_path,
@@ -308,6 +348,7 @@ def internal_icon(
     raw_type: str = "symbol",
     raw_subtype: str = "icon",
     anchor_relation: str = "above_text",
+    control_row_supported: bool = False,
 ) -> dict:
     return {
         "candidateId": candidate_id,
@@ -332,6 +373,7 @@ def internal_icon(
             "textMaskOverlap": text_overlap,
         },
         **({"groupSupportedExecution": True} if group_supported else {}),
+        **({"controlRowSupportedExecution": True} if control_row_supported else {}),
     }
 
 
@@ -386,7 +428,12 @@ def transparent_item(
     decision: str,
     text_overlap: float = 0.0,
     visible_replay_eligible: bool | None = None,
+    asset_path: str | None = "__default__",
+    visible_replay_reason: str | None = None,
 ) -> dict:
+    resolved_asset_path = "assets/transparent/debug.png" if decision == "allow" else None
+    if asset_path != "__default__":
+        resolved_asset_path = asset_path
     item = {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
@@ -394,15 +441,14 @@ def transparent_item(
         "mediaSourceObjectId": "media",
         "bbox": bbox,
         "decision": decision,
-        "assetPath": "assets/transparent/debug.png" if decision == "allow" else None,
+        "assetPath": resolved_asset_path,
         "textOverlap": text_overlap,
     }
     if visible_replay_eligible is not None:
         item["visibleReplayEligible"] = visible_replay_eligible
         item["gateDecision"] = {
             "visibleReplayEligible": visible_replay_eligible,
-            "visibleReplayReason": "asset_generated_and_alpha_quality_passed"
-            if visible_replay_eligible
-            else "analysis_only_without_visible_replay_support",
+            "visibleReplayReason": visible_replay_reason
+            or ("asset_generated_and_alpha_quality_passed" if visible_replay_eligible else "analysis_only_without_visible_replay_support"),
         }
     return item

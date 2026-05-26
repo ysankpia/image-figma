@@ -175,6 +175,7 @@ def score_internal_candidates(
         )
     apply_marker_repetition_roles(candidates, scale_profile)
     apply_repetition_scores(candidates)
+    apply_single_control_row_support(candidates, text_inside, scale_profile)
     candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1, scale_profile))
     return candidates
 
@@ -459,6 +460,63 @@ def apply_repetition_scores(candidates: list[dict[str, Any]]) -> None:
             item["reasons"].append("repeated_icon_text_row_geometry")
             item["groupSupportedExecution"] = item["confidence"] in {"high", "medium"}
         item["confidence"] = confidence_label(item["score"], item["scoreBreakdown"]["textAnchorScore"], item["candidateDecision"])
+
+
+def apply_single_control_row_support(candidates: list[dict[str, Any]], text_inside: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> None:
+    text_lookup = {block["ocrBoxId"]: block for block in text_inside}
+    for item in candidates:
+        if item["candidateDecision"] != "accepted_report_candidate" or item["role"] != "internal_icon_candidate":
+            continue
+        if item.get("groupSupportedExecution") is True:
+            continue
+        ocr_id = item.get("matchedOcrBoxId")
+        block = text_lookup.get(str(ocr_id or ""))
+        if block is None:
+            continue
+        if not single_control_row_icon_geometry(item, block, scale_profile):
+            continue
+        item["controlRowSupportedExecution"] = True
+        item["reasons"].append("single_control_row_icon_text_geometry")
+
+
+def single_control_row_icon_geometry(candidate: dict[str, Any], block: dict[str, Any], scale_profile: ImageScaleProfile) -> bool:
+    relation = str(candidate.get("anchorRelation") or "")
+    if relation not in {"above_text", "below_text", "left_of_text", "right_of_text"}:
+        return False
+    breakdown = candidate.get("scoreBreakdown") if isinstance(candidate.get("scoreBreakdown"), dict) else {}
+    text_anchor = float(breakdown.get("textAnchorScore") or 0.0)
+    relation_score = float(breakdown.get("relationConsistencyScore") or 0.0)
+    text_overlap = float(breakdown.get("textMaskOverlap") or 0.0)
+    hero = float(breakdown.get("heroGraphicPenalty") or 0.0)
+    compactness = float(breakdown.get("compactnessScore") or 0.0)
+    if text_anchor < 0.82 or relation_score < 0.70 or text_overlap > 0.14 or hero > 0.28 or compactness < 0.45:
+        return False
+    bbox = candidate["bbox"]
+    text_bbox = block["bbox"]
+    icon_short = min(bbox[2], bbox[3])
+    icon_long = max(bbox[2], bbox[3])
+    text_height = max(1, text_bbox[3])
+    if icon_short < scale_profile.length(8, minimum=5, maximum=40):
+        return False
+    if icon_long > max(scale_profile.length(96, minimum=36, maximum=220), text_height * 4.2):
+        return False
+    if bbox_area(bbox) > max(scale_profile.area(7200, minimum=3200), bbox_area(text_bbox) * 2.8):
+        return False
+    if relation in {"left_of_text", "right_of_text"}:
+        vertical_delta = abs(center_y(bbox) - center_y(text_bbox))
+        horizontal_gap = text_bbox[0] - x2(bbox) if relation == "left_of_text" else bbox[0] - x2(text_bbox)
+        return (
+            vertical_delta <= max(scale_profile.length(18, minimum=8, maximum=56), text_height * 0.80)
+            and -icon_long * 0.20 <= horizontal_gap <= max(scale_profile.length(52, minimum=16, maximum=140), text_height * 2.3)
+            and 0.35 <= bbox[3] / text_height <= 3.4
+        )
+    horizontal_delta = abs(center_x(bbox) - center_x(text_bbox))
+    vertical_gap = text_bbox[1] - y2(bbox) if relation == "above_text" else bbox[1] - y2(text_bbox)
+    return (
+        horizontal_delta <= max(scale_profile.length(28, minimum=10, maximum=100), text_bbox[2] * 0.55)
+        and -icon_long * 0.20 <= vertical_gap <= max(scale_profile.length(52, minimum=16, maximum=140), text_height * 2.3)
+        and 0.35 <= bbox[2] / max(1, text_bbox[2]) <= 2.6
+    )
 
 
 def apply_marker_repetition_roles(candidates: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> None:

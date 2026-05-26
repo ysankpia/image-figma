@@ -106,6 +106,7 @@ def normalize_media_internal_candidates(raw_items: Any) -> tuple[list[dict[str, 
                 "scoreBreakdown": breakdown if isinstance(breakdown, dict) else {},
                 "metrics": metrics if isinstance(metrics, dict) else {},
                 "groupSupportedExecution": item.get("groupSupportedExecution") is True,
+                "controlRowSupportedExecution": item.get("controlRowSupportedExecution") is True,
             }
         )
     return sorted(candidates, key=lambda item: item["candidateId"]), warnings

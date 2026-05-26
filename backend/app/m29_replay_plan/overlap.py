@@ -91,7 +91,9 @@ def is_promoted_internal_icon(item: dict[str, Any]) -> bool:
     if item.get("finalReplayAction") != "icon_replay":
         return False
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and bool(evidence.get("transparentAssetPath"))
+    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and (
+        bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True
+    )
 
 
 def is_promoted_internal_icon_label_overlap(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -112,7 +114,7 @@ def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dic
     return (
         evidence.get("promotionSource") == "m29_6_internal_icon_candidate"
         and evidence.get("mediaSourceObjectId") == media["sourceObjectId"]
-        and bool(evidence.get("transparentAssetPath"))
+        and (bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True)
     )
 
 

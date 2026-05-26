@@ -376,6 +376,39 @@ def test_m295_keeps_promoted_internal_icon_replay_when_cleanup_risk_is_high(tmp_
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
 
 
+def test_m295_keeps_control_row_source_crop_promoted_icon_without_copied_cleanup(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_control_row_source_crop_icon",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_icon(
+                    "promoted_icon",
+                    [30, 30, 20, 20],
+                    "media",
+                    evidence_score=0.78,
+                    transparent_asset_path=None,
+                    control_row_source_crop_eligible=True,
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "promoted_icon"],
+            [edge("media_icon", "media", "promoted_icon", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "promoted_icon")
+    assert icon_item["finalReplayAction"] == "icon_replay"
+    assert icon_item["targetRole"] == "m29_symbol"
+    assert icon_item["sourceEvidence"]["controlRowSourceCropEligible"] is True
+    assert not any(target.get("target") == "copied_image_asset" for target in icon_item["cleanupTargets"])
+    assert "cleanup_rejected_missing_transparent_replacement" in icon_item["risks"]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
+
+
 def test_m295_keeps_higher_evidence_promoted_internal_icon_for_near_equal_candidates(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_promoted_internal_icon_near_equal",
@@ -691,7 +724,10 @@ def promoted_internal_icon(
     evidence_score: float,
     text_overlap_ratio: float = 0.0,
     alpha_metrics: dict | None = None,
+    transparent_asset_path: str | None = "__default__",
+    control_row_source_crop_eligible: bool = False,
 ) -> dict:
+    resolved_asset_path = f"assets/transparent/{object_id}.png" if transparent_asset_path == "__default__" else transparent_asset_path
     return m292_object(
         object_id,
         bbox,
@@ -701,7 +737,8 @@ def promoted_internal_icon(
         source_evidence={
             "mediaSourceObjectId": media_id,
             "promotionSource": "m29_6_internal_icon_candidate",
-            "transparentAssetPath": f"assets/transparent/{object_id}.png",
+            "transparentAssetPath": resolved_asset_path,
+            "controlRowSourceCropEligible": control_row_source_crop_eligible,
             "evidenceScore": evidence_score,
             "textOverlapRatio": text_overlap_ratio,
             **(alpha_metrics or {}),

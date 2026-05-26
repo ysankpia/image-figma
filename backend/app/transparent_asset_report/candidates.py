@@ -102,7 +102,8 @@ def build_m296_candidate(
     if internal.get("candidateDecision") != "accepted_report_candidate":
         risks.append("internal_candidate_not_accepted")
     group_supported = internal.get("groupSupportedExecution") is True
-    execution_supported = internal.get("confidence") == "high" or group_supported
+    control_row_supported = internal.get("controlRowSupportedExecution") is True
+    execution_supported = internal.get("confidence") == "high" or group_supported or control_row_supported
     independent_alpha_supported = allows_independent_alpha_analysis(internal, text_overlap, hero_penalty, media_lookup)
     if not execution_supported and not independent_alpha_supported:
         risks.append("internal_candidate_not_execution_supported")
@@ -118,6 +119,8 @@ def build_m296_candidate(
         risks.append("bbox_out_of_image_bounds")
     if group_supported:
         reasons.append("group_supported_internal_candidate")
+    if control_row_supported:
+        reasons.append("control_row_supported_internal_candidate")
     if independent_alpha_supported and not execution_supported:
         reasons.append("strong_independent_evidence_alpha_analysis")
     alpha_profile = "anchored_soft_edge_icon" if allows_anchored_soft_edge_profile(internal, text_overlap, hero_penalty, group_supported) else "default_icon"
@@ -135,6 +138,7 @@ def build_m296_candidate(
         "alphaProfile": alpha_profile,
         "textOverlap": round(text_overlap, 6),
         "executionSupportedForVisibleReplay": execution_supported,
+        "controlRowSupportedExecution": control_row_supported,
         "analysisSupportedByIndependentEvidence": independent_alpha_supported,
         "candidateAllowedForAlpha": not risks,
         "preflightReasons": reasons,

@@ -106,6 +106,73 @@ def test_internal_source_promotion_rejects_analysis_only_transparent_asset(tmp_p
     assert result.report["rejectedCandidates"][0]["reason"] == "analysis_only_without_visible_replay_support"
 
 
+def test_internal_source_promotion_promotes_control_row_source_crop_icon_without_transparent_asset(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 24, 24],
+                confidence="medium",
+                text_anchor=0.90,
+                control_row_supported=True,
+            )
+        ],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 24, 24],
+                decision="reject",
+                analysis_bbox=[16, 16, 32, 32],
+                visible_replay_eligible=True,
+                asset_path=None,
+                control_row_source_crop_eligible=True,
+            )
+        ],
+        evidence_contract_items=[evidence_contract_item("contract", "candidate", decision="allow_visible_replay", evidence_score=0.78)],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["bbox"] == [20, 20, 24, 24]
+    assert promoted["sourceEvidence"]["transparentAssetPath"] is None
+    assert promoted["sourceEvidence"]["transparentAssetBbox"] == [20, 20, 24, 24]
+    assert promoted["sourceEvidence"]["controlRowSupportedExecution"] is True
+    assert promoted["sourceEvidence"]["controlRowSourceCropEligible"] is True
+    assert "control_row_source_crop_visible_replay" in promoted["reasons"]
+
+
+def test_internal_source_promotion_rejects_control_row_source_crop_without_visible_replay_gate(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 24, 24],
+                confidence="medium",
+                text_anchor=0.90,
+                control_row_supported=True,
+            )
+        ],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 24, 24],
+                decision="reject",
+                visible_replay_eligible=False,
+                asset_path=None,
+                control_row_source_crop_eligible=False,
+            )
+        ],
+        evidence_contract_items=[evidence_contract_item("contract", "candidate", decision="allow_visible_replay", evidence_score=0.78)],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 0
+    assert result.report["rejectedCandidates"][0]["reason"] == "analysis_only_without_visible_replay_support"
+
+
 def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(tmp_path: Path) -> None:
     result = promotion_report(
         tmp_path,
@@ -393,6 +460,7 @@ def internal_icon(
     confidence: str,
     text_anchor: float,
     group_supported: bool = False,
+    control_row_supported: bool = False,
     media_source_object_id: str = "media",
 ) -> dict:
     return {
@@ -406,6 +474,7 @@ def internal_icon(
         "score": 0.84,
         "scoreBreakdown": {"heroGraphicPenalty": 0.1, "textMaskOverlap": 0.0, "textAnchorScore": text_anchor},
         **({"groupSupportedExecution": True} if group_supported else {}),
+        **({"controlRowSupportedExecution": True} if control_row_supported else {}),
     }
 
 
@@ -452,7 +521,12 @@ def transparent_item(
     analysis_bbox: list[int] | None = None,
     media_source_object_id: str = "media",
     visible_replay_eligible: bool | None = None,
+    asset_path: str | None = "__default__",
+    control_row_source_crop_eligible: bool = False,
 ) -> dict:
+    resolved_asset_path = "assets/transparent/debug.png" if decision == "allow" else None
+    if asset_path != "__default__":
+        resolved_asset_path = asset_path
     item = {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
@@ -461,13 +535,14 @@ def transparent_item(
         "bbox": bbox,
         "analysisBbox": analysis_bbox,
         "decision": decision,
-        "assetPath": "assets/transparent/debug.png" if decision == "allow" else None,
+        "assetPath": resolved_asset_path,
         "textOverlap": 0.0,
     }
     if visible_replay_eligible is not None:
         item["visibleReplayEligible"] = visible_replay_eligible
         item["gateDecision"] = {
             "visibleReplayEligible": visible_replay_eligible,
+            "controlRowSourceCropEligible": control_row_source_crop_eligible,
             "visibleReplayReason": "asset_generated_and_alpha_quality_passed"
             if visible_replay_eligible
             else "analysis_only_without_visible_replay_support",

@@ -304,8 +304,14 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
     candidate_id = str(candidate["candidateId"])
     media_id = str(candidate["mediaSourceObjectId"])
     raw_node_id = str(candidate.get("rawNodeId") or "")
+    matched_ocr_box_id = str(candidate.get("matchedOcrBoxId") or "")
     candidate_bbox = normalize_bbox(candidate["bbox"], "candidate.bbox")
-    bbox = normalize_bbox(transparent_item.get("analysisBbox") or candidate_bbox, "transparent_item.analysisBbox")
+    transparent_asset_path = transparent_item.get("assetPath")
+    bbox = (
+        normalize_bbox(transparent_item.get("analysisBbox") or candidate_bbox, "transparent_item.analysisBbox")
+        if transparent_asset_path
+        else candidate_bbox
+    )
     decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}
     return {
         "id": f"m292_promoted_internal_icon_{index:04d}",
@@ -315,14 +321,16 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
         "replayDecision": "icon_replay",
         "sourceEvidence": {
             "m29NodeIds": [raw_node_id] if raw_node_id else [],
-            "ocrBoxIds": [],
+            "ocrBoxIds": [matched_ocr_box_id] if matched_ocr_box_id else [],
             "blockedIds": [],
             "mediaSourceObjectId": media_id,
             "candidateBbox": candidate_bbox,
             "mediaInternalCandidateId": candidate_id,
-            "transparentAssetPath": transparent_item.get("assetPath"),
+            "transparentAssetPath": transparent_asset_path,
             "transparentAssetBbox": bbox,
             "transparentAssetCandidateId": transparent_item.get("candidateId"),
+            "controlRowSupportedExecution": candidate.get("controlRowSupportedExecution") is True,
+            "controlRowSourceCropEligible": bool((transparent_item.get("gateDecision") if isinstance(transparent_item.get("gateDecision"), dict) else {}).get("controlRowSourceCropEligible")),
             "transparentAssetAlphaCoverage": transparent_item.get("alphaCoverage"),
             "transparentAssetForegroundAreaRatio": transparent_item.get("foregroundAreaRatio"),
             "transparentAssetEdgeAlphaCoverageGt32": transparent_item.get("edgeAlphaCoverageGt32"),
@@ -341,7 +349,7 @@ def promoted_object(candidate: dict[str, Any], transparent_item: dict[str, Any],
             "m29_6_high_confidence_internal_icon_candidate"
             if candidate.get("confidence") == "high"
             else "m29_6_group_supported_internal_icon_candidate",
-            "transparent_asset_allow",
+            "transparent_asset_allow" if transparent_asset_path else "control_row_source_crop_visible_replay",
             "evidence_contract_allow_visible_replay",
             "internal_source_promotion",
         ],

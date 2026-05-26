@@ -36,7 +36,8 @@ def build_m296_contract_item(
     hero_penalty = float_value(breakdown.get("heroGraphicPenalty"))
     media_containment = containment_ratio(bbox, media_bbox) if media_bbox is not None else 0.0
     transparent_allowed = transparent_visible_replay_eligible(transparent_item)
-    execution_supported = candidate.get("confidence") == "high" or candidate.get("groupSupportedExecution") is True
+    control_row_supported = candidate.get("controlRowSupportedExecution") is True
+    execution_supported = candidate.get("confidence") == "high" or candidate.get("groupSupportedExecution") is True or control_row_supported
 
     positive = {
         "sourceCandidateScore": clamp01(float_value(candidate.get("score"))),
@@ -46,6 +47,7 @@ def build_m296_contract_item(
         "repetition": clamp01(float_value(breakdown.get("repetitionScore"))),
         "relationConsistency": clamp01(float_value(breakdown.get("relationConsistencyScore"))),
         "transparentAsset": 1.0 if transparent_allowed else 0.0,
+        "controlRow": 1.0 if control_row_supported else 0.0,
     }
     cleanup_risk = cleanup_risk_score(
         transparent_allowed=transparent_allowed,
@@ -58,7 +60,11 @@ def build_m296_contract_item(
         "textOverlapPenalty": round(min(1.0, text_overlap / MAX_TEXT_OVERLAP_FOR_VISIBLE), 4),
         "heroGraphicPenalty": round(hero_penalty, 4),
         "cleanupRisk": cleanup_risk,
-        "repairCostPenalty": repair_cost_penalty(transparent_allowed=transparent_allowed, execution_supported=execution_supported),
+        "repairCostPenalty": repair_cost_penalty(
+            transparent_allowed=transparent_allowed,
+            execution_supported=execution_supported,
+            control_row_supported=control_row_supported,
+        ),
     }
     evidence_score = score_evidence(positive, negative)
     hard_reasons = hard_rejection_reasons(
@@ -72,6 +78,7 @@ def build_m296_contract_item(
         hard_reasons=hard_reasons,
         transparent_allowed=transparent_allowed,
         execution_supported=execution_supported,
+        control_row_supported=control_row_supported,
         media_containment=media_containment,
         text_overlap=text_overlap,
         hero_penalty=hero_penalty,
@@ -82,6 +89,7 @@ def build_m296_contract_item(
         hard_reasons=hard_reasons,
         transparent_allowed=transparent_allowed,
         execution_supported=execution_supported,
+        control_row_supported=control_row_supported,
         media_containment=media_containment,
         evidence_score=evidence_score,
     )
@@ -270,6 +278,7 @@ def score_evidence(positive: dict[str, float], negative: dict[str, float]) -> fl
         + positive["repetition"] * 0.10
         + positive["relationConsistency"] * 0.10
         + positive["transparentAsset"] * 0.20
+        + positive.get("controlRow", 0.0) * 0.14
         - negative["textOverlapPenalty"] * 0.20
         - negative["heroGraphicPenalty"] * 0.16
         - negative["cleanupRisk"] * 0.12
@@ -293,12 +302,22 @@ def score_shape_evidence(positive: dict[str, float], negative: dict[str, float])
     return round(clamp01(score), 4)
 
 
-def decision_mode(*, evidence_score: float, hard_reasons: list[str], transparent_allowed: bool, execution_supported: bool, media_containment: float, text_overlap: float, hero_penalty: float) -> str:
+def decision_mode(
+    *,
+    evidence_score: float,
+    hard_reasons: list[str],
+    transparent_allowed: bool,
+    execution_supported: bool,
+    control_row_supported: bool,
+    media_containment: float,
+    text_overlap: float,
+    hero_penalty: float,
+) -> str:
     if hard_reasons:
         return "reject"
     if (
         evidence_score >= ALLOW_VISIBLE_THRESHOLD
-        and transparent_allowed
+        and (transparent_allowed or control_row_supported)
         and execution_supported
         and media_containment >= MIN_MEDIA_CONTAINMENT_FOR_VISIBLE
         and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
@@ -393,12 +412,21 @@ def is_unanchored_generic_foreground(candidate: dict[str, Any], *, text_overlap:
         and float_value(breakdown.get("textAnchorScore")) >= MIN_ANCHORED_FOREGROUND_TEXT_ANCHOR
         and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
         and hero_penalty <= MAX_ANCHORED_FOREGROUND_HERO_PENALTY
-        and candidate.get("groupSupportedExecution") is True
+        and (candidate.get("groupSupportedExecution") is True or candidate.get("controlRowSupportedExecution") is True)
     )
     return not anchored
 
 
-def decision_reasons(*, mode: str, hard_reasons: list[str], transparent_allowed: bool, execution_supported: bool, media_containment: float, evidence_score: float) -> list[str]:
+def decision_reasons(
+    *,
+    mode: str,
+    hard_reasons: list[str],
+    transparent_allowed: bool,
+    execution_supported: bool,
+    control_row_supported: bool,
+    media_containment: float,
+    evidence_score: float,
+) -> list[str]:
     if mode == "reject":
         return hard_reasons or ["weak_evidence_contract_score"]
     reasons: list[str] = ["evidence_contract_score_threshold_met"] if evidence_score >= REPORT_ONLY_THRESHOLD else []
@@ -410,6 +438,8 @@ def decision_reasons(*, mode: str, hard_reasons: list[str], transparent_allowed:
         reasons.append("execution_supported_internal_icon")
     else:
         reasons.append("execution_support_missing")
+    if control_row_supported:
+        reasons.append("control_row_supported_internal_icon")
     if media_containment >= MIN_MEDIA_CONTAINMENT_FOR_VISIBLE:
         reasons.append("same_media_containment")
     if mode == "allow_visible_replay":
@@ -447,10 +477,12 @@ def cleanup_risk_score(*, transparent_allowed: bool, media_containment: float, t
     return round(clamp01(risk), 4)
 
 
-def repair_cost_penalty(*, transparent_allowed: bool, execution_supported: bool) -> float:
+def repair_cost_penalty(*, transparent_allowed: bool, execution_supported: bool, control_row_supported: bool = False) -> float:
     value = 0.10
     if not transparent_allowed:
         value += 0.22
+    if control_row_supported and not transparent_allowed:
+        value -= 0.10
     if not execution_supported:
         value += 0.14
     return round(clamp01(value), 4)
