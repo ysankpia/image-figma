@@ -8,18 +8,19 @@
 
 M29.6 内部资产分解已经避免了文案、文件名、行业、主题色、固定 bbox 这类硬特化；当前生产代码搜索也没有确认到这类 active literal/fixed-sample 特化规则。
 
-但这条链路仍有两类需要后续处理的结构性特化风险：
+这条链路仍有两类需要继续观察的结构性特化风险：
 
 1. **OCR-anchor evidence bias**：内部 foreground pixel scanning 目前主要来自 raw M29 primitive 与 OCR 附近多方向窗口。它已经不是“只看文字上方”，但仍可能漏掉没有 OCR 锚点的内部图形、装饰对象、table marker、圆点或小图标。
 2. **confidence gate drift**：当前实现已允许 `high` confidence 或 `groupSupportedExecution=true` 的 medium candidate 继续进入透明资产和 promotion gate，但文档、合同矩阵、reason 命名仍有 “high-confidence only” 的旧表述，容易把后续实现拉回单一置信度特化。
 
-062 source-chain audit 和 Gemini 对照审计之后，本 bug 的未解决范围扩大为以下通用 source-chain 缺陷：
+062 source-chain audit 和 Gemini 对照审计之后，本 bug 的跟踪范围扩大为以下通用 source-chain 缺陷：
 
 1. **absolute pixel threshold drift**：M29.2、M29.6、transparent asset 和 selected marker 相关逻辑曾有多处绝对像素阈值。Stage 2 已引入内部 scale profile，并覆盖 M29.2 默认 options、M29.6 component/text mask/scan window、transparent preflight、selected tab indicator 的高风险尺寸 gate；后续仍需继续盘点 legacy/dead path 里的旧阈值。
-2. **fixed candidate cap / scan budget**：M29.6 的 component/window candidate 提取曾存在固定 top-N 或固定窗口预算风险。Stage 2 已把 `[:6]` component 截断替换为基于窗口面积和 scale 的 return budget，并把 generic scan/candidate budget 改为 area-density aware；Stage 3 已给 selected marker / status dot / table marker 增加 M29.6 report-only 正向 role evidence。Stage 5 已把这些 marker role 接入 evidence contract / internal source promotion，后续仍需用真实 batch 验证实际覆盖面。
+2. **fixed candidate cap / scan budget**：M29.6 的 component/window candidate 提取曾存在固定 top-N 或固定窗口预算风险。Stage 2 已把 `[:6]` component 截断替换为基于窗口面积和 scale 的 return budget，并把 generic scan/candidate budget 改为 area-density aware；Stage 3 已给 selected marker / status dot / table marker 增加 M29.6 report-only 正向 role evidence；Stage 5 已把这些 marker role 接入 evidence contract / internal source promotion；Stage 6 已把 promotion exact bbox 去重改成 role-compatible spatial merge。后续仍需用真实 batch 验证实际覆盖面。
 3. **transparent gate coupling**：Stage 4 已把 `analysisAllowed`、`assetGenerated`、`visibleReplayEligible`、`cleanupEligible` 拆开。alpha 分析和诊断 PNG 可以先产生，但只有 `visibleReplayEligible=true` 才能被 evidence contract / internal source promotion 当成可见回放证据；cleanup 仍固定由 M29.5 授权。
 4. **promotion role narrowing**：Stage 5 已把 `selected_marker_candidate`、`table_marker_candidate`、`status_dot_candidate` 接入 `shape_geometry/shape_replay` source promotion。`internal_control_background` 仍只保留 role contract；在没有明确 M29.6 role/source evidence 前，不从普通内部图块硬造按钮背景。
-5. **missing fate trace**：一个候选对象从 M29.6 到 final M29.5/materializer 的第一阻断层需要手动翻多个 report，导致后续修复容易退化成阈值猜测。
+5. **missing fate trace**：Stage 1 已加入 bridge fate trace report，用于聚合候选对象从 M29.6 到 final M29.5/materializer 的第一阻断层，避免后续修复退化成手动翻多个 report 后猜阈值。
+6. **cleanup risk coupling**：Stage 7 已把 copied-image cleanup 风险门放回 final M29.5。高风险时只撤 copied-image cleanup target，并记录 `cleanup_rejected_*` risk；visible icon/shape replay 仍保留，materializer 仍只执行 M29.5 plan。
 
 这不是要删除数学阈值。面积、长宽比、foreground contrast、hero/texture penalty、text overlap、alpha coverage 这类阈值是正常数学参数；问题只出现在规则依赖单张样本、固定方向、固定文案、文件名、行业、主题色、固定 bbox，或把一个证据源当成唯一事实源。
 
@@ -87,8 +88,8 @@ PromoteInternalAsset(o) =
   and not OwnershipConflict(o)
 ```
 
-5. M29.5 会在 promoted internal asset 与 parent media 的 relation 成立时写入 copied media cleanup 授权。
-6. Materializer 只消费 M29.5 cleanup target，并优先用 transparent asset alpha mask 擦 parent copied media asset。
+5. M29.5 会在 promoted internal asset 与 parent media 的 relation 成立且 cleanup risk gate 通过时写入 copied media cleanup 授权。
+6. Materializer 只消费 M29.5 cleanup target，并优先用 transparent asset alpha mask 擦 parent copied media asset；如果 M29.5 因风险撤掉 copied-image cleanup target，materializer 仍必须创建对应 visible replay node。
 
 后续修复应继续按通用证据层推进：
 
@@ -97,9 +98,11 @@ PromoteInternalAsset(o) =
 3. 修复 M29.6 fixed top-N / fixed window cap 对小对象的漏检。已完成 Stage 2 第一轮：connected component 固定 top 6 截断已移除，generic scan/candidate budget 改为 scale-aware area-density budget。Stage 3 已补 selected marker / status dot / table marker 的 M29.6 report-only role evidence；后续需要在 evidence/promotion 层决定何时 replay as shape。
 4. 拆分 transparent asset gate，允许 medium + strong independent evidence 的 candidate 进入 alpha analysis，但不绕过 evidence contract。已完成 Stage 4：diagnostic alpha asset 成功不再等同于 visible replay 权限，evidence contract / promotion / bridge fate trace 统一读取 `visibleReplayEligible`。
 5. 增加 selected marker、table marker、status dot、internal control background 的正向 promotion role。已完成 Stage 5 的 marker/status/table 路径：shape role 不需要 transparent PNG，必须通过 evidence contract，再由 internal source promotion 写回 M29.2 `shape_geometry/shape_replay`；internal control background 继续等待明确 source role evidence。
-6. 增加 repeated small-object pattern、circular/marker primitive evidence、separator/control-background evidence。
-7. 需要时再把 `RepetitionSupported(o)` 作为 promotion 许可来源，但必须先有独立 report/test 支撑。
-8. 增加代码级/测试级 guard，禁止 literal text、filename、theme、industry、fixed bbox、single-direction-only anchor 进入 active mainline。
+6. 修复 promotion exact bbox dedupe。已完成 Stage 6：同角色高 IoU / 高 containment / 小幅 bbox 漂移合并为一个 promoted source，不同角色重叠记录 conflict，不静默覆盖。
+7. 增加 cleanup risk gate。已完成 Stage 7：final M29.5 保留 visible replay，只在 alpha/text overlap/replacement style 等证据显示风险高时拒绝 copied-image cleanup target。
+8. 继续增加 repeated small-object pattern、circular/marker primitive evidence、separator/control-background evidence。
+9. 需要时再把 `RepetitionSupported(o)` 作为 promotion 许可来源，但必须先有独立 report/test 支撑。
+10. 增加代码级/测试级 guard，禁止 literal text、filename、theme、industry、fixed bbox、single-direction-only anchor 进入 active mainline。
 
 ## Regression Guard
 
@@ -116,6 +119,8 @@ PromoteInternalAsset(o) =
 - 覆盖 transparent asset edge-alpha 风险拒绝。
 - 覆盖 promoted internal asset 的 M29.5 copied media cleanup 授权和 materializer alpha-mask 擦除。
 - 覆盖 ownership conservation 对 promoted internal icon copied-image cleanup 的解释；普通未提升 icon 仍不得擦 parent media。
+- 覆盖 promotion IoU / containment dedupe，不因 1-2px bbox 漂移重复晋升。
+- 覆盖 cleanup risk gate：promoted icon alpha/text 风险或 promoted shape replacement style 缺失时，M29.5 保留 visible replay 并只拒绝 copied-image cleanup。
 
 Stage 2 新增保护：
 
@@ -133,11 +138,11 @@ Stage 2 新增保护：
 - 覆盖 table/cell 内 circular marker 或 small icon 的通用 source evidence 测试。
 - 覆盖 anti-specialization source scan 或 contract test：active M29 chain 不得出现 literal label、filename、industry、theme、fixed bbox 或 single-direction-only execution gate。
 - 继续扩展 1x/2x/3x scale synthetic UI，用真实 batch 复核 table marker / status dot / selected marker 从 M29.6 role 到 promotion/replay as shape 的覆盖面。
-- 覆盖 promotion IoU / containment dedupe，不因 1-2px bbox 漂移重复晋升。
+- 覆盖 cleanup risk gate 的真实 artifact 指标：visible replay 成功但 copied-image cleanup 被拒绝时，B-stage/visual comparison 不应把它误诊断为 source promotion 失败。
 
 ## Validation Evidence
 
-当前 bug 记录阶段只做审计，不改运行行为。
+当前 bug 已进入 runtime 修复阶段；Stage 1-7 已改动内部报告、promotion、M29.5 cleanup 授权和对应 tests/docs，但未改 public DSL/API/Renderer/plugin protocol。
 
 已执行的相关验证：
 
@@ -221,6 +226,39 @@ uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_pro
 ```text
 25 passed
 71 passed
+```
+
+063 Stage 6 验证：
+
+```bash
+python -m py_compile backend/app/internal_source_promotion/pipeline.py backend/tests/test_internal_source_promotion.py
+cd backend
+uv run pytest tests/test_internal_source_promotion.py -q
+uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_bridge_fate_trace.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+git diff --check
+```
+
+结果：
+
+```text
+12 passed
+74 passed
+```
+
+063 Stage 7 验证：
+
+```bash
+python -m py_compile backend/app/m29_replay_plan/cleanup.py backend/app/m29_replay_plan/pipeline.py backend/app/internal_source_promotion/pipeline.py backend/tests/test_m29_replay_plan.py
+cd backend
+uv run pytest tests/test_m29_replay_plan.py tests/test_internal_source_promotion.py -q
+uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_upload_preview_pipeline.py -q
+```
+
+结果：
+
+```text
+37 passed
+66 passed
 ```
 
 525 批量验证第一轮修复：

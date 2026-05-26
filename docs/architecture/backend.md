@@ -100,7 +100,7 @@ reasons
 risks
 ```
 
-M29.3.1 是纯 bbox relation graph report。M29.4 是 weak structural evidence report。M29.5 是 replay plan quality gate，负责去重、排序、node budget 和 cleanup 授权。
+M29.3.1 是纯 bbox relation graph report。M29.4 是 weak structural evidence report。M29.5 是 replay plan quality gate，负责去重、排序、node budget、cleanup 授权和 copied-image cleanup 风险门。
 
 M29.4 的 cluster role hint 不提供组件化、Auto Layout、Figma Component/Instance 或直接 materialization 权限。它只能进入 M29.5 plan 的解释性 `clusterIds`。
 
@@ -143,7 +143,7 @@ storage/upload_previews/{taskId}/m29_internal_source_promotion/internal_source_p
 storage/upload_previews/{taskId}/m29_internal_source_promotion/source_ui_physical_graph.promoted.json
 ```
 
-promotion 本身不创建 DSL nodes、不直接 materialize。promotion 在写出增强版 M29.2 前会做 role-compatible spatial merge：同角色高 IoU/containment 或小幅 bbox 漂移的重复候选只保留 evidence rank 更高者，不同角色高重叠记录 conflict，不静默互相吞掉。promotion 后 pipeline 会用增强版 M29.2 重新生成最终 M29.3.1、M29.4、M29.5 和 ownership conservation report；M29.5 可以在 parent media relation 成立时为 promoted internal asset 写入 copied media cleanup 授权，后续 hierarchy/layout/materializer 只消费这条最终授权链。
+promotion 本身不创建 DSL nodes、不直接 materialize。promotion 在写出增强版 M29.2 前会做 role-compatible spatial merge：同角色高 IoU/containment 或小幅 bbox 漂移的重复候选只保留 evidence rank 更高者，不同角色高重叠记录 conflict，不静默互相吞掉。promotion 后 pipeline 会用增强版 M29.2 重新生成最终 M29.3.1、M29.4、M29.5 和 ownership conservation report；M29.5 可以在 parent media relation 成立时为 promoted internal asset 写入 copied media cleanup 授权。若 promoted icon 的 alpha metrics、text overlap 或 promoted shape 的 replacement style evidence 表明擦除风险高，M29.5 保留 visible replay，但拒绝 copied-image cleanup target 并记录 `cleanup_rejected_*` risk。后续 hierarchy/layout/materializer 只消费这条最终授权链。
 
 M29 bridge fate trace report 位于 materializer 之后。它读取 M29.6、transparent asset、evidence contract、internal source promotion、final M29.5 replay plan 和 materialization report，写出每个 internal candidate 的第一阻断层和下游决策：
 
@@ -237,6 +237,7 @@ Materializer 负责：
 - 复制或裁切 plan-approved raster/media/icon assets。
 - 只对 plan-approved visible actions 创建 DSL nodes。
 - 只按 M29.5 `cleanupTargets` 执行 fallback erasure 和 copied image asset cleanup，包括 editable text cleanup 和 promoted internal asset alpha-mask cleanup。
+- 当 M29.5 因 cleanup risk gate 移除 copied-image cleanup target 时，仍必须 materialize 对应 visible replay node；materializer 不得重新判断 cleanup 是否安全。
 - 写出 `materialization_report.json` 供诊断。
 
 Materializer 不负责：

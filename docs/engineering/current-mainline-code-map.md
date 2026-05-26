@@ -209,6 +209,7 @@ sort visible replay order
 enforce node budget
 authorize fallback cleanup
 authorize copied image asset cleanup
+gate copied image asset cleanup risk without cancelling visible replay
 apply visible ownership overlap suppression
 record risk and cluster support
 ```
@@ -230,7 +231,7 @@ types.py: options/result and replay action/target role Literal contracts
 normalization.py: M29.2 source object normalization
 lookups.py: M29.3 edge and M29.4 cluster lookup construction
 decisions.py: replay action mapping, target role, duplicate priority
-cleanup.py: fallback and copied-image asset cleanup authorization
+cleanup.py: fallback and copied-image asset cleanup authorization/risk gating
 overlap.py: visible replay overlap suppression for duplicate media, text, icon, and shape owners
 budget.py: visible node budget suppression and duplicate plan items
 report.py: reasons and summary construction
@@ -821,6 +822,8 @@ M29.2 sourceEvidence.shapeFillOverride / shapeRadiusOverride
 ```
 
 The materializer must not discard raw M29 `style.fill` and resample the whole bbox when a source shape already provided stable fill evidence. Bbox mean sampling is only a fallback, because support/control bboxes commonly contain text, icons, photos, or darker foreground pixels that would contaminate the replayed shape color.
+
+Copied-image cleanup risk is decided before materialization by final M29.5. If a promoted internal icon has risky alpha metrics, high text overlap, or a shape marker lacks replacement style evidence, M29.5 keeps the visible replay item but omits the copied-image cleanup target and records a `cleanup_rejected_*` risk. The materializer must continue to execute only the cleanup targets present in the plan.
 
 It must not own:
 

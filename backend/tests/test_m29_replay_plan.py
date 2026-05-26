@@ -256,6 +256,31 @@ def test_m295_promoted_internal_shape_marker_replays_as_shape(tmp_path: Path) ->
     } in marker_item["cleanupTargets"]
 
 
+def test_m295_keeps_internal_shape_replay_when_cleanup_style_evidence_is_missing(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_promoted_internal_shape_cleanup_risk",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape("marker", [24, 64, 8, 8], "media", internal_role="table_marker_candidate", evidence_score=0.82),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "marker"],
+            [edge("media_marker", "media", "marker", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    marker_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "marker")
+    assert marker_item["finalReplayAction"] == "shape_replay"
+    assert marker_item["targetRole"] == "m29_shape"
+    assert not any(target.get("target") == "copied_image_asset" for target in marker_item["cleanupTargets"])
+    assert "cleanup_rejected_missing_shape_replacement_style" in marker_item["risks"]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
+
+
 def test_m295_suppresses_nested_media_duplicate(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_nested_media",
@@ -317,6 +342,38 @@ def test_m295_keeps_promoted_internal_icon_over_parent_media(tmp_path: Path) -> 
     assert "promoted_internal_asset_cleans_parent_media_asset" in icon_item["reasons"]
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
     assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 1
+
+
+def test_m295_keeps_promoted_internal_icon_replay_when_cleanup_risk_is_high(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_promoted_internal_icon_cleanup_risk",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 100, 80], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_icon(
+                    "promoted_icon",
+                    [30, 30, 20, 20],
+                    "media",
+                    evidence_score=0.82,
+                    alpha_metrics={"transparentAssetEdgeAlphaCoverageGt32": 0.42},
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "promoted_icon"],
+            [edge("media_icon", "media", "promoted_icon", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "promoted_icon")
+    assert icon_item["finalReplayAction"] == "icon_replay"
+    assert icon_item["targetRole"] == "m29_symbol"
+    assert {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"} in icon_item["cleanupTargets"]
+    assert not any(target.get("target") == "copied_image_asset" for target in icon_item["cleanupTargets"])
+    assert "cleanup_rejected_edge_alpha_risk" in icon_item["risks"]
+    assert result.report["summary"]["copiedImageAssetCleanupTargetCount"] == 0
 
 
 def test_m295_keeps_higher_evidence_promoted_internal_icon_for_near_equal_candidates(tmp_path: Path) -> None:
@@ -626,7 +683,15 @@ def m292_object(
     }
 
 
-def promoted_internal_icon(object_id: str, bbox: list[int], media_id: str, *, evidence_score: float, text_overlap_ratio: float = 0.0) -> dict:
+def promoted_internal_icon(
+    object_id: str,
+    bbox: list[int],
+    media_id: str,
+    *,
+    evidence_score: float,
+    text_overlap_ratio: float = 0.0,
+    alpha_metrics: dict | None = None,
+) -> dict:
     return m292_object(
         object_id,
         bbox,
@@ -639,6 +704,7 @@ def promoted_internal_icon(object_id: str, bbox: list[int], media_id: str, *, ev
             "transparentAssetPath": f"assets/transparent/{object_id}.png",
             "evidenceScore": evidence_score,
             "textOverlapRatio": text_overlap_ratio,
+            **(alpha_metrics or {}),
         },
     )
 

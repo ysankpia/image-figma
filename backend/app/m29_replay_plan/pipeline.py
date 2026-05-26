@@ -54,7 +54,10 @@ def build_m295_replay_plan(
         target_role = target_role_for_action(action)
         cluster_ids = cluster_lookup.get(item["id"], [])
         relation_edge_ids = sorted(set(duplicate_edges + contained_media_edge_ids(item, source_objects, edge_lookup)))
-        cleanup_targets = cleanup_targets_for(item, source_objects, edge_lookup) if action in {"text_replay", "image_replay", "icon_replay", "shape_replay"} else []
+        cleanup_targets: list[dict[str, Any]] = []
+        cleanup_risks: list[str] = []
+        if action in {"text_replay", "image_replay", "icon_replay", "shape_replay"}:
+            cleanup_targets, cleanup_risks = cleanup_targets_for(item, source_objects, edge_lookup)
         plan_item = {
             "id": "",
             "sourceObjectId": item["id"],
@@ -69,7 +72,7 @@ def build_m295_replay_plan(
             "confidence": item["confidence"],
             "sourceEvidence": item.get("sourceEvidence", {}),
             "reasons": reasons_for(item, action, duplicate_ids, cluster_ids, cleanup_targets),
-            "risks": list(item["risks"]),
+            "risks": [*item["risks"], *cleanup_risks],
         }
         if action in {"text_replay", "image_replay", "icon_replay", "shape_replay"}:
             replay_candidates.append(plan_item)

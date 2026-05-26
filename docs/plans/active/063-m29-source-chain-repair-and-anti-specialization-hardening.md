@@ -298,7 +298,7 @@ uv run pytest tests/test_transparent_asset_report.py tests/test_m29_evidence_con
 
 ### Stage 5: Evidence Contract And Promotion Role Expansion
 
-状态：completed，提交待创建。
+状态：completed，已提交 `540d063 feat: promote internal marker roles as shapes`。
 
 promotion 从 internal icon 单一路径扩展为多角色 source promotion：
 
@@ -350,7 +350,7 @@ uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_pro
 
 ### Stage 6: Promotion Dedupe And Overlap Merge
 
-状态：completed，提交待创建。
+状态：completed，已提交 `2a1d1bf feat: merge promoted internal source overlaps`。
 
 把 exact bbox dedupe 改成 IoU / containment based merge。相同角色高度重叠合并，不同角色冲突进入 report/reject，不做静默覆盖。
 
@@ -380,6 +380,8 @@ uv run pytest tests/test_internal_source_promotion.py -q
 
 ### Stage 7: Cleanup And Render-Back Risk Gate
 
+状态：completed，提交待创建。
+
 cleanup 风险检查只用于防止错误擦除，不作为 source truth：
 
 ```text
@@ -391,6 +393,43 @@ cleanup target has replacement owner
 ```
 
 visible replay 安全但 cleanup 风险高时，允许 visible replay，拒绝 cleanup。
+
+Stage 7 实现边界：
+
+```text
+cleanup risk gate 位于 final M29.5 replay plan；
+M29.5 继续创建 visible replay plan item；
+高风险时只撤 copied_image_asset cleanup target，不撤 icon_replay / shape_replay；
+materializer 只执行 M29.5 cleanupTargets，不重新判断 cleanup safety；
+promoted internal icon cleanup 使用 transparent alpha metrics、text overlap 和 parent media relation；
+promoted table/status shape cleanup 要求 replacement style evidence，缺失时保留 shape replay 并拒绝 copied-image cleanup。
+```
+
+Stage 7 不改变：
+
+```text
+public API / DSL / Renderer / plugin protocol；
+M29.6 / transparent / evidence contract 的 report-only 边界；
+internal source promotion source truth 边界；
+materializer 执行器职责；
+B-stage quality / visual comparison 的诊断职责。
+```
+
+Stage 7 验证：
+
+```bash
+python -m py_compile backend/app/m29_replay_plan/cleanup.py backend/app/m29_replay_plan/pipeline.py backend/app/internal_source_promotion/pipeline.py backend/tests/test_m29_replay_plan.py
+cd backend
+uv run pytest tests/test_m29_replay_plan.py tests/test_internal_source_promotion.py -q
+uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_upload_preview_pipeline.py -q
+```
+
+结果：
+
+```text
+37 passed
+66 passed
+```
 
 ### Stage 8: Legacy / Dead Path Cleanup
 

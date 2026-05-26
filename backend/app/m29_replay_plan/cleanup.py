@@ -2,22 +2,38 @@ from __future__ import annotations
 
 from typing import Any
 
+MAX_INTERNAL_ICON_CLEANUP_TEXT_OVERLAP = 0.18
+MAX_INTERNAL_ICON_CLEANUP_EDGE_ALPHA_COVERAGE = 0.18
+MAX_INTERNAL_ICON_CLEANUP_EDGE_ALPHA_MEAN = 36.0
+MIN_INTERNAL_ICON_CLEANUP_ALPHA_COVERAGE = 0.04
+MAX_INTERNAL_ICON_CLEANUP_ALPHA_COVERAGE = 0.88
+MIN_INTERNAL_ICON_CLEANUP_LARGEST_COMPONENT = 0.35
+MAX_SHAPE_CLEANUP_TEXT_OVERLAP = 0.24
+MIN_SHAPE_CLEANUP_EVIDENCE_SCORE = 0.68
+
 
 def cleanup_targets_for(
     item: dict[str, Any],
     source_objects: list[dict[str, Any]],
     edge_lookup: dict[frozenset[str], dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     targets = [{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}]
+    risks: list[str] = []
     if item["replayDecision"] == "icon_replay":
-        targets.extend(promoted_internal_asset_cleanup_targets(item, source_objects, edge_lookup))
-        targets.extend(label_anchored_blocked_asset_cleanup_targets(item, source_objects, edge_lookup))
-        return targets
+        internal_targets, internal_risks = promoted_internal_asset_cleanup_targets(item, source_objects, edge_lookup)
+        blocked_targets, blocked_risks = label_anchored_blocked_asset_cleanup_targets(item, source_objects, edge_lookup)
+        targets.extend(internal_targets)
+        targets.extend(blocked_targets)
+        risks.extend(internal_risks)
+        risks.extend(blocked_risks)
+        return targets, risks
     if item["replayDecision"] == "shape_replay":
-        targets.extend(shape_cleanup_targets(item, source_objects, edge_lookup))
-        return targets
+        shape_targets, shape_risks = shape_cleanup_targets(item, source_objects, edge_lookup)
+        targets.extend(shape_targets)
+        risks.extend(shape_risks)
+        return targets, risks
     if item["replayDecision"] != "text_replay":
-        return targets
+        return targets, risks
     for other in source_objects:
         if other["id"] == item["id"]:
             continue
@@ -34,15 +50,16 @@ def cleanup_targets_for(
                     "reason": "editable_text_contained_by_media",
                 }
             )
-    return targets
+    return targets, risks
 
 
 def shape_cleanup_targets(
     item: dict[str, Any],
     source_objects: list[dict[str, Any]],
     edge_lookup: dict[frozenset[str], dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     targets: list[dict[str, Any]] = []
+    risks: list[str] = []
     for other in source_objects:
         if other["id"] == item["id"]:
             continue
@@ -50,6 +67,10 @@ def shape_cleanup_targets(
             continue
         edge = edge_lookup.get(frozenset({item["id"], other["id"]}))
         if shape_is_contained_by_media(item["id"], other["id"], edge):
+            risk = shape_cleanup_risk_reason(item, other, edge)
+            if risk:
+                risks.append(risk)
+                continue
             targets.append(
                 {
                     "target": "copied_image_asset",
@@ -57,44 +78,48 @@ def shape_cleanup_targets(
                     "reason": "shape_background_contained_by_media",
                 }
             )
-    return targets
+    return targets, risks
 
 
 def promoted_internal_asset_cleanup_targets(
     item: dict[str, Any],
     source_objects: list[dict[str, Any]],
     edge_lookup: dict[frozenset[str], dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
     if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
-        return []
+        return [], []
     media_id = str(evidence.get("mediaSourceObjectId") or "")
     if not media_id:
-        return []
+        return [], []
     media = next((other for other in source_objects if other["id"] == media_id), None)
     if media is None or media["replayDecision"] != "image_replay" or media["pixelOwner"] != "preserve_raster":
-        return []
+        return [], []
     edge = edge_lookup.get(frozenset({item["id"], media_id}))
     if not edge or not internal_asset_is_contained_by_media(item["id"], media_id, edge):
-        return []
+        return [], []
+    risk = promoted_internal_icon_cleanup_risk_reason(item, media, edge)
+    if risk:
+        return [], [risk]
     return [
         {
             "target": "copied_image_asset",
             "targetSourceObjectId": media_id,
             "reason": "promoted_internal_asset_contained_by_media",
         }
-    ]
+    ], []
 
 
 def label_anchored_blocked_asset_cleanup_targets(
     item: dict[str, Any],
     source_objects: list[dict[str, Any]],
     edge_lookup: dict[frozenset[str], dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
     if not evidence.get("labelAnchorOcrBoxId") or not evidence.get("blockedIds"):
-        return []
+        return [], []
     targets: list[dict[str, Any]] = []
+    risks: list[str] = []
     for other in source_objects:
         if other["id"] == item["id"]:
             continue
@@ -103,6 +128,10 @@ def label_anchored_blocked_asset_cleanup_targets(
         edge = edge_lookup.get(frozenset({item["id"], other["id"]}))
         if not edge or not internal_asset_is_contained_by_media(item["id"], other["id"], edge):
             continue
+        risk = label_anchored_blocked_asset_cleanup_risk_reason(item, other, edge)
+        if risk:
+            risks.append(risk)
+            continue
         targets.append(
             {
                 "target": "copied_image_asset",
@@ -110,7 +139,7 @@ def label_anchored_blocked_asset_cleanup_targets(
                 "reason": "label_anchored_blocked_asset_contained_by_media",
             }
         )
-    return targets
+    return targets, risks
 
 
 def contained_media_edge_ids(
@@ -171,6 +200,69 @@ def shape_is_contained_by_media(shape_id: str, media_id: str, edge: dict[str, An
     if left == media_id and right == shape_id:
         return primary == "contains" or text_overlap_ratio(edge, text_on_left=False) >= 0.70
     return False
+
+
+def promoted_internal_icon_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge: dict[str, Any]) -> str:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    if evidence.get("mediaSourceObjectId") != media["id"]:
+        return "cleanup_rejected_parent_media_mismatch"
+    if not evidence.get("transparentAssetPath"):
+        return "cleanup_rejected_missing_transparent_replacement"
+    text_overlap = safe_float(evidence.get("textOverlapRatio"))
+    if text_overlap > MAX_INTERNAL_ICON_CLEANUP_TEXT_OVERLAP:
+        return "cleanup_rejected_text_overlap_risk"
+    alpha_coverage = optional_float(evidence.get("transparentAssetAlphaCoverage"))
+    if alpha_coverage is not None and not (MIN_INTERNAL_ICON_CLEANUP_ALPHA_COVERAGE <= alpha_coverage <= MAX_INTERNAL_ICON_CLEANUP_ALPHA_COVERAGE):
+        return "cleanup_rejected_alpha_coverage_risk"
+    edge_alpha_coverage = optional_float(evidence.get("transparentAssetEdgeAlphaCoverageGt32"))
+    if edge_alpha_coverage is not None and edge_alpha_coverage > MAX_INTERNAL_ICON_CLEANUP_EDGE_ALPHA_COVERAGE:
+        return "cleanup_rejected_edge_alpha_risk"
+    edge_alpha_mean = optional_float(evidence.get("transparentAssetEdgeAlphaMean"))
+    if edge_alpha_mean is not None and edge_alpha_mean > MAX_INTERNAL_ICON_CLEANUP_EDGE_ALPHA_MEAN:
+        return "cleanup_rejected_edge_alpha_risk"
+    largest_component = optional_float(evidence.get("transparentAssetLargestComponentRatio"))
+    if largest_component is not None and largest_component < MIN_INTERNAL_ICON_CLEANUP_LARGEST_COMPONENT:
+        return "cleanup_rejected_fragmented_replacement_risk"
+    return ""
+
+
+def label_anchored_blocked_asset_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge: dict[str, Any]) -> str:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    media_containment = optional_float(evidence.get("mediaContainmentRatio"))
+    if media_containment is not None and media_containment < 0.80:
+        return "cleanup_rejected_low_media_containment"
+    return ""
+
+
+def shape_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge: dict[str, Any] | None) -> str:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    if evidence.get("mediaSourceObjectId") and evidence.get("mediaSourceObjectId") != media["id"]:
+        return "cleanup_rejected_parent_media_mismatch"
+    text_overlap = safe_float(evidence.get("textOverlapRatio"))
+    if text_overlap > MAX_SHAPE_CLEANUP_TEXT_OVERLAP:
+        return "cleanup_rejected_text_overlap_risk"
+    if evidence.get("promotionSource") == "m29_6_internal_shape_candidate":
+        score = safe_float(evidence.get("evidenceScore"))
+        if score < MIN_SHAPE_CLEANUP_EVIDENCE_SCORE:
+            return "cleanup_rejected_low_shape_evidence"
+        role = str(evidence.get("internalRole") or "")
+        has_style = bool(evidence.get("shapeFillOverride") or evidence.get("shapeRadiusOverride"))
+        if role in {"status_dot_candidate", "table_marker_candidate"} and not has_style:
+            return "cleanup_rejected_missing_shape_replacement_style"
+    return ""
+
+
+def optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def safe_float(value: Any) -> float:
+    return optional_float(value) or 0.0
 
 
 def text_overlap_ratio(edge: dict[str, Any], *, text_on_left: bool) -> float:
