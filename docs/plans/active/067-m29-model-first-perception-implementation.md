@@ -425,6 +425,23 @@ Acceptance:
 - No DSL/materialization changes in this stage.
 - Batch run on `/Users/luhui/Downloads/m29` completes with report artifacts.
 
+Implementation status:
+
+```text
+M29_PERCEPTION_MODEL_ENABLED and M29_PERCEPTION_MODEL_PATH added to backend settings and env docs.
+upload-preview can emit m29_perception_model/perception_model_report.json when explicitly enabled.
+default production behavior remains unchanged and does not create m29_perception_model artifacts.
+```
+
+Stage 2 smoke:
+
+```text
+image: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+env: M29_PERCEPTION_MODEL_ENABLED=true, M29_PERCEPTION_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+report: backend/tmp/stage2_optin_storage/upload_previews/stage2_smoke/m29_perception_model/perception_model_report.json
+result: perception report exists, final design.dsl.json exists
+```
+
 ### Stage 3: Perception Source Compiler Prototype
 
 Create:

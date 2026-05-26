@@ -23,6 +23,7 @@ from .stages import (
     run_m29_layout_energy_stage,
     run_m29_media_internal_decomposition_stage,
     run_m29_ownership_conservation_stage,
+    run_m29_perception_model_stage,
     run_m29_sibling_group_candidate_stage,
     run_m29_transparent_asset_stage,
     run_m29_design_token_stage,
@@ -60,6 +61,19 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     update_task(task_id, "ocr", 8, "Running OCR.")
     ocr_document = run_stage(paths, timings, "ocr", lambda: run_ocr(task_id, image, upload_path, paths.ocr))
     text_boxes, text_warnings = text_boxes_from_ocr_document(ocr_document.to_dict())
+
+    if state.settings.m29_perception_model_enabled:
+        update_task(task_id, "m29_perception_model", 12, "Running report-only M29 perception model.")
+        run_stage(
+            paths,
+            timings,
+            "m29_perception_model",
+            lambda: run_m29_perception_model_stage(
+                task_id=task_id,
+                png_data=png_data,
+                paths=paths,
+            ),
+        )
 
     update_task(task_id, "m29", 18, "Running M29 visual primitive graph.")
     m29_document = run_stage(

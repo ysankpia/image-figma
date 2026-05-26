@@ -56,12 +56,16 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv("OCR_PROVIDER", "baidu_ppocrv5")
     monkeypatch.setenv("UPLOAD_PREVIEW_PROFILE", "development")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "true")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_PATH", " /tmp/model.onnx ")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
 
     settings = config.get_settings()
 
     assert settings.ocr_provider == "baidu_ppocrv5"
     assert settings.upload_preview_profile == "development"
+    assert settings.m29_perception_model_enabled is True
+    assert settings.m29_perception_model_path == "/tmp/model.onnx"
 
 
 def test_parse_bool_supports_common_env_values() -> None:
@@ -73,3 +77,10 @@ def test_parse_bool_supports_common_env_values() -> None:
     assert config.parse_bool("off", default=True) is False
     assert config.parse_bool("", default=True) is True
     assert config.parse_bool("not-a-bool", default=False) is False
+
+
+def test_normalized_optional_string_strips_empty_values() -> None:
+    assert config.normalized_optional_string(None) is None
+    assert config.normalized_optional_string("") is None
+    assert config.normalized_optional_string("  ") is None
+    assert config.normalized_optional_string(" /tmp/model.onnx ") == "/tmp/model.onnx"

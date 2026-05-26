@@ -24,6 +24,8 @@ class Settings:
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
     upload_preview_profile: str = "production"
+    m29_perception_model_enabled: bool = False
+    m29_perception_model_path: str | None = None
 
 
 def get_settings() -> Settings:
@@ -49,6 +51,8 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         upload_preview_profile=parse_upload_preview_profile(os.getenv("UPLOAD_PREVIEW_PROFILE", "production")),
+        m29_perception_model_enabled=parse_bool(os.getenv("M29_PERCEPTION_MODEL_ENABLED"), default=False),
+        m29_perception_model_path=normalized_optional_string(os.getenv("M29_PERCEPTION_MODEL_PATH")),
     )
 
 
@@ -110,3 +114,10 @@ def parse_bool(value: str | None, *, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def normalized_optional_string(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None

@@ -18,6 +18,7 @@ from ..m29_evidence_contract import extract_m29_evidence_contract_report
 from ..media_internal_decomposition import extract_m29_media_internal_decomposition_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
+from ..perception_model_report import PerceptionModelOptions, extract_perception_model_report
 from ..plan_materializer import build_plan_driven_dsl
 from ..png_tools import PngMetadata
 from ..region_relation_graph_report import extract_m2931_region_relation_graph_report
@@ -72,6 +73,28 @@ def run_m29_visual_primitive_stage(
         text_boxes=text_boxes,
         emit_debug_artifacts=policy.emit_debug_artifacts,
         emit_preview_artifacts=policy.emit_preview_artifacts,
+    )
+
+
+def run_m29_perception_model_stage(
+    *,
+    task_id: str,
+    png_data: bytes,
+    paths: UploadPreviewPaths,
+):
+    model_path = state.settings.m29_perception_model_path
+    if not model_path:
+        raise UploadPreviewPipelineError(
+            "m29_perception_model",
+            "M29_PERCEPTION_MODEL_PATH_REQUIRED",
+            "M29_PERCEPTION_MODEL_PATH must be set when M29_PERCEPTION_MODEL_ENABLED=true.",
+        )
+    return extract_perception_model_report(
+        task_id=task_id,
+        source_png=png_data,
+        output_dir=paths.m29_perception_model,
+        model_path=model_path,
+        options=PerceptionModelOptions(),
     )
 
 

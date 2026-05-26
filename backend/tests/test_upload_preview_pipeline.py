@@ -4,6 +4,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -110,6 +111,7 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert not (task_root / "m29_0_4").exists()
     assert not (task_root / "m29_0_5").exists()
     assert not (task_root / "m29_0_7").exists()
+    assert not (task_root / "m29_perception_model").exists()
     assert not list(task_root.glob("**/overlays"))
     assert not list(task_root.glob("**/preview*.png"))
     assert (task_root / "ocr" / "ocr.json").exists()
@@ -142,6 +144,39 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     visual_summary = visual_report["summary"]
     assert visual_summary["textExclusionSource"] == "dsl_visible_text_plus_source_ocr_text"
     assert visual_summary["sourceTextBboxCount"] > 0
+
+
+def test_upload_preview_can_emit_opt_in_perception_model_report(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "true")
+    monkeypatch.setenv("M29_PERCEPTION_MODEL_PATH", "/tmp/fake-model.onnx")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    stages = importlib.import_module("app.upload_preview.stages")
+    monkeypatch.setattr(stages, "extract_perception_model_report", fake_perception_model_report)
+
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    perception_report_path = task_root / "m29_perception_model" / "perception_model_report.json"
+    assert perception_report_path.exists()
+    perception_report = json.loads(perception_report_path.read_text(encoding="utf-8"))
+    assert perception_report["summary"]["candidateCount"] == 1
+    assert perception_report["summary"]["reportOnly"] is True
+    assert perception_report["summary"]["sourceOwnershipChanged"] is False
+    stages_seen = {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert "m29_perception_model" in stages_seen
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -285,3 +320,63 @@ def make_dark_ui_png() -> bytes:
 
 def fail_m29_materialization(**_kwargs):
     raise RuntimeError("forced m29 materialization failure")
+
+
+def fake_perception_model_report(*, task_id: str, source_png: bytes, output_dir: Path, model_path: str, options):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "perception_model_report.json"
+    report = {
+        "schemaName": "M29PerceptionModelReport",
+        "schemaVersion": "0.1",
+        "taskId": task_id,
+        "outputReport": str(report_path),
+        "model": {"sourceProvider": "fake_perception_model", "modelPath": model_path},
+        "image": {"width": 10, "height": 10},
+        "options": options.to_dict(),
+        "summary": {
+            "candidateCount": 1,
+            "warningCount": 0,
+            "scoreMax": 0.9,
+            "scoreMean": 0.9,
+            "roleHintCounts": {"unknown_ui_object": 1},
+            "reportOnly": True,
+            "dslChanged": False,
+            "assetChanged": False,
+            "createdVisibleNodeCount": 0,
+            "materializationChanged": False,
+            "sourceOwnershipChanged": False,
+            "cleanupAuthorized": False,
+            "blockingUpload": False,
+            "noSpecializedTextFilenameThemeOrFixedBboxRules": True,
+        },
+        "candidates": [
+            {
+                "candidateId": "perception_candidate_0001",
+                "sourceProvider": "fake_perception_model",
+                "roleHint": "unknown_ui_object",
+                "bbox": [1, 1, 9, 9],
+                "score": 0.9,
+                "areaRatio": 0.64,
+                "rawOutputRef": {"anchorIndex": 1},
+                "decision": "report_only",
+                "replayAuthorized": False,
+                "cleanupAuthorized": False,
+            }
+        ],
+        "warnings": [],
+        "meta": {
+            "createdAt": "2026-05-27T00:00:00+00:00",
+            "truthSource": "test_fake_perception_model",
+            "reportOnly": True,
+            "dslChanged": False,
+            "assetChanged": False,
+            "createdVisibleNodeCount": 0,
+            "materializationChanged": False,
+            "sourceOwnershipChanged": False,
+            "cleanupAuthorized": False,
+            "blockingUpload": False,
+            "noSpecializedTextFilenameThemeOrFixedBboxRules": True,
+        },
+    }
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return SimpleNamespace(report=report, output_dir=output_dir)
