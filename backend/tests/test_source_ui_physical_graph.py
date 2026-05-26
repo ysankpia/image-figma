@@ -58,6 +58,47 @@ def test_small_media_overlay_label_remains_editable_text(tmp_path: Path) -> None
     assert text["sourceEvidence"]["mediaContainmentRatio"] >= 0.98
 
 
+def test_long_control_label_inside_large_media_remains_editable_text(tmp_path: Path) -> None:
+    source = make_textured_png(900, 1200, [0, 80, 850, 1050])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [0, 80, 850, 1050], metrics={"colorCount": 180, "textureScore": 0.3})],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_control_label", "Continue with Provider", [285, 1045, 300, 36])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    text = only_object(result, "editable_ui_text")
+    assert text["pixelOwner"] == "editable_text"
+    assert text["replayDecision"] == "text_replay"
+    assert text["sourceEvidence"]["mediaContainmentRatio"] >= 0.98
+    assert text["sourceEvidence"]["localBackgroundConfidence"] > 0
+
+
+def test_large_display_text_inside_media_is_still_preserved_by_relative_scale(tmp_path: Path) -> None:
+    source = make_textured_png(360, 260, [20, 20, 240, 120])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[m29_node("image_001", "image", [20, 20, 240, 120], metrics={"colorCount": 120, "textureScore": 0.32})],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_display_text", "HERO OFFER", [50, 56, 150, 52])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    text = only_object(result, "preserve_raster_text")
+    assert text["pixelOwner"] == "preserve_raster"
+    assert text["replayDecision"] == "preserve_in_parent_raster"
+    assert text["sourceEvidence"]["mediaContainmentRatio"] >= 0.98
+
+
 def test_adjacent_symbol_fragments_merge_into_one_raster_icon(tmp_path: Path) -> None:
     source = make_png(120, 80, fill=(250, 250, 250), marks=[([10, 20, 8, 8], (30, 30, 30)), ([23, 20, 8, 8], (30, 30, 30))])
     m29 = m29_document(

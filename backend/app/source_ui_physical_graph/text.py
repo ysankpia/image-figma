@@ -24,7 +24,8 @@ def classify_ocr_text_objects(
         if bbox is None:
             continue
         text = str(box.text or "").strip()
-        media_overlap = max((bbox_overlap_ratio(bbox, media.bbox) for media in media_objects), default=0.0)
+        containing_media = best_containing_media(bbox, media_objects)
+        media_overlap = bbox_overlap_ratio(bbox, containing_media.bbox) if containing_media is not None else 0.0
         local_conf = local_background_confidence(pixels, bbox)
         overlapped_m29 = [
             str(node.get("id") or "")
@@ -49,7 +50,11 @@ def classify_ocr_text_objects(
                 )
             )
             continue
-        if media_overlap >= options.editable_text_max_media_overlap and is_media_display_text(bbox, width, options):
+        if (
+            containing_media is not None
+            and media_overlap >= options.editable_text_max_media_overlap
+            and is_media_display_text(bbox, containing_media.bbox, width, options)
+        ):
             objects.append(
                 make_object(
                     bbox=bbox,
@@ -86,7 +91,31 @@ def classify_ocr_text_objects(
     return objects
 
 
-def is_media_display_text(bbox: list[int], image_width: int, options: M292SourcePhysicalOptions) -> bool:
-    return bbox[3] >= options.media_display_text_min_height or (
-        bbox[2] >= round(image_width * options.media_display_text_min_width_ratio) and bbox[3] >= round(options.media_display_text_min_height * 0.75)
+def best_containing_media(bbox: list[int], media_objects: list[M292SourceObject]) -> M292SourceObject | None:
+    matches = [
+        (bbox_overlap_ratio(bbox, media.bbox), media)
+        for media in media_objects
+    ]
+    matches = [match for match in matches if match[0] > 0]
+    if not matches:
+        return None
+    return max(matches, key=lambda item: item[0])[1]
+
+
+def is_media_display_text(
+    bbox: list[int],
+    media_bbox: list[int],
+    image_width: int,
+    options: M292SourcePhysicalOptions,
+) -> bool:
+    media_width = max(1, media_bbox[2])
+    media_height = max(1, media_bbox[3])
+    absolute_display_height = bbox[3] >= options.media_display_text_min_height
+    relative_display_height = bbox[3] >= round(media_height * 0.08)
+    relative_display_width = bbox[2] >= round(media_width * options.media_display_text_min_width_ratio)
+    image_relative_width = bbox[2] >= round(image_width * options.media_display_text_min_width_ratio)
+    return absolute_display_height and (
+        relative_display_height
+        or (relative_display_width and bbox[3] >= round(options.media_display_text_min_height * 0.75))
+        or (image_relative_width and bbox[3] >= round(media_height * 0.06))
     )
