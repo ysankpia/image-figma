@@ -250,6 +250,43 @@ def test_separator_inside_media_is_rejected_not_icon(tmp_path: Path) -> None:
     assert "separator_not_icon" in candidate["risks"]
 
 
+def test_scaled_pixel_anchor_component_is_not_rejected_by_1x_area_cap(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_scaled_anchor_png(),
+        source_objects=[source_object("media", [0, 0, 600, 360])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("large_label", [250, 300, 90, 42])],
+        image_size={"width": 600, "height": 360},
+    )
+
+    anchored = [
+        item
+        for item in report["internalCandidates"]
+        if item["candidateDecision"] == "accepted_report_candidate"
+        and item["rawType"] == "pixel_component"
+        and item["matchedOcrBoxId"] == "large_label"
+    ]
+    assert anchored
+    assert any(item["bbox"][2] >= 72 and item["bbox"][3] >= 68 for item in anchored)
+    assert report["meta"]["scaleProfile"]["scale_basis_px"] > 24
+
+
+def test_many_small_non_ocr_components_are_not_limited_to_top_six(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_many_small_components_png(),
+        source_objects=[source_object("media", [0, 0, 170, 120])],
+        raw_nodes=[],
+        ocr_blocks=[],
+        image_size={"width": 170, "height": 120},
+    )
+
+    components = [item for item in report["internalCandidates"] if item["rawSubtype"] == "non_ocr_foreground"]
+    assert len(components) >= 8
+    assert sum(1 for item in components if item["candidateDecision"] == "accepted_report_candidate") >= 8
+
+
 def media_report(
     tmp_path: Path,
     *,
@@ -257,12 +294,14 @@ def media_report(
     source_objects: list[dict],
     raw_nodes: list[dict],
     ocr_blocks: list[dict],
+    image_size: dict[str, int] | None = None,
 ) -> dict:
+    image_size = image_size or {"width": 400, "height": 300}
     result = extract_m29_media_internal_decomposition_report(
         task_id="task_media_internal",
         source_png=source_png,
-        m29_document={"version": "0.1", "imageSize": {"width": 400, "height": 300}, "nodes": raw_nodes, "blocked": []},
-        ocr_document={"version": "0.1", "imageSize": {"width": 400, "height": 300}, "blocks": ocr_blocks},
+        m29_document={"version": "0.1", "imageSize": image_size, "nodes": raw_nodes, "blocked": []},
+        ocr_document={"version": "0.1", "imageSize": image_size, "blocks": ocr_blocks},
         m292_document={"schemaName": "M292SourceUiPhysicalGraph", "schemaVersion": "0.1", "sourceObjects": source_objects},
         m2931_report={"schemaName": "M2931RegionRelationGraphReport", "schemaVersion": "0.1", "edges": []},
         m295_report={"schemaName": "M295ReplayPlan", "schemaVersion": "0.1", "planItems": []},
@@ -390,6 +429,33 @@ def make_selected_tab_png() -> bytes:
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(260, 160, rows)
+
+
+def make_scaled_anchor_png() -> bytes:
+    rows = []
+    for y in range(360):
+        row = bytearray()
+        for x in range(600):
+            rgb = [8, 12, 24]
+            if 260 <= x < 340 and 160 <= y < 240:
+                rgb = [30, 128, 255]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(600, 360, rows)
+
+
+def make_many_small_components_png() -> bytes:
+    boxes = [[10 + column * 38, 16 + row * 42, 12, 12] for row in range(2) for column in range(4)]
+    rows = []
+    for y in range(120):
+        row = bytearray()
+        for x in range(170):
+            rgb = [12, 16, 30]
+            if any(box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3] for box in boxes):
+                rgb = [42, 160, 242]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(170, 120, rows)
 
 
 def contained_bbox(inner: list[int], outer: list[int]) -> bool:

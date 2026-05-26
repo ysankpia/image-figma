@@ -4,6 +4,7 @@ from statistics import median
 from math import exp
 from typing import Any
 
+from ..image_math import ImageScaleProfile, build_scale_profile
 from ..png_tools import PngPixels
 from ..visual_primitive.metrics import color_distance
 from ..region_relation_kernel import bbox_area, center_x, center_y, x2, y2
@@ -21,6 +22,7 @@ PIXEL_FOREGROUND_MIN_SATURATION = 15
 PIXEL_FOREGROUND_MIN_LUMA = 18
 GENERIC_SCAN_MAX_WINDOWS = 96
 GENERIC_FOREGROUND_MAX_CANDIDATES = 80
+PIXEL_COMPONENT_MIN_RETURNED = 24
 
 
 def build_composite_media_items(
@@ -30,12 +32,14 @@ def build_composite_media_items(
     ocr_blocks: list[dict[str, Any]],
     image_size: dict[str, int],
     pixels: PngPixels | None = None,
+    scale_profile: ImageScaleProfile | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     text_masks: list[dict[str, Any]] = []
     internal_candidates: list[dict[str, Any]] = []
     rejected_fragments: list[dict[str, Any]] = []
     matched_groups: list[dict[str, Any]] = []
     media_items: list[dict[str, Any]] = []
+    scale_profile = scale_profile or build_scale_profile(image_size=image_size, ocr_blocks=ocr_blocks, source_objects=source_objects)
 
     for source in source_objects:
         if not is_preserve_raster_image(source):
@@ -45,9 +49,9 @@ def build_composite_media_items(
         if not is_composite_media(source, text_inside, raw_inside, pixels):
             continue
 
-        source_text_masks = [build_text_mask(source, block, image_size) for block in text_inside]
+        source_text_masks = [build_text_mask(source, block, image_size, scale_profile) for block in text_inside]
         text_masks.extend(source_text_masks)
-        candidates = score_internal_candidates(source, raw_inside, source_text_masks, text_inside, pixels)
+        candidates = score_internal_candidates(source, raw_inside, source_text_masks, text_inside, pixels, scale_profile)
         internal_candidates.extend(candidates)
         groups = build_matched_internal_groups(candidates, text_inside, source["sourceObjectId"], len(matched_groups) + 1)
         apply_group_support(candidates, groups)
@@ -107,14 +111,15 @@ def expanded_media_anchor_bbox(media_bbox: list[int], text_bbox: list[int]) -> l
     return [media_bbox[0] - padding_x, media_bbox[1] - padding_y, media_bbox[2] + padding_x * 2, media_bbox[3] + padding_y * 2]
 
 
-def build_text_mask(media: dict[str, Any], block: dict[str, Any], image_size: dict[str, int]) -> dict[str, Any]:
+def build_text_mask(media: dict[str, Any], block: dict[str, Any], image_size: dict[str, int], scale_profile: ImageScaleProfile) -> dict[str, Any]:
+    padding = scale_profile.length(3, minimum=2, maximum=12)
     return {
         "textMaskId": f"{media['sourceObjectId']}:{block['ocrBoxId']}:text_mask",
         "mediaSourceObjectId": media["sourceObjectId"],
         "ocrBoxId": block["ocrBoxId"],
         "bbox": block["bbox"],
-        "paddedBbox": padded_bbox(block["bbox"], 3, 3, image_size),
-        "padding": {"x": 3, "y": 3},
+        "paddedBbox": padded_bbox(block["bbox"], padding, padding, image_size),
+        "padding": {"x": padding, "y": padding},
         "reason": "internal_ocr_text_protection",
     }
 
@@ -136,12 +141,13 @@ def score_internal_candidates(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     pixels: PngPixels | None,
+    scale_profile: ImageScaleProfile,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for node in raw_inside:
         if node["type"] not in INTERNAL_CANDIDATE_TYPES:
             continue
-        candidate = score_one_candidate(media, node, text_masks, text_inside, len(candidates) + 1)
+        candidate = score_one_candidate(media, node, text_masks, text_inside, len(candidates) + 1, scale_profile)
         candidates.append(candidate)
     if pixels is not None:
         pixel_candidates = pixel_anchor_candidates(
@@ -151,6 +157,7 @@ def score_internal_candidates(
             text_inside=text_inside,
             existing_candidates=candidates,
             start_index=len(candidates) + 1,
+            scale_profile=scale_profile,
         )
         candidates.extend(pixel_candidates)
         candidates.extend(
@@ -161,10 +168,11 @@ def score_internal_candidates(
                 text_inside=text_inside,
                 existing_candidates=candidates,
                 start_index=len(candidates) + 1,
+                scale_profile=scale_profile,
             )
         )
     apply_repetition_scores(candidates)
-    candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1))
+    candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1, scale_profile))
     return candidates
 
 
@@ -174,12 +182,13 @@ def score_one_candidate(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     index: int,
+    scale_profile: ImageScaleProfile,
 ) -> dict[str, Any]:
     bbox = node["bbox"]
     metrics = node.get("metrics", {})
     text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
     best_anchor = best_text_anchor(bbox, text_inside)
-    size = size_score(bbox, media["bbox"])
+    size = size_score(bbox, media["bbox"], scale_profile)
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
@@ -247,13 +256,15 @@ def score_one_candidate(
     }
 
 
-def size_score(bbox: list[int], media_bbox: list[int]) -> float:
+def size_score(bbox: list[int], media_bbox: list[int], scale_profile: ImageScaleProfile) -> float:
     area = bbox_area(bbox)
-    max_area = min(12000, max(64, int(bbox_area(media_bbox) * 0.12)))
-    if area < 16 or area > max_area:
+    min_area = scale_profile.area(16, minimum=8, maximum=256)
+    full_score_area = scale_profile.area(48, minimum=24, maximum=768)
+    max_area = min(scale_profile.area(12000, minimum=12000), max(64, int(bbox_area(media_bbox) * 0.12)))
+    if area < min_area or area > max_area:
         return 0.0
-    if area < 48:
-        return round(area / 48, 3)
+    if area < full_score_area:
+        return round(area / full_score_area, 3)
     return 1.0
 
 
@@ -401,6 +412,7 @@ def merge_anchor_icon_fragments(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     start_index: int,
+    scale_profile: ImageScaleProfile,
 ) -> list[dict[str, Any]]:
     fragments_by_anchor: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for candidate in candidates:
@@ -420,7 +432,7 @@ def merge_anchor_icon_fragments(
         ordered = sorted(fragments, key=lambda item: item["score"], reverse=True)
         for first_index, first in enumerate(ordered):
             for second in ordered[first_index + 1 :]:
-                if not mergeable_icon_fragments(first["bbox"], second["bbox"], relation):
+                if not mergeable_icon_fragments(first["bbox"], second["bbox"], relation, scale_profile):
                     continue
                 bbox = union_bbox(first["bbox"], second["bbox"])
                 if any(is_near_equal(bbox, existing, 0.92) or containment_ratio(bbox, existing) >= 0.94 for existing in existing_bboxes):
@@ -434,6 +446,7 @@ def merge_anchor_icon_fragments(
                     text_masks=text_masks,
                     text_inside=text_inside,
                     index=start_index + len(merged),
+                    scale_profile=scale_profile,
                 )
                 if candidate["candidateDecision"] == "accepted_report_candidate":
                     existing_bboxes.append(candidate["bbox"])
@@ -444,19 +457,27 @@ def merge_anchor_icon_fragments(
     return merged
 
 
-def mergeable_icon_fragments(left: list[int], right: list[int], relation: str) -> bool:
+def mergeable_icon_fragments(left: list[int], right: list[int], relation: str, scale_profile: ImageScaleProfile) -> bool:
     union = union_bbox(left, right)
-    if bbox_area(union) > 12000 or long_thin(union):
+    if bbox_area(union) > scale_profile.area(12000, minimum=12000) or long_thin(union):
         return False
     if relation in {"above_text", "below_text"}:
         horizontal_overlap = intersection_1d(left[0], x2(left), right[0], x2(right)) / max(1, min(left[2], right[2]))
         horizontal_center_delta = abs(center_x(left) - center_x(right))
         vertical_gap = max(0, max(left[1], right[1]) - min(y2(left), y2(right)))
-        return horizontal_overlap >= 0.25 and horizontal_center_delta <= max(left[2], right[2]) * 0.60 and vertical_gap <= max(8, min(left[3], right[3]) * 0.65)
+        return (
+            horizontal_overlap >= 0.25
+            and horizontal_center_delta <= max(left[2], right[2]) * 0.60
+            and vertical_gap <= max(scale_profile.length(8, minimum=4), min(left[3], right[3]) * 0.65)
+        )
     vertical_overlap = intersection_1d(left[1], y2(left), right[1], y2(right)) / max(1, min(left[3], right[3]))
     vertical_center_delta = abs(center_y(left) - center_y(right))
     horizontal_gap = max(0, max(left[0], right[0]) - min(x2(left), x2(right)))
-    return vertical_overlap >= 0.25 and vertical_center_delta <= max(left[3], right[3]) * 0.60 and horizontal_gap <= max(8, min(left[2], right[2]) * 0.65)
+    return (
+        vertical_overlap >= 0.25
+        and vertical_center_delta <= max(left[3], right[3]) * 0.60
+        and horizontal_gap <= max(scale_profile.length(8, minimum=4), min(left[2], right[2]) * 0.65)
+    )
 
 
 def score_merged_anchor_candidate(
@@ -469,6 +490,7 @@ def score_merged_anchor_candidate(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     index: int,
+    scale_profile: ImageScaleProfile,
 ) -> dict[str, Any]:
     text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
     anchor_block = next((block for block in text_inside if block["ocrBoxId"] == ocr_id), None)
@@ -478,7 +500,7 @@ def score_merged_anchor_candidate(
     texture = sum(float(fragment["metrics"].get("textureScore") or 0.0) for fragment in fragments) / len(fragments)
     color_count = max(int(fragment["metrics"].get("colorCount") or 0) for fragment in fragments)
     metrics = {"fillRatio": round(fill_ratio, 4), "textureScore": round(texture, 4), "colorCount": color_count}
-    size = size_score(bbox, media["bbox"])
+    size = size_score(bbox, media["bbox"], scale_profile)
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, anchor_score)
@@ -662,12 +684,13 @@ def pixel_anchor_candidates(
     text_inside: list[dict[str, Any]],
     existing_candidates: list[dict[str, Any]],
     start_index: int,
+    scale_profile: ImageScaleProfile,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     seen_bboxes = [item["bbox"] for item in existing_candidates if item["candidateDecision"] == "accepted_report_candidate"]
     for block in text_inside:
-        for window in anchor_windows(block["bbox"], media["bbox"], pixels.width, pixels.height):
-            for component in foreground_components_in_window(pixels, window["bbox"], text_masks):
+        for window in anchor_windows(block["bbox"], media["bbox"], pixels.width, pixels.height, scale_profile):
+            for component in foreground_components_in_window(pixels, window["bbox"], text_masks, scale_profile):
                 bbox = component["bbox"]
                 if any(is_near_equal(bbox, existing, 0.72) or containment_ratio(bbox, existing) >= 0.82 for existing in seen_bboxes):
                     continue
@@ -680,6 +703,7 @@ def pixel_anchor_candidates(
                     text_masks=text_masks,
                     text_inside=text_inside,
                     index=start_index + len(candidates),
+                    scale_profile=scale_profile,
                 )
                 if candidate["candidateDecision"] == "accepted_report_candidate":
                     seen_bboxes.append(candidate["bbox"])
@@ -695,11 +719,13 @@ def generic_foreground_candidates(
     text_inside: list[dict[str, Any]],
     existing_candidates: list[dict[str, Any]],
     start_index: int,
+    scale_profile: ImageScaleProfile,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     seen_bboxes = [item["bbox"] for item in existing_candidates if item["candidateDecision"] == "accepted_report_candidate"]
-    for window in generic_scan_windows(media["bbox"], pixels.width, pixels.height):
-        for component in foreground_components_in_window(pixels, window["bbox"], text_masks):
+    max_candidates = generic_foreground_candidate_budget(media["bbox"], scale_profile)
+    for window in generic_scan_windows(media["bbox"], pixels.width, pixels.height, scale_profile):
+        for component in foreground_components_in_window(pixels, window["bbox"], text_masks, scale_profile):
             bbox = component["bbox"]
             if any(is_near_equal(bbox, existing, 0.72) or containment_ratio(bbox, existing) >= 0.82 for existing in seen_bboxes):
                 continue
@@ -710,16 +736,23 @@ def generic_foreground_candidates(
                 text_masks=text_masks,
                 text_inside=text_inside,
                 index=start_index + len(candidates),
+                scale_profile=scale_profile,
             )
             if candidate["candidateDecision"] == "accepted_report_candidate":
                 seen_bboxes.append(candidate["bbox"])
             candidates.append(candidate)
-            if len(candidates) >= GENERIC_FOREGROUND_MAX_CANDIDATES:
+            if len(candidates) >= max_candidates:
                 return candidates
     return candidates
 
 
-def generic_scan_windows(media_bbox: list[int], image_width: int, image_height: int) -> list[dict[str, Any]]:
+def generic_foreground_candidate_budget(media_bbox: list[int], scale_profile: ImageScaleProfile) -> int:
+    unit_area = max(1, scale_profile.area(1600, minimum=800, maximum=8000))
+    density_budget = max(GENERIC_FOREGROUND_MAX_CANDIDATES, round(bbox_area(media_bbox) / unit_area))
+    return min(240, density_budget)
+
+
+def generic_scan_windows(media_bbox: list[int], image_width: int, image_height: int, scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
     media = clamp_bbox_to_media(media_bbox, media_bbox, image_width, image_height)
     if media is None:
         return []
@@ -728,10 +761,13 @@ def generic_scan_windows(media_bbox: list[int], image_width: int, image_height: 
     if width <= 180 and height <= 180:
         return [{"relation": "non_ocr_foreground", "bbox": media}]
 
-    window_width = max(72, min(180, round(width / 3)))
-    window_height = max(72, min(180, round(height / 3)))
-    step_x = max(36, round(window_width * 0.55))
-    step_y = max(36, round(window_height * 0.55))
+    min_window = scale_profile.length(72, minimum=48, maximum=216)
+    max_window = scale_profile.length(180, minimum=120, maximum=420)
+    min_step = scale_profile.length(36, minimum=24, maximum=160)
+    window_width = max(min_window, min(max_window, round(width / 3)))
+    window_height = max(min_window, min(max_window, round(height / 3)))
+    step_x = max(min_step, round(window_width * 0.55))
+    step_y = max(min_step, round(window_height * 0.55))
     xs = scan_starts(media[0], width, window_width, step_x)
     ys = scan_starts(media[1], height, window_height, step_y)
     windows: list[dict[str, Any]] = []
@@ -743,9 +779,15 @@ def generic_scan_windows(media_bbox: list[int], image_width: int, image_height: 
             if any(is_near_equal(clamped, item["bbox"], 0.96) for item in windows):
                 continue
             windows.append({"relation": "non_ocr_foreground", "bbox": clamped})
-            if len(windows) >= GENERIC_SCAN_MAX_WINDOWS:
+            if len(windows) >= generic_scan_window_budget(media, scale_profile):
                 return windows
     return windows
+
+
+def generic_scan_window_budget(media_bbox: list[int], scale_profile: ImageScaleProfile) -> int:
+    unit_area = max(1, scale_profile.area(3600, minimum=1800, maximum=16000))
+    density_budget = max(GENERIC_SCAN_MAX_WINDOWS, round(bbox_area(media_bbox) / unit_area))
+    return min(320, density_budget)
 
 
 def scan_starts(origin: int, extent: int, window_extent: int, step: int) -> list[int]:
@@ -766,11 +808,12 @@ def score_generic_foreground_candidate(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     index: int,
+    scale_profile: ImageScaleProfile,
 ) -> dict[str, Any]:
     metrics = component["metrics"]
     text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
     best_anchor = best_text_anchor(bbox, text_inside)
-    size = size_score(bbox, media["bbox"])
+    size = size_score(bbox, media["bbox"], scale_profile)
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
@@ -838,14 +881,14 @@ def generic_confidence_label(score: float, decision: str) -> str:
     return "low"
 
 
-def anchor_windows(text_bbox: list[int], media_bbox: list[int], image_width: int, image_height: int) -> list[dict[str, Any]]:
-    width = max(56, min(140, int(text_bbox[2] * 2.4)))
-    height = max(36, min(92, int(text_bbox[3] * 2.8)))
-    side_width = max(36, min(96, int(text_bbox[3] * 2.6)))
-    side_height = max(34, min(88, int(text_bbox[3] * 2.4)))
+def anchor_windows(text_bbox: list[int], media_bbox: list[int], image_width: int, image_height: int, scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
+    width = max(scale_profile.length(56, minimum=36), min(scale_profile.length(140, minimum=96), int(text_bbox[2] * 2.4)))
+    height = max(scale_profile.length(36, minimum=24), min(scale_profile.length(92, minimum=64), int(text_bbox[3] * 2.8)))
+    side_width = max(scale_profile.length(36, minimum=24), min(scale_profile.length(96, minimum=64), int(text_bbox[3] * 2.6)))
+    side_height = max(scale_profile.length(34, minimum=22), min(scale_profile.length(88, minimum=60), int(text_bbox[3] * 2.4)))
     cx_text = center_x(text_bbox)
     cy_text = center_y(text_bbox)
-    gap = max(4, round(text_bbox[3] * 0.35))
+    gap = max(scale_profile.length(4, minimum=3), round(text_bbox[3] * 0.35))
     raw = [
         ("above_text", [round(cx_text - width / 2), text_bbox[1] - height - gap, width, height]),
         ("below_text", [round(cx_text - width / 2), y2(text_bbox) + gap, width, height]),
@@ -862,7 +905,7 @@ def anchor_windows(text_bbox: list[int], media_bbox: list[int], image_width: int
     return windows
 
 
-def foreground_components_in_window(pixels: PngPixels, bbox: list[int], text_masks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def foreground_components_in_window(pixels: PngPixels, bbox: list[int], text_masks: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
     background = median_edge_rgb(pixels, bbox)
     x, y, width, height = bbox
     mask = bytearray(width * height)
@@ -877,7 +920,7 @@ def foreground_components_in_window(pixels: PngPixels, bbox: list[int], text_mas
             rgb = (source_row[offset], source_row[offset + 1], source_row[offset + 2])
             if foreground_pixel(rgb, background):
                 mask[row * width + column] = 1
-    return connected_pixel_components(mask, bbox, pixels)
+    return connected_pixel_components(mask, bbox, pixels, scale_profile)
 
 
 def foreground_pixel(rgb: tuple[int, int, int], background: tuple[int, int, int]) -> bool:
@@ -890,7 +933,7 @@ def foreground_pixel(rgb: tuple[int, int, int], background: tuple[int, int, int]
     )
 
 
-def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: PngPixels) -> list[dict[str, Any]]:
+def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: PngPixels, scale_profile: ImageScaleProfile) -> list[dict[str, Any]]:
     width = window_bbox[2]
     height = window_bbox[3]
     visited = bytearray(width * height)
@@ -911,7 +954,7 @@ def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: 
                     if not visited[neighbor] and mask[neighbor]:
                         visited[neighbor] = 1
                         stack.append(neighbor)
-        if len(points) < PIXEL_COMPONENT_MIN_AREA or len(points) > PIXEL_COMPONENT_MAX_AREA:
+        if len(points) < pixel_component_min_area(scale_profile) or len(points) > pixel_component_max_area(scale_profile):
             continue
         xs = [point[0] for point in points]
         ys = [point[1] for point in points]
@@ -922,12 +965,30 @@ def connected_pixel_components(mask: bytearray, window_bbox: list[int], pixels: 
             max(ys) - min(ys) + 1,
         ]
         aspect = max(bbox[2], bbox[3]) / max(1, min(bbox[2], bbox[3]))
-        if min(bbox[2], bbox[3]) < PIXEL_COMPONENT_MIN_SHORT_EDGE or aspect > PIXEL_COMPONENT_MAX_ASPECT_RATIO:
+        if min(bbox[2], bbox[3]) < pixel_component_min_short_edge(scale_profile) or aspect > PIXEL_COMPONENT_MAX_ASPECT_RATIO:
             continue
         fill_ratio = len(points) / max(1, bbox_area(bbox))
         metrics = measure_pixel_component(pixels, bbox, fill_ratio)
         components.append({"bbox": bbox, "area": len(points), "metrics": metrics})
-    return sorted(components, key=lambda item: item["area"], reverse=True)[:6]
+    return sorted(components, key=lambda item: item["area"], reverse=True)[: pixel_component_return_budget(window_bbox, scale_profile)]
+
+
+def pixel_component_min_area(scale_profile: ImageScaleProfile) -> int:
+    return scale_profile.area(PIXEL_COMPONENT_MIN_AREA, minimum=8, maximum=320)
+
+
+def pixel_component_max_area(scale_profile: ImageScaleProfile) -> int:
+    return scale_profile.area(PIXEL_COMPONENT_MAX_AREA, minimum=PIXEL_COMPONENT_MAX_AREA)
+
+
+def pixel_component_min_short_edge(scale_profile: ImageScaleProfile) -> int:
+    return scale_profile.length(PIXEL_COMPONENT_MIN_SHORT_EDGE, minimum=4, maximum=32)
+
+
+def pixel_component_return_budget(window_bbox: list[int], scale_profile: ImageScaleProfile) -> int:
+    unit_area = max(1, scale_profile.area(900, minimum=450, maximum=3600))
+    density_budget = max(PIXEL_COMPONENT_MIN_RETURNED, round(bbox_area(window_bbox) / unit_area))
+    return min(96, density_budget)
 
 
 def score_pixel_anchor_candidate(
@@ -940,12 +1001,13 @@ def score_pixel_anchor_candidate(
     text_masks: list[dict[str, Any]],
     text_inside: list[dict[str, Any]],
     index: int,
+    scale_profile: ImageScaleProfile,
 ) -> dict[str, Any]:
     metrics = component["metrics"]
     text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
     best_anchor = best_text_anchor(bbox, text_inside)
     anchor_score = max(best_anchor["score"], directional_anchor_score(bbox, anchor_block["bbox"], anchor_relation)["score"])
-    size = size_score(bbox, media["bbox"])
+    size = size_score(bbox, media["bbox"], scale_profile)
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, anchor_score)

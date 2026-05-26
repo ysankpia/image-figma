@@ -94,6 +94,8 @@ single task / single Google icon / single bbox acceptance
 
 ### Stage 0: Audit Contract And Bug Ledger
 
+状态：completed，提交 `3c5d21b docs: record m29 source-chain hardening plan`。
+
 落本计划，提交 062 audit reports、Gemini 对照目录、bug 009 更新和 docs index 更新。
 
 验收：
@@ -105,6 +107,8 @@ single task / single Google icon / single bbox acceptance
 ```
 
 ### Stage 1: Bridge Fate Trace Report
+
+状态：completed，提交 `6319a88 feat: add m29 bridge fate trace report`。
 
 新增只读报告：
 
@@ -138,6 +142,8 @@ Stage 1 不改变 runtime 行为。
 
 ### Stage 2: Scale Normalization
 
+状态：in progress。
+
 新增内部 scale profile：
 
 ```text
@@ -154,6 +160,33 @@ M29.6 component area / short edge / scan window
 selected marker / tab indicator size gates
 text mask padding
 transparent tiny object edge sampling window
+```
+
+Stage 2 实现边界：
+
+```text
+内部 scale profile 写入 M29.2 / M29.6 / transparent report meta；
+M29.6 text mask padding、component 面积/短边、generic scan window 和 component return budget 走 scale-aware 参数；
+transparent asset candidate preflight 的面积/短边 gate 走 scale-aware 参数；
+M29.2 默认 source_ui_physical_graph options 从图像 fallback scale 派生，避免待判断的大 OCR display text 反过来抬高自己的 preserve 阈值；
+selected tab indicator 的局部几何 gate 使用 OCR text height 进行尺度归一化。
+```
+
+Stage 2 不改变：
+
+```text
+public API / DSL / Renderer / plugin protocol；
+M29.6 / transparent report-only 合同；
+internal source promotion role；
+M29.5 visible replay / cleanup 授权边界。
+```
+
+Stage 2 验证：
+
+```bash
+cd backend
+uv run pytest tests/test_image_math_scale.py tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_source_ui_physical_graph.py -q
+uv run pytest tests/test_image_math_import_boundaries.py tests/test_media_internal_decomposition.py tests/test_transparent_asset_report.py tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
 ```
 
 保留合理比例阈值：

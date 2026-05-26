@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..image_math import ImageScaleProfile, build_scale_profile
 from ..region_relation_kernel import bbox_area
 from .geometry import bbox_in_image, overlap_ratio
 
@@ -22,15 +23,17 @@ def collect_transparent_asset_candidates(
     ocr_blocks: list[dict[str, Any]],
     media_internal_candidates: list[dict[str, Any]],
     image_size: dict[str, int],
+    scale_profile: ImageScaleProfile | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     media_lookup = {str(source["sourceObjectId"]): source for source in source_objects}
+    scale_profile = scale_profile or build_scale_profile(image_size=image_size, ocr_blocks=ocr_blocks, source_objects=source_objects)
     for source in source_objects:
         if is_m292_icon_candidate(source):
-            candidates.append(build_m292_candidate(source, ocr_blocks, image_size, len(candidates) + 1))
+            candidates.append(build_m292_candidate(source, ocr_blocks, image_size, len(candidates) + 1, scale_profile))
     for internal in media_internal_candidates:
         if is_m296_internal_icon_candidate(internal):
-            candidates.append(build_m296_candidate(internal, ocr_blocks, image_size, len(candidates) + 1, media_lookup))
+            candidates.append(build_m296_candidate(internal, ocr_blocks, image_size, len(candidates) + 1, media_lookup, scale_profile))
     return candidates
 
 
@@ -42,15 +45,21 @@ def is_m296_internal_icon_candidate(internal: dict[str, Any]) -> bool:
     return internal.get("role") == "internal_icon_candidate"
 
 
-def build_m292_candidate(source: dict[str, Any], ocr_blocks: list[dict[str, Any]], image_size: dict[str, int], index: int) -> dict[str, Any]:
+def build_m292_candidate(
+    source: dict[str, Any],
+    ocr_blocks: list[dict[str, Any]],
+    image_size: dict[str, int],
+    index: int,
+    scale_profile: ImageScaleProfile,
+) -> dict[str, Any]:
     bbox = source["bbox"]
     risks: list[str] = []
     reasons = ["m29_2_raster_icon_source_object"]
     if source["visualKind"] != "raster_icon" or source["pixelOwner"] != "raster_icon" or source["replayDecision"] != "icon_replay":
         risks.append("not_raster_icon_replay")
-    if bbox_area(bbox) > MAX_TRANSPARENT_ASSET_AREA:
+    if transparent_asset_too_large(bbox, scale_profile):
         risks.append("transparent_candidate_too_large")
-    if icon_geometry_too_thin(bbox):
+    if icon_geometry_too_thin(bbox, scale_profile):
         risks.append("transparent_candidate_too_thin")
     if source.get("confidence") == "low":
         risks.append("low_source_confidence")
@@ -80,6 +89,7 @@ def build_m296_candidate(
     image_size: dict[str, int],
     index: int,
     media_lookup: dict[str, dict[str, Any]],
+    scale_profile: ImageScaleProfile,
 ) -> dict[str, Any]:
     bbox = internal["bbox"]
     breakdown = internal.get("scoreBreakdown", {})
@@ -94,9 +104,9 @@ def build_m296_candidate(
     group_supported = internal.get("groupSupportedExecution") is True
     if internal.get("confidence") != "high" and not group_supported:
         risks.append("internal_candidate_not_execution_supported")
-    if bbox_area(bbox) > MAX_TRANSPARENT_ASSET_AREA:
+    if transparent_asset_too_large(bbox, scale_profile):
         risks.append("transparent_candidate_too_large")
-    if icon_geometry_too_thin(bbox):
+    if icon_geometry_too_thin(bbox, scale_profile):
         risks.append("transparent_candidate_too_thin")
     if text_overlap > MAX_TEXT_OVERLAP:
         risks.append("overlaps_ocr_text")
@@ -142,7 +152,11 @@ def allows_anchored_soft_edge_profile(internal: dict[str, Any], text_overlap: fl
     )
 
 
-def icon_geometry_too_thin(bbox: list[int]) -> bool:
+def transparent_asset_too_large(bbox: list[int], scale_profile: ImageScaleProfile) -> bool:
+    return bbox_area(bbox) > scale_profile.area(MAX_TRANSPARENT_ASSET_AREA, minimum=MAX_TRANSPARENT_ASSET_AREA)
+
+
+def icon_geometry_too_thin(bbox: list[int], scale_profile: ImageScaleProfile) -> bool:
     short = min(bbox[2], bbox[3])
     long = max(bbox[2], bbox[3])
-    return short < MIN_TRANSPARENT_ICON_SHORT_EDGE or long / max(1, short) > MAX_TRANSPARENT_ICON_ASPECT_RATIO
+    return short < scale_profile.length(MIN_TRANSPARENT_ICON_SHORT_EDGE, minimum=4, maximum=32) or long / max(1, short) > MAX_TRANSPARENT_ICON_ASPECT_RATIO

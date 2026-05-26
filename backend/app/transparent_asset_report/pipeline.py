@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..image_math import build_scale_profile
 from ..png_tools import UnsupportedPngCropError, decode_png_pixels
 from .alpha import analyze_transparent_asset_candidate
 from .candidates import collect_transparent_asset_candidates
@@ -37,11 +38,13 @@ def extract_m29_transparent_asset_report(
     warnings.extend(source_warnings + ocr_warnings + internal_warnings)
 
     image_size = {"width": pixels.width, "height": pixels.height} if pixels is not None else image_size_from(ocr_document, m292_document)
+    scale_profile = build_scale_profile(image_size=image_size, ocr_blocks=ocr_blocks, source_objects=source_objects)
     candidates = collect_transparent_asset_candidates(
         source_objects=source_objects,
         ocr_blocks=ocr_blocks,
         media_internal_candidates=internal_candidates,
         image_size=image_size,
+        scale_profile=scale_profile,
     )
     items = [
         build_report_item(candidate, pixels, output_dir / "assets" / "transparent" / f"{candidate['candidateId']}.png")
@@ -63,6 +66,7 @@ def extract_m29_transparent_asset_report(
         "meta": {
             "createdAt": datetime.now(UTC).isoformat(),
             "truthSource": "source_png_plus_ocr_plus_m29_2_plus_m29_6",
+            "scaleProfile": scale_profile.to_dict(),
             **REPORT_ONLY_META,
         },
     }

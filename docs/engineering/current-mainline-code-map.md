@@ -135,6 +135,8 @@ physical metrics
 
 M29.2 当前也负责把有物理证据的大型复杂 image-like unknown 恢复为 `media_region` / `preserve_raster` / `image_replay`，为 fallback-off 场景提供 raster/media preservation。
 
+M29.2 默认 options 会从源图自身推导内部 scale profile。该 profile 只用于把高风险绝对像素 gate 归一到当前截图尺度，例如 icon area、cluster gap、control-like unknown size、media/display-text size。它不是设备型号、文件名、Retina 倍率或样本路径规则；display-text 的 preserve 判断使用图像 fallback scale，避免待判断的大 OCR 文字反过来抬高自己的阈值。局部 selected tab indicator 几何判断可以使用 OCR text height 做尺度归一，但仍输出 diagnostic/non-icon，除非后续 source role evidence 另行证明它应该 replay as shape。
+
 模块边界：
 
 ```text
@@ -301,6 +303,8 @@ validation.py: report schema and report-only invariant checks
 
 这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。它不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。后续如果要让内部 icon/image 可选，必须先经过 source ownership promotion 和 M29.5 replay/cleanup 授权。
 
+M29.6 report meta 记录 `scaleProfile`。Text mask padding、pixel component min/max area、short-edge gate、generic scan window size、generic candidate budget、connected component return budget 都使用该内部 scale profile 或面积密度预算。比例证据仍保持比例形式：overlap ratio、containment ratio、aspect ratio、coverage、text overlap、hero penalty 和 cleanup risk 不应被改成固定样本规则。
+
 ### M29 Transparent Asset Report
 
 `backend/app/transparent_asset_report/` 是 M29.6 之后、materialization 之前的 report-only transparent asset evidence surface。它消费：
@@ -332,6 +336,8 @@ validation.py: report schema and report-only invariant checks
 ```
 
 这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；内部 media 候选使用 parent-media-clamped `analysisBbox` 做上下文 alpha 分析，避免 tight foreground bbox 的边缘采样把主体误当背景。alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
+
+Transparent asset report meta 记录 `scaleProfile`。Preflight 的 candidate area 和 short-edge gate 使用同一内部 scale profile，避免高倍率 UI icon 因 1x 面积/短边上限被误拒。Alpha 背景稳定性、edge-alpha、foreground coverage 和 connected-foreground 仍是像素质量 gate，不因为 scale 成功就授权 visible replay 或 cleanup。
 
 ### M29 Evidence Contract
 

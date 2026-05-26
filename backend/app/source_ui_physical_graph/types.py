@@ -67,6 +67,7 @@ class M292SourcePhysicalOptions:
     control_unknown_max_edge_score: float = 0.24
     control_unknown_min_fill_ratio: float = 0.35
     duplicate_iou_threshold: float = 0.88
+    scale_factor: float = 1.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

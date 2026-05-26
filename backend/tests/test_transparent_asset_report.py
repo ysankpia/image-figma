@@ -38,6 +38,21 @@ def test_raster_icon_on_stable_background_allows_rgba_debug_asset(tmp_path: Path
     assert item["largestComponentRatio"] > 0.90
 
 
+def test_scaled_raster_icon_is_not_rejected_by_1x_area_cap(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_png=make_large_icon_png(),
+        source_objects=[raster_icon("large_icon", [40, 40, 120, 120])],
+        ocr_blocks=[ocr_block("scale_label", [170, 30, 52, 42])],
+        internal_candidates=[],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "allow"
+    assert "transparent_candidate_too_large" not in item["risks"]
+    assert report["meta"]["scaleProfile"]["scale_basis_px"] > 24
+
+
 def test_ocr_overlap_rejects_transparent_asset(tmp_path: Path) -> None:
     report = transparent_report(
         tmp_path,
@@ -245,6 +260,19 @@ def make_icon_png(*, unstable_background: bool = False, edge_alpha_risk: bool = 
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(64, 64, rows)
+
+
+def make_large_icon_png() -> bytes:
+    rows = []
+    for y in range(240):
+        row = bytearray()
+        for x in range(240):
+            rgb = [255, 255, 255]
+            if 60 <= x < 140 and 60 <= y < 140:
+                rgb = [0, 0, 0]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(240, 240, rows)
 
 
 def make_action_strip_png() -> bytes:

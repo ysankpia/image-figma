@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..image_math import build_scale_profile
 from ..png_tools import UnsupportedPngCropError, decode_png_pixels
 from .candidates import build_composite_media_items
 from .normalization import normalize_ocr_blocks, normalize_plan_items, normalize_raw_nodes, normalize_source_objects
@@ -38,12 +39,14 @@ def extract_m29_media_internal_decomposition_report(
         except UnsupportedPngCropError as error:
             pixel_warnings.append(f"source_png_decode_failed:{error}")
     image_size = image_size_from(m29_document, ocr_document, m292_document)
+    scale_profile = build_scale_profile(image_size=image_size, ocr_blocks=ocr_blocks, source_objects=source_objects)
     composite_media_items, text_masks, internal_candidates, matched_internal_groups, rejected_fragments = build_composite_media_items(
         source_objects=source_objects,
         raw_nodes=raw_nodes,
         ocr_blocks=ocr_blocks,
         image_size=image_size,
         pixels=pixels,
+        scale_profile=scale_profile,
     )
     warnings = source_warnings + raw_warnings + ocr_warnings + plan_warnings + pixel_warnings
     report_path = output_dir / "media_internal_decomposition_report.json"
@@ -81,6 +84,7 @@ def extract_m29_media_internal_decomposition_report(
         "meta": {
             "createdAt": datetime.now(UTC).isoformat(),
             "truthSource": "source_png_plus_ocr_plus_raw_m29_plus_m29_2_plus_m29_3_1_plus_m29_5",
+            "scaleProfile": scale_profile.to_dict(),
             **REPORT_ONLY_META,
         },
     }

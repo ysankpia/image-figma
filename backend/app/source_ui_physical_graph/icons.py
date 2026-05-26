@@ -80,7 +80,9 @@ def is_selected_tab_indicator_symbol(bbox: list[int], ocr_boxes: list[Any]) -> b
     height = bbox[3]
     if height <= 0 or width / max(1, height) < 3.2:
         return False
-    if height > 18:
+    text_height = median_ocr_height(ocr_boxes)
+    scale = max(0.5, min(6.0, text_height / 14.0)) if text_height > 0 else 1.0
+    if height > max(round(18 * scale), round(text_height * 0.75)):
         return False
     for box in ocr_boxes:
         text_bbox = getattr(box, "bbox", None)
@@ -91,6 +93,31 @@ def is_selected_tab_indicator_symbol(bbox: list[int], ocr_boxes: list[Any]) -> b
         dx = abs(indicator_cx - text_cx)
         vertical_gap = bbox[1] - (text_bbox[1] + text_bbox[3])
         width_ratio = width / max(1, text_bbox[2])
-        if dx <= max(12, text_bbox[2] * 0.45) and 0 <= vertical_gap <= max(28, text_bbox[3] * 1.15) and 0.70 <= width_ratio <= 1.80:
+        if (
+            dx <= max(round(12 * scale), text_bbox[2] * 0.45)
+            and 0 <= vertical_gap <= max(round(28 * scale), text_bbox[3] * 1.15)
+            and 0.70 <= width_ratio <= 1.80
+        ):
             return True
     return False
+
+
+def median_ocr_height(ocr_boxes: list[Any]) -> float:
+    heights: list[float] = []
+    for box in ocr_boxes:
+        text_bbox = getattr(box, "bbox", None)
+        if not isinstance(text_bbox, list) or len(text_bbox) != 4:
+            continue
+        try:
+            height = float(text_bbox[3])
+        except (TypeError, ValueError):
+            continue
+        if 4 <= height <= 160:
+            heights.append(height)
+    if not heights:
+        return 0.0
+    ordered = sorted(heights)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
