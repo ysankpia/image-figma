@@ -181,6 +181,41 @@ dependency requirement is known
 one dry inference path is understood or blocked with concrete error
 ```
 
+Current probe script:
+
+```text
+backend/scripts/probe_onnx_model.py
+```
+
+Run it without adding runtime dependencies:
+
+```bash
+cd backend
+uv run --with onnxruntime --with pillow --with numpy python scripts/probe_onnx_model.py \
+  --model /Volumes/WorkDrive/Models/model_fp16.onnx \
+  --input /Users/luhui/Downloads/525测试 \
+  --output-dir tmp/model_probe_script_525 \
+  --input-size 960 \
+  --max-files 3
+```
+
+Observed model facts from the probe:
+
+```text
+input: images [batch, 3, height, width] tensor(float)
+output: output0 [batch, 5, anchors] tensor(float)
+decode: YOLO-like single-class [x, y, w, h, objectness]
+role labels: none
+```
+
+Interpretation:
+
+```text
+The model is useful as a model-first UI object proposal source.
+It is not a complete design reconstruction model because it has no class labels, hierarchy, text semantics, or cleanup authority.
+M29 should consume its boxes as perception candidates, then use OCR and ownership/replay contracts to compile editable Figma nodes.
+```
+
 ### Stage 2: Perception Adapter Prototype
 
 If the model outputs useful UI candidates, create a report-only adapter:
@@ -259,4 +294,3 @@ make bridge fate a decision source
 commit model binaries into the repo
 add inference dependencies to main before probe evidence
 ```
-
