@@ -143,7 +143,7 @@ storage/upload_previews/{taskId}/m29_internal_source_promotion/internal_source_p
 storage/upload_previews/{taskId}/m29_internal_source_promotion/source_ui_physical_graph.promoted.json
 ```
 
-promotion 本身不创建 DSL nodes、不直接 materialize。promotion 后 pipeline 会用增强版 M29.2 重新生成最终 M29.3.1、M29.4、M29.5 和 ownership conservation report；M29.5 可以在 parent media relation 成立时为 promoted internal asset 写入 copied media cleanup 授权，后续 hierarchy/layout/materializer 只消费这条最终授权链。
+promotion 本身不创建 DSL nodes、不直接 materialize。promotion 在写出增强版 M29.2 前会做 role-compatible spatial merge：同角色高 IoU/containment 或小幅 bbox 漂移的重复候选只保留 evidence rank 更高者，不同角色高重叠记录 conflict，不静默互相吞掉。promotion 后 pipeline 会用增强版 M29.2 重新生成最终 M29.3.1、M29.4、M29.5 和 ownership conservation report；M29.5 可以在 parent media relation 成立时为 promoted internal asset 写入 copied media cleanup 授权，后续 hierarchy/layout/materializer 只消费这条最终授权链。
 
 M29 bridge fate trace report 位于 materializer 之后。它读取 M29.6、transparent asset、evidence contract、internal source promotion、final M29.5 replay plan 和 materialization report，写出每个 internal candidate 的第一阻断层和下游决策：
 

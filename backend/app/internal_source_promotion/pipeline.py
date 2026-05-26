@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..region_relation_kernel import normalize_bbox
+from ..region_relation_kernel import bbox_area, center_x, center_y, intersection_area, normalize_bbox
 from ..transparent_asset_report.gates import visible_replay_block_reason, visible_replay_eligible
 from .types import M29InternalSourcePromotionResult, REPORT_META
 
@@ -18,6 +18,10 @@ PROMOTABLE_SHAPE_ROLES = {
     "internal_shape_candidate",
     "internal_control_background",
 }
+PROMOTION_DUPLICATE_IOU_THRESHOLD = 0.72
+PROMOTION_DUPLICATE_CONTAINMENT_THRESHOLD = 0.82
+PROMOTION_DUPLICATE_CENTER_SHIFT_RATIO = 0.25
+PROMOTION_DUPLICATE_SIZE_DRIFT_RATIO = 0.25
 
 
 def extract_m29_internal_source_promotion_report(
@@ -126,18 +130,19 @@ def build_promoted_objects(
 
 
 def dedupe_promoted_objects(promoted: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    selected_by_bbox: dict[tuple[int, int, int, int], dict[str, Any]] = {}
+    kept: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    for item in promoted:
-        bbox = tuple(normalize_bbox(item.get("bbox"), "promoted.bbox"))
-        current = selected_by_bbox.get(bbox)
-        if current is None or promotion_rank(item) > promotion_rank(current):
-            if current is not None:
-                rejected.append(rejected_duplicate(current))
-            selected_by_bbox[bbox] = item
+    for item in sorted(promoted, key=promotion_rank, reverse=True):
+        match = spatial_promotion_match(item, kept)
+        if match is None:
+            kept.append(item)
+            continue
+        current, metrics = match
+        if promotion_role(item) == promotion_role(current):
+            remember_merged_candidate(current, item)
+            rejected.append(rejected_duplicate(item, current, metrics))
         else:
-            rejected.append(rejected_duplicate(item))
-    kept = list(selected_by_bbox.values())
+            rejected.append(rejected_role_conflict(item, current, metrics))
     next_index = {"raster_icon": 1, "shape_geometry": 1}
     for item in kept:
         owner = str(item.get("pixelOwner") or "")
@@ -148,6 +153,67 @@ def dedupe_promoted_objects(promoted: list[dict[str, Any]]) -> tuple[list[dict[s
             item["id"] = f"m292_promoted_internal_icon_{next_index['raster_icon']:04d}"
             next_index["raster_icon"] += 1
     return kept, rejected
+
+
+def spatial_promotion_match(item: dict[str, Any], kept: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    matches: list[tuple[float, dict[str, Any], dict[str, Any]]] = []
+    for current in kept:
+        metrics = spatial_overlap_metrics(item, current)
+        if metrics is None or not metrics["promotionDuplicateGeometry"]:
+            continue
+        matches.append((float(metrics["spatialOverlapScore"]), current, metrics))
+    if not matches:
+        return None
+    _, current, metrics = max(matches, key=lambda match: match[0])
+    return current, metrics
+
+
+def spatial_overlap_metrics(left_item: dict[str, Any], right_item: dict[str, Any]) -> dict[str, Any] | None:
+    left = normalize_bbox(left_item.get("bbox"), "left_promoted.bbox")
+    right = normalize_bbox(right_item.get("bbox"), "right_promoted.bbox")
+    intersection = intersection_area(left, right)
+    if intersection <= 0:
+        return None
+    left_area = bbox_area(left)
+    right_area = bbox_area(right)
+    union = max(1, left_area + right_area - intersection)
+    iou = intersection / union
+    left_containment = intersection / max(1, left_area)
+    right_containment = intersection / max(1, right_area)
+    min_width = max(1, min(left[2], right[2]))
+    min_height = max(1, min(left[3], right[3]))
+    center_shift_ratio = max(abs(center_x(left) - center_x(right)) / min_width, abs(center_y(left) - center_y(right)) / min_height)
+    size_drift_ratio = max(abs(left[2] - right[2]) / max(1, max(left[2], right[2])), abs(left[3] - right[3]) / max(1, max(left[3], right[3])))
+    duplicate_geometry = (
+        iou >= PROMOTION_DUPLICATE_IOU_THRESHOLD
+        or max(left_containment, right_containment) >= PROMOTION_DUPLICATE_CONTAINMENT_THRESHOLD
+        or (
+            center_shift_ratio <= PROMOTION_DUPLICATE_CENTER_SHIFT_RATIO
+            and size_drift_ratio <= PROMOTION_DUPLICATE_SIZE_DRIFT_RATIO
+            and min(left_containment, right_containment) >= 0.50
+        )
+    )
+    return {
+        "intersectionArea": intersection,
+        "iou": round(iou, 6),
+        "leftContainment": round(left_containment, 6),
+        "rightContainment": round(right_containment, 6),
+        "centerShiftRatio": round(center_shift_ratio, 6),
+        "sizeDriftRatio": round(size_drift_ratio, 6),
+        "spatialOverlapScore": round(max(iou, left_containment, right_containment), 6),
+        "promotionDuplicateGeometry": duplicate_geometry,
+    }
+
+
+def promotion_role(item: dict[str, Any]) -> str:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    internal_role = str(evidence.get("internalRole") or "")
+    if internal_role:
+        return internal_role
+    source = str(evidence.get("promotionSource") or "")
+    if source:
+        return source
+    return str(item.get("pixelOwner") or "")
 
 
 def promotion_rank(item: dict[str, Any]) -> tuple[float, int, str]:
@@ -161,13 +227,46 @@ def promotion_rank(item: dict[str, Any]) -> tuple[float, int, str]:
     return (score, len(candidate_id), media_id)
 
 
-def rejected_duplicate(item: dict[str, Any]) -> dict[str, Any]:
+def remember_merged_candidate(kept: dict[str, Any], duplicate: dict[str, Any]) -> None:
+    kept_evidence = kept.get("sourceEvidence") if isinstance(kept.get("sourceEvidence"), dict) else {}
+    duplicate_evidence = duplicate.get("sourceEvidence") if isinstance(duplicate.get("sourceEvidence"), dict) else {}
+    duplicate_id = duplicate_evidence.get("mediaInternalCandidateId")
+    if not duplicate_id:
+        return
+    merged = list(kept_evidence.get("mergedMediaInternalCandidateIds") or [])
+    if duplicate_id not in merged:
+        merged.append(duplicate_id)
+    kept_evidence["mergedMediaInternalCandidateIds"] = merged
+
+
+def rejected_duplicate(item: dict[str, Any], kept: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    kept_evidence = kept.get("sourceEvidence") if isinstance(kept.get("sourceEvidence"), dict) else {}
+    item_bbox = normalize_bbox(item.get("bbox"), "duplicate.bbox")
+    kept_bbox = normalize_bbox(kept.get("bbox"), "kept.bbox")
     return {
         "candidateId": evidence.get("mediaInternalCandidateId"),
-        "reason": "duplicate_promoted_internal_bbox",
+        "reason": "duplicate_promoted_internal_bbox" if item_bbox == kept_bbox else "duplicate_promoted_internal_spatial_overlap",
         "bbox": item.get("bbox"),
-        "keptBy": "highest_evidence_score",
+        "keptCandidateId": kept_evidence.get("mediaInternalCandidateId"),
+        "keptRole": promotion_role(kept),
+        "keptBy": "highest_evidence_role_compatible_spatial_merge",
+        "overlapMetrics": metrics,
+    }
+
+
+def rejected_role_conflict(item: dict[str, Any], kept: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    kept_evidence = kept.get("sourceEvidence") if isinstance(kept.get("sourceEvidence"), dict) else {}
+    return {
+        "candidateId": evidence.get("mediaInternalCandidateId"),
+        "reason": "conflicting_promoted_internal_role_overlap",
+        "bbox": item.get("bbox"),
+        "role": promotion_role(item),
+        "keptCandidateId": kept_evidence.get("mediaInternalCandidateId"),
+        "keptRole": promotion_role(kept),
+        "keptBy": "highest_evidence_role_conflict",
+        "overlapMetrics": metrics,
     }
 
 

@@ -350,7 +350,33 @@ uv run pytest tests/test_m29_evidence_contract.py tests/test_internal_source_pro
 
 ### Stage 6: Promotion Dedupe And Overlap Merge
 
+状态：completed，提交待创建。
+
 把 exact bbox dedupe 改成 IoU / containment based merge。相同角色高度重叠合并，不同角色冲突进入 report/reject，不做静默覆盖。
+
+Stage 6 实现边界：
+
+```text
+promotion dedupe 从 exact bbox key 改成 spatial overlap merge；
+same promotion role 高 IoU / 高 containment / 小中心漂移 + 小尺寸漂移时只保留 evidence rank 更高的 candidate；
+不同 role 高重叠时记录 conflicting_promoted_internal_role_overlap，不静默覆盖；
+相邻但不重叠的小 marker/status/table object 保持多个 promoted source objects；
+dedupe 仍发生在 internal_source_promotion，不下沉到 materializer/Renderer/plugin。
+```
+
+Stage 6 验证：
+
+```bash
+python -m py_compile backend/app/internal_source_promotion/pipeline.py backend/tests/test_internal_source_promotion.py
+cd backend
+uv run pytest tests/test_internal_source_promotion.py -q
+```
+
+结果：
+
+```text
+12 passed
+```
 
 ### Stage 7: Cleanup And Render-Back Risk Gate
 

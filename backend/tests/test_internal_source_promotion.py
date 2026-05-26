@@ -133,9 +133,141 @@ def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(
             "candidateId": "candidate_a",
             "reason": "duplicate_promoted_internal_bbox",
             "bbox": [20, 20, 24, 24],
-            "keptBy": "highest_evidence_score",
+            "keptCandidateId": "candidate_b",
+            "keptRole": "m29_6_internal_icon_candidate",
+            "keptBy": "highest_evidence_role_compatible_spatial_merge",
+            "overlapMetrics": {
+                "intersectionArea": 576,
+                "iou": 1.0,
+                "leftContainment": 1.0,
+                "rightContainment": 1.0,
+                "centerShiftRatio": 0.0,
+                "sizeDriftRatio": 0.0,
+                "spatialOverlapScore": 1.0,
+                "promotionDuplicateGeometry": True,
+            },
         }
     ]
+
+
+def test_internal_source_promotion_dedupes_offset_bbox_by_iou_not_exact_bbox(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon("candidate_a", [20, 20, 24, 24], confidence="high", text_anchor=0.82),
+            internal_icon("candidate_b", [21, 21, 24, 24], confidence="high", text_anchor=0.86),
+        ],
+        transparent_items=[
+            transparent_item("asset_candidate_a", "candidate_a", [20, 20, 24, 24], decision="allow"),
+            transparent_item("asset_candidate_b", "candidate_b", [21, 21, 24, 24], decision="allow"),
+        ],
+        evidence_contract_items=[
+            evidence_contract_item("contract_a", "candidate_a", decision="allow_visible_replay", evidence_score=0.72),
+            evidence_contract_item("contract_b", "candidate_b", decision="allow_visible_replay", evidence_score=0.86),
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    promoted = result.report["promotedSourceObjects"][0]
+    assert promoted["sourceEvidence"]["mediaInternalCandidateId"] == "candidate_b"
+    assert promoted["sourceEvidence"]["mergedMediaInternalCandidateIds"] == ["candidate_a"]
+    rejected = result.report["rejectedCandidates"][0]
+    assert rejected["candidateId"] == "candidate_a"
+    assert rejected["reason"] == "duplicate_promoted_internal_spatial_overlap"
+    assert rejected["keptCandidateId"] == "candidate_b"
+    assert rejected["overlapMetrics"]["iou"] > 0.80
+
+
+def test_internal_source_promotion_keeps_nearby_distinct_shape_markers(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "table_marker_a",
+                [32, 44, 8, 8],
+                role="table_marker_candidate",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                repetition=0.72,
+            ),
+            internal_shape_candidate(
+                "table_marker_b",
+                [44, 44, 8, 8],
+                role="table_marker_candidate",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                repetition=0.72,
+            ),
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            evidence_contract_item(
+                "contract_a",
+                "table_marker_a",
+                decision="allow_visible_replay",
+                evidence_score=0.80,
+                source_kind="m29_6_internal_shape_candidate",
+            ),
+            evidence_contract_item(
+                "contract_b",
+                "table_marker_b",
+                decision="allow_visible_replay",
+                evidence_score=0.79,
+                source_kind="m29_6_internal_shape_candidate",
+            ),
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 2
+    assert result.report["rejectedCandidates"] == []
+
+
+def test_internal_source_promotion_rejects_overlapping_different_shape_roles_as_conflict(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[
+            internal_shape_candidate(
+                "selected_marker",
+                [24, 72, 36, 6],
+                role="selected_marker_candidate",
+                text_anchor=0.82,
+                relation="below_text",
+            ),
+            internal_shape_candidate(
+                "table_marker",
+                [25, 72, 34, 6],
+                role="table_marker_candidate",
+                text_anchor=0.0,
+                relation="non_ocr_foreground",
+                repetition=0.72,
+            ),
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            evidence_contract_item(
+                "contract_selected",
+                "selected_marker",
+                decision="allow_visible_replay",
+                evidence_score=0.82,
+                source_kind="m29_6_internal_shape_candidate",
+            ),
+            evidence_contract_item(
+                "contract_table",
+                "table_marker",
+                decision="allow_visible_replay",
+                evidence_score=0.78,
+                source_kind="m29_6_internal_shape_candidate",
+            ),
+        ],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 1
+    rejected = result.report["rejectedCandidates"][0]
+    assert rejected["candidateId"] == "table_marker"
+    assert rejected["reason"] == "conflicting_promoted_internal_role_overlap"
+    assert rejected["role"] == "table_marker_candidate"
+    assert rejected["keptCandidateId"] == "selected_marker"
+    assert rejected["keptRole"] == "selected_marker_candidate"
 
 
 def test_internal_source_promotion_promotes_selected_marker_as_shape(tmp_path: Path) -> None:
