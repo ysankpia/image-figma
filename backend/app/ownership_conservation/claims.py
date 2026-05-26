@@ -58,6 +58,8 @@ def build_cleanup_claims(plan_items: list[dict[str, Any]]) -> list[dict[str, Any
                     "cleanupTarget": cleanup_target,
                     "targetSourceObjectId": target.get("targetSourceObjectId"),
                     "reason": str(target.get("reason") or ""),
+                    **({"foregroundClaimId": target.get("foregroundClaimId")} if target.get("foregroundClaimId") else {}),
+                    **({"maskKind": target.get("maskKind")} if target.get("maskKind") else {}),
                     "authorizedBy": "m29_5_cleanupTargets",
                 }
             )

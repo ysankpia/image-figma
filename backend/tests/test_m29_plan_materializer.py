@@ -468,6 +468,69 @@ def test_shape_background_cleans_parent_media_only_with_m295_target(tmp_path: Pa
     assert result_without_cleanup.report["summary"]["copiedImageAssetShapeErasedCount"] == 0
 
 
+def test_foreground_claim_shape_cleanup_uses_m295_geometry_mask(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(140, 100, fill=(240, 240, 240), marks=[([10, 10, 100, 70], (40, 80, 120)), ([30, 28, 42, 20], (82, 148, 76))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object("media", [10, 10, 100, 70], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object(
+                "pill",
+                [30, 28, 42, 20],
+                "control_background",
+                "shape_geometry",
+                "shape_replay",
+                m29_ids=["unknown_pill"],
+                source_evidence={
+                    "promotionSource": "m29_6_foreground_claim",
+                    "foregroundClaimId": "pill_candidate:foreground_claim",
+                    "claimMaskKind": "rounded_rect",
+                    "shapeFillOverride": "#52944C",
+                    "shapeRadiusOverride": 10,
+                },
+            ),
+        ]
+    )
+    authorized_plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 100, 70], "image_replay", "m29_image"),
+            m295_item(
+                "plan_pill",
+                "pill",
+                [30, 28, 42, 20],
+                "shape_replay",
+                "m29_shape",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "foreground_claim_removed_from_residual_media",
+                        "foregroundClaimId": "pill_candidate:foreground_claim",
+                        "maskKind": "rounded_rect",
+                    },
+                ],
+            ),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 100, 70]), m29_node("unknown_pill", "unknown", [30, 28, 42, 20])]),
+        m292_document=m292,
+        m295_replay_plan=authorized_plan,
+        output_dir=tmp_path / "out_foreground_claim_shape_cleanup",
+    )
+
+    copied = copied_image_pixels(result.dsl, tmp_path / "out_foreground_claim_shape_cleanup")
+    assert copied.rows[28][40 * 3 : 40 * 3 + 3] != b"\x52\x94\x4c"
+    assert copied.rows[18][20 * 3 : 20 * 3 + 3] == b"\x52\x94\x4c"
+    assert result.report["summary"]["copiedImageAssetShapeErasedCount"] == 1
+
+
 def test_controlled_structure_materialization_groups_contiguous_high_confidence_members(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(248, 248, 248), marks=[([20, 20, 40, 20], (235, 235, 235)), ([70, 20, 40, 20], (20, 20, 20))]))
     m292 = m292_document(

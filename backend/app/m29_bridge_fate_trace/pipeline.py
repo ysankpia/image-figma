@@ -12,12 +12,16 @@ from .validation import validate_m29_bridge_fate_trace_report
 
 
 VISIBLE_REPLAY_ACTIONS = {"text_replay", "image_replay", "icon_replay", "shape_replay"}
+ALLOW_PROMOTION_MODES = {"allow_visible_replay", "allow_foreground_claim"}
 SHAPE_CANDIDATE_ROLES = {
     "selected_marker_candidate",
     "status_dot_candidate",
     "table_marker_candidate",
     "internal_shape_candidate",
     "internal_control_background",
+    "internal_overlay_badge",
+    "internal_pill_button",
+    "internal_circle_control",
 }
 
 
@@ -109,6 +113,7 @@ def build_trace(
     contract_decision = nested_decision_mode(contract_item)
     promotion_decision = "promoted" if promoted_item is not None else str((rejected_promotion or {}).get("reason") or "missing_promotion_candidate")
     final_replay_decision = str((plan_item or {}).get("finalReplayAction") or ("missing_final_m29_5_plan_item" if promoted_item is not None else "not_applicable"))
+    cleanup_target = copied_cleanup_target(plan_item)
     materializer_decision = materializer_decision_for(
         promoted_item=promoted_item,
         plan_item=plan_item,
@@ -133,6 +138,10 @@ def build_trace(
         "promotedSourceObjectId": promoted_source_id or None,
         "bbox": candidate.get("bbox"),
         "candidateDecision": str(candidate.get("candidateDecision") or "unknown"),
+        "claimDecision": str(candidate.get("claimDecision") or "unknown"),
+        "claimScore": candidate.get("claimScore"),
+        "foregroundClaimId": candidate.get("foregroundClaimId") or ((promoted_item or {}).get("sourceEvidence") or {}).get("foregroundClaimId"),
+        "maskKind": candidate.get("maskKind") or ((promoted_item or {}).get("sourceEvidence") or {}).get("claimMaskKind"),
         "candidateConfidence": str(candidate.get("confidence") or "unknown"),
         "candidateScore": candidate.get("score"),
         "transparentDecision": transparent_decision,
@@ -144,6 +153,9 @@ def build_trace(
         "promotionDecision": promotion_decision,
         "finalReplayDecision": final_replay_decision,
         "finalReplayPlanItemId": (plan_item or {}).get("id"),
+        "cleanupDecision": cleanup_decision_for(plan_item, cleanup_target),
+        "cleanupTarget": cleanup_target,
+        "cleanupRisk": cleanup_risk_for(plan_item),
         "materializerDecision": materializer_decision,
         "materializedNodeId": (replayed_item or {}).get("id"),
         "firstBlockingStage": first_stage,
@@ -182,8 +194,8 @@ def first_blocking_stage(
     if contract_item is None:
         return ("m29_evidence_contract", "missing_evidence_contract")
     decision = contract_item.get("decision") if isinstance(contract_item.get("decision"), dict) else {}
-    if decision.get("mode") != "allow_visible_replay":
-        return ("m29_evidence_contract", first_reason(decision, fallback="evidence_contract_not_allowing_visible_replay"))
+    if decision.get("mode") not in ALLOW_PROMOTION_MODES:
+        return ("m29_evidence_contract", first_reason(decision, fallback="evidence_contract_not_allowing_foreground_claim"))
     if promoted_item is None:
         return ("m29_internal_source_promotion", str((rejected_promotion or {}).get("reason") or "missing_promoted_source_object"))
     if plan_item is None:
@@ -224,6 +236,30 @@ def materializer_decision_for(
     if skipped_item is not None:
         return str(skipped_item.get("reason") or "skipped")
     return "missing_materialized_node"
+
+
+def copied_cleanup_target(plan_item: dict[str, Any] | None) -> dict[str, Any] | None:
+    if plan_item is None:
+        return None
+    for target in plan_item.get("cleanupTargets", []) if isinstance(plan_item.get("cleanupTargets"), list) else []:
+        if isinstance(target, dict) and target.get("target") == "copied_image_asset":
+            return target
+    return None
+
+
+def cleanup_decision_for(plan_item: dict[str, Any] | None, cleanup_target: dict[str, Any] | None) -> str:
+    if plan_item is None:
+        return "not_applicable"
+    if cleanup_target is not None:
+        return "copied_image_cleanup_authorized"
+    risks = cleanup_risk_for(plan_item)
+    return "copied_image_cleanup_blocked" if risks else "not_required"
+
+
+def cleanup_risk_for(plan_item: dict[str, Any] | None) -> list[str]:
+    if plan_item is None:
+        return []
+    return [risk for risk in list_strings(plan_item.get("risks")) if risk.startswith("cleanup_rejected_")]
 
 
 def promoted_source_objects_by_candidate(items: Any) -> dict[str, dict[str, Any]]:

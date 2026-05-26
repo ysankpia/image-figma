@@ -71,12 +71,16 @@ def shape_cleanup_targets(
             if risk:
                 risks.append(risk)
                 continue
+            evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+            target = {
+                "target": "copied_image_asset",
+                "targetSourceObjectId": other["id"],
+                "reason": cleanup_reason_for_shape(item),
+            }
+            if is_foreground_claim_source(evidence):
+                target.update(foreground_claim_cleanup_fields(evidence))
             targets.append(
-                {
-                    "target": "copied_image_asset",
-                    "targetSourceObjectId": other["id"],
-                    "reason": "shape_background_contained_by_media",
-                }
+                target
             )
     return targets, risks
 
@@ -87,7 +91,7 @@ def promoted_internal_asset_cleanup_targets(
     edge_lookup: dict[frozenset[str], dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
+    if evidence.get("promotionSource") not in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}:
         return [], []
     media_id = str(evidence.get("mediaSourceObjectId") or "")
     if not media_id:
@@ -101,13 +105,14 @@ def promoted_internal_asset_cleanup_targets(
     risk = promoted_internal_icon_cleanup_risk_reason(item, media, edge)
     if risk:
         return [], [risk]
-    return [
-        {
-            "target": "copied_image_asset",
-            "targetSourceObjectId": media_id,
-            "reason": "promoted_internal_asset_contained_by_media",
-        }
-    ], []
+    target = {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": media_id,
+        "reason": "foreground_claim_removed_from_residual_media" if is_foreground_claim_source(evidence) else "promoted_internal_asset_contained_by_media",
+    }
+    if is_foreground_claim_source(evidence):
+        target.update(foreground_claim_cleanup_fields(evidence))
+    return [target], []
 
 
 def label_anchored_blocked_asset_cleanup_targets(
@@ -241,15 +246,34 @@ def shape_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge:
     text_overlap = safe_float(evidence.get("textOverlapRatio"))
     if text_overlap > MAX_SHAPE_CLEANUP_TEXT_OVERLAP:
         return "cleanup_rejected_text_overlap_risk"
-    if evidence.get("promotionSource") == "m29_6_internal_shape_candidate":
+    if evidence.get("promotionSource") in {"m29_6_internal_shape_candidate", "m29_6_foreground_claim"}:
         score = safe_float(evidence.get("evidenceScore"))
         if score < MIN_SHAPE_CLEANUP_EVIDENCE_SCORE:
             return "cleanup_rejected_low_shape_evidence"
         role = str(evidence.get("internalRole") or "")
         has_style = bool(evidence.get("shapeFillOverride") or evidence.get("shapeRadiusOverride"))
-        if role in {"status_dot_candidate", "table_marker_candidate"} and not has_style:
+        if role in {"status_dot_candidate", "table_marker_candidate", "internal_overlay_badge", "internal_pill_button", "internal_circle_control"} and not has_style:
             return "cleanup_rejected_missing_shape_replacement_style"
     return ""
+
+
+def cleanup_reason_for_shape(item: dict[str, Any]) -> str:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    if is_foreground_claim_source(evidence):
+        return "foreground_claim_removed_from_residual_media"
+    return "shape_background_contained_by_media"
+
+
+def is_foreground_claim_source(evidence: dict[str, Any]) -> bool:
+    return str(evidence.get("promotionSource") or "") == "m29_6_foreground_claim" or bool(evidence.get("foregroundClaimId"))
+
+
+def foreground_claim_cleanup_fields(evidence: dict[str, Any]) -> dict[str, Any]:
+    fields = {
+        "foregroundClaimId": evidence.get("foregroundClaimId"),
+        "maskKind": evidence.get("claimMaskKind") or "bbox",
+    }
+    return {key: value for key, value in fields.items() if value}
 
 
 def optional_float(value: Any) -> float | None:

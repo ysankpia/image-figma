@@ -256,6 +256,46 @@ def test_m295_promoted_internal_shape_marker_replays_as_shape(tmp_path: Path) ->
     } in marker_item["cleanupTargets"]
 
 
+def test_m295_promoted_foreground_claim_pill_creates_residual_cleanup_target(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_foreground_claim_pill_cleanup",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 160, 100], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape(
+                    "pill",
+                    [24, 36, 72, 28],
+                    "media",
+                    internal_role="internal_pill_button",
+                    evidence_score=0.84,
+                    promotion_source="m29_6_foreground_claim",
+                    foreground_claim_id="pill_candidate:foreground_claim",
+                    claim_mask_kind="rounded_rect",
+                    shape_fill="#B94AF4",
+                    shape_radius=14,
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "pill"],
+            [edge("media_pill", "media", "pill", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    pill_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "pill")
+    assert pill_item["finalReplayAction"] == "shape_replay"
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "pill_candidate:foreground_claim",
+        "maskKind": "rounded_rect",
+    } in pill_item["cleanupTargets"]
+    assert "foreground_claim_cleans_residual_media_asset" in pill_item["reasons"]
+
+
 def test_m295_keeps_internal_shape_replay_when_cleanup_style_evidence_is_missing(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_promoted_internal_shape_cleanup_risk",
@@ -746,19 +786,40 @@ def promoted_internal_icon(
     )
 
 
-def promoted_internal_shape(object_id: str, bbox: list[int], media_id: str, *, internal_role: str, evidence_score: float) -> dict:
+def promoted_internal_shape(
+    object_id: str,
+    bbox: list[int],
+    media_id: str,
+    *,
+    internal_role: str,
+    evidence_score: float,
+    promotion_source: str = "m29_6_internal_shape_candidate",
+    foreground_claim_id: str | None = None,
+    claim_mask_kind: str | None = None,
+    shape_fill: str | None = None,
+    shape_radius: int | None = None,
+) -> dict:
+    source_evidence = {
+        "mediaSourceObjectId": media_id,
+        "promotionSource": promotion_source,
+        "internalRole": internal_role,
+        "evidenceScore": evidence_score,
+    }
+    if foreground_claim_id is not None:
+        source_evidence["foregroundClaimId"] = foreground_claim_id
+    if claim_mask_kind is not None:
+        source_evidence["claimMaskKind"] = claim_mask_kind
+    if shape_fill is not None:
+        source_evidence["shapeFillOverride"] = shape_fill
+    if shape_radius is not None:
+        source_evidence["shapeRadiusOverride"] = shape_radius
     return m292_object(
         object_id,
         bbox,
         "separator",
         "shape_geometry",
         "shape_replay",
-        source_evidence={
-            "mediaSourceObjectId": media_id,
-            "promotionSource": "m29_6_internal_shape_candidate",
-            "internalRole": internal_role,
-            "evidenceScore": evidence_score,
-        },
+        source_evidence=source_evidence,
     )
 
 

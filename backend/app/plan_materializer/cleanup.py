@@ -158,7 +158,8 @@ def clean_shape_backgrounds_from_copied_image_assets(
         rows = [bytearray(row) for row in pixels.rows]
         modified = False
         for shape_node in shape_nodes:
-            if not plan_allows_shape_copied_image_cleanup(plan_items or [], shape_node.source_id, image_node.source_id):
+            cleanup_target = shape_copied_image_cleanup_target(plan_items or [], shape_node.source_id, image_node.source_id)
+            if cleanup_target is None:
                 continue
             local_bbox = map_page_bbox_to_asset_pixels(shape_node.bbox, image_node.bbox, pixels.width, pixels.height, scale_x, scale_y)
             if local_bbox is None:
@@ -167,14 +168,7 @@ def clean_shape_backgrounds_from_copied_image_assets(
                 fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
             except Exception:
                 fill = sample_canvas_background(pixels)
-            x, y, width, height = local_bbox
-            for row_idx in range(y, y + height):
-                row = rows[row_idx]
-                for col_idx in range(x, x + width):
-                    offset = col_idx * 3
-                    row[offset] = fill[0]
-                    row[offset + 1] = fill[1]
-                    row[offset + 2] = fill[2]
+            erase_with_geometry_mask(rows, local_bbox, fill, str(cleanup_target.get("maskKind") or "bbox"))
             modified = True
             erased_count += 1
         if modified:
@@ -208,7 +202,11 @@ def plan_allows_internal_asset_copied_image_cleanup(plan_items: list[dict[str, A
             if (
                 isinstance(target, dict)
                 and target.get("target") == "copied_image_asset"
-                and target.get("reason") in {"promoted_internal_asset_contained_by_media", "label_anchored_blocked_asset_contained_by_media"}
+                and target.get("reason") in {
+                    "promoted_internal_asset_contained_by_media",
+                    "label_anchored_blocked_asset_contained_by_media",
+                    "foreground_claim_removed_from_residual_media",
+                }
                 and str(target.get("targetSourceObjectId") or "") == image_source_id
             ):
                 return True
@@ -216,20 +214,24 @@ def plan_allows_internal_asset_copied_image_cleanup(plan_items: list[dict[str, A
 
 
 def plan_allows_shape_copied_image_cleanup(plan_items: list[dict[str, Any]], shape_source_id: str, image_source_id: str) -> bool:
+    return shape_copied_image_cleanup_target(plan_items, shape_source_id, image_source_id) is not None
+
+
+def shape_copied_image_cleanup_target(plan_items: list[dict[str, Any]], shape_source_id: str, image_source_id: str) -> dict[str, Any] | None:
     for item in plan_items:
         if str(item.get("sourceObjectId") or "") != shape_source_id:
             continue
         if item.get("finalReplayAction") != "shape_replay":
-            return False
+            return None
         for target in item.get("cleanupTargets", []) if isinstance(item.get("cleanupTargets"), list) else []:
             if (
                 isinstance(target, dict)
                 and target.get("target") == "copied_image_asset"
-                and target.get("reason") == "shape_background_contained_by_media"
+                and target.get("reason") in {"shape_background_contained_by_media", "foreground_claim_removed_from_residual_media"}
                 and str(target.get("targetSourceObjectId") or "") == image_source_id
             ):
-                return True
-    return False
+                return target
+    return None
 
 
 def erase_with_alpha_mask(
@@ -258,6 +260,40 @@ def erase_with_alpha_mask(
             row[offset] = fill[0]
             row[offset + 1] = fill[1]
             row[offset + 2] = fill[2]
+
+
+def erase_with_geometry_mask(rows: list[bytearray], local_bbox: list[int], fill: tuple[int, int, int], mask_kind: str) -> None:
+    x, y, width, height = local_bbox
+    for row_offset in range(height):
+        row = rows[y + row_offset]
+        for col_offset in range(width):
+            if not geometry_mask_contains(col_offset, row_offset, width, height, mask_kind):
+                continue
+            col_idx = x + col_offset
+            offset = col_idx * 3
+            row[offset] = fill[0]
+            row[offset + 1] = fill[1]
+            row[offset + 2] = fill[2]
+
+
+def geometry_mask_contains(col_offset: int, row_offset: int, width: int, height: int, mask_kind: str) -> bool:
+    if mask_kind == "circle":
+        radius = min(width, height) / 2.0
+        cx = (width - 1) / 2.0
+        cy = (height - 1) / 2.0
+        return (col_offset - cx) ** 2 + (row_offset - cy) ** 2 <= radius**2
+    if mask_kind == "rounded_rect":
+        radius = min(width, height) / 2.0
+        left = radius
+        right = width - 1 - radius
+        top = radius
+        bottom = height - 1 - radius
+        if left <= col_offset <= right or top <= row_offset <= bottom:
+            return True
+        cx = left if col_offset < left else right
+        cy = top if row_offset < top else bottom
+        return (col_offset - cx) ** 2 + (row_offset - cy) ** 2 <= radius**2
+    return True
 
 
 def read_png_alpha_mask(path: Path) -> tuple[int, int, bytes] | None:

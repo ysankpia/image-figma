@@ -152,7 +152,7 @@ def detect_invalid_cleanup_claims(
         conflicts.append(
             invalid_copied_cleanup_conflict(
                 claim,
-                "copied image cleanup must be authorized by editable text containment or promoted internal asset containment",
+                "copied image cleanup must be authorized by editable text containment, foreground claim, or promoted internal asset containment",
             )
         )
     return conflicts
@@ -178,10 +178,10 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
 ) -> bool:
     if plan_item["finalReplayAction"] != "icon_replay":
         return False
-    if claim.get("reason") != "promoted_internal_asset_contained_by_media":
+    if claim.get("reason") not in {"promoted_internal_asset_contained_by_media", "foreground_claim_removed_from_residual_media"}:
         return False
     evidence = plan_item.get("sourceEvidence") if isinstance(plan_item.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
+    if evidence.get("promotionSource") not in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}:
         return False
     if evidence.get("mediaSourceObjectId") != target_id:
         return False
@@ -216,14 +216,14 @@ def copied_cleanup_is_valid_for_shape_background(
 ) -> bool:
     if plan_item["finalReplayAction"] != "shape_replay":
         return False
-    if claim.get("reason") != "shape_background_contained_by_media":
+    if claim.get("reason") not in {"shape_background_contained_by_media", "foreground_claim_removed_from_residual_media"}:
         return False
     edge = edge_between(edge_lookup, claim["sourceObjectId"], target_id)
     return relation_contains_object(edge, object_id=claim["sourceObjectId"], media_id=target_id)
 
 
 def promoted_internal_icon_has_visible_replay_evidence(evidence: dict[str, Any]) -> bool:
-    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and (
+    return evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"} and (
         bool(evidence.get("transparentAssetPath")) or evidence.get("controlRowSourceCropEligible") is True
     )
 

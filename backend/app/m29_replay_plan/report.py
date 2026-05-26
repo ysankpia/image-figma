@@ -24,6 +24,8 @@ def reasons_for(
         reasons.append("editable_text_cleans_containing_media_asset")
     if "promoted_internal_asset_contained_by_media" in copied_reasons:
         reasons.append("promoted_internal_asset_cleans_parent_media_asset")
+    if "foreground_claim_removed_from_residual_media" in copied_reasons:
+        reasons.append("foreground_claim_cleans_residual_media_asset")
     if "label_anchored_blocked_asset_contained_by_media" in copied_reasons:
         reasons.append("label_anchored_blocked_asset_cleans_parent_media_asset")
     if "shape_background_contained_by_media" in copied_reasons:

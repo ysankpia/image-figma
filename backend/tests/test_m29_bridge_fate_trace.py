@@ -223,6 +223,152 @@ def test_bridge_fate_trace_does_not_require_transparent_asset_for_shape_candidat
     assert trace["finalReplayDecision"] == "shape_replay"
 
 
+def test_bridge_fate_trace_reports_foreground_claim_cleanup_authorization(tmp_path: Path) -> None:
+    result = trace_report(
+        tmp_path,
+        internal_candidates=[
+            internal_candidate(
+                "pill",
+                [20, 40, 72, 28],
+                role="internal_pill_button",
+                claim_decision="propose_foreground_claim",
+                claim_score=0.74,
+                foreground_claim_id="pill:foreground_claim",
+                mask_kind="rounded_rect",
+            )
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            {
+                "contractId": "contract",
+                "candidateId": "pill",
+                "sourceKind": "m29_6_internal_shape_candidate",
+                "decision": {
+                    "mode": "allow_foreground_claim",
+                    "evidenceScore": 0.84,
+                    "reasons": ["allow_foreground_claim_contract"],
+                },
+            }
+        ],
+        promoted_source_objects=[
+            {
+                "id": "m292_promoted_internal_shape_0001",
+                "bbox": [20, 40, 72, 28],
+                "sourceEvidence": {
+                    "mediaInternalCandidateId": "pill",
+                    "foregroundClaimId": "pill:foreground_claim",
+                    "claimMaskKind": "rounded_rect",
+                },
+                "reasons": ["internal_source_promotion"],
+            }
+        ],
+        rejected_candidates=[],
+        final_plan_items=[
+            {
+                "id": "m295_plan_0001",
+                "sourceObjectId": "m292_promoted_internal_shape_0001",
+                "finalReplayAction": "shape_replay",
+                "cleanupTargets": [
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "foreground_claim_removed_from_residual_media",
+                        "foregroundClaimId": "pill:foreground_claim",
+                        "maskKind": "rounded_rect",
+                    }
+                ],
+                "reasons": ["m29_5_action_shape_replay", "foreground_claim_cleans_residual_media_asset"],
+            }
+        ],
+        replayed_nodes=[
+            {
+                "id": "m29_shape_0001",
+                "kind": "shape",
+                "source_id": "m292_promoted_internal_shape_0001",
+            }
+        ],
+        skipped_items=[],
+    )
+
+    trace = result.report["traces"][0]
+    assert trace["firstBlockingStage"] == "none"
+    assert trace["evidenceDecision"] == "allow_foreground_claim"
+    assert trace["claimDecision"] == "propose_foreground_claim"
+    assert trace["foregroundClaimId"] == "pill:foreground_claim"
+    assert trace["maskKind"] == "rounded_rect"
+    assert trace["cleanupDecision"] == "copied_image_cleanup_authorized"
+    assert trace["cleanupTarget"]["reason"] == "foreground_claim_removed_from_residual_media"
+    assert trace["materializerDecision"] == "replayed"
+
+
+def test_bridge_fate_trace_reports_cleanup_risk_without_blocking_visible_replay(tmp_path: Path) -> None:
+    result = trace_report(
+        tmp_path,
+        internal_candidates=[
+            internal_candidate(
+                "pill",
+                [20, 40, 72, 28],
+                role="internal_pill_button",
+                claim_decision="propose_foreground_claim",
+                claim_score=0.74,
+                foreground_claim_id="pill:foreground_claim",
+                mask_kind="rounded_rect",
+            )
+        ],
+        transparent_items=[],
+        evidence_contract_items=[
+            {
+                "contractId": "contract",
+                "candidateId": "pill",
+                "sourceKind": "m29_6_internal_shape_candidate",
+                "decision": {
+                    "mode": "allow_foreground_claim",
+                    "evidenceScore": 0.84,
+                    "reasons": ["allow_foreground_claim_contract"],
+                },
+            }
+        ],
+        promoted_source_objects=[
+            {
+                "id": "m292_promoted_internal_shape_0001",
+                "bbox": [20, 40, 72, 28],
+                "sourceEvidence": {
+                    "mediaInternalCandidateId": "pill",
+                    "foregroundClaimId": "pill:foreground_claim",
+                    "claimMaskKind": "rounded_rect",
+                },
+                "reasons": ["internal_source_promotion"],
+            }
+        ],
+        rejected_candidates=[],
+        final_plan_items=[
+            {
+                "id": "m295_plan_0001",
+                "sourceObjectId": "m292_promoted_internal_shape_0001",
+                "finalReplayAction": "shape_replay",
+                "cleanupTargets": [{"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"}],
+                "risks": ["cleanup_rejected_missing_shape_replacement_style"],
+                "reasons": ["m29_5_action_shape_replay"],
+            }
+        ],
+        replayed_nodes=[
+            {
+                "id": "m29_shape_0001",
+                "kind": "shape",
+                "source_id": "m292_promoted_internal_shape_0001",
+            }
+        ],
+        skipped_items=[],
+    )
+
+    trace = result.report["traces"][0]
+    assert trace["firstBlockingStage"] == "none"
+    assert trace["firstBlockingReason"] == "visible_replay_materialized"
+    assert trace["cleanupDecision"] == "copied_image_cleanup_blocked"
+    assert trace["cleanupRisk"] == ["cleanup_rejected_missing_shape_replacement_style"]
+    assert trace["materializerDecision"] == "replayed"
+
+
 def trace_report(
     tmp_path: Path,
     *,
@@ -273,8 +419,17 @@ def trace_report(
     )
 
 
-def internal_candidate(candidate_id: str, bbox: list[int], *, role: str = "internal_icon_candidate") -> dict:
-    return {
+def internal_candidate(
+    candidate_id: str,
+    bbox: list[int],
+    *,
+    role: str = "internal_icon_candidate",
+    claim_decision: str | None = None,
+    claim_score: float | None = None,
+    foreground_claim_id: str | None = None,
+    mask_kind: str | None = None,
+) -> dict:
+    candidate = {
         "candidateId": candidate_id,
         "mediaSourceObjectId": "media",
         "role": role,
@@ -284,3 +439,12 @@ def internal_candidate(candidate_id: str, bbox: list[int], *, role: str = "inter
         "score": 0.64,
         "scoreBreakdown": {"textAnchorScore": 0.82, "heroGraphicPenalty": 0.0},
     }
+    if claim_decision is not None:
+        candidate["claimDecision"] = claim_decision
+    if claim_score is not None:
+        candidate["claimScore"] = claim_score
+    if foreground_claim_id is not None:
+        candidate["foregroundClaimId"] = foreground_claim_id
+    if mask_kind is not None:
+        candidate["maskKind"] = mask_kind
+    return candidate
