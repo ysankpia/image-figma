@@ -60,7 +60,7 @@ Therefore:
 
 - unsupported OCR provider fails the task.
 - missing Baidu token fails the task when `OCR_PROVIDER=baidu_ppocrv5`.
-- remote OCR timeout/failure fails the task.
+- remote OCR timeout/failure fails the task after provider-local transient HTTP retry is exhausted.
 - the backend must not mark a task completed with fake DSL after OCR failure.
 
 This is different from the removed pre-M29 fallback-first chain, where OCR failure could still return a deterministic fallback DSL.
@@ -110,18 +110,29 @@ Suggested local preview targets:
 
 ## Retry Strategy
 
-v0.1 does not implement automatic retry.
+v0.1 does not implement task-level automatic retry.
 
 Allowed:
 
 - user manually uploads again.
 - provider-specific timeout tuning through environment variables.
+- provider-local bounded retry for transient HTTP transport failures and transient HTTP status codes from required external services.
 - future explicit retry endpoint.
 
 Not allowed:
 
 - silent background reruns without task status updates.
 - fabricating completed output after required evidence failure.
+
+Current provider-local retry:
+
+```text
+Baidu PP-OCRv5 HTTP submit / poll / result download:
+  max attempts = 3
+  transient transport errors from requests are retried
+  HTTP 408 / 425 / 429 / 5xx are retried
+  remote job state=failed, token errors, parse errors, and exhausted retries still fail OCR
+```
 
 ## Removed Reliability Rules
 

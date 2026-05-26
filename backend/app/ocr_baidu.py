@@ -14,6 +14,9 @@ from .png_tools import PngMetadata
 
 
 PROVIDER = "baidu_ppocrv5"
+TRANSIENT_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+HTTP_MAX_ATTEMPTS = 3
+HTTP_RETRY_BASE_SECONDS = 0.5
 
 
 def extract_baidu_ppocrv5(
@@ -95,8 +98,10 @@ def submit_job(source_path: Path, settings: Settings) -> tuple[str, float]:
 
     start = time.perf_counter()
     with source_path.open("rb") as source:
-        response = requests.post(
+        response = request_with_transient_retry(
+            "post",
             settings.baidu_paddle_ocr_job_url,
+            settings=settings,
             headers=headers,
             data=data,
             files={"file": source},
@@ -118,8 +123,10 @@ def poll_job(job_id: str, settings: Settings) -> tuple[dict[str, Any], float, in
     polls = 0
     while True:
         polls += 1
-        response = requests.get(
+        response = request_with_transient_retry(
+            "get",
             f"{settings.baidu_paddle_ocr_job_url}/{job_id}",
+            settings=settings,
             headers=headers,
             timeout=settings.baidu_paddle_ocr_timeout_seconds,
         )
@@ -138,7 +145,12 @@ def poll_job(job_id: str, settings: Settings) -> tuple[dict[str, Any], float, in
 
 
 def download_jsonl(url: str, settings: Settings) -> list[dict[str, Any]]:
-    response = requests.get(url, timeout=settings.baidu_paddle_ocr_timeout_seconds)
+    response = request_with_transient_retry(
+        "get",
+        url,
+        settings=settings,
+        timeout=settings.baidu_paddle_ocr_timeout_seconds,
+    )
     if response.status_code != 200:
         raise ValueError(f"Baidu PP-OCRv5 JSONL download failed with status {response.status_code}.")
     rows: list[dict[str, Any]] = []
@@ -149,6 +161,47 @@ def download_jsonl(url: str, settings: Settings) -> list[dict[str, Any]]:
     if not rows:
         raise ValueError("Baidu PP-OCRv5 JSONL response is empty.")
     return rows
+
+
+def request_with_transient_retry(method: str, url: str, *, settings: Settings, **kwargs: Any) -> requests.Response:
+    request_fn = getattr(requests, method)
+    last_error: requests.RequestException | None = None
+    for attempt in range(1, HTTP_MAX_ATTEMPTS + 1):
+        rewind_request_files(kwargs)
+        try:
+            response = request_fn(url, **kwargs)
+        except requests.RequestException as error:
+            last_error = error
+            if attempt >= HTTP_MAX_ATTEMPTS:
+                raise
+            sleep_before_retry(attempt, settings)
+            continue
+        if response.status_code in TRANSIENT_HTTP_STATUS_CODES and attempt < HTTP_MAX_ATTEMPTS:
+            sleep_before_retry(attempt, settings)
+            continue
+        return response
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError(f"Baidu PP-OCRv5 {method.upper()} request failed before a response was returned.")
+
+
+def rewind_request_files(kwargs: dict[str, Any]) -> None:
+    files = kwargs.get("files")
+    if not isinstance(files, dict):
+        return
+    for value in files.values():
+        file_obj = value
+        if isinstance(value, tuple) and value:
+            file_obj = value[1]
+        seek = getattr(file_obj, "seek", None)
+        if callable(seek):
+            seek(0)
+
+
+def sleep_before_retry(attempt: int, settings: Settings) -> None:
+    delay = min(settings.baidu_paddle_ocr_poll_interval_seconds, HTTP_RETRY_BASE_SECONDS * (2 ** (attempt - 1)))
+    if delay > 0:
+        time.sleep(delay)
 
 
 def parse_ppocrv5_rows(rows: list[dict[str, Any]], min_confidence: float) -> tuple[list[OCRBlock], list[OCRWarning]]:

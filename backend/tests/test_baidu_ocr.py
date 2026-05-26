@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from app.config import Settings
 from app.ocr import extract_ocr
 from app.ocr_baidu import parse_ppocrv5_rows, polygon_to_bbox, rec_box_to_bbox
@@ -186,6 +188,154 @@ def test_baidu_provider_remote_failure_returns_failed_document(monkeypatch, tmp_
     assert document.status == "failed"
     assert document.error is not None
     assert document.error["code"] == "OCR_EXTRACTION_FAILED"
+
+
+def test_baidu_provider_retries_transient_submit_transport_failure(monkeypatch, tmp_path) -> None:
+    post_calls = 0
+    uploaded_sizes: list[int] = []
+
+    def fake_post(url: str, **kwargs: Any) -> FakeResponse:
+        nonlocal post_calls
+        post_calls += 1
+        uploaded_sizes.append(len(kwargs["files"]["file"].read()))
+        if post_calls == 1:
+            raise requests.exceptions.SSLError("temporary eof")
+        return FakeResponse(200, {"data": {"jobId": "job_123"}})
+
+    def fake_get(url: str, **kwargs: Any) -> FakeResponse:
+        if url.endswith("/job_123"):
+            return FakeResponse(
+                200,
+                {
+                    "data": {
+                        "state": "done",
+                        "resultUrl": {"jsonUrl": "https://example.test/result.jsonl"},
+                    }
+                },
+            )
+        return FakeResponse(
+            200,
+            text=json.dumps(
+                {
+                    "result": {
+                        "ocrResults": [
+                            {
+                                "prunedResult": {
+                                    "rec_texts": ["Retry OK"],
+                                    "rec_scores": [0.99],
+                                    "rec_boxes": [[10, 20, 110, 60]],
+                                    "rec_polys": [],
+                                }
+                            }
+                        ]
+                    }
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+    monkeypatch.setattr("app.ocr_baidu.requests.post", fake_post)
+    monkeypatch.setattr("app.ocr_baidu.requests.get", fake_get)
+    source = tmp_path / "input.png"
+    from conftest import PNG_BYTES
+
+    source.write_bytes(PNG_BYTES)
+    image = read_png_metadata(PNG_BYTES)
+    assert image is not None
+    document = extract_ocr(
+        task_id="task_ocr_retry_submit",
+        image=image,
+        settings=Settings(
+            version="0.1.0",
+            storage_root=tmp_path,
+            database_path=tmp_path / "app.db",
+            public_base_url="http://localhost:8000",
+            max_upload_bytes=10 * 1024 * 1024,
+            cors_allow_origins=["*"],
+            ocr_provider="baidu_ppocrv5",
+            baidu_paddle_ocr_token="test-token",
+            baidu_paddle_ocr_poll_interval_seconds=0,
+        ),
+        source_path=source,
+    )
+
+    assert document.status == "completed"
+    assert post_calls == 2
+    assert uploaded_sizes[0] > 0
+    assert uploaded_sizes[1] == uploaded_sizes[0]
+    assert document.blocks[0].text == "Retry OK"
+
+
+def test_baidu_provider_retries_transient_jsonl_503(monkeypatch, tmp_path) -> None:
+    jsonl_calls = 0
+
+    def fake_post(url: str, **kwargs: Any) -> FakeResponse:
+        return FakeResponse(200, {"data": {"jobId": "job_123"}})
+
+    def fake_get(url: str, **kwargs: Any) -> FakeResponse:
+        nonlocal jsonl_calls
+        if url.endswith("/job_123"):
+            return FakeResponse(
+                200,
+                {
+                    "data": {
+                        "state": "done",
+                        "resultUrl": {"jsonUrl": "https://example.test/result.jsonl"},
+                    }
+                },
+            )
+        jsonl_calls += 1
+        if jsonl_calls == 1:
+            return FakeResponse(503, {"message": "temporary unavailable"})
+        return FakeResponse(
+            200,
+            text=json.dumps(
+                {
+                    "result": {
+                        "ocrResults": [
+                            {
+                                "prunedResult": {
+                                    "rec_texts": ["Retry JSONL"],
+                                    "rec_scores": [0.99],
+                                    "rec_boxes": [[10, 20, 110, 60]],
+                                    "rec_polys": [],
+                                }
+                            }
+                        ]
+                    }
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+    monkeypatch.setattr("app.ocr_baidu.requests.post", fake_post)
+    monkeypatch.setattr("app.ocr_baidu.requests.get", fake_get)
+    source = tmp_path / "input.png"
+    from conftest import PNG_BYTES
+
+    source.write_bytes(PNG_BYTES)
+    image = read_png_metadata(PNG_BYTES)
+    assert image is not None
+    document = extract_ocr(
+        task_id="task_ocr_retry_jsonl",
+        image=image,
+        settings=Settings(
+            version="0.1.0",
+            storage_root=tmp_path,
+            database_path=tmp_path / "app.db",
+            public_base_url="http://localhost:8000",
+            max_upload_bytes=10 * 1024 * 1024,
+            cors_allow_origins=["*"],
+            ocr_provider="baidu_ppocrv5",
+            baidu_paddle_ocr_token="test-token",
+            baidu_paddle_ocr_poll_interval_seconds=0,
+        ),
+        source_path=source,
+    )
+
+    assert document.status == "completed"
+    assert jsonl_calls == 2
+    assert document.blocks[0].text == "Retry JSONL"
 
 
 class FakeResponse:

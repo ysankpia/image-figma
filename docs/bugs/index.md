@@ -4,13 +4,13 @@
 
 当前 open bug：
 
-- [012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md](open/012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md)：底部 tab 图标在 low-confidence composite media 内被 raw M29 blocked evidence 捕获，但 M29.2 未恢复为 `raster_icon / icon_replay`。
 - [011-finite-control-backgrounds-can-be-preserved-as-media.md](open/011-finite-control-backgrounds-can-be-preserved-as-media.md)：部分有限按钮/控件背景被 low-confidence image-like unknown 抢成 `media_region / preserve_raster`，导致背景不可作为 shape 层编辑。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
 
 最近 resolved bug：
 
+- [012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md](resolved/012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md)：底部 tab 图标在 low-confidence composite media 内被 raw M29 blocked evidence 捕获后，现在通过 M29.2 label-anchor recovery 恢复为 `raster_icon / icon_replay`，并由 M29.5 授权 copied media cleanup。
 - [013-dsl-visual-comparison-text-noise-dominates-gate.md](resolved/013-dsl-visual-comparison-text-noise-dominates-gate.md)：DSL visual comparison 的近似文字渲染误差主导全图 diff，导致 061 真实样本质量 gate 容易被诊断字体噪声带偏。
 - [010-dsl-visual-comparison-text-renders-as-solid-bars.md](resolved/010-dsl-visual-comparison-text-renders-as-solid-bars.md)：DSL visual comparison 的 report-only 近似渲染把 text 节点画成实心条，容易误导 525 artifact inspection。
 - [008-fallback-off-dark-ui-white-collapse.md](resolved/008-fallback-off-dark-ui-white-collapse.md)：M29 fallback-off 深色 UI 暴露固定浅色背景，根因是 raster/media preservation 没有回归 M29.2/M29.5 主链。

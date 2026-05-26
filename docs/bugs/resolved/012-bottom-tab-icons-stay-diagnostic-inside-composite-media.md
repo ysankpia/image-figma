@@ -1,7 +1,8 @@
 # Bug: 底部 tab 图标在 composite media 内停留为 diagnostic
 
-- 状态：open, partial
+- 状态：resolved
 - 创建日期：2026-05-25
+- 解决日期：2026-05-26
 - 影响范围：raw M29 blocked evidence、M29.2 source ownership、M29.5 replay plan、真实上传样本底部导航可编辑质量
 
 ## Summary
@@ -10,7 +11,7 @@
 
 这不是字体识别问题，也不是 Renderer/Figma plugin 问题。问题发生在 source evidence 到 source ownership / promotion permission 的转换处：底部整条 tab bar 被保守保留为 `media_region / preserve_raster` 后，内部小图标要么以 raw M29 `blocked` fragments 出现，要么只存在于 M29.6 pixel/internal candidate 证据里。当前链路在多个地方直接用局部 gate 做最终裁决，缺少统一的 evidence consistency gate。
 
-## Reproduction
+## Original Reproduction
 
 当前复现 task：
 
@@ -144,9 +145,9 @@ EvidenceScore 中或缺少执行安全证据 -> report_only
 EvidenceScore 低或负证据强 -> reject
 ```
 
-## Fix Plan
+## Fix
 
-采用无新增依赖的通用修复：
+采用无新增依赖的通用修复，已落在 M29.2 / evidence chain / M29.5 授权边界内：
 
 1. 保留原有恢复公式，继续禁止 text overlap、大区域、line-like、inside true image primitive 等高风险碎片。
 2. M29.2 新增受限 fragment-group evidence：如果 blocked foreground 被 low-confidence composite media 包含，但它是小前景、无文字重叠，并且能和 media 内部 OCR label 建立邻近锚点关系，则恢复为 `raster_icon / icon_replay`。
@@ -155,7 +156,7 @@ EvidenceScore 低或负证据强 -> reject
    - icon 在 label 上方或同一 control cell 内；
    - 垂直距离在 bbox 尺寸推导出的有限范围；
    - media 内存在多个 OCR label 时可形成 control-strip evidence。
-4. 新增 `M29EvidenceContractReport`，把 M29.6 internal icon candidate、transparent asset alpha gate、parent media containment、text anchor/repetition 和负证据合成 `allow_visible_replay | report_only | reject`。
+4. `M29EvidenceContractReport` 把 M29.6 internal icon candidate、transparent asset alpha gate、parent media containment、text anchor/repetition 和负证据合成 `allow_visible_replay | report_only | reject`。
 5. `internal_source_promotion` 只能消费 `allow_visible_replay` 的 evidence contract，不能继续直接消费局部 confidence + alpha allow。
 6. M29.5 和 materializer 仍只消费 M29.2/promoted M29.2 source object 和 M29.5 cleanupTargets，不发明 owner 或 cleanup 权限。
 
@@ -169,18 +170,17 @@ EvidenceScore 低或负证据强 -> reject
 
 ## Regression Guard
 
-需要新增测试：
+已新增/保留测试：
 
-- low-confidence composite media 内部的小复杂 foreground，如果几何上锚定到 OCR label，应恢复为 `raster_icon / icon_replay`。
-- M29.6 internal icon 只有在 evidence contract 为 `allow_visible_replay` 时才能 promotion。
-- transparent asset reject / high text overlap / hero risk / missing execution support 不能 promotion。
-- 与 OCR 文字重叠的 blocked foreground 仍为 diagnostic。
-- 大面积 blocked foreground 仍不恢复。
-- 没有 OCR label/control-strip evidence 的 media-contained blocked foreground 仍不恢复。
+- `backend/tests/test_source_ui_physical_graph.py::test_blocked_media_contained_foreground_with_label_anchor_recovers_as_raster_icon`
+- `backend/tests/test_source_ui_physical_graph.py::test_blocked_media_contained_foreground_without_label_anchor_stays_diagnostic`
+- `backend/tests/test_source_ui_physical_graph.py::test_blocked_complex_foreground_overlapping_ocr_stays_diagnostic`
+- `backend/tests/test_m29_replay_plan.py::test_m295_keeps_label_anchored_blocked_icon_over_parent_media`
+- `backend/tests/test_m29_evidence_contract.py::test_label_anchored_blocked_icon_is_audit_only_not_promotion_contract`
 
 ## Validation Evidence
 
-Stage 061-3 已完成一个通用的部分修复：M29.6 internal icon 的 transparent asset alpha gate 不再只用 tight foreground bbox 边缘采样，而是对内部候选使用 parent-media-clamped analysis bbox 和 dominant background cluster；promotion 使用同一个 `analysisBbox`，避免透明 PNG 与 visible source bbox 缩放不一致。
+Stage 061-3 完成一个通用修复：M29.6 internal icon 的 transparent asset alpha gate 不再只用 tight foreground bbox 边缘采样，而是对内部候选使用 parent-media-clamped analysis bbox 和 dominant background cluster；promotion 使用同一个 `analysisBbox`，避免透明 PNG 与 visible source bbox 缩放不一致。
 
 同时补上一个关键负证据：generic `pixel_component / non_ocr_foreground` 即使 alpha 允许，也不能直接通过 evidence contract 变成 visible replay。这个 gate 阻止了地图路线、楼层图线段、下划线这类非图标 foreground fragment 被误升成内部图标。
 
@@ -213,8 +213,114 @@ Ledger:
 backend/tmp/validation/upload_preview_batch_20260526_045958/upload_preview_batch_validation.json
 ```
 
-Remaining:
+Stage 061-9 复验：
 
 ```text
-This bug is not fully closed. Raw M29 blocked-fragment recovery for already-detected label-anchored bottom tab icons remains a separate upstream source-ownership issue. The next fix must still happen in raw M29 / M29.2 / evidence contract, not in materializer, Renderer, or plugin.
+original bug source:
+  backend/storage/uploads/task_ba7fda4a90e9/original.png
+
+single-image diagnostic ledger:
+  backend/tmp/bug012_current/upload_preview_batch_validation.json
+
+current diagnostic task:
+  task_ef9e0ae177cc
+
+result:
+  completed: 1/1
+  failed: 0
+  degraded: 0
+  missing artifacts: 0
+  asset fetch failures: 0
 ```
+
+Current M29.2 evidence for the original bottom tab icon fragments:
+
+```text
+m292_object_0108 [442,1559,50,51] raster_icon / raster_icon / icon_replay, labelAnchorOcrBoxId=ocr_text_084, blockedIds=[blocked_027]
+m292_object_0109 [816,1561,41,46] raster_icon / raster_icon / icon_replay, labelAnchorOcrBoxId=ocr_text_086, blockedIds=[blocked_028, blocked_031]
+m292_object_0110 [82,1562,42,45] raster_icon / raster_icon / icon_replay, labelAnchorOcrBoxId=ocr_text_082, blockedIds=[blocked_029]
+m292_object_0111 [264,1563,43,44] raster_icon / raster_icon / icon_replay, labelAnchorOcrBoxId=ocr_text_083, blockedIds=[blocked_030]
+```
+
+Current M29.5 evidence:
+
+```text
+All four recovered bottom-tab icon source objects have finalReplayAction=icon_replay.
+All four include copied_image_asset cleanupTargets against parent media m292_object_0094
+with reason=label_anchored_blocked_asset_contained_by_media.
+```
+
+Current DSL evidence:
+
+```text
+The four recovered icons are materialized as image nodes:
+  M29 Symbol / m292_object_0108
+  M29 Symbol / m292_object_0109
+  M29 Symbol / m292_object_0110
+  M29 Symbol / m292_object_0111
+
+They are also members of controlled transparent row group:
+  m29_c_group_m29_sibling_group_0026
+```
+
+Targeted validation:
+
+```bash
+cd backend
+uv run pytest tests/test_baidu_ocr.py tests/test_source_ui_physical_graph.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+```
+
+Result:
+
+```text
+79 passed
+```
+
+Primary 061 batch validation:
+
+```bash
+cd backend
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/测试/images --poll-timeout 300
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_074415/upload_preview_batch_validation.json
+```
+
+Result:
+
+```text
+inputCount: 40
+supportedInputCount: 40
+completedTaskCount: 40
+supportedFailedCount: 0
+degradedRecordCount: 0
+backendCrashCount: 0
+missingArtifactCount: 0
+assetFetchFailedCount: 0
+ownershipConflictTypeCounts: {}
+averageDslVisualGateNormalizedMeanAbsError: 0.001449
+maxDslVisualGateChangedPixelRatio10: 0.018258
+```
+
+## Prevention Notes
+
+The resolved contract is narrow:
+
+```text
+low-confidence composite media + small blocked foreground + no text overlap
++ OCR label anchor inside the same media context
+=> M29.2 may recover as raster_icon / icon_replay
+=> M29.5 may authorize copied_image_asset cleanup
+```
+
+The contract still rejects unanchored media-contained foreground, OCR-overlapping
+foreground, large fragments, line-like fragments, true image-internal texture,
+and generic M29.6 non-OCR foreground without independent evidence.
+
+Do not reopen this by adding downstream materializer/Renderer/plugin fixes.
+If a future bottom/action row icon fails, start from raw M29 / M29.2 evidence
+and prove whether the fragment is missing, blocked, unanchored, or rejected by
+the evidence contract.
