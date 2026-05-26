@@ -331,11 +331,23 @@ normalization.py: OCR/M29.2/M29.6 normalization
 geometry.py: bbox/image-bound and overlap helpers
 candidates.py: allowed candidate-source selection and preflight gates
 alpha.py: edge/context background sampling, dominant background cluster, alpha mask metrics, edge-alpha risk gate, and diagnostic RGBA output
+gates.py: shared visible replay eligibility helpers for evidence/promotion/trace consumers
 report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence 或有结构支持的 medium confidence；内部 media 候选使用 parent-media-clamped `analysisBbox` 做上下文 alpha 分析，避免 tight foreground bbox 的边缘采样把主体误当背景。alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
+这个 package 只对已存在的 `raster_icon/icon_replay` source object 与 M29.6 `internal_icon_candidate` 做透明资产候选诊断。M29.6 internal candidate 必须是 accepted，且为 high confidence、有结构支持的 medium confidence，或具备强独立证据的 medium candidate 才能进入 alpha analysis；内部 media 候选使用 parent-media-clamped `analysisBbox` 做上下文 alpha 分析，避免 tight foreground bbox 的边缘采样把主体误当背景。alpha gate 会拒绝 unstable background、weak foreground、fragmented foreground、text overlap、thin geometry 和 edge-alpha background residue。它不扫描所有 media，不做通用人像/商品抠图，不替换 materialized assets，不提升 source ownership，不授权 cleanup，不被 materializer 直接消费。
+
+Transparent asset report 明确拆分四个 gate：
+
+```text
+analysisAllowed: 是否允许进入 alpha/background analysis
+assetGenerated: 是否实际生成 diagnostic RGBA asset
+visibleReplayEligible: 是否允许作为 evidence contract / promotion 的可见回放证据
+cleanupEligible: 永远 false；cleanup 只能由 final M29.5 replay plan 授权
+```
+
+`decision=allow` 和 `assetPath` 只表示诊断 alpha asset 生成成功；新代码必须优先读取 `visibleReplayEligible`，旧报告缺少该字段时才回退到 legacy `decision=allow + assetPath` 语义。
 
 Transparent asset report meta 记录 `scaleProfile`。Preflight 的 candidate area 和 short-edge gate 使用同一内部 scale profile，避免高倍率 UI icon 因 1x 面积/短边上限被误拒。Alpha 背景稳定性、edge-alpha、foreground coverage 和 connected-foreground 仍是像素质量 gate，不因为 scale 成功就授权 visible replay 或 cleanup。
 
@@ -365,7 +377,7 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent asset allow、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha allow 直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
+这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent visible replay eligibility、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha asset 生成成功直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
 
 ### M29 Internal Source Promotion
 
@@ -392,7 +404,7 @@ pipeline.py: internal icon promotion and promoted M29.2 document write
 types.py: promotion result and invariant metadata
 ```
 
-这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 evidence contract `allow_visible_replay` 的对象。若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha allow 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent `visibleReplayEligible=true`，以及 evidence contract `allow_visible_replay` 的对象。若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha asset generation 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
 
 ### M29 Bridge Fate Trace
 
@@ -422,7 +434,7 @@ report.py: summary counts by blocking stage/reason/role
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只解释 internal candidate 的命运：第一阻断层、阻断原因、transparent/evidence/promotion/final replay/materializer decision。它不创建 source objects，不改 M29.5 plan，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 消费。它的目的是避免后续调阈值时手动翻多个 report。
+这个 package 只解释 internal candidate 的命运：第一阻断层、阻断原因、transparent/evidence/promotion/final replay/materializer decision。Trace 会显示 `transparentVisibleReplayEligible` 和 `transparentGateDecision`，用于区分“诊断 alpha asset 已生成”和“可见回放证据已授权”。它不创建 source objects，不改 M29.5 plan，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 消费。它的目的是避免后续调阈值时手动翻多个 report。
 
 ### M29 Hierarchy Candidates
 

@@ -203,7 +203,7 @@ cleanup risk
 
 ### Stage 3: M29.6 Candidate Extraction Correctness
 
-状态：in progress。
+状态：completed，提交 `3f805f7 feat: add m29 internal marker candidate roles`。
 
 修复 candidate extraction 的固定 cap 和固定窗口问题：
 
@@ -247,6 +247,8 @@ uv run pytest tests/test_media_internal_decomposition.py tests/test_transparent_
 
 ### Stage 4: Transparent Asset Gate Split
 
+状态：completed，提交待创建。
+
 拆分当前透明资产硬门：
 
 ```text
@@ -257,6 +259,42 @@ cleanupEligible
 ```
 
 允许 medium + strong independent evidence 的 candidate 进入 alpha analysis，但仍必须通过 evidence contract 和 promotion 才能 visible replay。cleanup 仍只能由 M29.5 授权。
+
+Stage 4 实现边界：
+
+```text
+transparent asset report 继续保持 report-only，可生成 diagnostic alpha asset；
+diagnostic alpha asset 成功不再等同于 visible replay 权限；
+evidence contract / internal source promotion / bridge fate trace 统一读取 visibleReplayEligible；
+旧报告缺少 visibleReplayEligible 时保持 decision=allow + assetPath 的兼容 fallback；
+cleanupEligible 固定为 false，并记录 M29.5 replay plan 才能授权 cleanup。
+```
+
+Stage 4 不改变：
+
+```text
+public API / DSL / Renderer / plugin protocol；
+M29.6 candidate role；
+internal source promotion role；
+M29.5 replay / cleanup；
+materializer / Renderer / plugin。
+```
+
+Stage 4 验证：
+
+```bash
+python -m py_compile backend/app/transparent_asset_report/gates.py backend/app/transparent_asset_report/candidates.py backend/app/transparent_asset_report/pipeline.py backend/app/transparent_asset_report/report.py backend/app/m29_evidence_contract/scoring.py backend/app/internal_source_promotion/pipeline.py backend/app/m29_bridge_fate_trace/pipeline.py
+cd backend
+uv run pytest tests/test_transparent_asset_report.py tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_bridge_fate_trace.py -q
+uv run pytest tests/test_transparent_asset_report.py tests/test_m29_evidence_contract.py tests/test_internal_source_promotion.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+```
+
+结果：
+
+```text
+34 passed
+76 passed
+```
 
 ### Stage 5: Evidence Contract And Promotion Role Expansion
 

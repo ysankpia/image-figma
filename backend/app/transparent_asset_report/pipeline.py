@@ -90,6 +90,7 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
             container_bbox=candidate.get("mediaBbox") if candidate["source"] == "m29_6_internal_icon_candidate" else None,
             alpha_profile=str(candidate.get("alphaProfile") or "default_icon"),
         )
+    gate = split_gate_decision(candidate, analysis)
     return {
         "candidateId": candidate["candidateId"],
         "source": candidate["source"],
@@ -111,10 +112,47 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
         "inputConfidence": candidate["inputConfidence"],
         "inputScore": candidate["inputScore"],
         "alphaProfile": candidate.get("alphaProfile") or "default_icon",
+        "analysisAllowed": gate["analysisAllowed"],
+        "assetGenerated": gate["assetGenerated"],
+        "visibleReplayEligible": gate["visibleReplayEligible"],
+        "cleanupEligible": gate["cleanupEligible"],
+        "gateDecision": gate,
         "reasons": candidate["preflightReasons"] + [reason for reason in analysis["reasons"] if reason not in candidate["preflightReasons"]],
         "risks": candidate["preflightRisks"] + [risk for risk in analysis["risks"] if risk not in candidate["preflightRisks"]],
         "reportOnly": True,
     }
+
+
+def split_gate_decision(candidate: dict[str, Any], analysis: dict[str, Any]) -> dict[str, Any]:
+    analysis_allowed = bool(candidate.get("candidateAllowedForAlpha"))
+    asset_generated = analysis.get("decision") == "allow" and bool(analysis.get("assetPath"))
+    execution_supported = candidate.get("executionSupportedForVisibleReplay")
+    visible_replay_eligible = analysis_allowed and asset_generated and (execution_supported is not False)
+    return {
+        "analysisAllowed": analysis_allowed,
+        "assetGenerated": asset_generated,
+        "visibleReplayEligible": visible_replay_eligible,
+        "cleanupEligible": False,
+        "cleanupEligibilityReason": "m29_5_replay_plan_authorizes_cleanup",
+        "visibleReplayReason": visible_replay_reason(
+            analysis_allowed=analysis_allowed,
+            asset_generated=asset_generated,
+            execution_supported=execution_supported,
+            visible_replay_eligible=visible_replay_eligible,
+        ),
+    }
+
+
+def visible_replay_reason(*, analysis_allowed: bool, asset_generated: bool, execution_supported: Any, visible_replay_eligible: bool) -> str:
+    if visible_replay_eligible:
+        return "asset_generated_and_alpha_quality_passed"
+    if not analysis_allowed:
+        return "alpha_analysis_not_allowed"
+    if not asset_generated:
+        return "alpha_asset_not_generated"
+    if execution_supported is False:
+        return "analysis_only_without_visible_replay_support"
+    return "not_visible_replay_eligible"
 
 
 def rejected_analysis(reason: str) -> dict[str, Any]:

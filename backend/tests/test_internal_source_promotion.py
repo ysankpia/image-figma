@@ -86,6 +86,26 @@ def test_internal_source_promotion_requires_evidence_contract_even_when_alpha_al
     assert result.report["rejectedCandidates"][0]["reason"] == "missing_evidence_contract"
 
 
+def test_internal_source_promotion_rejects_analysis_only_transparent_asset(tmp_path: Path) -> None:
+    result = promotion_report(
+        tmp_path,
+        internal_candidates=[internal_icon("candidate", [20, 20, 24, 24], confidence="high", text_anchor=0.82)],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 24, 24],
+                decision="allow",
+                visible_replay_eligible=False,
+            )
+        ],
+        evidence_contract_items=[evidence_contract_item("contract", "candidate", decision="allow_visible_replay", evidence_score=0.82)],
+    )
+
+    assert result.report["summary"]["promotedSourceObjectCount"] == 0
+    assert result.report["rejectedCandidates"][0]["reason"] == "analysis_only_without_visible_replay_support"
+
+
 def test_internal_source_promotion_dedupes_same_promoted_bbox_by_evidence_score(tmp_path: Path) -> None:
     result = promotion_report(
         tmp_path,
@@ -198,8 +218,9 @@ def transparent_item(
     decision: str,
     analysis_bbox: list[int] | None = None,
     media_source_object_id: str = "media",
+    visible_replay_eligible: bool | None = None,
 ) -> dict:
-    return {
+    item = {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
         "sourceObjectId": source_object_id,
@@ -210,6 +231,15 @@ def transparent_item(
         "assetPath": "assets/transparent/debug.png" if decision == "allow" else None,
         "textOverlap": 0.0,
     }
+    if visible_replay_eligible is not None:
+        item["visibleReplayEligible"] = visible_replay_eligible
+        item["gateDecision"] = {
+            "visibleReplayEligible": visible_replay_eligible,
+            "visibleReplayReason": "asset_generated_and_alpha_quality_passed"
+            if visible_replay_eligible
+            else "analysis_only_without_visible_replay_support",
+        }
+    return item
 
 
 def evidence_contract_item(item_id: str, candidate_id: str, *, decision: str, evidence_score: float) -> dict:

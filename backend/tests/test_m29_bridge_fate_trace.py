@@ -112,6 +112,64 @@ def test_bridge_fate_trace_reports_materialized_visible_replay(tmp_path: Path) -
     assert result.report["summary"]["materializedCount"] == 1
 
 
+def test_bridge_fate_trace_reports_analysis_only_transparent_gate_blocker(tmp_path: Path) -> None:
+    result = trace_report(
+        tmp_path,
+        internal_candidates=[internal_candidate("candidate", [20, 20, 24, 24])],
+        transparent_items=[
+            {
+                "candidateId": "transparent_candidate",
+                "source": "m29_6_internal_icon_candidate",
+                "sourceObjectId": "candidate",
+                "bbox": [20, 20, 24, 24],
+                "decision": "allow",
+                "assetPath": "assets/transparent/icon.png",
+                "visibleReplayEligible": False,
+                "gateDecision": {
+                    "analysisAllowed": True,
+                    "assetGenerated": True,
+                    "visibleReplayEligible": False,
+                    "cleanupEligible": False,
+                    "visibleReplayReason": "analysis_only_without_visible_replay_support",
+                },
+                "reasons": ["strong_independent_evidence_alpha_analysis"],
+                "risks": [],
+            }
+        ],
+        evidence_contract_items=[
+            {
+                "contractId": "contract",
+                "candidateId": "candidate",
+                "sourceKind": "m29_6_internal_icon_candidate",
+                "decision": {
+                    "mode": "report_only",
+                    "evidenceScore": 0.62,
+                    "reasons": ["transparent_asset_not_allowing_visible_replay"],
+                },
+            }
+        ],
+        promoted_source_objects=[],
+        rejected_candidates=[
+            {
+                "candidateId": "candidate",
+                "reason": "analysis_only_without_visible_replay_support",
+                "bbox": [20, 20, 24, 24],
+            }
+        ],
+        final_plan_items=[],
+        replayed_nodes=[],
+        skipped_items=[],
+    )
+
+    trace = result.report["traces"][0]
+    assert trace["firstBlockingStage"] == "m29_transparent_assets"
+    assert trace["firstBlockingReason"] == "analysis_only_without_visible_replay_support"
+    assert trace["transparentDecision"] == "allow"
+    assert trace["transparentAssetPath"] == "assets/transparent/icon.png"
+    assert trace["transparentVisibleReplayEligible"] is False
+    assert trace["promotionDecision"] == "analysis_only_without_visible_replay_support"
+
+
 def trace_report(
     tmp_path: Path,
     *,

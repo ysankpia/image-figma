@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..region_relation_kernel import normalize_bbox
+from ..transparent_asset_report.gates import visible_replay_block_reason, visible_replay_eligible
 from .types import M29InternalSourcePromotionResult, REPORT_META
 
 
@@ -170,8 +171,8 @@ def reject_reason(candidate: dict[str, Any] | None, transparent_item: dict[str, 
         return "invalid_candidate_bbox"
     if transparent_item is None:
         return "missing_transparent_asset_item"
-    if transparent_item.get("decision") != "allow" or transparent_item.get("assetPath") is None:
-        return "missing_transparent_asset_path"
+    if not visible_replay_eligible(transparent_item):
+        return visible_replay_block_reason(transparent_item)
     if evidence_contract is None:
         return "missing_evidence_contract"
     decision = evidence_contract.get("decision") if isinstance(evidence_contract.get("decision"), dict) else {}

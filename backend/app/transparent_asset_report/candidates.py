@@ -102,7 +102,9 @@ def build_m296_candidate(
     if internal.get("candidateDecision") != "accepted_report_candidate":
         risks.append("internal_candidate_not_accepted")
     group_supported = internal.get("groupSupportedExecution") is True
-    if internal.get("confidence") != "high" and not group_supported:
+    execution_supported = internal.get("confidence") == "high" or group_supported
+    independent_alpha_supported = allows_independent_alpha_analysis(internal, text_overlap, hero_penalty, media_lookup)
+    if not execution_supported and not independent_alpha_supported:
         risks.append("internal_candidate_not_execution_supported")
     if transparent_asset_too_large(bbox, scale_profile):
         risks.append("transparent_candidate_too_large")
@@ -116,6 +118,8 @@ def build_m296_candidate(
         risks.append("bbox_out_of_image_bounds")
     if group_supported:
         reasons.append("group_supported_internal_candidate")
+    if independent_alpha_supported and not execution_supported:
+        reasons.append("strong_independent_evidence_alpha_analysis")
     alpha_profile = "anchored_soft_edge_icon" if allows_anchored_soft_edge_profile(internal, text_overlap, hero_penalty, group_supported) else "default_icon"
     if alpha_profile == "anchored_soft_edge_icon":
         reasons.append("anchored_soft_edge_icon_profile")
@@ -130,10 +134,41 @@ def build_m296_candidate(
         "inputScore": internal.get("score"),
         "alphaProfile": alpha_profile,
         "textOverlap": round(text_overlap, 6),
+        "executionSupportedForVisibleReplay": execution_supported,
+        "analysisSupportedByIndependentEvidence": independent_alpha_supported,
         "candidateAllowedForAlpha": not risks,
         "preflightReasons": reasons,
         "preflightRisks": risks,
     }
+
+
+def allows_independent_alpha_analysis(
+    internal: dict[str, Any],
+    text_overlap: float,
+    hero_penalty: float,
+    media_lookup: dict[str, dict[str, Any]],
+) -> bool:
+    breakdown = internal.get("scoreBreakdown", {})
+    relation = str(internal.get("anchorRelation") or "")
+    text_anchor = float(breakdown.get("textAnchorScore") or 0.0)
+    compact = float(breakdown.get("compactnessScore") or 0.0)
+    color = float(breakdown.get("colorCoherenceScore") or 0.0)
+    media = media_lookup.get(str(internal.get("mediaSourceObjectId") or ""))
+    media_containment = 0.0
+    if media is not None:
+        media_containment = containment_ratio(internal.get("bbox"), media.get("bbox"))
+    return (
+        internal.get("candidateDecision") == "accepted_report_candidate"
+        and internal.get("confidence") == "medium"
+        and bool(internal.get("matchedOcrBoxId"))
+        and relation in {"above_text", "below_text", "left_of_text", "right_of_text"}
+        and text_anchor >= SOFT_EDGE_MIN_TEXT_ANCHOR
+        and text_overlap <= SOFT_EDGE_MAX_TEXT_OVERLAP
+        and hero_penalty <= SOFT_EDGE_MAX_HERO_PENALTY
+        and media_containment >= 0.95
+        and compact >= 0.45
+        and color >= 0.45
+    )
 
 
 def allows_anchored_soft_edge_profile(internal: dict[str, Any], text_overlap: float, hero_penalty: float, group_supported: bool) -> bool:
@@ -160,3 +195,14 @@ def icon_geometry_too_thin(bbox: list[int], scale_profile: ImageScaleProfile) ->
     short = min(bbox[2], bbox[3])
     long = max(bbox[2], bbox[3])
     return short < scale_profile.length(MIN_TRANSPARENT_ICON_SHORT_EDGE, minimum=4, maximum=32) or long / max(1, short) > MAX_TRANSPARENT_ICON_ASPECT_RATIO
+
+
+def containment_ratio(bbox: Any, container: Any) -> float:
+    if not isinstance(bbox, list) or len(bbox) != 4 or not isinstance(container, list) or len(container) != 4:
+        return 0.0
+    left = max(int(bbox[0]), int(container[0]))
+    top = max(int(bbox[1]), int(container[1]))
+    right = min(int(bbox[0]) + int(bbox[2]), int(container[0]) + int(container[2]))
+    bottom = min(int(bbox[1]) + int(bbox[3]), int(container[1]) + int(container[3]))
+    area = max(0, right - left) * max(0, bottom - top)
+    return area / max(1, int(bbox[2]) * int(bbox[3]))

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..transparent_asset_report.gates import visible_replay_block_reason, visible_replay_eligible
 from .report import build_summary
 from .types import M29BridgeFateTraceResult, REPORT_ONLY_META
 from .validation import validate_m29_bridge_fate_trace_report
@@ -129,6 +130,8 @@ def build_trace(
         "candidateScore": candidate.get("score"),
         "transparentDecision": transparent_decision,
         "transparentAssetPath": (transparent_item or {}).get("assetPath"),
+        "transparentVisibleReplayEligible": visible_replay_eligible(transparent_item),
+        "transparentGateDecision": (transparent_item or {}).get("gateDecision"),
         "evidenceDecision": contract_decision,
         "evidenceScore": evidence_score(contract_item),
         "promotionDecision": promotion_decision,
@@ -166,8 +169,8 @@ def first_blocking_stage(
         return ("m29_media_internal_decomposition", str(candidate.get("candidateDecision") or "internal_candidate_not_accepted"))
     if transparent_item is None:
         return ("m29_transparent_assets", "missing_transparent_asset_item")
-    if transparent_item.get("decision") != "allow" or not transparent_item.get("assetPath"):
-        return ("m29_transparent_assets", first_reason(transparent_item, fallback="missing_transparent_asset_path"))
+    if not visible_replay_eligible(transparent_item):
+        return ("m29_transparent_assets", visible_replay_block_reason(transparent_item))
     if contract_item is None:
         return ("m29_evidence_contract", "missing_evidence_contract")
     decision = contract_item.get("decision") if isinstance(contract_item.get("decision"), dict) else {}

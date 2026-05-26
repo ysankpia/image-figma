@@ -46,6 +46,28 @@ def test_transparent_reject_keeps_candidate_report_only(tmp_path: Path) -> None:
     assert "transparent_asset_not_allowing_visible_replay" in item["risk"]["risks"]
 
 
+def test_analysis_only_transparent_asset_does_not_allow_visible_replay(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[internal_icon("candidate", [20, 20, 24, 24], confidence="high", text_anchor=0.82)],
+        transparent_items=[
+            transparent_item(
+                "asset_candidate",
+                "candidate",
+                [20, 20, 24, 24],
+                decision="allow",
+                visible_replay_eligible=False,
+            )
+        ],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "report_only"
+    assert item["decision"]["promotionAllowed"] is False
+    assert item["positiveEvidence"]["transparentAsset"] == 0.0
+    assert "transparent_asset_not_allowing_visible_replay" in item["decision"]["reasons"]
+
+
 def test_high_text_overlap_rejects_internal_icon_contract(tmp_path: Path) -> None:
     report = evidence_report(
         tmp_path,
@@ -267,8 +289,16 @@ def internal_icon(
     }
 
 
-def transparent_item(item_id: str, source_object_id: str, bbox: list[int], *, decision: str, text_overlap: float = 0.0) -> dict:
-    return {
+def transparent_item(
+    item_id: str,
+    source_object_id: str,
+    bbox: list[int],
+    *,
+    decision: str,
+    text_overlap: float = 0.0,
+    visible_replay_eligible: bool | None = None,
+) -> dict:
+    item = {
         "candidateId": item_id,
         "source": "m29_6_internal_icon_candidate",
         "sourceObjectId": source_object_id,
@@ -278,3 +308,12 @@ def transparent_item(item_id: str, source_object_id: str, bbox: list[int], *, de
         "assetPath": "assets/transparent/debug.png" if decision == "allow" else None,
         "textOverlap": text_overlap,
     }
+    if visible_replay_eligible is not None:
+        item["visibleReplayEligible"] = visible_replay_eligible
+        item["gateDecision"] = {
+            "visibleReplayEligible": visible_replay_eligible,
+            "visibleReplayReason": "asset_generated_and_alpha_quality_passed"
+            if visible_replay_eligible
+            else "analysis_only_without_visible_replay_support",
+        }
+    return item

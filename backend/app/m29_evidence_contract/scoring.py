@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..region_relation_kernel import bbox_area, intersection_area, normalize_bbox
+from ..transparent_asset_report.gates import visible_replay_eligible as transparent_visible_replay_eligible
 
 
 ALLOW_VISIBLE_THRESHOLD = 0.68
@@ -27,7 +28,7 @@ def build_m296_contract_item(
     text_overlap = max(float_value(breakdown.get("textMaskOverlap")), float_value((transparent_item or {}).get("textOverlap")))
     hero_penalty = float_value(breakdown.get("heroGraphicPenalty"))
     media_containment = containment_ratio(bbox, media_bbox) if media_bbox is not None else 0.0
-    transparent_allowed = transparent_item is not None and transparent_item.get("decision") == "allow" and bool(transparent_item.get("assetPath"))
+    transparent_allowed = transparent_visible_replay_eligible(transparent_item)
     execution_supported = candidate.get("confidence") == "high" or candidate.get("groupSupportedExecution") is True
 
     positive = {
@@ -116,7 +117,7 @@ def build_label_anchored_blocked_contract_item(*, contract_id: str, source: dict
     evidence = source.get("sourceEvidence") if isinstance(source.get("sourceEvidence"), dict) else {}
     media_containment = float_value(evidence.get("mediaContainmentRatio")) or (containment_ratio(bbox, media_bbox) if media_bbox is not None else 0.0)
     text_overlap = float_value(evidence.get("textOverlapRatio"))
-    transparent_allowed = transparent_item is not None and transparent_item.get("decision") == "allow" and bool(transparent_item.get("assetPath"))
+    transparent_allowed = transparent_visible_replay_eligible(transparent_item)
     source_score = {"high": 0.9, "medium": 0.72, "low": 0.35}.get(str(source.get("confidence") or "low"), 0.35)
     positive = {
         "sourceCandidateScore": source_score,

@@ -11,6 +11,9 @@ def test_transparent_asset_empty_is_report_only(tmp_path: Path) -> None:
 
     assert report["summary"]["candidateCount"] == 0
     assert report["summary"]["allowedCount"] == 0
+    assert report["summary"]["analysisAllowedCount"] == 0
+    assert report["summary"]["visibleReplayEligibleCount"] == 0
+    assert report["summary"]["cleanupEligibleCount"] == 0
     assert report["summary"]["assetChanged"] is False
     assert report["meta"]["reportOnly"] is True
     assert report["meta"]["materializerConsumesAssets"] is False
@@ -28,6 +31,10 @@ def test_raster_icon_on_stable_background_allows_rgba_debug_asset(tmp_path: Path
     assert report["summary"]["allowedCount"] == 1
     item = report["items"][0]
     assert item["decision"] == "allow"
+    assert item["analysisAllowed"] is True
+    assert item["assetGenerated"] is True
+    assert item["visibleReplayEligible"] is True
+    assert item["cleanupEligible"] is False
     assert item["assetPath"]
     asset_path = tmp_path / "m29_transparent_assets" / item["assetPath"]
     assert asset_path.exists()
@@ -123,6 +130,46 @@ def test_medium_confidence_internal_icon_without_group_support_is_report_rejecte
     item = report["items"][0]
     assert item["decision"] == "reject"
     assert "internal_candidate_not_execution_supported" in item["risks"]
+    assert item["analysisAllowed"] is False
+    assert item["assetGenerated"] is False
+    assert item["visibleReplayEligible"] is False
+    assert item["cleanupEligible"] is False
+
+
+def test_medium_strong_anchor_internal_icon_can_generate_analysis_only_asset(tmp_path: Path) -> None:
+    report = transparent_report(
+        tmp_path,
+        source_objects=[media_region("media", [0, 0, 64, 64])],
+        ocr_blocks=[],
+        internal_candidates=[
+            internal_icon(
+                "internal_icon",
+                [18, 18, 24, 24],
+                confidence="medium",
+                media_source_object_id="media",
+                matched_ocr_box_id="label",
+                anchor_relation="above_text",
+                text_anchor=0.88,
+                hero_penalty=0.12,
+                text_overlap=0.02,
+                compactness=0.80,
+                color_coherence=0.82,
+            )
+        ],
+    )
+
+    item = report["items"][0]
+    assert item["decision"] == "allow"
+    assert item["analysisAllowed"] is True
+    assert item["assetGenerated"] is True
+    assert item["visibleReplayEligible"] is False
+    assert item["cleanupEligible"] is False
+    assert item["gateDecision"]["visibleReplayReason"] == "analysis_only_without_visible_replay_support"
+    assert "strong_independent_evidence_alpha_analysis" in item["reasons"]
+    assert "internal_candidate_not_execution_supported" not in item["risks"]
+    assert report["summary"]["analysisAllowedCount"] == 1
+    assert report["summary"]["assetGeneratedCount"] == 1
+    assert report["summary"]["visibleReplayEligibleCount"] == 0
 
 
 def test_group_supported_medium_internal_icon_uses_alpha_gate(tmp_path: Path) -> None:
@@ -135,6 +182,8 @@ def test_group_supported_medium_internal_icon_uses_alpha_gate(tmp_path: Path) ->
 
     item = report["items"][0]
     assert item["decision"] == "allow"
+    assert item["visibleReplayEligible"] is True
+    assert item["cleanupEligible"] is False
     assert "group_supported_internal_candidate" in item["reasons"]
     assert "internal_candidate_not_execution_supported" not in item["risks"]
 
@@ -369,6 +418,8 @@ def internal_icon(
     text_overlap: float = 0.0,
     raw_type: str = "symbol",
     raw_subtype: str = "icon",
+    compactness: float = 0.86,
+    color_coherence: float = 0.78,
 ) -> dict:
     return {
         "candidateId": candidate_id,
@@ -381,7 +432,13 @@ def internal_icon(
         "candidateDecision": "accepted_report_candidate",
         "confidence": confidence,
         "score": 0.82,
-        "scoreBreakdown": {"heroGraphicPenalty": hero_penalty, "textMaskOverlap": text_overlap, "textAnchorScore": text_anchor},
+        "scoreBreakdown": {
+            "heroGraphicPenalty": hero_penalty,
+            "textMaskOverlap": text_overlap,
+            "textAnchorScore": text_anchor,
+            "compactnessScore": compactness,
+            "colorCoherenceScore": color_coherence,
+        },
         "matchedOcrBoxId": matched_ocr_box_id,
         "anchorRelation": anchor_relation,
         "metrics": {},
