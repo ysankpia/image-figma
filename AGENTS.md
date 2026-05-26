@@ -113,6 +113,20 @@ Changes to M29 owner, relation, replay, materializer, cleanup authorization, or 
 
 Bug work starts from `docs/bugs/index.md` and the related bug record. Reproduce before fixing. After the fix, record root cause, fix summary, regression guard, and validation evidence. If automated regression coverage is not practical, document the alternate guard and remaining risk in the bug record.
 
+## M29 Bridge Fate Debugging
+
+For any M29-visible regression, inspect the latest task's bridge fate trace first:
+
+```text
+backend/storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
+```
+
+Use it only as a read-only diagnostic index. Identify `firstBlockingStage`, `firstBlockingReason`, `candidateRole`, `bbox`, `evidenceDecision`, `promotionDecision`, `finalReplayDecision`, and `materializerDecision` before choosing a fix layer.
+
+Fix the owning layer shown by the trace. Do not add sample-specific labels, brands, filenames, task ids, fixed bboxes, fixed coordinates, theme colors, or one-off screenshot rules to bridge fate trace, materializer, Renderer, or plugin code.
+
+Bridge fate remains diagnostic infrastructure. Failure evidence and regression guards belong in `docs/bugs/`, `docs/plans/`, tests, or validation ledgers.
+
 ## Commit & Pull Request Guidelines
 
 Use Conventional Commit style such as `docs:`, `refactor:`, `test:`, `feat:`, and `fix:`. Phase work must become an independent commit scoped to that phase's code, tests, docs, ADRs, and plan updates. Do not include next-phase exploration, temporary debugging, storage, dist, secrets, or unrelated local changes.
