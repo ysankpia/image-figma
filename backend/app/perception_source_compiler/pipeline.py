@@ -221,8 +221,9 @@ def classify_candidate(
         parent_control is not None
         and score >= options.min_control_child_icon_score
         and area_ratio <= options.max_icon_area_ratio
-        and text_overlap <= options.max_icon_text_overlap
     ):
+        if text_overlap > options.max_control_child_icon_text_overlap:
+            return rejected(candidate, "control_child_icon_text_overlap_risk", bbox=bbox)
         return {
             "mode": "compile_source_object",
             "sourceObject": build_raster_icon_object(

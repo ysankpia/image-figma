@@ -859,7 +859,81 @@ The next owning layer is quality hardening in perception_source_compiler and res
 Do not patch Renderer/plugin/materializer to hide these; continue at source ownership/replay cleanup layers.
 ```
 
-### Stage 8: Legacy Pruning Plan
+### Stage 8: Perception Ownership Quality Hardening
+
+First Stage 7 repair:
+
+```text
+problem:
+  Some low-score model candidates inside compiled controls were compiled as raster_icon even when their bbox overlapped OCR text.
+
+first-principles owner:
+  perception_source_compiler
+
+reason:
+  An icon source owner cannot claim pixels that are already owned by editable text.
+  This is source ownership conflict, not a Renderer/plugin/materializer issue.
+
+fix:
+  Add a stricter max_control_child_icon_text_overlap gate only for low-score child-icon inference.
+  Keep normal high-confidence compact icon inference unchanged.
+```
+
+Validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+  result: 77 passed
+
+py_compile:
+  python3 -m py_compile app/perception_source_compiler/*.py tests/test_perception_source_compiler.py
+  result: passed
+
+first ten HTTP batch after repair:
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_030822/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  previous Stage 7 value: 8
+  totalCompiledSourceObjectCount: 125
+  previous Stage 7 value: 139
+  totalCompiledControlBackgroundCount: 104
+  previous Stage 7 value: 104
+  totalCompiledRasterIconCount: 21
+  previous Stage 7 value: 35
+  totalMaterializedVisibleNodeCount: 1591
+  previous Stage 7 value: 1593
+  totalCopiedImageAssetCleanupTargetCount: 173
+  averageDslVisualGateNormalizedMeanAbsError: 0.013117
+
+hard regression HTTP batch after repair:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260527_031354/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCompiledSourceObjectCount: 6
+  totalCompiledControlBackgroundCount: 4
+  totalCompiledRasterIconCount: 2
+  totalMaterializedVisibleNodeCount: 35
+  averageDslVisualGateNormalizedMeanAbsError: 0.007875
+```
+
+Conclusion:
+
+```text
+The repair removed all first-ten visible ownership overlap conflicts without reducing control background compilation.
+The removed compiled icons were unsafe text-overlapping child-icon candidates.
+The next quality owner remains residual cleanup and media-parent assignment:
+  first-ten image (8) still has compiled controls/icons but copiedImageAssetCleanupTargetCount=0 because many perception controls have no parent media to erase.
+  source-crop icon cleanup remains blocked without transparent/safe replacement.
+```
+
+### Stage 9: Legacy Pruning Plan
 
 Only after Stage 7 shows stable improvement:
 

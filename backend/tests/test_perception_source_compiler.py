@@ -187,6 +187,38 @@ def test_low_score_icon_candidate_compiles_only_inside_compiled_control(tmp_path
     assert rejected["model_loose_low_score_fragment"] == "insufficient_ownership_evidence"
 
 
+def test_low_score_control_child_icon_cannot_claim_text_pixels(tmp_path: Path) -> None:
+    source = make_png(
+        320,
+        700,
+        fill=(248, 248, 248),
+        marks=[
+            ([48, 296, 224, 48], (33, 88, 190)),
+            ([78, 312, 24, 16], (255, 255, 255)),
+            ([124, 312, 98, 16], (255, 255, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_child_icon_text_overlap",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_label", "Continue", [124, 312, 98, 16])]),
+        perception_model_report=perception_report(
+            [
+                candidate("model_button_bg", [48, 296, 272, 344], 0.42),
+                candidate("model_text_sized_icon", [112, 304, 236, 336], 0.11),
+            ]
+        ),
+        m292_document=m292_document([m292_object("media", [0, 0, 320, 700], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    assert shape["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_contains_ocr_text"]
+    assert not [item for item in result.report["compiledSourceObjects"] if item["visualKind"] == "raster_icon"]
+    rejected = {item["candidateId"]: item["reason"] for item in result.report["rejectedCandidates"]}
+    assert rejected["model_text_sized_icon"] == "control_child_icon_text_overlap_risk"
+
+
 def test_tiny_stable_circle_candidate_compiles_to_shape_not_icon(tmp_path: Path) -> None:
     source = make_png(120, 90, fill=(248, 248, 248), marks=[([40, 30, 10, 10], (45, 115, 235))])
     result = extract_perception_source_compiler_report(

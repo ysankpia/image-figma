@@ -20,6 +20,7 @@ class PerceptionSourceCompilerOptions:
     min_control_text_area_ratio: float = 0.025
     max_control_text_area_ratio: float = 0.55
     max_icon_text_overlap: float = 0.20
+    max_control_child_icon_text_overlap: float = 0.04
     min_control_child_containment: float = 0.82
     max_report_only_area_ratio: float = 0.35
     min_control_aspect_ratio: float = 2.0
