@@ -20,6 +20,7 @@ class UploadPreviewPaths:
     m29_transparent_assets: Path
     m29_evidence_contract: Path
     m29_internal_source_promotion: Path
+    m29_bridge_fate_trace: Path
     m29_hierarchy_candidates: Path
     m29_sibling_groups: Path
     m29_layout_energy: Path
@@ -45,6 +46,7 @@ def pipeline_paths(task_id: str) -> UploadPreviewPaths:
         m29_transparent_assets=root / "m29_transparent_assets",
         m29_evidence_contract=root / "m29_evidence_contract",
         m29_internal_source_promotion=root / "m29_internal_source_promotion",
+        m29_bridge_fate_trace=root / "m29_bridge_fate_trace",
         m29_hierarchy_candidates=root / "m29_hierarchy_candidates",
         m29_sibling_groups=root / "m29_sibling_groups",
         m29_layout_energy=root / "m29_layout_energy",

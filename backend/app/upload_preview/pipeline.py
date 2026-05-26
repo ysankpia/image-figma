@@ -16,6 +16,7 @@ from .stages import (
     run_m295_replay_plan_stage,
     run_m29_auto_layout_permission_stage,
     run_m29_b_stage_quality_stage,
+    run_m29_bridge_fate_trace_stage,
     run_m29_evidence_contract_stage,
     run_m29_hierarchy_candidate_stage,
     run_m29_internal_source_promotion_stage,
@@ -328,6 +329,23 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             sibling_group_report=sibling_group_result.report,
             layout_energy_report=layout_energy_result.report,
             auto_layout_permission_report=auto_layout_permission_result.report,
+        ),
+    )
+
+    update_task(task_id, "m29_bridge_fate_trace", 93, "Tracing M29 internal candidate bridge fate.")
+    run_stage(
+        paths,
+        timings,
+        "m29_bridge_fate_trace",
+        lambda: run_m29_bridge_fate_trace_stage(
+            task_id=task_id,
+            paths=paths,
+            media_internal_report=media_internal_result.report,
+            transparent_asset_report=transparent_asset_result.report,
+            evidence_contract_report=evidence_contract_result.report,
+            promotion_report=promotion_result.report,
+            final_m295_report=m295_result.report,
+            materialization_report=materialized_design_result.report,
         ),
     )
 

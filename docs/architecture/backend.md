@@ -57,6 +57,7 @@ receive multipart PNG
 -> M29 layout energy report
 -> M29 Auto Layout permission report
 -> M29 plan-driven DSL materialization
+-> M29 bridge fate trace report
 -> M29 design token report
 -> M29 B-stage quality report
 -> publish M29 assets
@@ -143,6 +144,14 @@ storage/upload_previews/{taskId}/m29_internal_source_promotion/source_ui_physica
 ```
 
 promotion 本身不创建 DSL nodes、不直接 materialize。promotion 后 pipeline 会用增强版 M29.2 重新生成最终 M29.3.1、M29.4、M29.5 和 ownership conservation report；M29.5 可以在 parent media relation 成立时为 promoted internal asset 写入 copied media cleanup 授权，后续 hierarchy/layout/materializer 只消费这条最终授权链。
+
+M29 bridge fate trace report 位于 materializer 之后。它读取 M29.6、transparent asset、evidence contract、internal source promotion、final M29.5 replay plan 和 materialization report，写出每个 internal candidate 的第一阻断层和下游决策：
+
+```text
+storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
+```
+
+这个阶段是 report-only diagnostic artifact：不创建 source objects，不改变 replay plan，不创建 DSL visible nodes，不改 asset，不授权 cleanup，也不是 materializer 的输入。它只用于解释候选对象是被 transparent preflight、evidence contract、promotion、final replay plan 还是 materializer 阻断。
 
 M29 hierarchy candidate report 位于 final M29.5 replay plan 之后、materializer 之前。它读取 promoted M29.2 source objects、final M29.3.1 relation graph 和 final M29.5 replay plan，写出候选父子结构报告：
 

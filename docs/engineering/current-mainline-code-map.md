@@ -24,6 +24,7 @@ Plugin upload
 -> M29 layout energy report
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
+-> M29 bridge fate trace report
 -> M29 design token report
 -> M29 B-stage quality report
 -> DSL v0.1
@@ -65,6 +66,7 @@ run M29 sibling group candidate report
 run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
+run M29 bridge fate trace report
 run M29 design token report
 run M29 B-stage quality report
 publish M29 assets
@@ -79,7 +81,7 @@ types.py: pipeline error/profile/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/design-token/B-stage-quality stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/bridge-fate-trace/design-token/B-stage-quality stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
@@ -385,6 +387,36 @@ types.py: promotion result and invariant metadata
 ```
 
 这个 package 只提升同时满足 M29.6 accepted internal icon candidate、transparent asset allow，以及 evidence contract `allow_visible_replay` 的对象。若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha allow 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+
+### M29 Bridge Fate Trace
+
+`backend/app/m29_bridge_fate_trace/` 是 materialization 之后的 report-only diagnostic surface。它消费：
+
+```text
+M29.6 media internal decomposition report
+M29 transparent asset report
+M29 evidence contract report
+M29 internal source promotion report
+final M29.5 replay plan
+M29 materialization report
+```
+
+它创建：
+
+```text
+storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
+```
+
+模块边界：
+
+```text
+pipeline.py: joins candidate fate across M29.6/transparent/evidence/promotion/final replay/materialization
+types.py: report-only constants and result type
+report.py: summary counts by blocking stage/reason/role
+validation.py: report schema and report-only invariant checks
+```
+
+这个 package 只解释 internal candidate 的命运：第一阻断层、阻断原因、transparent/evidence/promotion/final replay/materializer decision。它不创建 source objects，不改 M29.5 plan，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 消费。它的目的是避免后续调阈值时手动翻多个 report。
 
 ### M29 Hierarchy Candidates
 

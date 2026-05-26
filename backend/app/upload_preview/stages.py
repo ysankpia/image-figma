@@ -13,6 +13,7 @@ from ..m29_replay_plan import build_m295_replay_plan
 from ..hierarchy_candidate_report import extract_m29_hierarchy_candidate_report
 from ..internal_source_promotion import extract_m29_internal_source_promotion_report
 from ..layout_energy_report import extract_m29_layout_energy_report
+from ..m29_bridge_fate_trace import extract_m29_bridge_fate_trace_report
 from ..m29_evidence_contract import extract_m29_evidence_contract_report
 from ..media_internal_decomposition import extract_m29_media_internal_decomposition_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
@@ -208,6 +209,29 @@ def run_m29_evidence_contract_stage(
         media_internal_report=media_internal_report,
         transparent_asset_report=transparent_asset_report,
         output_dir=paths.m29_evidence_contract,
+    )
+
+
+def run_m29_bridge_fate_trace_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    media_internal_report: dict[str, Any],
+    transparent_asset_report: dict[str, Any],
+    evidence_contract_report: dict[str, Any],
+    promotion_report: dict[str, Any],
+    final_m295_report: dict[str, Any],
+    materialization_report: dict[str, Any],
+):
+    return extract_m29_bridge_fate_trace_report(
+        task_id=task_id,
+        media_internal_report=media_internal_report,
+        transparent_asset_report=transparent_asset_report,
+        evidence_contract_report=evidence_contract_report,
+        promotion_report=promotion_report,
+        final_m295_report=final_m295_report,
+        materialization_report=materialization_report,
+        output_dir=paths.m29_bridge_fate_trace,
     )
 
 
