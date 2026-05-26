@@ -15,6 +15,7 @@ from ..internal_source_promotion import extract_m29_internal_source_promotion_re
 from ..layout_energy_report import extract_m29_layout_energy_report
 from ..m29_bridge_fate_trace import extract_m29_bridge_fate_trace_report
 from ..m29_evidence_contract import extract_m29_evidence_contract_report
+from ..m29_perception_fate_trace import extract_m29_perception_fate_trace_report
 from ..media_internal_decomposition import extract_m29_media_internal_decomposition_report
 from ..ownership_conservation import extract_m29_ownership_conservation_report
 from ..ocr import extract_ocr
@@ -275,6 +276,25 @@ def run_m29_bridge_fate_trace_stage(
         final_m295_report=final_m295_report,
         materialization_report=materialization_report,
         output_dir=paths.m29_bridge_fate_trace,
+    )
+
+
+def run_m29_perception_fate_trace_stage(
+    *,
+    task_id: str,
+    paths: UploadPreviewPaths,
+    perception_model_report: dict[str, Any],
+    perception_source_compiler_report: dict[str, Any],
+    final_m295_report: dict[str, Any],
+    materialization_report: dict[str, Any],
+):
+    return extract_m29_perception_fate_trace_report(
+        task_id=task_id,
+        perception_model_report=perception_model_report,
+        perception_source_compiler_report=perception_source_compiler_report,
+        final_m295_report=final_m295_report,
+        materialization_report=materialization_report,
+        output_dir=paths.m29_perception_fate_trace,
     )
 
 

@@ -1114,7 +1114,134 @@ The repair removes large false control backgrounds, improves visual reconstructi
 Remaining visible error is now mostly font rendering/OCR text fidelity plus smaller icon/cleanup gaps, not the large-banner ownership failure.
 ```
 
-### Stage 11: Legacy Pruning Plan
+### Stage 11: Model-First Fate Trace
+
+After Stage 10, the old `m29_bridge_fate_trace` could explain only the M29.6/transparent/evidence/promotion path. It could not explain the new model-first path:
+
+```text
+perception candidate
+-> perception_source_compiler
+-> final M29.5 replay
+-> cleanup target
+-> materializer result
+```
+
+First-principles owner:
+
+```text
+diagnostic/report surface
+```
+
+Reason:
+
+```text
+The model-first path must not hide remaining failures behind old M29.6 bridge diagnostics.
+The trace must be read-only and must not feed source ownership, replay, cleanup, materializer, Renderer, or plugin decisions.
+```
+
+Implementation status:
+
+```text
+backend/app/m29_perception_fate_trace/ added as a report-only diagnostic package.
+upload-preview emits m29_perception_fate_trace/perception_fate_trace_report.json when M29_PERCEPTION_MODEL_ENABLED=true.
+batch validation now requires and summarizes the perception fate trace only for model-first validation runs.
+The trace reports:
+  candidateId
+  bbox
+  score
+  compilerDecision
+  compilerReason
+  compiledSourceObjectId
+  compiledRole
+  finalReplayDecision
+  cleanupDecision
+  materializerDecision
+  firstBlockingStage
+  firstBlockingReason
+```
+
+Report-only invariants:
+
+```text
+dslChanged=false
+assetChanged=false
+createdVisibleNodeCount=0
+materializationChanged=false
+sourceOwnershipChanged=false
+materializerConsumesTrace=false
+```
+
+Validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_m29_perception_fate_trace.py tests/test_upload_preview_pipeline.py tests/test_upload_preview_batch_validation_script.py -q
+  result: 20 passed
+
+py_compile:
+  python3 -m py_compile app/m29_perception_fate_trace/*.py app/upload_preview/pipeline.py app/upload_preview/stages.py app/upload_preview/paths.py scripts/run_upload_preview_batch_validation.py tests/test_m29_perception_fate_trace.py tests/test_upload_preview_pipeline.py tests/test_upload_preview_batch_validation_script.py
+  result: passed
+
+hard regression HTTP batch:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_202159_745679_13323/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalPerceptionCandidateCount: 13
+  totalCompiledSourceObjectCount: 4
+  totalCompiledControlBackgroundCount: 3
+  totalCompiledRasterIconCount: 1
+  totalPerceptionFateTraceCount: 13
+  totalPerceptionFateBlockedCount: 9
+  totalVisibleOwnershipOverlapConflicts: 0
+  averageDslVisualGateNormalizedMeanAbsError: 0.005637
+
+first ten HTTP batch:
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_202250_581048_14288/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalPerceptionCandidateCount: 659
+  totalCompiledSourceObjectCount: 69
+  totalCompiledControlBackgroundCount: 60
+  totalCompiledRasterIconCount: 9
+  totalPerceptionFateTraceCount: 659
+  totalPerceptionFateBlockedCount: 612
+  totalVisibleOwnershipOverlapConflicts: 0
+  averageDslVisualGateNormalizedMeanAbsError: 0.004795
+```
+
+Hard image trace sample:
+
+```text
+task: task_979ca273cf4e
+trace summary:
+  traceCount=13
+  compiledCount=4
+  materializedCount=4
+  cleanupAuthorizedCount=4
+  blockedCount=9
+  firstBlockingStageCounts:
+    none=4
+    m29_perception_source_compiler=9
+  firstBlockingReasonCounts:
+    visible_replay_materialized=4
+    insufficient_ownership_evidence=5
+    duplicate_or_near_equal_existing_source_object=3
+    content_region_too_large_for_control_background=1
+```
+
+Conclusion:
+
+```text
+Stage 11 does not improve visual output directly.
+It closes the diagnostic gap for model-first perception so the next repair can target the correct owning layer.
+On the hard image and first-ten gate set, remaining model-first blockers are now visible in m29_perception_source_compiler, not hidden behind M29.6/transparent/bridge fate reports.
+```
+
+### Stage 12: Legacy Pruning Plan
 
 Only after Stage 7 shows stable improvement:
 

@@ -160,6 +160,11 @@ def test_collect_artifacts_can_require_perception_model_outputs(tmp_path: Path, 
         encoding="utf-8",
     )
     (root / "m29_perception_source_compiler" / "source_ui_physical_graph.perception.json").write_text("{}", encoding="utf-8")
+    (root / "m29_perception_fate_trace").mkdir()
+    (root / "m29_perception_fate_trace" / "perception_fate_trace_report.json").write_text(
+        json.dumps({"summary": {"traceCount": 11, "blockedCount": 6}}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(script, "validate_dsl_assets", lambda *args, **kwargs: None)
     record = script.base_record(tmp_path / "input.png", tmp_path)
     record["status"] = "completed"
@@ -168,10 +173,13 @@ def test_collect_artifacts_can_require_perception_model_outputs(tmp_path: Path, 
 
     assert not [error for error in record["errors"] if error["type"] == "missing_artifact"]
     assert record["artifacts"]["perceptionModelReport"]["exists"] is True
+    assert record["artifacts"]["perceptionFateTraceReport"]["exists"] is True
     assert record["perceptionCandidateCount"] == 11
     assert record["compiledSourceObjectCount"] == 5
     assert record["compiledControlBackgroundCount"] == 2
     assert record["compiledRasterIconCount"] == 3
+    assert record["perceptionFateTraceCount"] == 11
+    assert record["perceptionFateBlockedCount"] == 6
     assert record["plannedShapeReplayCount"] == 7
     assert record["plannedIconReplayCount"] == 4
     assert record["copiedImageAssetCleanupTargetCount"] == 6
@@ -189,6 +197,8 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     completed["compiledSourceObjectCount"] = 5
     completed["compiledControlBackgroundCount"] = 2
     completed["compiledRasterIconCount"] = 3
+    completed["perceptionFateTraceCount"] = 11
+    completed["perceptionFateBlockedCount"] = 6
     completed["plannedShapeReplayCount"] = 7
     completed["plannedIconReplayCount"] = 4
     completed["copiedImageAssetCleanupTargetCount"] = 6
@@ -229,6 +239,8 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     assert summary["totalCompiledSourceObjectCount"] == 5
     assert summary["totalCompiledControlBackgroundCount"] == 2
     assert summary["totalCompiledRasterIconCount"] == 3
+    assert summary["totalPerceptionFateTraceCount"] == 11
+    assert summary["totalPerceptionFateBlockedCount"] == 6
     assert summary["totalPlannedShapeReplayCount"] == 7
     assert summary["totalPlannedIconReplayCount"] == 4
     assert summary["totalCopiedImageAssetCleanupTargetCount"] == 6

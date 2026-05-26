@@ -303,6 +303,8 @@ def base_record(image_path: Path, input_dir: Path) -> dict[str, Any]:
         "compiledSourceObjectCount": 0,
         "compiledControlBackgroundCount": 0,
         "compiledRasterIconCount": 0,
+        "perceptionFateTraceCount": 0,
+        "perceptionFateBlockedCount": 0,
         "plannedShapeReplayCount": 0,
         "plannedIconReplayCount": 0,
         "copiedImageAssetCleanupTargetCount": 0,
@@ -433,6 +435,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
                 "perceptionModelReport": root / "m29_perception_model" / "perception_model_report.json",
                 "perceptionSourceCompilerReport": root / "m29_perception_source_compiler" / "perception_source_compiler_report.json",
                 "perceptionSourceCompilerM292": root / "m29_perception_source_compiler" / "source_ui_physical_graph.perception.json",
+                "perceptionFateTraceReport": root / "m29_perception_fate_trace" / "perception_fate_trace_report.json",
             }
         )
     for key, path in artifact_paths.items():
@@ -468,6 +471,7 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
     if expect_perception_artifacts:
         load_summary(record, "perceptionModel", artifact_paths["perceptionModelReport"])
         load_summary(record, "perceptionSourceCompiler", artifact_paths["perceptionSourceCompilerReport"])
+        load_summary(record, "perceptionFateTrace", artifact_paths["perceptionFateTraceReport"])
     derive_record_metrics(record)
     validate_dsl_assets(record, artifact_paths["dsl"], base_url=base_url)
 
@@ -534,12 +538,16 @@ def derive_record_metrics(record: dict[str, Any]) -> None:
     ownership_summary = record.get("summaries", {}).get("ownershipConservation", {})
     perception_summary = record.get("summaries", {}).get("perceptionModel", {})
     compiler_summary = record.get("summaries", {}).get("perceptionSourceCompiler", {})
+    fate_summary = record.get("summaries", {}).get("perceptionFateTrace", {})
     if isinstance(perception_summary, dict):
         record["perceptionCandidateCount"] = int(perception_summary.get("candidateCount") or 0)
     if isinstance(compiler_summary, dict):
         record["compiledSourceObjectCount"] = int(compiler_summary.get("compiledSourceObjectCount") or 0)
         record["compiledControlBackgroundCount"] = int(compiler_summary.get("compiledControlBackgroundCount") or 0)
         record["compiledRasterIconCount"] = int(compiler_summary.get("compiledRasterIconCount") or 0)
+    if isinstance(fate_summary, dict):
+        record["perceptionFateTraceCount"] = int(fate_summary.get("traceCount") or 0)
+        record["perceptionFateBlockedCount"] = int(fate_summary.get("blockedCount") or 0)
     if isinstance(replay_summary, dict):
         record["plannedShapeReplayCount"] = int(replay_summary.get("plannedShapeReplayCount") or 0)
         record["plannedIconReplayCount"] = int(replay_summary.get("plannedIconReplayCount") or 0)
@@ -669,6 +677,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     total_compiled_source_objects = 0
     total_compiled_controls = 0
     total_compiled_icons = 0
+    total_perception_fate_traces = 0
+    total_perception_fate_blocked = 0
     total_planned_shape_replay = 0
     total_planned_icon_replay = 0
     total_copied_cleanup_targets = 0
@@ -690,6 +700,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         total_compiled_source_objects += int(record.get("compiledSourceObjectCount") or 0)
         total_compiled_controls += int(record.get("compiledControlBackgroundCount") or 0)
         total_compiled_icons += int(record.get("compiledRasterIconCount") or 0)
+        total_perception_fate_traces += int(record.get("perceptionFateTraceCount") or 0)
+        total_perception_fate_blocked += int(record.get("perceptionFateBlockedCount") or 0)
         total_planned_shape_replay += int(record.get("plannedShapeReplayCount") or 0)
         total_planned_icon_replay += int(record.get("plannedIconReplayCount") or 0)
         total_copied_cleanup_targets += int(record.get("copiedImageAssetCleanupTargetCount") or 0)
@@ -782,6 +794,8 @@ def build_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "totalCompiledSourceObjectCount": total_compiled_source_objects,
         "totalCompiledControlBackgroundCount": total_compiled_controls,
         "totalCompiledRasterIconCount": total_compiled_icons,
+        "totalPerceptionFateTraceCount": total_perception_fate_traces,
+        "totalPerceptionFateBlockedCount": total_perception_fate_blocked,
         "totalPlannedShapeReplayCount": total_planned_shape_replay,
         "totalPlannedIconReplayCount": total_planned_icon_replay,
         "totalCopiedImageAssetCleanupTargetCount": total_copied_cleanup_targets,

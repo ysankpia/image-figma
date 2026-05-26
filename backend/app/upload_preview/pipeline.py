@@ -23,6 +23,7 @@ from .stages import (
     run_m29_layout_energy_stage,
     run_m29_media_internal_decomposition_stage,
     run_m29_ownership_conservation_stage,
+    run_m29_perception_fate_trace_stage,
     run_m29_perception_model_stage,
     run_m29_perception_source_compiler_stage,
     run_m29_sibling_group_candidate_stage,
@@ -64,6 +65,7 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     text_boxes, text_warnings = text_boxes_from_ocr_document(ocr_document.to_dict())
 
     perception_model_result = None
+    compiler_result = None
     if state.settings.m29_perception_model_enabled:
         update_task(task_id, "m29_perception_model", 12, "Running report-only M29 perception model.")
         perception_model_result = run_stage(
@@ -381,6 +383,22 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             materialization_report=materialized_design_result.report,
         ),
     )
+
+    if state.settings.m29_perception_model_enabled and perception_model_result is not None and compiler_result is not None:
+        update_task(task_id, "m29_perception_fate_trace", 93, "Tracing M29 perception candidate fate.")
+        run_stage(
+            paths,
+            timings,
+            "m29_perception_fate_trace",
+            lambda: run_m29_perception_fate_trace_stage(
+                task_id=task_id,
+                paths=paths,
+                perception_model_report=perception_model_result.report,
+                perception_source_compiler_report=compiler_result.report,
+                final_m295_report=m295_result.report,
+                materialization_report=materialized_design_result.report,
+            ),
+        )
 
     update_task(task_id, "m29_design_tokens", 94, "Extracting M29 single-page design token report.")
     design_token_result = run_stage(

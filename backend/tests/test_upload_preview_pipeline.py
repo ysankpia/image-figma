@@ -183,9 +183,15 @@ def test_upload_preview_can_emit_opt_in_perception_model_report(tmp_path: Path, 
     assert compiler_report["summary"]["perceptionCandidateCount"] == 1
     assert compiler_report["summary"]["sourceOwnershipChanged"] is True
     assert compiler_report["summary"]["compiledSourceObjectCount"] >= 1
+    fate_trace_path = task_root / "m29_perception_fate_trace" / "perception_fate_trace_report.json"
+    assert fate_trace_path.exists()
+    fate_trace = json.loads(fate_trace_path.read_text(encoding="utf-8"))
+    assert fate_trace["summary"]["traceCount"] == perception_report["summary"]["candidateCount"]
+    assert fate_trace["meta"]["materializerConsumesTrace"] is False
     stages_seen = {item["stage"] for item in report["stageTimings"]["stages"]}
     assert "m29_perception_model" in stages_seen
     assert "m29_perception_source_compiler" in stages_seen
+    assert "m29_perception_fate_trace" in stages_seen
 
 
 def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
