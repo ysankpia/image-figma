@@ -260,10 +260,10 @@ def shape_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge:
         return "cleanup_rejected_text_overlap_risk"
     if evidence.get("promotionSource") in INTERNAL_SHAPE_PROMOTION_SOURCES:
         score = safe_float(evidence.get("evidenceScore"))
-        if score < MIN_SHAPE_CLEANUP_EVIDENCE_SCORE:
-            return "cleanup_rejected_low_shape_evidence"
         role = str(evidence.get("internalRole") or "")
         has_style = bool(evidence.get("shapeFillOverride") or evidence.get("shapeRadiusOverride"))
+        if score < MIN_SHAPE_CLEANUP_EVIDENCE_SCORE and not shape_role_has_styled_foreground_claim(role, has_style):
+            return "cleanup_rejected_low_shape_evidence"
         if role in {"status_dot_candidate", "table_marker_candidate", "internal_overlay_badge", "internal_pill_button", "internal_circle_control"} and not has_style:
             return "cleanup_rejected_missing_shape_replacement_style"
     return ""
@@ -278,6 +278,15 @@ def cleanup_reason_for_shape(item: dict[str, Any]) -> str:
 
 def is_foreground_claim_source(evidence: dict[str, Any]) -> bool:
     return str(evidence.get("promotionSource") or "") in FOREGROUND_CLAIM_PROMOTION_SOURCES or bool(evidence.get("foregroundClaimId"))
+
+
+def shape_role_has_styled_foreground_claim(role: str, has_style: bool) -> bool:
+    return has_style and role in {
+        "internal_control_background",
+        "internal_overlay_badge",
+        "internal_pill_button",
+        "internal_circle_control",
+    }
 
 
 def foreground_claim_cleanup_fields(evidence: dict[str, Any]) -> dict[str, Any]:

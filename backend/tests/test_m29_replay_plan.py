@@ -296,6 +296,78 @@ def test_m295_promoted_foreground_claim_pill_creates_residual_cleanup_target(tmp
     assert "foreground_claim_cleans_residual_media_asset" in pill_item["reasons"]
 
 
+def test_m295_low_score_styled_perception_control_creates_residual_cleanup_target(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_low_score_perception_control_cleanup",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 200, 140], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape(
+                    "control",
+                    [24, 58, 148, 36],
+                    "media",
+                    internal_role="internal_control_background",
+                    evidence_score=0.39,
+                    promotion_source="perception_model_foreground_claim",
+                    foreground_claim_id="model_control:foreground_claim",
+                    claim_mask_kind="rounded_rect",
+                    shape_fill="#2158BE",
+                    shape_radius=18,
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "control"],
+            [edge("media_control", "media", "control", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    control_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "control")
+    assert control_item["finalReplayAction"] == "shape_replay"
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "model_control:foreground_claim",
+        "maskKind": "rounded_rect",
+    } in control_item["cleanupTargets"]
+    assert "cleanup_rejected_low_shape_evidence" not in control_item["risks"]
+
+
+def test_m295_low_score_unstyled_shape_still_blocks_residual_cleanup(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_low_score_unstyled_shape_cleanup_blocked",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 200, 140], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape(
+                    "marker",
+                    [24, 58, 12, 12],
+                    "media",
+                    internal_role="table_marker_candidate",
+                    evidence_score=0.39,
+                    promotion_source="perception_model_foreground_claim",
+                    foreground_claim_id="model_marker:foreground_claim",
+                    claim_mask_kind="circle",
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "marker"],
+            [edge("media_marker", "media", "marker", "contains", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    marker_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "marker")
+    assert marker_item["finalReplayAction"] == "shape_replay"
+    assert not any(target.get("target") == "copied_image_asset" for target in marker_item["cleanupTargets"])
+    assert "cleanup_rejected_low_shape_evidence" in marker_item["risks"]
+
+
 def test_m295_keeps_internal_shape_replay_when_cleanup_style_evidence_is_missing(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_promoted_internal_shape_cleanup_risk",

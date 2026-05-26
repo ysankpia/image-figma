@@ -661,6 +661,56 @@ Acceptance:
 - If cleanup is unsafe, final DSL still contains selectable foreground node and the trace records cleanup blocker.
 - Materializer still refuses cleanup not present in M29.5.
 
+Implementation status:
+
+```text
+M29.5 shape cleanup risk no longer treats raw model score as the only cleanup authority for styled foreground controls.
+Low-score perception foreground claims can authorize copied-image cleanup only when the role is a styled control-like shape:
+  internal_control_background
+  internal_overlay_badge
+  internal_pill_button
+  internal_circle_control
+Unstyled marker/table/status shapes still require the existing evidence score gate and remain blocked when evidence is weak.
+Materializer still consumes only final M29.5 cleanupTargets.
+```
+
+Stage 6 validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_perception_source_compiler.py -q
+  result: 76 passed
+
+py_compile:
+  python3 -m py_compile backend/app/m29_replay_plan/*.py backend/tests/test_m29_replay_plan.py
+  result: passed
+
+hard regression direct pipeline:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  output root: backend/tmp/stage6_hard_smoke_storage/upload_previews/stage6_hard_smoke
+  compiledControlBackgroundCount: 4
+  compiledRasterIconCount: 4
+  plannedShapeReplayCount: 7
+  copiedImageAssetCleanupTargetCount: 7
+  copiedImageAssetShapeErasedCount: 5
+  visibleNodeCount: 44
+
+first ten direct pipeline:
+  summary: backend/tmp/stage6_first10_direct_summary.json
+  failed: 0 / 10
+  Stage 5 totals: compiled=118, controls=28, icons=90, cleanupTargets=0, shapeErased=0, internalErased=0
+  Stage 6 totals: compiled=118, controls=28, icons=90, cleanupTargets=85, shapeErased=82, internalErased=3
+```
+
+Remaining risk:
+
+```text
+Icon residual cleanup still blocks source-crop icons without transparent replacement; this is intentional until a safe mask exists.
+One first-ten image still has cleanupTargets=0; this needs artifact inspection in Stage 7, not a single-image rule.
+Direct validation still uses OCR_PROVIDER=fake because real OCR credentials are environment-dependent.
+```
+
 ### Stage 7: Real Sample Batch And Figma-Facing Inspection
 
 Run:
