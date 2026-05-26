@@ -1971,3 +1971,140 @@ Bug ledger:
 ```text
 Bug 012 moved from docs/bugs/open/ to docs/bugs/resolved/.
 ```
+
+### Stage 10: Finite Control Background Verification
+
+Status:
+
+```text
+passed
+```
+
+Scope:
+
+```text
+Completion audit after Stage 9 found Bug 011 still open in the bug ledger even
+though the finite-control-background path had already been implemented and
+validated in earlier 061 work.
+
+This stage did not add new code. It verified the current source-evidence chain
+against the 525 secondary real-sample set and closed the stale bug record with
+current artifact evidence. The tea-order sample's bottom control background is
+now a finite editable shape, not preserved as media raster.
+```
+
+First-principles classification:
+
+```text
+real goal: finite UI controls become editable shape layers when source evidence
+  supports them
+source truth: source PNG + OCR bbox + raw M29 shape/unknown evidence + M29.2
+  source ownership + M29.5 replay plan
+information-loss point: old low-confidence image-like unknown classification
+  could steal ownership from finite control backgrounds before the shape replay
+  plan was formed
+owning layer: raw M29 support detection + M29.2 source ownership
+do-not-do: do not invent owner/cleanup in materializer, Renderer, or plugin;
+  do not use literal text, color, filename, task id, fixed bbox, or one-sample
+  layout rules
+next verification: targeted tests + 525 secondary batch + tea sample
+  M29.2/M29.5/DSL artifact inspection
+```
+
+Validation:
+
+```bash
+cd backend
+uv run pytest tests/test_source_ui_physical_graph.py tests/test_visual_primitive_graph.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+uv run python scripts/run_upload_preview_batch_validation.py --input-dir /Users/luhui/Downloads/525测试 --poll-timeout 300
+```
+
+Result:
+
+```text
+targeted tests: 92 passed in 17.31s
+secondary inputs: 6
+supported inputs: 6
+completed: 6
+supported failed: 0
+degraded: 0
+backend crashes: 0
+missing artifacts: 0
+asset fetch failures: 0
+ownership overlap conflicts: 0
+```
+
+Ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260526_080221/upload_preview_batch_validation.json
+```
+
+Key secondary-set metrics:
+
+```text
+visible replay claims: 381
+composite media count: 39
+internal candidates: 1204
+accepted internal candidates: 891
+matched internal groups: 21
+transparent asset candidates: 1198
+transparent assets allowed: 41
+promoted internal source objects: 15
+controlled structure groups: 36
+average DSL visual normalized mean absolute error: 0.021218
+max DSL visual changed pixel ratio @10: 0.080967
+average DSL visual gate normalized mean absolute error: 0.005125
+max DSL visual gate changed pixel ratio @10: 0.025176
+ownership conflict type counts: {}
+```
+
+Tea-order sample evidence:
+
+```text
+source:
+  /Users/luhui/Downloads/525测试/ChatGPT Image 2026年5月23日 17_52_19.png
+
+task:
+  task_e9899b456736
+
+M29.2 object:
+  id = m292_object_0108
+  bbox = [662, 1479, 206, 66]
+  visualKind = control_background
+  pixelOwner = shape_geometry
+  replayDecision = shape_replay
+  reason = low_confidence_unknown_control_background
+  shapeFillOverride = #456441
+  shapeRadiusOverride = 33
+
+M29.5:
+  finalReplayAction = shape_replay
+
+DSL:
+  node = m29_shape_0004
+  fill = #456441
+  radius = 33
+```
+
+Cleanup evidence:
+
+```text
+Only fallback cleanup remains for this finite control. The copied image cleanup
+target is suppressed because the parent media was not materialized, so the
+materializer does not receive an invalid copied-media cleanup instruction.
+```
+
+Anti-overfitting check:
+
+```text
+No code was changed in this stage. The closure is based on current generic
+source evidence and real-sample artifacts, not a new filename, literal text,
+theme color, fixed coordinate, task id, or one-screenshot rule.
+```
+
+Bug ledger:
+
+```text
+Bug 011 moved from docs/bugs/open/ to docs/bugs/resolved/.
+```

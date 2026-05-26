@@ -1,7 +1,8 @@
 # Bug: 有限控件背景被保守保留为 media raster
 
-- 状态：open
+- 状态：resolved
 - 创建日期：2026-05-25
+- 解决日期：2026-05-26
 - 影响范围：raw M29 visual primitive graph、M29.2 source ownership、M29.5 cleanup authorization、525 真实样本可编辑质量
 
 ## Summary
@@ -110,7 +111,7 @@ do not fix in:
 
 ## Regression Guard
 
-需要新增或确认的回归保护：
+已新增或确认的回归保护：
 
 - raw M29：短文本宽胶囊按钮能生成 `text_support_background` shape。
 - M29.2：低置信 unknown 与 control-shape 大面积重叠时，control-shape 获得 `shape_geometry` ownership，unknown 不再变成 media。
@@ -120,6 +121,62 @@ do not fix in:
 - 真实样本：525 全量 batch 仍完成，ownership conflict 仍为 0。
 
 ## Validation Evidence
+
+2026-05-26 16:02 CST 再次验证：
+
+```bash
+cd backend
+uv run pytest tests/test_source_ui_physical_graph.py tests/test_visual_primitive_graph.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_upload_preview_pipeline.py -q
+
+uv run python scripts/run_upload_preview_batch_validation.py \
+  --input-dir /Users/luhui/Downloads/525测试 \
+  --poll-timeout 300
+```
+
+结果：
+
+```text
+targeted tests: 92 passed in 17.31s
+ledger: backend/tmp/validation/upload_preview_batch_20260526_080221/upload_preview_batch_validation.json
+inputCount = 6
+supportedInputCount = 6
+completedTaskCount = 6
+supportedFailedCount = 0
+degradedRecordCount = 0
+backendCrashCount = 0
+missingArtifactCount = 0
+assetFetchFailedCount = 0
+totalVisibleReplayClaimCount = 381
+totalVisibleOwnershipOverlapConflicts = 0
+ownershipConflictTypeCounts = {}
+```
+
+茶饮点单样本当前验证：
+
+```text
+source = /Users/luhui/Downloads/525测试/ChatGPT Image 2026年5月23日 17_52_19.png
+taskId = task_e9899b456736
+M29.2 object = m292_object_0108
+bbox = [662, 1479, 206, 66]
+visualKind = control_background
+pixelOwner = shape_geometry
+replayDecision = shape_replay
+reason = low_confidence_unknown_control_background
+shapeFillOverride = #456441
+shapeRadiusOverride = 33
+M29.5 action = shape_replay
+DSL node = m29_shape_0004
+DSL fill = #456441
+DSL radius = 33
+```
+
+M29.5 cleanup 验证：
+
+```text
+Only fallback cleanup target remains for this control.
+The copied image cleanup target is suppressed because the parent media was not
+materialized. No invalid copied cleanup conflict is introduced.
+```
 
 2026-05-25 22:31 CST 已验证：
 
