@@ -1,6 +1,11 @@
 
 # 061 Codia-like Real Sample Hardening
 
+- 状态：completed
+- 创建日期：2026-05-26
+- 完成日期：2026-05-26
+- 负责人：Codex
+
 Use the `stage-gated-dev-agent` Skill.
 
 I am going to sleep. Do not ask me to review every image. You must run this as a stage-gated autonomous task.
@@ -2107,4 +2112,240 @@ Bug ledger:
 
 ```text
 Bug 011 moved from docs/bugs/open/ to docs/bugs/resolved/.
+```
+
+## 17. Final Report
+
+### Summary
+
+Stage 061 completed as Codia-like hardening progress with measured real-sample
+evidence. It did not claim Codia parity.
+
+The main outcome is a more stable, auditable upload-preview pipeline on the
+40-image primary set and the 6-image 525 secondary set:
+
+```text
+primary 40-image batch:
+  completed = 40/40
+  supported failed = 0
+  degraded = 0
+  backend crashes = 0
+  missing artifacts = 0
+  asset fetch failures = 0
+  ownership conflicts = 0
+
+secondary 525 batch:
+  completed = 6/6
+  supported failed = 0
+  degraded = 0
+  backend crashes = 0
+  missing artifacts = 0
+  asset fetch failures = 0
+  ownership conflicts = 0
+```
+
+### Standards Followed
+
+```text
+AGENTS.md
+docs/index.md
+docs/engineering/testing-strategy.md
+docs/engineering/m29-contract-regression-matrix.md
+docs/architecture/image_math_boundary.md
+docs/plans/completed/061-codia-like-real-sample-hardening.md
+```
+
+### Sample Sets
+
+```text
+primary:
+  /Users/luhui/Downloads/测试/images
+  ledger = backend/tmp/validation/upload_preview_batch_20260526_074415/upload_preview_batch_validation.json
+
+secondary:
+  /Users/luhui/Downloads/525测试
+  ledger = backend/tmp/validation/upload_preview_batch_20260526_080221/upload_preview_batch_validation.json
+```
+
+### Completed Stages
+
+| stage | result | commit | ledger |
+|---|---|---|---|
+| 1 Batch Baseline And Ledger | passed | d57aa8f | `backend/tmp/validation/upload_preview_batch_20260526_031541/upload_preview_batch_validation.json` |
+| 2 Text-Excluded DSL Visual Gate | passed | d33ca17 | `backend/tmp/validation/upload_preview_batch_20260526_040404/upload_preview_batch_validation.json` |
+| 3 Internal Icon Transparent Asset Stabilization | passed | 118a34d | `backend/tmp/validation/upload_preview_batch_20260526_045958/upload_preview_batch_validation.json` |
+| 4 Internal Source Promotion Deduplication | passed | 79468be | `backend/tmp/validation/upload_preview_batch_20260526_052302/upload_preview_batch_validation.json` |
+| 5 Text-Excluded Gate Diff Artifact | passed | df15b6e | `backend/tmp/validation/upload_preview_batch_20260526_054405/upload_preview_batch_validation.json` |
+| 6 Source-Text-Aware Gate Diff Mask | passed | cfde95c | `backend/tmp/validation/upload_preview_batch_20260526_061536/upload_preview_batch_validation.json` |
+| 7 Source Shape Fill Consumption | passed | 99e0288 | `backend/tmp/validation/upload_preview_batch_20260526_063815/upload_preview_batch_validation.json` |
+| 8 Gate Diff Settlement And Stop Point | passed | b1ea58a | `backend/tmp/validation/upload_preview_batch_20260526_063815/upload_preview_batch_validation.json` |
+| 9 Bug 012 Verification And OCR Transient Retry | passed | c0e0ee9 | `backend/tmp/validation/upload_preview_batch_20260526_074415/upload_preview_batch_validation.json` |
+| 10 Finite Control Background Verification | passed | b470c19 | `backend/tmp/validation/upload_preview_batch_20260526_080221/upload_preview_batch_validation.json` |
+
+### Final Batch Results
+
+Primary 40-image set:
+
+```text
+inputCount = 40
+supportedInputCount = 40
+unsupportedInputCount = 0
+completedTaskCount = 40
+supportedFailedCount = 0
+degradedRecordCount = 0
+backendCrashCount = 0
+missingArtifactCount = 0
+assetFetchFailedCount = 0
+totalVisibleReplayClaimCount = 4921
+totalVisibleOwnershipOverlapConflicts = 0
+totalPromotedInternalSourceObjectCount = 22
+averageDslVisualNormalizedMeanAbsError = 0.039127
+maxDslVisualChangedPixelRatio10 = 0.111889
+averageDslVisualGateNormalizedMeanAbsError = 0.001449
+maxDslVisualGateChangedPixelRatio10 = 0.018258
+ownershipConflictTypeCounts = {}
+```
+
+Secondary 525 set:
+
+```text
+inputCount = 6
+supportedInputCount = 6
+unsupportedInputCount = 0
+completedTaskCount = 6
+supportedFailedCount = 0
+degradedRecordCount = 0
+backendCrashCount = 0
+missingArtifactCount = 0
+assetFetchFailedCount = 0
+totalVisibleReplayClaimCount = 381
+totalVisibleOwnershipOverlapConflicts = 0
+totalPromotedInternalSourceObjectCount = 15
+averageDslVisualNormalizedMeanAbsError = 0.021218
+maxDslVisualChangedPixelRatio10 = 0.080967
+averageDslVisualGateNormalizedMeanAbsError = 0.005125
+maxDslVisualGateChangedPixelRatio10 = 0.025176
+ownershipConflictTypeCounts = {}
+```
+
+### Quality Improvements
+
+Text editability:
+
+```text
+Validation now separates approximate text-rendering noise from non-text visual
+gate evidence, reducing false investigation pressure from font/glyph mismatch.
+```
+
+Finite controls:
+
+```text
+Bug 011 is resolved. The verified 525 tea-order sample now materializes the
+finite bottom control background as `control_background / shape_geometry /
+shape_replay` with source-derived fill and radius evidence.
+```
+
+Media internal elements:
+
+```text
+Internal media icon candidates are more stable through transparent asset alpha
+gates, internal source promotion dedupe, and promoted-source replay.
+```
+
+Bottom tabs / action rows / markers:
+
+```text
+Bug 012 is resolved. The original bottom-tab icon sample now recovers the four
+tab icons as `raster_icon / icon_replay`, with M29.5-authorized copied-media
+cleanup and selectable DSL image nodes.
+```
+
+Visual diff:
+
+```text
+The final primary gate normalized mean absolute error is 0.001449, with worst
+gate changed pixel ratio @10 of 0.018258. Stage 8 stopped further metric
+squeezing because the remaining residue was low and mixed.
+```
+
+Cleanup safety:
+
+```text
+Cleanup remains M29.5-authorized. Invalid copied-media cleanup targets are
+suppressed when the parent media is not materialized.
+```
+
+Layer structure:
+
+```text
+The batch ledger now tracks controlled structure groups, sibling/layout/token
+evidence, promoted internal source counts, asset fetch failures, and missing
+artifacts for real-sample inspection.
+```
+
+### Remaining Failed Or Degraded Cases
+
+```text
+No failed or degraded supported records remain in the final primary or
+secondary ledgers.
+```
+
+Remaining non-blocking risks:
+
+```text
+Bug 009 remains open as a structural future-risk record for specialization-prone
+internal asset gates. It is not a current 061 completion blocker because this
+stage added and verified generic gates without filename, text, theme, coordinate,
+or sample-id rules.
+
+Bug 003 remains open against the older M12 replacement path. It is not a current
+M29 upload-preview mainline blocker.
+```
+
+### Contract Status
+
+| contract | changed? | note |
+|---|---|---|
+| DSL schema | no | no schema migration |
+| API response shape | no | `/api/upload-preview` and `/api/tasks/{taskId}/dsl` unchanged |
+| Renderer protocol | no | no renderer patch |
+| Figma plugin protocol | no | no plugin patch |
+| dependency policy | no | no new dependency added during 061 |
+| cleanup authorization | no | still M29.5 `cleanupTargets` only |
+
+### Anti-overfitting Check
+
+| check | result |
+|---|---|
+| filename/path rule | not introduced |
+| fixed coordinate rule | not introduced |
+| fixed screenshot size rule | not introduced |
+| literal text rule | not introduced |
+| brand/theme/color rule | not introduced |
+| single-sample rule | not introduced |
+| materializer owner invention | not introduced |
+| Renderer/plugin downstream patch | not introduced |
+
+### Commits
+
+```text
+d57aa8f feat(stage-061-1): add scoped batch validation ledger
+d33ca17 feat(stage-061-2): add text-excluded visual gate metrics
+118a34d feat(stage-061-3): stabilize internal icon transparent assets
+79468be fix(stage-061-4): dedupe promoted internal sources
+df15b6e test(stage-061-5): add text-excluded visual diff artifact
+cfde95c test(stage-061-6): include source text in gate diff mask
+99e0288 fix(stage-061-7): preserve source shape fills
+b1ea58a docs(stage-061-8): record gate diff hardening stop point
+c0e0ee9 fix(stage-061-9): harden ocr transient retry
+b470c19 docs(stage-061-10): resolve finite control background bug
+```
+
+### Next Recommended Task
+
+```text
+Do not continue 061 by squeezing residual visual metrics. The next useful work
+is the already-active Gemini first-principles audit plan, followed by a new
+specific bug or refactor stage only when code/artifact evidence identifies an
+owning layer.
 ```
