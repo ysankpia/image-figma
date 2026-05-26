@@ -125,6 +125,76 @@ def test_geometry_control_candidate_is_not_suppressed_by_parent_media_duplicate(
     assert shape["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_control_geometry"]
 
 
+def test_text_candidate_near_equal_to_parent_media_remains_report_only(tmp_path: Path) -> None:
+    source = make_png(
+        320,
+        220,
+        fill=(245, 248, 255),
+        marks=[
+            ([24, 32, 272, 120], (95, 155, 240)),
+            ([54, 60, 140, 28], (255, 255, 255)),
+            ([54, 96, 110, 18], (255, 255, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_media_text_region",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document(
+            [
+                ocr_block("ocr_title", "Banner title", [54, 60, 140, 28]),
+                ocr_block("ocr_subtitle", "Subtitle", [54, 96, 110, 18]),
+            ]
+        ),
+        perception_model_report=perception_report([candidate("model_banner", [24, 32, 296, 152], 0.44)]),
+        m292_document=m292_document(
+            [
+                m292_object("media_banner", [20, 28, 280, 128], "media_region", "preserve_raster", "image_replay"),
+                m292_object("text_title", [54, 60, 140, 28], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_title"]}),
+            ]
+        ),
+        output_dir=tmp_path / "compiler",
+    )
+
+    assert result.report["summary"]["compiledSourceObjectCount"] == 0
+    assert result.report["rejectedCandidates"][0]["reason"] in {
+        "large_perception_candidate_preserved_as_media_residual",
+        "near_equal_parent_media_candidate",
+    }
+
+
+def test_large_text_content_region_is_not_compiled_as_control_background(tmp_path: Path) -> None:
+    source = make_png(
+        360,
+        720,
+        fill=(248, 248, 248),
+        marks=[
+            ([28, 260, 304, 170], (255, 255, 255)),
+            ([52, 288, 130, 22], (20, 20, 20)),
+            ([52, 324, 180, 18], (80, 80, 80)),
+            ([52, 360, 170, 18], (80, 80, 80)),
+            ([52, 396, 130, 18], (80, 80, 80)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_large_card",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document(
+            [
+                ocr_block("ocr_title", "Card title", [52, 288, 130, 22]),
+                ocr_block("ocr_line_1", "Line one", [52, 324, 180, 18]),
+                ocr_block("ocr_line_2", "Line two", [52, 360, 170, 18]),
+                ocr_block("ocr_line_3", "Line three", [52, 396, 130, 18]),
+            ]
+        ),
+        perception_model_report=perception_report([candidate("model_content_card", [28, 260, 332, 430], 0.41)]),
+        m292_document=m292_document([]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    assert result.report["summary"]["compiledSourceObjectCount"] == 0
+    assert result.report["rejectedCandidates"][0]["reason"] == "content_region_too_large_for_control_background"
+
+
 def test_geometry_control_candidate_compiles_without_complete_ocr_containment(tmp_path: Path) -> None:
     source = make_png(
         320,

@@ -1006,7 +1006,115 @@ This improves copied-media residual cleanup without adding materializer, Rendere
 The remaining first-ten image (8) copiedImageAssetCleanupTargetCount=0 is not a materializer failure: its compiled controls have no parent media region to erase, so fallback cleanup is the correct current target.
 ```
 
-### Stage 10: Legacy Pruning Plan
+### Stage 10: Perception Text-Region Ownership Guard
+
+After Stage 9, the current HTTP validation path was rerun with collision-resistant output directories and per-record visual gate metrics.
+
+Problem found:
+
+```text
+perception_source_compiler treated large text-containing content regions as control_background.
+Worst example:
+  /Users/luhui/Downloads/m29/ChatGPT Image 2026年5月17日 14_47_13 (10).png
+  model candidate bbox [34,326,801,249] covered the carousel/banner media.
+  compiler emitted m292_perception_control_0001 as a large rounded_rect shape.
+  M29.5 and materializer correctly executed the plan, producing a huge pale-blue pill over the banner.
+```
+
+First-principles owner:
+
+```text
+perception_source_compiler
+```
+
+Reason:
+
+```text
+The model is single-class and can propose large UI/content regions.
+A text-containing candidate is not automatically a button/control.
+Only finite controls, pills, buttons, search fields, and compact UI affordances should claim shape ownership.
+Large content/card/banner regions should stay residual media or report-only unless a separate background contract proves a safe card replay.
+```
+
+Fix:
+
+```text
+Add a generic content-region guard for text-containing perception candidates.
+Reject text candidates as control_background when their bbox height is too large relative to contained OCR text height or when they contain too many OCR boxes.
+Keep true button/search/pill geometry paths working.
+Limit pill radius inference to finite-height controls so large cards do not get half-height pill radii.
+Improve batch validation script:
+  default output directories now include microseconds and pid to avoid concurrent run collisions.
+  each record now exposes top-level visual gate metrics for sorting and inspection.
+```
+
+Validation:
+
+```text
+focused tests:
+  cd backend
+  uv run pytest tests/test_upload_preview_batch_validation_script.py -q
+  result: 8 passed
+
+  cd backend
+  uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py -q
+  result: 80 passed
+
+py_compile:
+  python3 -m py_compile scripts/run_upload_preview_batch_validation.py tests/test_upload_preview_batch_validation_script.py
+  result: passed
+
+  python3 -m py_compile app/perception_source_compiler/*.py tests/test_perception_source_compiler.py
+  result: passed
+
+first ten HTTP batch after repair:
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_195954_651397_95047/upload_preview_batch_validation.json
+  completedTaskCount: 10 / 10
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCompiledSourceObjectCount: 69
+  previous Stage 9 value: 125
+  totalCompiledControlBackgroundCount: 60
+  previous Stage 9 value: 104
+  totalCompiledRasterIconCount: 9
+  previous Stage 9 value: 21
+  totalCopiedImageAssetCleanupTargetCount: 180
+  previous Stage 9 value: 178
+  averageDslVisualGateNormalizedMeanAbsError: 0.004795
+  previous Stage 9 value: 0.013117
+  maxDslVisualGateChangedPixelRatio10: 0.043956
+  previous Stage 9 value: 0.171102
+
+hard regression HTTP batch after repair:
+  input: /Users/luhui/Downloads/m29/微信图片_20260524225318_199_118.png
+  ledger: backend/tmp/validation/upload_preview_batch_20260526_195954_649544_95046/upload_preview_batch_validation.json
+  completedTaskCount: 1 / 1
+  missingArtifactCount: 0
+  assetFetchFailedCount: 0
+  totalVisibleOwnershipOverlapConflicts: 0
+  totalCompiledSourceObjectCount: 4
+  previous Stage 9 value: 6
+  totalCompiledControlBackgroundCount: 3
+  previous Stage 9 value: 4
+  totalCompiledRasterIconCount: 1
+  previous Stage 9 value: 2
+  averageDslVisualGateNormalizedMeanAbsError: 0.005637
+  previous Stage 9 value: 0.007875
+  maxDslVisualGateChangedPixelRatio10: 0.039108
+  previous Stage 9 value: 0.055304
+```
+
+Conclusion:
+
+```text
+Candidate recall was not the blocker.
+The owning failure was source ownership over-claiming in perception_source_compiler.
+The repair removes large false control backgrounds, improves visual reconstruction on the first-ten gate set and the hard image, and keeps M29.5/materializer boundaries intact.
+Remaining visible error is now mostly font rendering/OCR text fidelity plus smaller icon/cleanup gaps, not the large-banner ownership failure.
+```
+
+### Stage 11: Legacy Pruning Plan
 
 Only after Stage 7 shows stable improvement:
 

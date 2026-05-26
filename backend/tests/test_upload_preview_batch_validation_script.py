@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -79,6 +80,26 @@ def test_backend_command_can_include_runtime_extras() -> None:
         "--port",
         "8123",
     ]
+
+
+def test_resolve_output_dir_uses_collision_resistant_default(monkeypatch) -> None:
+    script = load_script()
+
+    class FixedDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            class FixedNow:
+                def strftime(self, fmt: str) -> str:
+                    return "20260527_123456_789012"
+
+            return FixedNow()
+
+    monkeypatch.setattr(script, "datetime", FixedDatetime)
+    monkeypatch.setattr(os, "getpid", lambda: 4242)
+
+    output_dir = script.resolve_output_dir("")
+
+    assert output_dir.name == "upload_preview_batch_20260527_123456_789012_4242"
 
 
 def test_load_summary_extracts_dsl_counts(tmp_path: Path) -> None:
@@ -214,6 +235,24 @@ def test_build_summary_separates_unsupported_from_supported_failures(tmp_path: P
     assert summary["totalCopiedImageAssetShapeErasedCount"] == 5
     assert summary["totalCopiedImageAssetInternalErasedCount"] == 1
     assert summary["totalMaterializedVisibleNodeCount"] == 30
+
+
+def test_derive_record_metrics_promotes_visual_gate_metrics(tmp_path: Path) -> None:
+    script = load_script()
+    record = script.base_record(tmp_path / "input.png", tmp_path)
+    record["summaries"]["dslVisualComparison"] = {
+        "normalizedMeanAbsError": 0.1234567,
+        "changedPixelRatio10": 0.2345678,
+        "gateNormalizedMeanAbsError": 0.0123456,
+        "gateChangedPixelRatio10": 0.0456789,
+    }
+
+    script.derive_record_metrics(record)
+
+    assert record["dslVisualNormalizedMeanAbsError"] == 0.123457
+    assert record["dslVisualChangedPixelRatio10"] == 0.234568
+    assert record["dslVisualGateNormalizedMeanAbsError"] == 0.012346
+    assert record["dslVisualGateChangedPixelRatio10"] == 0.045679
 
 
 def write_minimal_artifacts(root: Path, storage_root: Path, task_id: str) -> None:

@@ -153,6 +153,15 @@ def classify_candidate(
         return rejected(candidate, "duplicate_or_near_equal_existing_source_object", bbox=bbox)
 
     if contained_text and score >= options.min_control_score and area_ratio <= options.max_control_area_ratio:
+        if content_region_too_large_for_text_control(
+            bbox=bbox,
+            text_count=len(contained_text),
+            area_ratio=area_ratio,
+            contained_text=contained_text,
+            image_height=image_height,
+            options=options,
+        ):
+            return rejected(candidate, "content_region_too_large_for_control_background", bbox=bbox)
         if text_area_ratio < options.min_control_text_area_ratio or text_area_ratio > options.max_control_text_area_ratio:
             return rejected(candidate, "contained_text_area_ratio_outside_control_range", bbox=bbox)
         return {
@@ -489,6 +498,26 @@ def geometry_supports_control_background(
     )
 
 
+def content_region_too_large_for_text_control(
+    *,
+    bbox: list[int],
+    text_count: int,
+    area_ratio: float,
+    contained_text: list[Any],
+    image_height: int,
+    options: PerceptionSourceCompilerOptions,
+) -> bool:
+    text_heights = []
+    for box in contained_text:
+        text_bbox = parse_xywh_bbox(getattr(box, "bbox", None))
+        if text_bbox is not None:
+            text_heights.append(text_bbox[3])
+    median_text_height = sorted(text_heights)[len(text_heights) // 2] if text_heights else 0
+    if median_text_height > 0 and bbox[3] > round(median_text_height * options.max_text_control_height_to_text_height):
+        return True
+    return text_count > options.max_text_control_ocr_count
+
+
 def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:
     color_count = int(getattr(metrics, "color_count", 999))
     texture_score = float(getattr(metrics, "texture_score", 1.0))
@@ -503,7 +532,7 @@ def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:
 def inferred_radius(bbox: list[int], *, role: str) -> int | None:
     if role == "indicator" and abs(bbox[2] - bbox[3]) <= max(2, round(min(bbox[2], bbox[3]) * 0.18)):
         return min(bbox[2], bbox[3]) // 2
-    if role == "control" and bbox[2] / max(1, bbox[3]) >= 1.6:
+    if role == "control" and bbox[3] <= 96 and bbox[2] / max(1, bbox[3]) >= 1.6:
         return min(bbox[2], bbox[3]) // 2
     return None
 

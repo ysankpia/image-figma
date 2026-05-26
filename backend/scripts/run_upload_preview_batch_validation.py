@@ -137,8 +137,8 @@ def parse_args() -> argparse.Namespace:
 def resolve_output_dir(value: str) -> Path:
     if value.strip():
         return Path(value).expanduser().resolve()
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return (BACKEND_ROOT / "tmp" / "validation" / f"upload_preview_batch_{stamp}").resolve()
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
+    return (BACKEND_ROOT / "tmp" / "validation" / f"upload_preview_batch_{stamp}_{os.getpid()}").resolve()
 
 
 def discover_inputs(input_dir: Path, *, recursive: bool = False, max_files: int = 0) -> list[dict[str, Any]]:
@@ -295,6 +295,10 @@ def base_record(image_path: Path, input_dir: Path) -> dict[str, Any]:
         "visibleImageCount": 0,
         "visibleSymbolCount": 0,
         "fallbackCount": 0,
+        "dslVisualNormalizedMeanAbsError": None,
+        "dslVisualChangedPixelRatio10": None,
+        "dslVisualGateNormalizedMeanAbsError": None,
+        "dslVisualGateChangedPixelRatio10": None,
         "perceptionCandidateCount": 0,
         "compiledSourceObjectCount": 0,
         "compiledControlBackgroundCount": 0,
@@ -553,11 +557,30 @@ def derive_record_metrics(record: dict[str, Any]) -> None:
             + int(materialization_summary.get("copiedImageAssetInternalErasedCount") or 0)
             + int(materialization_summary.get("copiedImageAssetShapeErasedCount") or 0)
         )
+    dsl_visual_summary = record.get("summaries", {}).get("dslVisualComparison", {})
+    if isinstance(dsl_visual_summary, dict):
+        record["dslVisualNormalizedMeanAbsError"] = optional_float(dsl_visual_summary.get("normalizedMeanAbsError"))
+        record["dslVisualChangedPixelRatio10"] = optional_float(dsl_visual_summary.get("changedPixelRatio10"))
+        record["dslVisualGateNormalizedMeanAbsError"] = optional_float(
+            dsl_visual_summary.get("gateNormalizedMeanAbsError", dsl_visual_summary.get("normalizedMeanAbsError"))
+        )
+        record["dslVisualGateChangedPixelRatio10"] = optional_float(
+            dsl_visual_summary.get("gateChangedPixelRatio10", dsl_visual_summary.get("changedPixelRatio10"))
+        )
     conflict_type_counts = ownership_summary.get("conflictTypeCounts", {}) if isinstance(ownership_summary, dict) else {}
     if isinstance(conflict_type_counts, dict):
         record["ownershipConflictCount"] = sum(int(value or 0) for value in conflict_type_counts.values())
     if record.get("status") == "completed" and record.get("errors"):
         record["degradedReason"] = "artifact_or_asset_validation_error"
+
+
+def optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return round(float(value), 6)
+    except (TypeError, ValueError):
+        return None
 
 
 def validate_dsl_assets(record: dict[str, Any], dsl_path: Path, *, base_url: str) -> None:

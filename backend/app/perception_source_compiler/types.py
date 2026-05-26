@@ -14,6 +14,10 @@ class PerceptionSourceCompilerOptions:
     duplicate_iou_threshold: float = 0.72
     media_near_equal_iou_threshold: float = 0.82
     max_control_area_ratio: float = 0.24
+    max_text_control_area_ratio: float = 0.08
+    max_text_control_height_ratio: float = 0.12
+    max_text_control_height_to_text_height: float = 4.0
+    max_text_control_ocr_count: int = 6
     max_icon_area_ratio: float = 0.045
     min_geometry_control_area_ratio: float = 0.0025
     min_text_containment: float = 0.80
