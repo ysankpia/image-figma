@@ -356,6 +356,61 @@ def test_repeated_small_non_ocr_components_report_table_marker_role(tmp_path: Pa
     assert all("repeated_small_marker_geometry" in item["reasons"] for item in markers)
 
 
+def test_overlay_shape_fragments_merge_into_single_pill_foreground_claim(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_objects=[source_object("media", [0, 0, 360, 220])],
+        raw_nodes=[
+            raw_shape("pill_left", [82, 118, 28, 34], subtype="badge_background", fill_ratio=0.72),
+            raw_shape("pill_mid", [108, 112, 108, 42], subtype="badge_background", fill_ratio=0.96),
+            raw_shape("pill_right", [214, 118, 28, 34], subtype="badge_background", fill_ratio=0.72),
+        ],
+        ocr_blocks=[],
+    )
+
+    merged = [
+        item
+        for item in report["internalCandidates"]
+        if item["role"] in {"internal_overlay_badge", "internal_pill_button"} and "merged_overlay_control_fragments" in item["reasons"]
+    ]
+    assert len(merged) == 1
+    candidate = merged[0]
+    assert candidate["bbox"] == [82, 112, 160, 42]
+    assert candidate["candidateDecision"] == "accepted_report_candidate"
+    assert candidate["claimDecision"] == "propose_foreground_claim"
+    assert candidate["maskKind"] == "rounded_rect"
+    assert candidate["foregroundLayerEvidence"] >= 0.60
+    assert candidate["claimScore"] >= 0.68
+    assert set(candidate["sourceFragmentCandidateIds"]) == {
+        "media:internal_candidate_0001",
+        "media:internal_candidate_0002",
+        "media:internal_candidate_0003",
+    }
+
+
+def test_non_ocr_overlay_pill_can_propose_foreground_claim_without_text_anchor(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_overlay_pill_png(),
+        source_objects=[source_object("media", [0, 0, 280, 180])],
+        raw_nodes=[],
+        ocr_blocks=[],
+        image_size={"width": 280, "height": 180},
+    )
+
+    claims = [
+        item
+        for item in report["internalCandidates"]
+        if item["role"] in {"internal_overlay_badge", "internal_pill_button"}
+        and item["claimDecision"] == "propose_foreground_claim"
+    ]
+    assert claims
+    assert any(contained_bbox([82, 92, 116, 34], item["bbox"]) for item in claims)
+    assert all(item["matchedOcrBoxId"] is None for item in claims)
+    assert all("overlay_control_foreground_claim" in item["reasons"] for item in claims)
+    assert report["meta"]["noSpecializedTextFilenameThemeOrFixedBboxRules"] is True
+
+
 def media_report(
     tmp_path: Path,
     *,
@@ -416,8 +471,8 @@ def raw_symbol(
     return raw_node(node_id, bbox, "symbol", "foreground", texture=texture, color_count=color_count, fill_ratio=fill_ratio)
 
 
-def raw_shape(node_id: str, bbox: list[int], *, subtype: str = "rect") -> dict:
-    return raw_node(node_id, bbox, "shape", subtype, texture=0.04, color_count=4, fill_ratio=1.0)
+def raw_shape(node_id: str, bbox: list[int], *, subtype: str = "rect", fill_ratio: float = 1.0) -> dict:
+    return raw_node(node_id, bbox, "shape", subtype, texture=0.04, color_count=4, fill_ratio=fill_ratio)
 
 
 def raw_node(
@@ -552,6 +607,27 @@ def make_table_marker_components_png() -> bytes:
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(240, 180, rows)
+
+
+def make_overlay_pill_png() -> bytes:
+    rows = []
+    for y in range(180):
+        row = bytearray()
+        for x in range(280):
+            rgb = [8, 10, 24]
+            if 82 <= x < 198 and 92 <= y < 126:
+                radius = 17
+                left_cx = 82 + radius
+                right_cx = 198 - radius - 1
+                cy = 92 + radius
+                in_center = 82 + radius <= x < 198 - radius
+                in_left = (x - left_cx) ** 2 + (y - cy) ** 2 <= radius**2
+                in_right = (x - right_cx) ** 2 + (y - cy) ** 2 <= radius**2
+                if in_center or in_left or in_right:
+                    rgb = [186, 72, 245]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(280, 180, rows)
 
 
 def contained_bbox(inner: list[int], outer: list[int]) -> bool:

@@ -25,6 +25,8 @@ GENERIC_FOREGROUND_MAX_CANDIDATES = 80
 PIXEL_COMPONENT_MIN_RETURNED = 24
 SELECTED_MARKER_MIN_ASPECT_RATIO = 3.2
 SMALL_MARKER_MAX_ASPECT_RATIO = 1.8
+OVERLAY_CONTROL_SUBTYPES = {"badge_background", "text_support_background", "low_contrast_support", "rect", "pill"}
+OVERLAY_CONTROL_ROLES = {"internal_overlay_badge", "internal_pill_button", "internal_circle_control", "internal_control_background"}
 
 
 def build_composite_media_items(
@@ -174,9 +176,11 @@ def score_internal_candidates(
             )
         )
     apply_marker_repetition_roles(candidates, scale_profile)
+    candidates.extend(merge_overlay_control_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1, scale_profile))
     apply_repetition_scores(candidates)
     apply_single_control_row_support(candidates, text_inside, scale_profile)
     candidates.extend(merge_anchor_icon_fragments(media, candidates, text_masks, text_inside, len(candidates) + 1, scale_profile))
+    apply_foreground_claim_fields(candidates)
     return candidates
 
 
@@ -197,7 +201,18 @@ def score_one_candidate(
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
     separator = long_thin(bbox) or node["subtype"] == "separator"
-    score = round(size * 0.18 + compact * 0.16 + color * 0.12 + best_anchor["score"] * 0.34 - hero * 0.20, 3)
+    foreground_layer = foreground_layer_evidence(bbox, media["bbox"], metrics)
+    overlay_geometry = overlay_geometry_score(bbox, metrics)
+    score = round(
+        size * 0.18
+        + compact * 0.16
+        + color * 0.12
+        + best_anchor["score"] * 0.34
+        + overlay_geometry * 0.10
+        + foreground_layer * 0.08
+        - hero * 0.20,
+        3,
+    )
     role = candidate_role(node, separator)
     reasons: list[str] = []
     risks: list[str] = []
@@ -244,6 +259,8 @@ def score_one_candidate(
             "repetitionScore": 0.0,
             "heroGraphicPenalty": hero,
             "textMaskOverlap": text_overlap,
+            "foregroundLayerEvidence": foreground_layer,
+            "overlayGeometryScore": overlay_geometry,
         },
         "matchedOcrBoxId": best_anchor["ocrBoxId"],
         "anchorRelation": best_anchor["relation"],
@@ -376,8 +393,57 @@ def candidate_role(node: dict[str, Any], separator: bool) -> str:
     if node["type"] == "symbol":
         return "internal_icon_candidate"
     if node["type"] == "shape":
+        subtype = str(node.get("subtype") or "")
+        metrics = node.get("metrics") if isinstance(node.get("metrics"), dict) else {}
+        bbox = node.get("bbox") if isinstance(node.get("bbox"), list) else [0, 0, 0, 0]
+        if subtype in OVERLAY_CONTROL_SUBTYPES and overlay_geometry_score(bbox, metrics) >= 0.60:
+            return overlay_role_for_bbox(bbox)
         return "internal_shape_candidate"
     return "internal_decorative_candidate"
+
+
+def overlay_role_for_bbox(bbox: list[int]) -> str:
+    width = max(1, bbox[2])
+    height = max(1, bbox[3])
+    aspect = width / height
+    if 0.78 <= aspect <= 1.28:
+        return "internal_circle_control"
+    if aspect >= 2.2:
+        return "internal_pill_button"
+    return "internal_overlay_badge"
+
+
+def overlay_geometry_score(bbox: list[int], metrics: dict[str, Any]) -> float:
+    width = max(1, bbox[2])
+    height = max(1, bbox[3])
+    aspect = width / height
+    fill_ratio = float(metrics.get("fillRatio") or 0.0)
+    texture = float(metrics.get("textureScore") or 0.0)
+    color_count = int(metrics.get("colorCount") or 0)
+    fill_score = max(0.0, min(1.0, fill_ratio / 0.62))
+    texture_score = max(0.0, 1.0 - min(1.0, texture / 0.18))
+    color_score = max(0.0, 1.0 - min(1.0, color_count / 48))
+    if 0.78 <= aspect <= 1.28:
+        shape_score = 0.90
+    elif aspect >= 1.8:
+        shape_score = 1.0
+    else:
+        shape_score = 0.62
+    return round(max(0.0, min(1.0, shape_score * 0.38 + fill_score * 0.28 + texture_score * 0.20 + color_score * 0.14)), 3)
+
+
+def foreground_layer_evidence(bbox: list[int], media_bbox: list[int], metrics: dict[str, Any]) -> float:
+    texture = float(metrics.get("textureScore") or 0.0)
+    edge = float(metrics.get("edgeScore") or 0.0)
+    fill = float(metrics.get("fillRatio") or 0.0)
+    color_count = int(metrics.get("colorCount") or 0)
+    area = area_ratio(bbox, media_bbox)
+    stability = max(0.0, 1.0 - min(1.0, texture / 0.20)) * 0.32
+    boundary = min(1.0, edge / 0.20) * 0.18
+    fill_score = min(1.0, fill / 0.65) * 0.24
+    color_score = max(0.0, 1.0 - min(1.0, color_count / 64)) * 0.16
+    support_size = 0.10 if 0.00005 <= area <= 0.14 else 0.0
+    return round(max(0.0, min(1.0, stability + boundary + fill_score + color_score + support_size)), 3)
 
 
 def pixel_candidate_role(
@@ -389,11 +455,27 @@ def pixel_candidate_role(
     anchor_block: dict[str, Any] | None,
     scale_profile: ImageScaleProfile,
 ) -> str:
+    if anchor_relation == "non_ocr_foreground" and overlay_component_geometry(bbox, media_bbox, component.get("metrics", {}), scale_profile):
+        return overlay_role_for_bbox(bbox)
     if anchor_block is not None and selected_marker_geometry(bbox, anchor_block["bbox"], anchor_relation, scale_profile):
         return "selected_marker_candidate"
     if small_marker_geometry(bbox, media_bbox, component.get("metrics", {}), scale_profile) and anchor_relation not in {"above_text", "below_text"}:
         return "status_dot_candidate"
     return "internal_icon_candidate"
+
+
+def overlay_component_geometry(bbox: list[int], media_bbox: list[int], metrics: dict[str, Any], scale_profile: ImageScaleProfile) -> bool:
+    short = min(bbox[2], bbox[3])
+    long = max(bbox[2], bbox[3])
+    if short < scale_profile.length(16, minimum=10, maximum=56):
+        return False
+    if long < scale_profile.length(24, minimum=16, maximum=80):
+        return False
+    if area_ratio(bbox, media_bbox) > 0.16:
+        return False
+    if overlay_geometry_score(bbox, metrics) < 0.62:
+        return False
+    return foreground_layer_evidence(bbox, media_bbox, metrics) >= 0.52
 
 
 def selected_marker_geometry(bbox: list[int], text_bbox: list[int], anchor_relation: str, scale_profile: ImageScaleProfile) -> bool:
@@ -542,6 +624,270 @@ def apply_marker_repetition_roles(candidates: list[dict[str, Any]], scale_profil
         item["score"] = round(min(1.0, item["score"] + 0.06), 3)
         item["confidence"] = generic_confidence_label(item["score"], item["candidateDecision"])
         item["reasons"].append("repeated_small_marker_geometry")
+
+
+def apply_foreground_claim_fields(candidates: list[dict[str, Any]]) -> None:
+    for item in candidates:
+        breakdown = item.get("scoreBreakdown") if isinstance(item.get("scoreBreakdown"), dict) else {}
+        foreground_layer = float(breakdown.get("foregroundLayerEvidence") or 0.0)
+        overlay_geometry = float(breakdown.get("overlayGeometryScore") or 0.0)
+        text_overlap = float(breakdown.get("textMaskOverlap") or 0.0)
+        hero = float(breakdown.get("heroGraphicPenalty") or 0.0)
+        role = str(item.get("role") or "")
+        claim_score = foreground_claim_score(item, foreground_layer, overlay_geometry, text_overlap, hero)
+        item["parentMediaSourceObjectId"] = item.get("mediaSourceObjectId")
+        item["foregroundLayerEvidence"] = round(foreground_layer, 4)
+        item["claimScore"] = claim_score
+        item["maskKind"] = mask_kind_for_candidate(item)
+        item["claimDecision"] = foreground_claim_decision(item, claim_score, foreground_layer, overlay_geometry, text_overlap, hero)
+        if item["claimDecision"] == "propose_foreground_claim" and role in OVERLAY_CONTROL_ROLES:
+            if "overlay_control_foreground_claim" not in item["reasons"]:
+                item["reasons"].append("overlay_control_foreground_claim")
+
+
+def foreground_claim_score(item: dict[str, Any], foreground_layer: float, overlay_geometry: float, text_overlap: float, hero: float) -> float:
+    breakdown = item.get("scoreBreakdown") if isinstance(item.get("scoreBreakdown"), dict) else {}
+    role = str(item.get("role") or "")
+    base_score = float(item.get("score") or 0.0)
+    compact = float(breakdown.get("compactnessScore") or 0.0)
+    repetition = float(breakdown.get("repetitionScore") or 0.0)
+    relation = float(breakdown.get("relationConsistencyScore") or 0.0)
+    merged_overlay_bonus = 0.08 if role in OVERLAY_CONTROL_ROLES and item.get("sourceFragmentCandidateIds") else 0.0
+    compact_weight = 0.08 if role in OVERLAY_CONTROL_ROLES else 0.16
+    overlay_weight = 0.28 if role in OVERLAY_CONTROL_ROLES else 0.22
+    foreground_weight = 0.26 if role in OVERLAY_CONTROL_ROLES else 0.22
+    score = (
+        base_score * 0.24
+        + compact * compact_weight
+        + foreground_layer * foreground_weight
+        + overlay_geometry * overlay_weight
+        + repetition * 0.08
+        + relation * 0.08
+        + merged_overlay_bonus
+        - min(1.0, text_overlap / 0.30) * 0.18
+        - hero * 0.14
+    )
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def foreground_claim_decision(item: dict[str, Any], claim_score: float, foreground_layer: float, overlay_geometry: float, text_overlap: float, hero: float) -> str:
+    if item.get("candidateDecision") != "accepted_report_candidate":
+        return "reject"
+    role = str(item.get("role") or "")
+    if role in OVERLAY_CONTROL_ROLES:
+        strong_overlay_geometry = foreground_layer >= 0.64 and overlay_geometry >= 0.84 and claim_score >= 0.70
+        if claim_score >= 0.66 and foreground_layer >= 0.56 and overlay_geometry >= 0.60 and text_overlap <= 0.24 and hero <= 0.48:
+            return "propose_foreground_claim"
+        if strong_overlay_geometry and text_overlap <= 0.20 and hero <= 0.56:
+            return "propose_foreground_claim"
+        if claim_score >= 0.42:
+            return "report_only"
+        return "reject"
+    if role in {"selected_marker_candidate", "status_dot_candidate", "table_marker_candidate", "internal_icon_candidate"}:
+        if claim_score >= 0.66 and hero <= 0.48 and text_overlap <= 0.24:
+            return "propose_foreground_claim"
+        if claim_score >= 0.42:
+            return "report_only"
+    return "report_only" if claim_score >= 0.42 else "reject"
+
+
+def mask_kind_for_candidate(item: dict[str, Any]) -> str:
+    role = str(item.get("role") or "")
+    if role == "internal_circle_control" or circular_bbox(item.get("bbox") or [0, 0, 0, 0]):
+        return "circle"
+    if role in {"internal_overlay_badge", "internal_pill_button", "internal_control_background"}:
+        return "rounded_rect"
+    if role == "internal_icon_candidate":
+        return "alpha"
+    return "bbox"
+
+
+def circular_bbox(bbox: list[int]) -> bool:
+    if len(bbox) != 4 or bbox[2] <= 0 or bbox[3] <= 0:
+        return False
+    ratio = bbox[2] / max(1, bbox[3])
+    return 0.78 <= ratio <= 1.28
+
+
+def merge_overlay_control_fragments(
+    media: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    text_masks: list[dict[str, Any]],
+    text_inside: list[dict[str, Any]],
+    start_index: int,
+    scale_profile: ImageScaleProfile,
+) -> list[dict[str, Any]]:
+    fragments = [
+        item
+        for item in candidates
+        if item["candidateDecision"] == "accepted_report_candidate"
+        and (
+            (item["rawType"] == "shape" and item["rawSubtype"] in OVERLAY_CONTROL_SUBTYPES)
+            or (item["rawType"] == "pixel_component" and item["role"] in OVERLAY_CONTROL_ROLES)
+        )
+        and area_ratio(item["bbox"], media["bbox"]) <= 0.14
+    ]
+    if len(fragments) < 2:
+        return []
+    clusters = overlay_fragment_clusters(fragments, scale_profile)
+    merged: list[dict[str, Any]] = []
+    existing_bboxes = [item["bbox"] for item in candidates if item["candidateDecision"] == "accepted_report_candidate"]
+    for cluster in clusters:
+        if len(cluster) < 2:
+            continue
+        bbox = cluster[0]["bbox"]
+        for item in cluster[1:]:
+            bbox = union_bbox(bbox, item["bbox"])
+        if any(is_near_equal(bbox, existing, 0.94) or containment_ratio(bbox, existing) >= 0.96 for existing in existing_bboxes):
+            continue
+        candidate = score_merged_overlay_candidate(
+            media=media,
+            bbox=bbox,
+            fragments=cluster,
+            text_masks=text_masks,
+            text_inside=text_inside,
+            index=start_index + len(merged),
+            scale_profile=scale_profile,
+        )
+        if candidate["candidateDecision"] == "accepted_report_candidate":
+            existing_bboxes.append(candidate["bbox"])
+        merged.append(candidate)
+    return merged
+
+
+def overlay_fragment_clusters(fragments: list[dict[str, Any]], scale_profile: ImageScaleProfile) -> list[list[dict[str, Any]]]:
+    remaining = sorted(fragments, key=lambda item: (item["bbox"][1], item["bbox"][0]))
+    clusters: list[list[dict[str, Any]]] = []
+    gap_limit = scale_profile.length(12, minimum=4, maximum=48)
+    while remaining:
+        cluster = [remaining.pop(0)]
+        changed = True
+        while changed:
+            changed = False
+            for item in list(remaining):
+                if any(overlay_fragments_mergeable(item, member, gap_limit) for member in cluster):
+                    cluster.append(item)
+                    remaining.remove(item)
+                    changed = True
+        clusters.append(sorted(cluster, key=lambda item: item["bbox"][0]))
+    return clusters
+
+
+def overlay_fragments_mergeable(left: dict[str, Any], right: dict[str, Any], gap_limit: int) -> bool:
+    left_box = left["bbox"]
+    right_box = right["bbox"]
+    vertical_overlap = intersection_1d(left_box[1], y2(left_box), right_box[1], y2(right_box)) / max(1, min(left_box[3], right_box[3]))
+    horizontal_overlap = intersection_1d(left_box[0], x2(left_box), right_box[0], x2(right_box)) / max(1, min(left_box[2], right_box[2]))
+    horizontal_gap = max(0, max(left_box[0], right_box[0]) - min(x2(left_box), x2(right_box)))
+    vertical_gap = max(0, max(left_box[1], right_box[1]) - min(y2(left_box), y2(right_box)))
+    left_metrics = left.get("metrics") if isinstance(left.get("metrics"), dict) else {}
+    right_metrics = right.get("metrics") if isinstance(right.get("metrics"), dict) else {}
+    brightness_delta = abs(float(left_metrics.get("brightness") or 0.0) - float(right_metrics.get("brightness") or 0.0))
+    return (
+        brightness_delta <= 48
+        and (
+            (vertical_overlap >= 0.42 and horizontal_gap <= gap_limit)
+            or (horizontal_overlap >= 0.42 and vertical_gap <= gap_limit)
+        )
+    )
+
+
+def score_merged_overlay_candidate(
+    *,
+    media: dict[str, Any],
+    bbox: list[int],
+    fragments: list[dict[str, Any]],
+    text_masks: list[dict[str, Any]],
+    text_inside: list[dict[str, Any]],
+    index: int,
+    scale_profile: ImageScaleProfile,
+) -> dict[str, Any]:
+    text_overlap = max((overlap_ratio(bbox, mask["paddedBbox"]) for mask in text_masks), default=0.0)
+    best_anchor = best_text_anchor(bbox, text_inside)
+    fill_ratio = min(1.0, sum(bbox_area(fragment["bbox"]) * float(fragment["metrics"].get("fillRatio") or 0.0) for fragment in fragments) / max(1, bbox_area(bbox)))
+    texture = sum(float(fragment["metrics"].get("textureScore") or 0.0) for fragment in fragments) / len(fragments)
+    edge = max(float(fragment["metrics"].get("edgeScore") or 0.0) for fragment in fragments)
+    color_count = max(int(fragment["metrics"].get("colorCount") or 0) for fragment in fragments)
+    brightness = sum(float(fragment["metrics"].get("brightness") or 0.0) for fragment in fragments) / len(fragments)
+    mean_rgb = average_mean_rgb(fragments)
+    metrics = {
+        "fillRatio": round(fill_ratio, 4),
+        "textureScore": round(texture, 4),
+        "edgeScore": round(edge, 4),
+        "colorCount": color_count,
+        "brightness": round(brightness, 3),
+        "meanRgb": mean_rgb,
+    }
+    size = size_score(bbox, media["bbox"], scale_profile)
+    compact = compactness_score(bbox, metrics)
+    color = color_coherence_score(metrics)
+    overlay_geometry = overlay_geometry_score(bbox, metrics)
+    foreground_layer = foreground_layer_evidence(bbox, media["bbox"], metrics)
+    hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
+    score = round(size * 0.16 + compact * 0.18 + color * 0.10 + overlay_geometry * 0.22 + foreground_layer * 0.20 + best_anchor["score"] * 0.08 - hero * 0.14 + 0.08, 3)
+    decision = "accepted_report_candidate"
+    risks: list[str] = []
+    if text_overlap > 0.30:
+        decision = "rejected_fragment"
+        risks.append("overlaps_internal_text_mask")
+    if area_ratio(bbox, media["bbox"]) > 0.16:
+        decision = "rejected_fragment"
+        risks.append("large_media_fragment")
+    if hero >= 0.62 and foreground_layer < 0.55:
+        decision = "rejected_fragment"
+        risks.append("hero_or_texture_fragment")
+    if overlay_geometry < 0.55 or score < 0.58:
+        decision = "rejected_fragment"
+        risks.append("weak_overlay_control_score")
+    return {
+        "candidateId": f"{media['sourceObjectId']}:internal_candidate_{index:04d}",
+        "mediaSourceObjectId": media["sourceObjectId"],
+        "rawNodeId": "merged_overlay_" + "_".join(fragment["rawNodeId"] for fragment in fragments),
+        "rawType": "merged_shape_fragment",
+        "rawSubtype": "overlay_control",
+        "role": overlay_role_for_bbox(bbox),
+        "bbox": bbox,
+        "candidateDecision": decision,
+        "confidence": generic_confidence_label(score, decision),
+        "score": score,
+        "scoreBreakdown": {
+            "sizeScore": size,
+            "compactnessScore": compact,
+            "colorCoherenceScore": color,
+            "textAnchorScore": round(best_anchor["score"], 3),
+            "relationConsistencyScore": round(best_anchor["relationScore"], 3),
+            "repetitionScore": 0.0,
+            "heroGraphicPenalty": hero,
+            "textMaskOverlap": text_overlap,
+            "foregroundLayerEvidence": foreground_layer,
+            "overlayGeometryScore": overlay_geometry,
+        },
+        "matchedOcrBoxId": best_anchor["ocrBoxId"] if best_anchor["score"] >= 0.30 else None,
+        "anchorRelation": best_anchor["relation"] if best_anchor["score"] >= 0.30 else "non_ocr_foreground",
+        "metrics": {
+            "areaRatioInMedia": area_ratio(bbox, media["bbox"]),
+            "rawConfidence": round(sum(float(fragment["metrics"].get("rawConfidence") or 0.0) for fragment in fragments) / len(fragments), 3),
+            "fillRatio": round(fill_ratio, 4),
+            "textureScore": round(texture, 4),
+            "colorCount": color_count,
+        },
+        "sourceFragmentCandidateIds": [fragment["candidateId"] for fragment in fragments],
+        "reasons": ["merged_overlay_control_fragments"],
+        "risks": risks,
+        "reportOnly": True,
+    }
+
+
+def average_mean_rgb(fragments: list[dict[str, Any]]) -> list[int]:
+    values: list[list[float]] = []
+    for fragment in fragments:
+        metrics = fragment.get("metrics") if isinstance(fragment.get("metrics"), dict) else {}
+        rgb = metrics.get("meanRgb")
+        if isinstance(rgb, list) and len(rgb) == 3:
+            values.append([float(rgb[0]), float(rgb[1]), float(rgb[2])])
+    if not values:
+        return [0, 0, 0]
+    return [round(sum(item[channel] for item in values) / len(values)) for channel in range(3)]
 
 
 def aligned_marker_clusters(markers: list[dict[str, Any]], scale_profile: ImageScaleProfile, *, axis: str) -> list[list[dict[str, Any]]]:
@@ -987,6 +1333,8 @@ def score_generic_foreground_candidate(
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, best_anchor["score"])
+    overlay_geometry = overlay_geometry_score(bbox, metrics)
+    foreground_layer = foreground_layer_evidence(bbox, media["bbox"], metrics)
     role = pixel_candidate_role(
         bbox=bbox,
         media_bbox=media["bbox"],
@@ -995,7 +1343,10 @@ def score_generic_foreground_candidate(
         anchor_block=None,
         scale_profile=scale_profile,
     )
-    score = round(size * 0.24 + compact * 0.22 + color * 0.16 + max(0.0, 1.0 - hero) * 0.28 + best_anchor["score"] * 0.10, 3)
+    if role in OVERLAY_CONTROL_ROLES:
+        score = round(size * 0.16 + compact * 0.18 + color * 0.10 + max(0.0, 1.0 - hero) * 0.14 + overlay_geometry * 0.22 + foreground_layer * 0.20, 3)
+    else:
+        score = round(size * 0.24 + compact * 0.22 + color * 0.16 + max(0.0, 1.0 - hero) * 0.28 + best_anchor["score"] * 0.10, 3)
     decision = "accepted_report_candidate"
     risks: list[str] = []
     if text_overlap > 0.30:
@@ -1033,6 +1384,8 @@ def score_generic_foreground_candidate(
             "repetitionScore": 0.0,
             "heroGraphicPenalty": hero,
             "textMaskOverlap": text_overlap,
+            "foregroundLayerEvidence": foreground_layer,
+            "overlayGeometryScore": overlay_geometry,
         },
         "matchedOcrBoxId": best_anchor["ocrBoxId"] if best_anchor["score"] >= 0.30 else None,
         "anchorRelation": best_anchor["relation"] if best_anchor["score"] >= 0.30 else "non_ocr_foreground",
@@ -1216,6 +1569,8 @@ def score_pixel_anchor_candidate(
     compact = compactness_score(bbox, metrics)
     color = color_coherence_score(metrics)
     hero = hero_graphic_penalty(bbox, media["bbox"], metrics, anchor_score)
+    overlay_geometry = overlay_geometry_score(bbox, metrics)
+    foreground_layer = foreground_layer_evidence(bbox, media["bbox"], metrics)
     role = pixel_candidate_role(
         bbox=bbox,
         media_bbox=media["bbox"],
@@ -1262,6 +1617,8 @@ def score_pixel_anchor_candidate(
             "repetitionScore": 0.0,
             "heroGraphicPenalty": hero,
             "textMaskOverlap": text_overlap,
+            "foregroundLayerEvidence": foreground_layer,
+            "overlayGeometryScore": overlay_geometry,
         },
         "matchedOcrBoxId": best_anchor["ocrBoxId"] or anchor_block["ocrBoxId"],
         "anchorRelation": best_anchor["relation"] or anchor_relation,
