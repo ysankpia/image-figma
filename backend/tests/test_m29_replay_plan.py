@@ -709,6 +709,90 @@ def test_m295_keeps_perception_control_image_crop_over_parent_media(tmp_path: Pa
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
 
 
+def test_m295_keeps_perception_child_icon_over_complex_control_image_crop(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_perception_control_crop_child_icon",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 360, 900], "media_region", "preserve_raster", "image_replay"),
+                m292_object(
+                    "control_crop",
+                    [48, 310, 264, 100],
+                    "media_region",
+                    "preserve_raster",
+                    "image_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "promotionSource": "perception_model_foreground_claim",
+                        "mediaSourceObjectId": "media",
+                        "foregroundClaimId": "model_button:foreground_claim",
+                        "claimMaskKind": "bbox",
+                        "internalRole": "internal_control_raster_background",
+                    },
+                ),
+                m292_object(
+                    "icon",
+                    [74, 336, 44, 44],
+                    "raster_icon",
+                    "raster_icon",
+                    "icon_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "promotionSource": "perception_model_foreground_claim",
+                        "mediaSourceObjectId": "media",
+                        "parentControlSourceObjectId": "control_crop",
+                        "foregroundClaimId": "model_icon:foreground_claim",
+                        "claimMaskKind": "bbox",
+                        "internalRole": "internal_icon_candidate",
+                        "controlRowSourceCropEligible": True,
+                        "textOverlapRatio": 0.0,
+                    },
+                ),
+                promoted_internal_icon(
+                    "compat_icon",
+                    [73, 335, 46, 46],
+                    "control_crop",
+                    evidence_score=1.0,
+                    transparent_asset_path=None,
+                    control_row_source_crop_eligible=True,
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "control_crop", "icon", "compat_icon"],
+            [
+                edge("media_control_crop", "media", "control_crop", "contains", []),
+                edge("control_crop_icon", "control_crop", "icon", "contains", []),
+                edge("media_icon", "media", "icon", "contains", []),
+                edge("icon_compat", "icon", "compat_icon", "near_equal", []),
+            ],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions["media"] == "image_replay"
+    assert actions["control_crop"] == "image_replay"
+    assert actions["icon"] == "icon_replay"
+    assert actions["compat_icon"] == "suppress_duplicate"
+    icon_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "icon")
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "control_crop",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "model_icon:foreground_claim",
+        "maskKind": "bbox",
+    } in icon_item["cleanupTargets"]
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "model_icon:foreground_claim",
+        "maskKind": "bbox",
+    } in icon_item["cleanupTargets"]
+
+
 def test_m295_suppresses_small_overlapping_text_duplicate(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_text_overlap",

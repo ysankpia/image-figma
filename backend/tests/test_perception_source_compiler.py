@@ -318,6 +318,38 @@ def test_low_score_control_child_icon_cannot_claim_text_pixels(tmp_path: Path) -
     assert rejected["model_text_sized_icon"] == "control_child_icon_text_overlap_risk"
 
 
+def test_low_score_icon_candidate_compiles_inside_complex_control_image_crop(tmp_path: Path) -> None:
+    source = make_png(
+        360,
+        900,
+        fill=(16, 18, 42),
+        marks=[
+            ([48, 310, 264, 100], (28, 24, 58)),
+            ([74, 336, 44, 44], (40, 110, 230)),
+            ([146, 348, 124, 20], (248, 248, 248)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_complex_control_child_icon",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_button", "Continue", [146, 348, 124, 20])]),
+        perception_model_report=perception_report(
+            [
+                candidate("model_tall_button", [48, 310, 312, 410], 0.46),
+                candidate("model_button_icon", [74, 336, 118, 380], 0.12),
+            ]
+        ),
+        m292_document=m292_document([m292_object("media", [0, 0, 360, 900], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    control = only_compiled(result.report, "media_region")
+    icon = only_compiled(result.report, "raster_icon")
+    assert control["sourceEvidence"]["internalRole"] == "internal_control_raster_background"
+    assert icon["sourceEvidence"]["parentControlSourceObjectId"] == control["id"]
+    assert icon["sourceEvidence"]["iconInferenceReasons"] == ["perception_candidate_inside_compiled_control"]
+
+
 def test_tiny_stable_circle_candidate_compiles_to_shape_not_icon(tmp_path: Path) -> None:
     source = make_png(120, 90, fill=(248, 248, 248), marks=[([40, 30, 10, 10], (45, 115, 235))])
     result = extract_perception_source_compiler_report(

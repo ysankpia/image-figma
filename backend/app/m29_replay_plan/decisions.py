@@ -49,7 +49,11 @@ def near_equal_duplicate_ids(
         if not edge or edge.get("primarySetRelation") != "near_equal":
             continue
         other_priority = replay_priority(other)
-        if both_promoted_internal_icons(item, other):
+        if parent_control_child_icon_over_compat_promoted_icon(item, other):
+            suppressed.append(other["id"])
+        elif parent_control_child_icon_over_compat_promoted_icon(other, item):
+            suppressed.append(item["id"])
+        elif both_promoted_internal_icons(item, other):
             if evidence_score(item_evidence(item)) >= evidence_score(item_evidence(other)):
                 suppressed.append(other["id"])
             else:
@@ -79,6 +83,20 @@ def replay_priority(item: dict[str, Any]) -> tuple[int, int]:
 
 def both_promoted_internal_icons(item: dict[str, Any], other: dict[str, Any]) -> bool:
     return is_promoted_internal_icon(item) and is_promoted_internal_icon(other)
+
+
+def parent_control_child_icon_over_compat_promoted_icon(child_icon: dict[str, Any], compat_icon: dict[str, Any]) -> bool:
+    child_evidence = item_evidence(child_icon)
+    compat_evidence = item_evidence(compat_icon)
+    compat_parent_id = compat_evidence.get("parentMediaSourceObjectId") or compat_evidence.get("mediaSourceObjectId")
+    return (
+        is_promoted_internal_icon(child_icon)
+        and is_promoted_internal_icon(compat_icon)
+        and child_evidence.get("promotionSource") == "perception_model_foreground_claim"
+        and bool(child_evidence.get("parentControlSourceObjectId"))
+        and compat_evidence.get("promotionSource") in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}
+        and compat_parent_id == child_evidence.get("parentControlSourceObjectId")
+    )
 
 
 def is_promoted_internal_icon(item: dict[str, Any]) -> bool:

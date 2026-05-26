@@ -188,7 +188,10 @@ def copied_cleanup_is_valid_for_promoted_internal_asset(
     evidence = plan_item.get("sourceEvidence") if isinstance(plan_item.get("sourceEvidence"), dict) else {}
     if evidence.get("promotionSource") not in INTERNAL_ICON_FOREGROUND_SOURCES:
         return False
-    if evidence.get("mediaSourceObjectId") != target_id:
+    valid_media_ids = {str(evidence.get("mediaSourceObjectId") or "")}
+    if evidence.get("parentControlSourceObjectId"):
+        valid_media_ids.add(str(evidence.get("parentControlSourceObjectId") or ""))
+    if target_id not in valid_media_ids:
         return False
     if not evidence.get("transparentAssetPath") and evidence.get("controlRowSourceCropEligible") is not True:
         return False
@@ -241,6 +244,12 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
         icon = left if left["finalReplayAction"] == "icon_replay" else right
         image = right if icon is left else left
         evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
+        if (
+            evidence.get("promotionSource") == "perception_model_foreground_claim"
+            and evidence.get("parentControlSourceObjectId") == image["sourceObjectId"]
+            and evidence.get("controlRowSourceCropEligible") is True
+        ):
+            return True
         if (
             promoted_internal_icon_has_visible_replay_evidence(evidence)
             and evidence.get("mediaSourceObjectId") == image["sourceObjectId"]

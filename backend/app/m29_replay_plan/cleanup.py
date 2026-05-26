@@ -108,23 +108,39 @@ def promoted_internal_asset_cleanup_targets(
     media_id = str(evidence.get("mediaSourceObjectId") or "")
     if not media_id:
         return [], []
-    media = next((other for other in source_objects if other["id"] == media_id), None)
-    if media is None or media["replayDecision"] != "image_replay" or media["pixelOwner"] != "preserve_raster":
-        return [], []
-    edge = edge_lookup.get(frozenset({item["id"], media_id}))
-    if not edge or not internal_asset_is_contained_by_media(item["id"], media_id, edge):
-        return [], []
-    risk = promoted_internal_icon_cleanup_risk_reason(item, media, edge)
-    if risk:
-        return [], [risk]
-    target = {
-        "target": "copied_image_asset",
-        "targetSourceObjectId": media_id,
-        "reason": "foreground_claim_removed_from_residual_media" if is_foreground_claim_source(evidence) else "promoted_internal_asset_contained_by_media",
-    }
-    if is_foreground_claim_source(evidence):
-        target.update(foreground_claim_cleanup_fields(evidence))
-    return [target], []
+    targets: list[dict[str, Any]] = []
+    risks: list[str] = []
+    for target_media_id in promoted_internal_icon_cleanup_media_ids(evidence):
+        media = next((other for other in source_objects if other["id"] == target_media_id), None)
+        if media is None or media["replayDecision"] != "image_replay" or media["pixelOwner"] != "preserve_raster":
+            continue
+        edge = edge_lookup.get(frozenset({item["id"], target_media_id}))
+        if not edge or not internal_asset_is_contained_by_media(item["id"], target_media_id, edge):
+            continue
+        risk = promoted_internal_icon_cleanup_risk_reason(item, media, edge)
+        if risk:
+            risks.append(risk)
+            continue
+        target = {
+            "target": "copied_image_asset",
+            "targetSourceObjectId": target_media_id,
+            "reason": "foreground_claim_removed_from_residual_media" if is_foreground_claim_source(evidence) else "promoted_internal_asset_contained_by_media",
+        }
+        if is_foreground_claim_source(evidence):
+            target.update(foreground_claim_cleanup_fields(evidence))
+        targets.append(target)
+    return targets, risks
+
+
+def promoted_internal_icon_cleanup_media_ids(evidence: dict[str, Any]) -> list[str]:
+    media_ids: list[str] = []
+    parent_control_id = str(evidence.get("parentControlSourceObjectId") or "")
+    if parent_control_id:
+        media_ids.append(parent_control_id)
+    media_id = str(evidence.get("mediaSourceObjectId") or "")
+    if media_id and media_id not in media_ids:
+        media_ids.append(media_id)
+    return media_ids
 
 
 def label_anchored_blocked_asset_cleanup_targets(
@@ -221,7 +237,7 @@ def shape_is_contained_by_media(shape_id: str, media_id: str, edge: dict[str, An
 
 def promoted_internal_icon_cleanup_risk_reason(item: dict[str, Any], media: dict[str, Any], edge: dict[str, Any]) -> str:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    if evidence.get("mediaSourceObjectId") != media["id"]:
+    if media["id"] not in promoted_internal_icon_cleanup_media_ids(evidence):
         return "cleanup_rejected_parent_media_mismatch"
     if not evidence.get("transparentAssetPath") and evidence.get("controlRowSourceCropEligible") is not True:
         return "cleanup_rejected_missing_transparent_replacement"

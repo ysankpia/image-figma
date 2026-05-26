@@ -514,7 +514,7 @@ def near_equal_media_region(bbox: list[int], objects: list[dict[str, Any]], opti
 def parent_control_for_candidate(bbox: list[int], objects: list[dict[str, Any]], options: PerceptionSourceCompilerOptions) -> dict[str, Any] | None:
     matches: list[tuple[float, int, dict[str, Any]]] = []
     for item in objects:
-        if item.get("visualKind") != "control_background" or item.get("pixelOwner") != "shape_geometry":
+        if not is_compiled_control_parent(item):
             continue
         control_bbox = parse_xywh_bbox(item.get("bbox"))
         if control_bbox is None:
@@ -526,6 +526,19 @@ def parent_control_for_candidate(bbox: list[int], objects: list[dict[str, Any]],
     if not matches:
         return None
     return sorted(matches, key=lambda value: (-value[0], value[1]))[0][2]
+
+
+def is_compiled_control_parent(item: dict[str, Any]) -> bool:
+    if item.get("visualKind") == "control_background" and item.get("pixelOwner") == "shape_geometry":
+        return True
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    return (
+        item.get("visualKind") == "media_region"
+        and item.get("pixelOwner") == "preserve_raster"
+        and item.get("replayDecision") == "image_replay"
+        and evidence.get("promotionSource") == "perception_model_foreground_claim"
+        and evidence.get("internalRole") == "internal_control_raster_background"
+    )
 
 
 def geometry_supports_control_background(

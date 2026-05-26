@@ -1431,6 +1431,116 @@ cd backend
 uv run pytest tests/test_upload_preview_pipeline.py tests/test_config_env.py tests/test_upload_preview_batch_validation_script.py -q
 ```
 
+### Stage 14: Complex Control Child Icon Ownership
+
+Problem:
+
+```text
+Complex controls that are unsafe as flat shapes can replay as selectable foreground image crops.
+Low-score child icons inside those control crops were still treated as report-only, because the compiler only recognized shape controls as parent controls.
+After compiler support was added, M29.5 could still suppress the child icon as a duplicate when a compatibility M29.6 promoted icon existed, or treat icon-over-control-crop as ordinary image/icon overlap.
+```
+
+Fix:
+
+```text
+perception_source_compiler:
+  Treat proven `internal_control_raster_background` image crops as parent controls for contained child icon candidates.
+
+M29.5 replay plan:
+  Prefer the model-first child icon over a near-equal compatibility M29.6 promoted icon when the compatibility icon's parent is the model-first control crop.
+  Keep icon replay over its parent control crop instead of visible-overlap suppressing it.
+  Authorize copied-image cleanup for both nested residual owners:
+    parentControlSourceObjectId
+    mediaSourceObjectId
+
+ownership_conservation:
+  Treat icon-over-parent-control-crop overlap and nested copied-image cleanup as explainable only when `parentControlSourceObjectId` / `mediaSourceObjectId` evidence is present.
+```
+
+Guardrails:
+
+```text
+No model candidate bypasses M29.2/M29.5.
+No materializer, Renderer, or plugin creates ownership.
+No filename, task id, visible text, brand, theme, fixed coordinate, or fixed bbox rule.
+Ordinary overlapping media duplicates remain suppressible.
+```
+
+Validation:
+
+```bash
+cd backend
+python3 -m py_compile app/perception_source_compiler/*.py app/m29_replay_plan/*.py app/ownership_conservation/*.py tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_ownership_conservation.py
+
+uv run pytest tests/test_perception_source_compiler.py tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_m29_perception_fate_trace.py -q
+```
+
+Result:
+
+```text
+90 passed.
+```
+
+Hard image validation:
+
+```text
+ledger: backend/tmp/validation/upload_preview_batch_20260526_211751_165704_57016/upload_preview_batch_validation.json
+completedTaskCount: 1 / 1
+totalVisibleOwnershipOverlapConflicts: 0
+totalCompiledSourceObjectCount: 6
+totalCompiledControlImageCount: 1
+totalCompiledRasterIconCount: 2
+totalPerceptionFateTraceCount: 13
+totalPerceptionFateBlockedCount: 7
+totalPlannedIconReplayCount: 9
+totalCopiedImageAssetInternalErasedCount: 3
+totalMaterializedVisibleNodeCount: 36
+averageDslVisualGateNormalizedMeanAbsError: 0.005637
+maxDslVisualGateChangedPixelRatio10: 0.039108
+```
+
+Trace proof:
+
+```text
+perception_candidate_0007
+-> m292_perception_icon_0001
+compiledRole: raster_icon
+internalRole: internal_icon_candidate
+parentControlSourceObjectId: m292_perception_control_image_0001
+finalReplayDecision: icon_replay
+materializerDecision: replayed
+firstBlockingStage: none
+```
+
+First-ten validation:
+
+```text
+ledger: backend/tmp/validation/upload_preview_batch_20260526_211847_110907_58063/upload_preview_batch_validation.json
+completedTaskCount: 10 / 10
+missingArtifactCount: 0
+assetFetchFailedCount: 0
+totalVisibleOwnershipOverlapConflicts: 0
+totalPerceptionCandidateCount: 659
+totalCompiledSourceObjectCount: 72
+totalCompiledControlBackgroundCount: 60
+totalCompiledControlImageCount: 3
+totalCompiledRasterIconCount: 9
+totalPerceptionFateTraceCount: 659
+totalPerceptionFateBlockedCount: 609
+totalMaterializedVisibleNodeCount: 1617
+averageDslVisualGateNormalizedMeanAbsError: 0.004690
+maxDslVisualGateChangedPixelRatio10: 0.043956
+```
+
+Conclusion:
+
+```text
+This closes a real model-first nested ownership gap for complex selectable controls.
+It does not solve missing model proposals such as a model that never emits an independent icon bbox.
+The next repair should inspect remaining high-value perception fate blockers before widening compiler gates.
+```
+
 ## Validation Commands
 
 Probe validation:
