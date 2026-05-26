@@ -27,6 +27,8 @@ def cluster_icon_objects(
             continue
         if bbox_area(bbox) > options.icon_max_area:
             continue
+        if is_selected_tab_indicator_symbol(bbox, ocr_boxes):
+            continue
         if any(bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
             continue
         if any(bbox_overlap_ratio(bbox, box.bbox) >= 0.45 for box in ocr_boxes):
@@ -71,3 +73,24 @@ def cluster_icon_objects(
             )
         )
     return objects
+
+
+def is_selected_tab_indicator_symbol(bbox: list[int], ocr_boxes: list[Any]) -> bool:
+    width = bbox[2]
+    height = bbox[3]
+    if height <= 0 or width / max(1, height) < 3.2:
+        return False
+    if height > 18:
+        return False
+    for box in ocr_boxes:
+        text_bbox = getattr(box, "bbox", None)
+        if not isinstance(text_bbox, list) or len(text_bbox) != 4:
+            continue
+        text_cx = text_bbox[0] + text_bbox[2] / 2
+        indicator_cx = bbox[0] + bbox[2] / 2
+        dx = abs(indicator_cx - text_cx)
+        vertical_gap = bbox[1] - (text_bbox[1] + text_bbox[3])
+        width_ratio = width / max(1, text_bbox[2])
+        if dx <= max(12, text_bbox[2] * 0.45) and 0 <= vertical_gap <= max(28, text_bbox[3] * 1.15) and 0.70 <= width_ratio <= 1.80:
+            return True
+    return False

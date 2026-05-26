@@ -6,6 +6,8 @@ from .geometry import intersection_area, overlap_ratio, union_bbox
 from .relations import edge_between, edge_is_near_equal, relation_contains_object, relation_contains_text
 from .types import NON_VISIBLE_REPLAY_ACTIONS, VISIBLE_REPLAY_ACTIONS
 
+MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO = 0.14
+
 
 def detect_conflicts(
     *,
@@ -246,7 +248,34 @@ def overlap_is_explainable(left: dict[str, Any], right: dict[str, Any], edge_loo
             text,
             image["sourceObjectId"],
         )
+    if actions == {"icon_replay", "text_replay"}:
+        icon = left if left["finalReplayAction"] == "icon_replay" else right
+        text = right if icon is left else left
+        return is_promoted_internal_icon_label_overlap(icon, text)
     return False
+
+
+def is_promoted_internal_icon_label_overlap(icon: dict[str, Any], text: dict[str, Any]) -> bool:
+    evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
+    if evidence.get("promotionSource") != "m29_6_internal_icon_candidate":
+        return False
+    if not evidence.get("transparentAssetPath"):
+        return False
+    media_id = str(evidence.get("mediaSourceObjectId") or "")
+    if not media_id:
+        return False
+    if not has_copied_cleanup_target(icon, media_id) or not has_copied_cleanup_target(text, media_id):
+        return False
+    if safe_float(evidence.get("textOverlapRatio")) > MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO:
+        return False
+    return True
+
+
+def safe_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def has_copied_cleanup_target(plan_item: dict[str, Any], target_source_id: str) -> bool:

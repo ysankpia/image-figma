@@ -84,6 +84,34 @@ def test_adjacent_symbol_fragments_merge_into_one_raster_icon(tmp_path: Path) ->
     assert result["summary"]["rasterIconCount"] == 1
 
 
+def test_selected_tab_indicator_symbol_is_not_standalone_icon(tmp_path: Path) -> None:
+    source = make_png(220, 180, fill=(5, 12, 26), marks=[([76, 148, 68, 10], (42, 96, 255)), ([82, 112, 56, 24], (180, 190, 220))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "selected_indicator",
+                "symbol",
+                [76, 148, 68, 10],
+                metrics={"colorCount": 18, "textureScore": 0.04, "edgeScore": 0.08, "fillRatio": 0.9},
+            )
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("tab_label", "Tab", [82, 112, 56, 24])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    assert not [item for item in result["sourceObjects"] if item["visualKind"] == "raster_icon"]
+    diagnostic = only_object(result, "unknown")
+    assert diagnostic["pixelOwner"] == "diagnostic_only"
+    assert diagnostic["replayDecision"] == "skip"
+    assert "selected_tab_indicator_not_icon" in diagnostic["risks"]
+
+
 def test_simple_shape_replays_but_complex_shape_is_diagnostic(tmp_path: Path) -> None:
     source = make_png(160, 100, fill=(248, 248, 248), marks=[([10, 10, 80, 20], (235, 235, 235)), ([110, 12, 22, 22], (60, 60, 120))])
     m29 = m29_document(

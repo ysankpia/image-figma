@@ -11,6 +11,9 @@ MAX_TEXT_OVERLAP = 0.20
 MAX_INTERNAL_HERO_PENALTY = 0.42
 MIN_TRANSPARENT_ICON_SHORT_EDGE = 8
 MAX_TRANSPARENT_ICON_ASPECT_RATIO = 10.0
+SOFT_EDGE_MIN_TEXT_ANCHOR = 0.70
+SOFT_EDGE_MAX_HERO_PENALTY = 0.26
+SOFT_EDGE_MAX_TEXT_OVERLAP = 0.14
 
 
 def collect_transparent_asset_candidates(
@@ -103,6 +106,9 @@ def build_m296_candidate(
         risks.append("bbox_out_of_image_bounds")
     if group_supported:
         reasons.append("group_supported_internal_candidate")
+    alpha_profile = "anchored_soft_edge_icon" if allows_anchored_soft_edge_profile(internal, text_overlap, hero_penalty, group_supported) else "default_icon"
+    if alpha_profile == "anchored_soft_edge_icon":
+        reasons.append("anchored_soft_edge_icon_profile")
     return {
         "candidateId": f"m29_transparent_asset_candidate_{index:04d}",
         "source": "m29_6_internal_icon_candidate",
@@ -112,11 +118,28 @@ def build_m296_candidate(
         "bbox": bbox,
         "inputConfidence": internal.get("confidence") or "low",
         "inputScore": internal.get("score"),
+        "alphaProfile": alpha_profile,
         "textOverlap": round(text_overlap, 6),
         "candidateAllowedForAlpha": not risks,
         "preflightReasons": reasons,
         "preflightRisks": risks,
     }
+
+
+def allows_anchored_soft_edge_profile(internal: dict[str, Any], text_overlap: float, hero_penalty: float, group_supported: bool) -> bool:
+    breakdown = internal.get("scoreBreakdown", {})
+    text_anchor = float(breakdown.get("textAnchorScore") or 0.0)
+    relation = str(internal.get("anchorRelation") or "")
+    has_anchor = bool(internal.get("matchedOcrBoxId")) and relation in {"above_text", "below_text", "left_of_text", "right_of_text"}
+    execution_supported = internal.get("confidence") == "high" or group_supported
+    return (
+        has_anchor
+        and execution_supported
+        and group_supported
+        and text_anchor >= SOFT_EDGE_MIN_TEXT_ANCHOR
+        and text_overlap <= SOFT_EDGE_MAX_TEXT_OVERLAP
+        and hero_penalty <= SOFT_EDGE_MAX_HERO_PENALTY
+    )
 
 
 def icon_geometry_too_thin(bbox: list[int]) -> bool:

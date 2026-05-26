@@ -102,6 +102,55 @@ def test_generic_non_ocr_foreground_is_not_promoted_even_with_alpha(tmp_path: Pa
     assert "generic_foreground_not_visible_replay" in item["decision"]["reasons"]
 
 
+def test_anchored_group_supported_non_ocr_foreground_can_pass_evidence_contract(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 52, 44],
+                confidence="high",
+                text_anchor=0.90,
+                text_overlap=0.03,
+                hero_penalty=0.12,
+                group_supported=True,
+                raw_type="pixel_component",
+                raw_subtype="non_ocr_foreground",
+            )
+        ],
+        transparent_items=[transparent_item("asset_candidate", "candidate", [20, 20, 52, 44], decision="allow", text_overlap=0.03)],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "allow_visible_replay"
+    assert item["decision"]["promotionAllowed"] is True
+    assert "generic_foreground_not_visible_replay" not in item["decision"]["reasons"]
+
+
+def test_anchored_non_ocr_foreground_without_group_support_stays_rejected(tmp_path: Path) -> None:
+    report = evidence_report(
+        tmp_path,
+        internal_candidates=[
+            internal_icon(
+                "candidate",
+                [20, 20, 52, 44],
+                confidence="high",
+                text_anchor=0.90,
+                text_overlap=0.03,
+                hero_penalty=0.12,
+                raw_type="pixel_component",
+                raw_subtype="non_ocr_foreground",
+            )
+        ],
+        transparent_items=[transparent_item("asset_candidate", "candidate", [20, 20, 52, 44], decision="allow", text_overlap=0.03)],
+    )
+
+    item = report["contractItems"][0]
+    assert item["decision"]["mode"] == "reject"
+    assert item["decision"]["promotionAllowed"] is False
+    assert "generic_foreground_not_visible_replay" in item["decision"]["reasons"]
+
+
 def test_label_anchored_blocked_icon_is_audit_only_not_promotion_contract(tmp_path: Path) -> None:
     report = evidence_report(
         tmp_path,
@@ -190,6 +239,7 @@ def internal_icon(
     group_supported: bool = False,
     raw_type: str = "symbol",
     raw_subtype: str = "icon",
+    anchor_relation: str = "above_text",
 ) -> dict:
     return {
         "candidateId": candidate_id,
@@ -198,6 +248,7 @@ def internal_icon(
         "rawType": raw_type,
         "rawSubtype": raw_subtype,
         "matchedOcrBoxId": "ocr_label",
+        "anchorRelation": anchor_relation,
         "role": "internal_icon_candidate",
         "bbox": bbox,
         "candidateDecision": "accepted_report_candidate",

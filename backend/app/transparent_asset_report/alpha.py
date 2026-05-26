@@ -10,6 +10,11 @@ from ..region_relation_kernel import x2, y2
 MIN_DOMINANT_BACKGROUND_COVERAGE = 0.36
 MAX_BACKGROUND_CLUSTER_VARIANCE = 18.0
 MAX_EDGE_VARIANCE_FALLBACK = 38.0
+MIN_SOFT_EDGE_BACKGROUND_COVERAGE = 0.32
+MAX_SOFT_EDGE_BACKGROUND_CLUSTER_VARIANCE = 8.0
+MAX_SOFT_EDGE_EDGE_ALPHA_MEAN = 48.0
+MAX_SOFT_EDGE_EDGE_ALPHA_COVERAGE = 0.30
+MIN_SOFT_EDGE_LARGEST_COMPONENT_RATIO = 0.90
 
 
 def analyze_transparent_asset_candidate(
@@ -20,6 +25,7 @@ def analyze_transparent_asset_candidate(
     write_asset: bool = False,
     expand_context: bool = False,
     container_bbox: list[int] | None = None,
+    alpha_profile: str = "default_icon",
 ) -> dict[str, Any]:
     analysis_bbox = expanded_analysis_bbox(bbox, pixels, container_bbox) if expand_context else bbox
     edge_pixels = sample_edge_pixels(pixels, analysis_bbox)
@@ -28,8 +34,9 @@ def analyze_transparent_asset_candidate(
     background_sample = dominant_background_sample(edge_pixels) if expand_context else edge_background_sample(edge_pixels)
     background = background_sample["rgb"]
     bg_variance = background_sample["variance"]
-    if not background_sample["stable"]:
-        return reject("unstable_background", background, bg_variance, background_sample=background_sample)
+    soft_edge = alpha_profile == "anchored_soft_edge_icon"
+    if not background_sample["stable"] and not soft_edge_background_is_stable(background_sample):
+        return reject("unstable_background", background, bg_variance, background_sample=background_sample, analysis_bbox=analysis_bbox)
     distances = pixel_distances(pixels, analysis_bbox, background)
     foreground = [value for value in distances if value >= 72]
     foreground_ratio = len(foreground) / max(1, len(distances))
@@ -39,18 +46,19 @@ def analyze_transparent_asset_candidate(
         return reject("foreground_fills_crop", background, bg_variance, foreground_ratio=foreground_ratio, background_sample=background_sample)
     mask_data, alpha_coverage = build_alpha_mask(pixels, analysis_bbox, background)
     edge_alpha = edge_alpha_metrics(mask_data, analysis_bbox[2], analysis_bbox[3])
-    if edge_alpha["edgeAlphaCoverageGt32"] > 0.12 or edge_alpha["edgeAlphaMean"] > 28:
+    largest_ratio = largest_component_ratio(mask_data, analysis_bbox[2], analysis_bbox[3])
+    if edge_alpha_is_risky(edge_alpha, largest_ratio, soft_edge):
         return reject(
             "edge_alpha_risk",
             background,
             bg_variance,
             foreground_ratio=foreground_ratio,
             alpha_coverage=alpha_coverage,
+            largest_component_ratio=largest_ratio,
             edge_alpha=edge_alpha,
             background_sample=background_sample,
             analysis_bbox=analysis_bbox,
         )
-    largest_ratio = largest_component_ratio(mask_data, analysis_bbox[2], analysis_bbox[3])
     if largest_ratio < 0.35:
         return reject(
             "fragmented_foreground_mask",
@@ -96,7 +104,7 @@ def analyze_transparent_asset_candidate(
         "edgeAlphaMean": edge_alpha["edgeAlphaMean"],
         "edgeAlphaCoverageGt32": edge_alpha["edgeAlphaCoverageGt32"],
         "assetPath": asset_path,
-        "reasons": ["stable_background", "foreground_contrast", "connected_foreground"],
+        "reasons": allow_reasons(soft_edge=soft_edge, background_sample=background_sample),
         "risks": [],
     }
 
@@ -191,6 +199,34 @@ def dominant_background_sample(samples: list[tuple[int, int, int]]) -> dict[str,
         "edgeVariance": round(all_edge_variance, 3),
         "stable": stable,
     }
+
+
+def soft_edge_background_is_stable(background_sample: dict[str, Any]) -> bool:
+    return (
+        float(background_sample.get("coverage") or 0.0) >= MIN_SOFT_EDGE_BACKGROUND_COVERAGE
+        and float(background_sample.get("clusterVariance") or 0.0) <= MAX_SOFT_EDGE_BACKGROUND_CLUSTER_VARIANCE
+    )
+
+
+def edge_alpha_is_risky(edge_alpha: dict[str, float], largest_ratio: float, soft_edge: bool) -> bool:
+    if edge_alpha["edgeAlphaCoverageGt32"] <= 0.12 and edge_alpha["edgeAlphaMean"] <= 28:
+        return False
+    if not soft_edge:
+        return True
+    return (
+        edge_alpha["edgeAlphaCoverageGt32"] > MAX_SOFT_EDGE_EDGE_ALPHA_COVERAGE
+        or edge_alpha["edgeAlphaMean"] > MAX_SOFT_EDGE_EDGE_ALPHA_MEAN
+        or largest_ratio < MIN_SOFT_EDGE_LARGEST_COMPONENT_RATIO
+    )
+
+
+def allow_reasons(*, soft_edge: bool, background_sample: dict[str, Any]) -> list[str]:
+    reasons = ["stable_background", "foreground_contrast", "connected_foreground"]
+    if soft_edge:
+        reasons.append("anchored_soft_edge_alpha")
+        if not background_sample["stable"]:
+            reasons.append("dominant_cluster_soft_edge_background")
+    return reasons
 
 
 def dominant_rgb(samples: list[tuple[int, int, int]]) -> tuple[int, int, int]:

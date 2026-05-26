@@ -31,6 +31,7 @@
 - [M29.6 Media Internal Decomposition And Transparent Assets](054-m29-media-internal-decomposition-and-transparent-assets.md) — `completed`
 - [M29 Internal Asset Evidence And Cleanup Hardening](055-m29-internal-asset-evidence-and-cleanup-hardening.md) — `completed`
 - [Codia-like Real Sample Hardening](061-codia-like-real-sample-hardening.md) — `completed`
+- [Bottom Tab Selected Icon Anchor Hardening](062-bottom-tab-selected-icon-anchor-hardening.md) — `completed`
 - [M29 Direct Replay Experiment](029-direct-replay-experiment.md) — `completed`
 - [M29 Direct Replay Figma Compare Mode](029-direct-replay-figma-compare-mode.md) — `completed`
 - [M29 Direct Shape Physical Style Preservation](029-direct-shape-physical-style-preservation.md) — `completed`

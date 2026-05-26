@@ -10,6 +10,8 @@ REPORT_ONLY_THRESHOLD = 0.42
 MAX_TEXT_OVERLAP_FOR_VISIBLE = 0.20
 MAX_HERO_PENALTY_FOR_VISIBLE = 0.42
 MIN_MEDIA_CONTAINMENT_FOR_VISIBLE = 0.95
+MIN_ANCHORED_FOREGROUND_TEXT_ANCHOR = 0.70
+MAX_ANCHORED_FOREGROUND_HERO_PENALTY = 0.26
 
 
 def build_m296_contract_item(
@@ -210,7 +212,7 @@ def hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dict[str,
         reasons.append("not_internal_icon_candidate")
     if candidate.get("candidateDecision") != "accepted_report_candidate":
         reasons.append("internal_candidate_not_accepted")
-    if candidate.get("rawType") == "pixel_component" and candidate.get("rawSubtype") == "non_ocr_foreground":
+    if is_unanchored_generic_foreground(candidate, text_overlap=text_overlap, hero_penalty=hero_penalty):
         reasons.append("generic_foreground_not_visible_replay")
     if parent_media is None:
         reasons.append("missing_parent_media_source_object")
@@ -219,6 +221,22 @@ def hard_rejection_reasons(*, candidate: dict[str, Any], parent_media: dict[str,
     if hero_penalty > 0.62:
         reasons.append("hero_or_texture_risk_too_high")
     return reasons
+
+
+def is_unanchored_generic_foreground(candidate: dict[str, Any], *, text_overlap: float, hero_penalty: float) -> bool:
+    if candidate.get("rawType") != "pixel_component" or candidate.get("rawSubtype") != "non_ocr_foreground":
+        return False
+    breakdown = candidate.get("scoreBreakdown") if isinstance(candidate.get("scoreBreakdown"), dict) else {}
+    anchor_relation = str(candidate.get("anchorRelation") or "")
+    anchored = (
+        bool(candidate.get("matchedOcrBoxId"))
+        and anchor_relation in {"above_text", "below_text", "left_of_text", "right_of_text"}
+        and float_value(breakdown.get("textAnchorScore")) >= MIN_ANCHORED_FOREGROUND_TEXT_ANCHOR
+        and text_overlap <= MAX_TEXT_OVERLAP_FOR_VISIBLE
+        and hero_penalty <= MAX_ANCHORED_FOREGROUND_HERO_PENALTY
+        and candidate.get("groupSupportedExecution") is True
+    )
+    return not anchored
 
 
 def decision_reasons(*, mode: str, hard_reasons: list[str], transparent_allowed: bool, execution_supported: bool, media_containment: float, evidence_score: float) -> list[str]:

@@ -9,6 +9,7 @@
 
 最近 resolved bug：
 
+- [015-bottom-tab-selected-icon-stays-non-ocr-foreground.md](resolved/015-bottom-tab-selected-icon-stays-non-ocr-foreground.md)：selected bottom tab icon 现在通过 near-media OCR anchor、evidence-aware soft-edge alpha、evidence contract、promotion、M29.5 去重和 ownership conservation 成为独立 `icon_replay`，selected indicator 仍保持 diagnostic。
 - [014-fragmented-internal-icon-fails-transparent-asset-gate.md](resolved/014-fragmented-internal-icon-fails-transparent-asset-gate.md)：图内 action row icon 被切成相邻碎片时，现在由 M29.6 生成同 OCR anchor 的 union candidate，再通过 transparent/evidence/promotion/M29.5 主链成为可选 icon。
 - [011-finite-control-backgrounds-can-be-preserved-as-media.md](resolved/011-finite-control-backgrounds-can-be-preserved-as-media.md)：有限按钮/控件背景现在在 source evidence 支持时进入 `control_background / shape_geometry / shape_replay`，并由 M29.5 裁剪无效 copied cleanup target。
 - [012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md](resolved/012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md)：底部 tab 图标在 low-confidence composite media 内被 raw M29 blocked evidence 捕获后，现在通过 M29.2 label-anchor recovery 恢复为 `raster_icon / icon_replay`，并由 M29.5 授权 copied media cleanup。

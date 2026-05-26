@@ -40,7 +40,7 @@ def build_composite_media_items(
     for source in source_objects:
         if not is_preserve_raster_image(source):
             continue
-        text_inside = [block for block in ocr_blocks if containment_ratio(block["bbox"], source["bbox"]) >= 0.95]
+        text_inside = [block for block in ocr_blocks if text_belongs_to_media_context(block["bbox"], source["bbox"])]
         raw_inside = [node for node in raw_nodes if raw_inside_media(node, source)]
         if not is_composite_media(source, text_inside, raw_inside, pixels):
             continue
@@ -89,6 +89,22 @@ def raw_inside_media(node: dict[str, Any], media: dict[str, Any]) -> bool:
     if containment_ratio(node["bbox"], media["bbox"]) < 0.95:
         return False
     return not is_near_equal(node["bbox"], media["bbox"], 0.88)
+
+
+def text_belongs_to_media_context(text_bbox: list[int], media_bbox: list[int]) -> bool:
+    if containment_ratio(text_bbox, media_bbox) >= 0.95:
+        return True
+    horizontal_overlap = intersection_1d(text_bbox[0], x2(text_bbox), media_bbox[0], x2(media_bbox)) / max(1, text_bbox[2])
+    if horizontal_overlap < 0.95:
+        return False
+    media_context = expanded_media_anchor_bbox(media_bbox, text_bbox)
+    return containment_ratio(text_bbox, media_context) >= 0.95
+
+
+def expanded_media_anchor_bbox(media_bbox: list[int], text_bbox: list[int]) -> list[int]:
+    padding_x = max(4, min(12, round(media_bbox[2] * 0.02)))
+    padding_y = max(8, min(18, round(max(media_bbox[3] * 0.18, text_bbox[3] * 0.55))))
+    return [media_bbox[0] - padding_x, media_bbox[1] - padding_y, media_bbox[2] + padding_x * 2, media_bbox[3] + padding_y * 2]
 
 
 def build_text_mask(media: dict[str, Any], block: dict[str, Any], image_size: dict[str, int]) -> dict[str, Any]:
@@ -1057,10 +1073,11 @@ def point_in_any_text_mask(x: int, y: int, text_masks: list[dict[str, Any]]) -> 
 
 
 def clamp_bbox_to_media(bbox: list[int], media_bbox: list[int], image_width: int, image_height: int) -> list[int] | None:
-    left = max(0, media_bbox[0], bbox[0])
-    top = max(0, media_bbox[1], bbox[1])
-    right = min(image_width, x2(media_bbox), x2(bbox))
-    bottom = min(image_height, y2(media_bbox), y2(bbox))
+    media_context = expanded_media_anchor_bbox(media_bbox, bbox)
+    left = max(0, media_context[0], bbox[0])
+    top = max(0, media_context[1], bbox[1])
+    right = min(image_width, x2(media_context), x2(bbox))
+    bottom = min(image_height, y2(media_context), y2(bbox))
     if right - left <= 2 or bottom - top <= 2:
         return None
     return [left, top, right - left, bottom - top]

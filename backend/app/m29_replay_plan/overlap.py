@@ -39,6 +39,9 @@ def suppress_visible_overlap_duplicates(
     return sorted(accepted, key=visible_plan_sort_key), suppressed
 
 
+MAX_PROMOTED_INTERNAL_ICON_TEXT_OVERLAP_RATIO = 0.14
+
+
 def overlap_priority_sort_key(item: dict[str, Any]) -> tuple[int, int, int, str]:
     action_rank = {"image_replay": 0, "text_replay": 1, "shape_replay": 2, "icon_replay": 3}.get(item["finalReplayAction"], 9)
     confidence_rank = {"high": 0, "medium": 1, "low": 2}.get(item["confidence"], 2)
@@ -78,8 +81,26 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
             return False
         return left_action == "image_replay" and containment_ratio >= 0.20
     if actions == {"text_replay", "icon_replay"}:
+        if is_promoted_internal_icon_label_overlap(left, right):
+            return False
         return left_action == "text_replay" and containment_ratio >= 0.25
     return False
+
+
+def is_promoted_internal_icon(item: dict[str, Any]) -> bool:
+    if item.get("finalReplayAction") != "icon_replay":
+        return False
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    return evidence.get("promotionSource") == "m29_6_internal_icon_candidate" and bool(evidence.get("transparentAssetPath"))
+
+
+def is_promoted_internal_icon_label_overlap(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    icon = left if left["finalReplayAction"] == "icon_replay" else right if right["finalReplayAction"] == "icon_replay" else None
+    text = left if left["finalReplayAction"] == "text_replay" else right if right["finalReplayAction"] == "text_replay" else None
+    if icon is None or text is None or not is_promoted_internal_icon(icon):
+        return False
+    evidence = icon.get("sourceEvidence") if isinstance(icon.get("sourceEvidence"), dict) else {}
+    return safe_float(evidence.get("textOverlapRatio")) <= MAX_PROMOTED_INTERNAL_ICON_TEXT_OVERLAP_RATIO
 
 
 def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -93,6 +114,13 @@ def is_promoted_internal_icon_over_parent_media(left: dict[str, Any], right: dic
         and evidence.get("mediaSourceObjectId") == media["sourceObjectId"]
         and bool(evidence.get("transparentAssetPath"))
     )
+
+
+def safe_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def is_label_anchored_blocked_icon_over_parent_media(left: dict[str, Any], right: dict[str, Any]) -> bool:

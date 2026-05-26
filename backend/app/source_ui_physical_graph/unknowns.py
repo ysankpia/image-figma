@@ -6,6 +6,7 @@ from ..m29_materialization_utils import bbox_overlap_ratio
 from ..png_tools import PngPixels
 from ..visual_primitive_graph import bbox_area, bbox_in_bounds, measure_region
 from .artifacts import local_background_confidence, parse_bbox
+from .icons import is_selected_tab_indicator_symbol
 from .types import M292SourceObject, M292SourcePhysicalOptions, make_object
 
 
@@ -25,10 +26,14 @@ def classify_unknown_objects(
         bbox = parse_bbox(node.get("bbox"))
         if bbox is None or not bbox_in_bounds(bbox, width, height):
             continue
-        if node_type in {"text", "shape", "image", "symbol"}:
+        if node_type in {"text", "shape", "image"}:
+            continue
+        if node_type == "symbol" and not is_selected_tab_indicator_symbol(bbox, ocr_boxes):
             continue
         if any(bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
             continue
+        reasons = ["selected_tab_indicator_not_icon"] if node_type == "symbol" else ["unsupported_visual_kind"]
+        risks = ["selected_tab_indicator_not_icon"] if node_type == "symbol" else ["diagnostic_only"]
         if node_type in known_types:
             metrics = measure_region(pixels, bbox)
             if (
@@ -49,8 +54,8 @@ def classify_unknown_objects(
                 text_overlap=max((bbox_overlap_ratio(bbox, box.bbox) for box in ocr_boxes), default=0.0),
                 media_containment=max((bbox_overlap_ratio(bbox, media.bbox) for media in media_objects), default=0.0),
                 confidence="low",
-                reasons=["unsupported_visual_kind"],
-                risks=["diagnostic_only"],
+                reasons=reasons,
+                risks=risks,
             )
         )
     return objects

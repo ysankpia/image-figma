@@ -84,6 +84,7 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
             write_asset=True,
             expand_context=candidate["source"] == "m29_6_internal_icon_candidate",
             container_bbox=candidate.get("mediaBbox") if candidate["source"] == "m29_6_internal_icon_candidate" else None,
+            alpha_profile=str(candidate.get("alphaProfile") or "default_icon"),
         )
     return {
         "candidateId": candidate["candidateId"],
@@ -105,6 +106,7 @@ def build_report_item(candidate: dict[str, Any], pixels: Any, asset_path: Path) 
         "textOverlap": round(float(candidate["textOverlap"]), 6),
         "inputConfidence": candidate["inputConfidence"],
         "inputScore": candidate["inputScore"],
+        "alphaProfile": candidate.get("alphaProfile") or "default_icon",
         "reasons": candidate["preflightReasons"] + [reason for reason in analysis["reasons"] if reason not in candidate["preflightReasons"]],
         "risks": candidate["preflightRisks"] + [risk for risk in analysis["risks"] if risk not in candidate["preflightRisks"]],
         "reportOnly": True,

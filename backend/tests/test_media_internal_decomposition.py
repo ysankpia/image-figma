@@ -216,6 +216,26 @@ def test_fragmented_icon_parts_with_same_text_anchor_get_union_candidate(tmp_pat
     assert {item["ocrBoxId"] for item in group_items} == {"text_a", "text_b", "text_c", "text_d"}
 
 
+def test_near_media_bottom_label_can_anchor_internal_icon_candidate(tmp_path: Path) -> None:
+    report = media_report(
+        tmp_path,
+        source_png=make_selected_tab_png(),
+        source_objects=[source_object("media", [0, 30, 260, 100])],
+        raw_nodes=[],
+        ocr_blocks=[ocr_block("tab_label", [108, 118, 44, 24])],
+    )
+
+    anchored = [
+        item
+        for item in report["internalCandidates"]
+        if item["candidateDecision"] == "accepted_report_candidate"
+        and item.get("matchedOcrBoxId") == "tab_label"
+        and item.get("anchorRelation") == "above_text"
+    ]
+    assert anchored
+    assert any("ocr_anchor_foreground_component" in item["reasons"] for item in anchored)
+
+
 def test_separator_inside_media_is_rejected_not_icon(tmp_path: Path) -> None:
     report = media_report(
         tmp_path,
@@ -357,6 +377,19 @@ def make_non_ocr_foreground_png(*, hero: bool = False) -> bytes:
             row.extend(rgb)
         rows.append(bytes(row))
     return encode_rgb_png(220, 140, rows)
+
+
+def make_selected_tab_png() -> bytes:
+    rows = []
+    for y in range(160):
+        row = bytearray()
+        for x in range(260):
+            rgb = [5, 12, 26]
+            if 96 <= x < 164 and 54 <= y < 108:
+                rgb = [28, 118, 255]
+            row.extend(rgb)
+        rows.append(bytes(row))
+    return encode_rgb_png(260, 160, rows)
 
 
 def contained_bbox(inner: list[int], outer: list[int]) -> bool:
