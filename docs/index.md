@@ -16,7 +16,7 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
-- 当前 active plan：Gemini 审核核验计划见 [plans/active/060-gemini-review-first-principles-audit.md](plans/active/060-gemini-review-first-principles-audit.md)，M29 internal icon 证据合同计划见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 Codia-like 真实样本加固计划见 [plans/completed/061-codia-like-real-sample-hardening.md](plans/completed/061-codia-like-real-sample-hardening.md)，image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
+- 当前 active plan：M29 source-chain 修复计划见 [plans/active/063-m29-source-chain-repair-and-anti-specialization-hardening.md](plans/active/063-m29-source-chain-repair-and-anti-specialization-hardening.md)，M29 第一性原理 source-chain 代码审计计划见 [plans/active/062-m29-first-principles-source-chain-code-audit.md](plans/active/062-m29-first-principles-source-chain-code-audit.md)，Gemini 审核核验计划见 [plans/active/060-gemini-review-first-principles-audit.md](plans/active/060-gemini-review-first-principles-audit.md)，M29 internal icon 证据合同计划见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 Codia-like 真实样本加固计划见 [plans/completed/061-codia-like-real-sample-hardening.md](plans/completed/061-codia-like-real-sample-hardening.md)，image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
 
 ## By Task Type
 
@@ -150,6 +150,8 @@
 - M39.1.1/M39.2/M40/M41 阶段顺序决策：[decisions/0064-gate-unit-candidates-before-promotion-and-componentization.md](decisions/0064-gate-unit-candidates-before-promotion-and-componentization.md)
 - Bug 索引：[bugs/index.md](bugs/index.md)
 - Bug 模板：[bugs/template.md](bugs/template.md)
+- M29 source-chain 代码审计：[code-reviews/m29-first-principles-source-chain-audit/README.md](code-reviews/m29-first-principles-source-chain-audit/README.md)
+- Gemini 对照审计：[code-reviews-gemini/README.md](code-reviews-gemini/README.md)
 
 ## Runbooks And Reference
 
