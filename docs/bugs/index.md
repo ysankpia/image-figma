@@ -4,6 +4,7 @@
 
 当前 open bug：
 
+- [021-m29-replay-overlap-and-model-asset-contract-gap.md](open/021-m29-replay-overlap-and-model-asset-contract-gap.md)：M29.5 overlap duplicate suppression 与 materializer transparent asset provenance 在 model-first 主链下存在合同缺口。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
 
