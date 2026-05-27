@@ -167,5 +167,6 @@
 - 全链路第一性原理本地核对：[reference/full-chain-first-principles-local-audit.md](reference/full-chain-first-principles-local-audit.md)
 - 外部代码审核技术规划输入：[reference/code_review_first_principles_technical_plan.md](reference/code_review_first_principles_technical_plan.md)
 - Codex 长跑执行提示词输入：[reference/codex_prompt.md](reference/codex_prompt.md)
+- Claude Code M29 model-first 审核提示词输入：[reference/claude-code-m29-model-first-review-prompt.md](reference/claude-code-m29-model-first-review-prompt.md)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
 - Pre-M29 归档清单：[reference/legacy/pre-m29-archive-inventory.md](reference/legacy/pre-m29-archive-inventory.md)
