@@ -49,6 +49,14 @@ class PerceptionSourceCompilerOptions:
     min_vertical_label_gap_ratio: float = 0.28
     max_vertical_icon_text_width_ratio: float = 1.85
     min_vertical_icon_text_width_ratio: float = 0.45
+    min_selectable_raster_crop_score: float = 0.18
+    min_selectable_text_raster_crop_score: float = 0.10
+    min_selectable_raster_crop_area_ratio: float = 0.00008
+    max_selectable_raster_crop_area_ratio: float = 0.08
+    max_selectable_raster_crop_text_overlap: float = 0.38
+    max_selectable_raster_crop_ocr_count: int = 3
+    min_selectable_text_crop_area_expansion: float = 1.18
+    max_selectable_raster_crop_specific_owner_overlap: float = 0.18
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

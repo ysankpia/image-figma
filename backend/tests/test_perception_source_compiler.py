@@ -434,6 +434,78 @@ def test_low_score_icon_candidate_compiles_inside_complex_control_image_crop(tmp
     assert icon["sourceEvidence"]["iconInferenceReasons"] == ["perception_candidate_inside_compiled_control"]
 
 
+def test_low_risk_unknown_candidate_compiles_to_selectable_raster_crop(tmp_path: Path) -> None:
+    source = make_png(
+        240,
+        180,
+        fill=(18, 20, 42),
+        marks=[
+            ([68, 56, 48, 28], (55, 90, 220)),
+            ([88, 64, 28, 14], (210, 230, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_selectable_crop",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([]),
+        perception_model_report=perception_report([candidate("model_unknown_ui", [60, 48, 132, 96], 0.22)]),
+        m292_document=m292_document([m292_object("media", [0, 0, 240, 180], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    crop = only_compiled(result.report, "media_region")
+    assert crop["id"] == "m292_perception_selectable_crop_0001"
+    assert crop["bbox"] == [60, 48, 72, 48]
+    assert crop["pixelOwner"] == "preserve_raster"
+    assert crop["replayDecision"] == "image_replay"
+    assert crop["sourceEvidence"]["internalRole"] == "internal_selectable_raster_crop"
+    assert crop["sourceEvidence"]["cleanupEligible"] is False
+    assert crop["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_selectable_raster_crop_fallback"]
+
+    relation = extract_m2931_region_relation_graph_report(
+        task_id="task_compiler_selectable_crop",
+        m292_document=result.m292_document,
+        output_dir=tmp_path / "m29_3_1",
+    ).report
+    replay = build_m295_replay_plan(
+        task_id="task_compiler_selectable_crop",
+        m292_document=result.m292_document,
+        m2931_report=relation,
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    ).report
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in replay["planItems"]}
+    assert actions["media"] == "image_replay"
+    assert actions[crop["id"]] == "image_replay"
+    crop_item = next(item for item in replay["planItems"] if item["sourceObjectId"] == crop["id"])
+    assert crop_item["targetRole"] == "m29_image"
+    assert not any(target.get("target") == "copied_image_asset" for target in crop_item["cleanupTargets"])
+
+
+def test_text_only_model_candidate_does_not_become_selectable_raster_crop(tmp_path: Path) -> None:
+    source = make_png(
+        240,
+        180,
+        fill=(248, 248, 248),
+        marks=[([82, 62, 64, 18], (20, 20, 20))],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_text_candidate_no_crop",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_text", "Label", [82, 62, 64, 18])]),
+        perception_model_report=perception_report([candidate("model_text_only", [82, 62, 146, 80], 0.16)]),
+        m292_document=m292_document([m292_object("text", [82, 62, 64, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_text"]})]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    assert result.report["summary"]["compiledSourceObjectCount"] == 0
+    rejected = {item["candidateId"]: item["reason"] for item in result.report["rejectedCandidates"]}
+    assert rejected["model_text_only"] in {
+        "duplicate_or_near_equal_existing_source_object",
+        "insufficient_ownership_evidence",
+    }
+
+
 def test_vertical_label_tile_infers_icon_above_text_without_replaying_whole_tile(tmp_path: Path) -> None:
     source = make_png(
         360,

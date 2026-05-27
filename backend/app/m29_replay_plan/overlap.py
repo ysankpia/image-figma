@@ -82,6 +82,9 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
             return containment_ratio >= 0.20
         return False
     if actions == {"image_replay", "icon_replay"}:
+        image = left if left_action == "image_replay" else right
+        if is_perception_selectable_raster_crop(image):
+            return False
         if is_perception_control_child_icon_over_parent_control(left, right):
             return False
         if is_promoted_internal_icon_over_parent_media(left, right):
@@ -158,8 +161,18 @@ def is_perception_control_raster_child(*, child: dict[str, Any], parent: dict[st
     evidence = child.get("sourceEvidence") if isinstance(child.get("sourceEvidence"), dict) else {}
     return (
         evidence.get("promotionSource") == "perception_model_foreground_claim"
-        and evidence.get("internalRole") == "internal_control_raster_background"
+        and evidence.get("internalRole") in {"internal_control_raster_background", "internal_selectable_raster_crop"}
         and evidence.get("mediaSourceObjectId") == parent.get("sourceObjectId")
+        and bool(evidence.get("foregroundClaimId"))
+    )
+
+
+def is_perception_selectable_raster_crop(item: dict[str, Any]) -> bool:
+    evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
+    return (
+        item.get("finalReplayAction") == "image_replay"
+        and evidence.get("promotionSource") == "perception_model_foreground_claim"
+        and evidence.get("internalRole") == "internal_selectable_raster_crop"
         and bool(evidence.get("foregroundClaimId"))
     )
 

@@ -122,11 +122,14 @@ Allowed compiled source ownership:
 ```text
 control_background / shape_geometry / shape_replay
 media_region / preserve_raster / image_replay for complex selectable control crops
+media_region / preserve_raster / image_replay for low-risk selectable raster crop fallback
 raster_icon / raster_icon / icon_replay
 small indicator shape / shape_geometry / shape_replay
 ```
 
 The compiler is upstream of final M29.3/M29.4/M29.5. It does not create DSL nodes, does not authorize cleanup directly, and does not let materializer consume raw model output. M29.5 remains the only visible replay and cleanup authority.
+
+Selectable raster crop fallback is intentionally weaker than vectorization. It exists so model-discovered UI foreground that is low-risk but not yet classifiable as shape/icon still becomes selectable and draggable in Figma. It must not suppress more specific icon/shape/text replay, must not claim copied-image cleanup, and must not use filename, brand, literal text, theme color, fixed bbox, or fixed coordinate rules.
 
 `backend/app/m29_perception_fate_trace/` is a read-only diagnostic surface after materialization. It joins:
 

@@ -34,6 +34,7 @@
 - [M29 Residual Media Layer Order Fix](069-m29-residual-media-layer-order-fix.md) — `completed`
 - [M29 Model-First Tab And Control Icon Regression](070-m29-model-first-tab-and-control-icon-regression.md) — `completed`
 - [M29 Control Radius Pixel Evidence Fix](071-m29-control-radius-pixel-evidence-fix.md) — `completed`
+- [M29 Model-First Selectable Raster Crop Fallback](072-m29-model-first-selectable-raster-crop-fallback.md) — `completed`
 - [Codia-like Real Sample Hardening](061-codia-like-real-sample-hardening.md) — `completed`
 - [Bottom Tab Selected Icon Anchor Hardening](062-bottom-tab-selected-icon-anchor-hardening.md) — `completed`
 - [M29 Source-Chain Repair And Anti-Specialization Hardening](063-m29-source-chain-repair-and-anti-specialization-hardening.md) — `completed`

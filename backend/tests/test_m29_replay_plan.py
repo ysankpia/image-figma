@@ -761,6 +761,64 @@ def test_m295_keeps_perception_control_image_crop_over_parent_media(tmp_path: Pa
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
 
 
+def test_m295_selectable_raster_crop_does_not_suppress_more_specific_icon(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_perception_selectable_crop_icon_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 320, 200], "media_region", "preserve_raster", "image_replay"),
+                m292_object(
+                    "selectable_crop",
+                    [48, 48, 120, 80],
+                    "media_region",
+                    "preserve_raster",
+                    "image_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "promotionSource": "perception_model_foreground_claim",
+                        "mediaSourceObjectId": "media",
+                        "foregroundClaimId": "model_unknown:foreground_claim",
+                        "claimMaskKind": "bbox",
+                        "internalRole": "internal_selectable_raster_crop",
+                        "cleanupEligible": False,
+                    },
+                ),
+                m292_object(
+                    "icon",
+                    [72, 64, 32, 32],
+                    "raster_icon",
+                    "raster_icon",
+                    "icon_replay",
+                    confidence="medium",
+                    source_evidence={
+                        "promotionSource": "perception_model_foreground_claim",
+                        "mediaSourceObjectId": "media",
+                        "foregroundClaimId": "model_icon:foreground_claim",
+                        "claimMaskKind": "bbox",
+                        "internalRole": "internal_icon_candidate",
+                        "controlRowSourceCropEligible": True,
+                        "textOverlapRatio": 0.0,
+                    },
+                ),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "selectable_crop", "icon"],
+            [
+                edge("media_crop", "media", "selectable_crop", "contains", []),
+                edge("media_icon", "media", "icon", "contains", []),
+                edge("crop_icon", "selectable_crop", "icon", "contains", []),
+            ],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"media": "image_replay", "selectable_crop": "image_replay", "icon": "icon_replay"}
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
+
+
 def test_m295_keeps_perception_child_icon_over_complex_control_image_crop(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_perception_control_crop_child_icon",

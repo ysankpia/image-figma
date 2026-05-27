@@ -309,7 +309,7 @@ def is_perception_control_raster_child(*, child: dict[str, Any], parent: dict[st
     evidence = child.get("sourceEvidence") if isinstance(child.get("sourceEvidence"), dict) else {}
     return (
         evidence.get("promotionSource") == "perception_model_foreground_claim"
-        and evidence.get("internalRole") == "internal_control_raster_background"
+        and evidence.get("internalRole") in {"internal_control_raster_background", "internal_selectable_raster_crop"}
         and evidence.get("mediaSourceObjectId") == parent.get("sourceObjectId")
         and bool(evidence.get("foregroundClaimId"))
     )

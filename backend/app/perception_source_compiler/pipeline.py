@@ -330,6 +330,40 @@ def classify_candidate(
             "sourceObject": vertical_icon,
         }
 
+    if supports_selectable_raster_crop_fallback(
+        candidate=candidate,
+        bbox=bbox,
+        score=score,
+        area_ratio=area_ratio,
+        text_overlap=text_overlap,
+        contained_text=contained_text,
+        metrics=metrics,
+        existing_objects=[*base_objects, *compiled_objects],
+        options=options,
+    ):
+        return {
+            "mode": "compile_source_object",
+            "sourceObject": build_selectable_raster_crop_object(
+                index=len(
+                    [
+                        item
+                        for item in compiled_objects
+                        if item.get("visualKind") == "media_region"
+                        and (item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}).get("internalRole")
+                        == "internal_selectable_raster_crop"
+                    ]
+                )
+                + 1,
+                candidate=candidate,
+                bbox=bbox,
+                pixels=pixels,
+                media_source_id=media_source_id,
+                contained_text=contained_text,
+                text_overlap=text_overlap,
+                inference_reasons=["perception_candidate_selectable_raster_crop_fallback"],
+            ),
+        }
+
     return rejected(candidate, "insufficient_ownership_evidence", bbox=bbox)
 
 
@@ -401,6 +435,43 @@ def build_control_image_object(
             "claimMaskKind": "bbox",
             "internalRole": "internal_control_raster_background",
             "controlTextAreaRatio": round(text_area_ratio, 4),
+            "controlInferenceReasons": inference_reasons,
+        },
+    )
+
+
+def build_selectable_raster_crop_object(
+    *,
+    index: int,
+    candidate: dict[str, Any],
+    bbox: list[int],
+    pixels: Any,
+    media_source_id: str,
+    contained_text: list[Any],
+    text_overlap: float,
+    inference_reasons: list[str],
+) -> dict[str, Any]:
+    return source_object(
+        object_id=f"m292_perception_selectable_crop_{index:04d}",
+        bbox=bbox,
+        visual_kind="media_region",
+        pixel_owner="preserve_raster",
+        replay_decision="image_replay",
+        confidence="medium",
+        reasons=[*inference_reasons, "compiled_before_m29_replay"],
+        risks=[
+            "model_single_class_low_risk_candidate_kept_as_selectable_raster",
+            "not_vectorized_yet",
+        ],
+        evidence={
+            **common_evidence(candidate, bbox, pixels, media_source_id),
+            "ocrBoxIds": [str(box.id) for box in contained_text if getattr(box, "id", None)],
+            "promotionSource": "perception_model_foreground_claim",
+            "foregroundClaimId": f"{candidate['candidateId']}:foreground_claim",
+            "claimMaskKind": "bbox",
+            "internalRole": "internal_selectable_raster_crop",
+            "textOverlapRatio": round(text_overlap, 4),
+            "cleanupEligible": False,
             "controlInferenceReasons": inference_reasons,
         },
     )
@@ -997,6 +1068,81 @@ def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:
     tiny_dot = max(bbox[2], bbox[3]) <= 14 and 0.55 <= aspect <= 1.82
     stable_fill = color_count <= 16 and texture_score <= 0.18
     return stable_fill and (long_marker or tiny_dot)
+
+
+def supports_selectable_raster_crop_fallback(
+    *,
+    candidate: dict[str, Any],
+    bbox: list[int],
+    score: float,
+    area_ratio: float,
+    text_overlap: float,
+    contained_text: list[Any],
+    metrics: Any,
+    existing_objects: list[dict[str, Any]],
+    options: PerceptionSourceCompilerOptions,
+) -> bool:
+    if area_ratio < options.min_selectable_raster_crop_area_ratio:
+        return False
+    if area_ratio > options.max_selectable_raster_crop_area_ratio:
+        return False
+    if overlaps_specific_replay_owner(bbox, existing_objects, options):
+        return False
+    if len(contained_text) > options.max_selectable_raster_crop_ocr_count:
+        return False
+    if text_overlap > options.max_selectable_raster_crop_text_overlap and not contained_text:
+        return False
+    if contained_text:
+        if score < options.min_selectable_text_raster_crop_score:
+            return False
+        if not candidate_expands_beyond_text(bbox, contained_text, options):
+            return False
+    elif score < options.min_selectable_raster_crop_score:
+        return False
+    if bbox[2] < 3 or bbox[3] < 3:
+        return False
+    return has_nontrivial_visual_signal(metrics)
+
+
+def overlaps_specific_replay_owner(bbox: list[int], objects: list[dict[str, Any]], options: PerceptionSourceCompilerOptions) -> bool:
+    for item in objects:
+        if item.get("replayDecision") not in {"shape_replay", "icon_replay"}:
+            continue
+        existing_bbox = parse_xywh_bbox(item.get("bbox"))
+        if existing_bbox is None:
+            continue
+        if overlap_ratio(existing_bbox, bbox) > options.max_selectable_raster_crop_specific_owner_overlap:
+            return True
+    return False
+
+
+def candidate_expands_beyond_text(bbox: list[int], contained_text: list[Any], options: PerceptionSourceCompilerOptions) -> bool:
+    text_boxes = [parse_xywh_bbox(getattr(box, "bbox", None)) for box in contained_text]
+    valid_boxes = [box for box in text_boxes if box is not None]
+    if not valid_boxes:
+        return True
+    text_union = union_bbox(valid_boxes)
+    if bbox_area(bbox) < bbox_area(text_union) * options.min_selectable_text_crop_area_expansion:
+        return False
+    vertical_padding = (bbox[3] - text_union[3]) / max(1, text_union[3])
+    horizontal_padding = (bbox[2] - text_union[2]) / max(1, text_union[2])
+    return vertical_padding >= 0.18 or horizontal_padding >= 0.18
+
+
+def union_bbox(boxes: list[list[int]]) -> list[int]:
+    left = min(box[0] for box in boxes)
+    top = min(box[1] for box in boxes)
+    right = max(x2(box) for box in boxes)
+    bottom = max(y2(box) for box in boxes)
+    return [left, top, right - left, bottom - top]
+
+
+def has_nontrivial_visual_signal(metrics: Any) -> bool:
+    color_count = int(getattr(metrics, "color_count", 0))
+    texture_score = float(getattr(metrics, "texture_score", 0.0))
+    edge_score = float(getattr(metrics, "edge_score", 0.0))
+    fill_ratio = float(getattr(metrics, "fill_ratio", 0.0))
+    return color_count >= 2 or texture_score >= 0.015 or edge_score >= 0.015 or fill_ratio < 0.96
 
 
 def inferred_radius(bbox: list[int], *, role: str) -> int | None:
