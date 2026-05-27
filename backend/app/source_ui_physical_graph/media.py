@@ -88,3 +88,13 @@ def is_control_shape_supported_low_confidence_unknown(node: dict[str, Any], bbox
         if bbox_overlap_ratio(bbox, candidate_bbox) >= 0.65:
             return True
     return False
+
+
+def media_blocks_child_foreground(media: M292SourceObject) -> bool:
+    if media.visual_kind != "media_region" or media.pixel_owner != "preserve_raster":
+        return False
+    if "low_confidence_media_region" in media.risks:
+        return False
+    if "contains_internal_text" in media.risks:
+        return False
+    return "m29_image_region" in media.reasons

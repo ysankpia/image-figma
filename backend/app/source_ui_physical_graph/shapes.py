@@ -7,6 +7,7 @@ from ..png_tools import PngPixels
 from ..visual_primitive_graph import bbox_area, bbox_in_bounds
 from .artifacts import local_background_confidence, parse_bbox
 from .controls import CONTROL_BACKGROUND_SUBTYPES, classify_control_like_unknown
+from .media import media_blocks_child_foreground
 from .types import M292SourceObject, M292SourcePhysicalOptions, M292VisualKind, make_object
 
 
@@ -55,7 +56,7 @@ def classify_shape_objects(
         bbox = parse_bbox(node.get("bbox"))
         if bbox is None or not bbox_in_bounds(bbox, width, height):
             continue
-        if any(bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
+        if any(media_blocks_child_foreground(media) and bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
             continue
         subtype = str(node.get("subtype") or "")
         metrics = node.get("metrics") if isinstance(node.get("metrics"), dict) else {}

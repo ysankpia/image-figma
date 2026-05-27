@@ -6,6 +6,7 @@ from ..m29_materialization_utils import bbox_overlap_ratio
 from ..png_tools import PngPixels
 from ..visual_primitive_graph import bbox_area, bbox_gap_distance, bbox_in_bounds
 from .artifacts import local_background_confidence, parse_bbox, union_bbox
+from .media import media_blocks_child_foreground
 from .types import M292SourceObject, M292SourcePhysicalOptions, make_object
 
 
@@ -27,9 +28,11 @@ def cluster_icon_objects(
             continue
         if bbox_area(bbox) > options.icon_max_area:
             continue
+        if is_line_like_symbol(bbox):
+            continue
         if is_selected_tab_indicator_symbol(bbox, ocr_boxes):
             continue
-        if any(bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
+        if any(media_blocks_child_foreground(media) and bbox_overlap_ratio(bbox, media.bbox) >= 0.80 for media in media_objects):
             continue
         if any(bbox_overlap_ratio(bbox, box.bbox) >= 0.45 for box in ocr_boxes):
             continue
@@ -73,6 +76,16 @@ def cluster_icon_objects(
             )
         )
     return objects
+
+
+def is_line_like_symbol(bbox: list[int]) -> bool:
+    width = bbox[2]
+    height = bbox[3]
+    if width <= 0 or height <= 0:
+        return True
+    long_edge = max(width, height)
+    short_edge = min(width, height)
+    return short_edge <= 3 and long_edge / max(1, short_edge) >= 12
 
 
 def is_selected_tab_indicator_symbol(bbox: list[int], ocr_boxes: list[Any]) -> bool:

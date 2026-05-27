@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.png_tools import PngPixels, encode_rgb_png, read_png_metadata
-from app.source_ui_physical_graph import M292SourcePhysicalOptions, extract_source_ui_physical_graph
+from app.source_ui_physical_graph import M292SourcePhysicalOptions, cluster_icon_objects, extract_source_ui_physical_graph
+from app.source_ui_physical_graph.media import media_blocks_child_foreground
+from app.source_ui_physical_graph.types import make_object
 
 
 def test_high_confidence_ocr_text_becomes_editable_text_replay(tmp_path: Path) -> None:
@@ -123,6 +125,48 @@ def test_adjacent_symbol_fragments_merge_into_one_raster_icon(tmp_path: Path) ->
     assert icon["replayDecision"] == "icon_replay"
     assert icon["sourceEvidence"]["m29NodeIds"] == ["symbol_001", "symbol_002"]
     assert result["summary"]["rasterIconCount"] == 1
+
+
+def test_line_like_symbol_does_not_swallow_adjacent_icon_cluster(tmp_path: Path) -> None:
+    source = make_png(
+        760,
+        120,
+        fill=(250, 250, 250),
+        marks=[
+            ([40, 40, 620, 2], (244, 245, 247)),
+            ([52, 54, 64, 58], (252, 216, 188)),
+        ],
+    )
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "symbol_separator",
+                "symbol",
+                [40, 40, 620, 2],
+                metrics={"colorCount": 1, "textureScore": 0.03, "edgeScore": 0.0, "fillRatio": 0.52},
+            ),
+            m29_node(
+                "symbol_icon",
+                "symbol",
+                [52, 54, 64, 58],
+                metrics={"colorCount": 35, "textureScore": 0.05, "edgeScore": 0.07, "fillRatio": 0.95},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([]),
+        output_dir=tmp_path / "m29_2",
+        options=M292SourcePhysicalOptions(icon_cluster_gap=16, icon_max_area=48000),
+    )
+
+    icon = only_object(result, "raster_icon")
+    assert icon["bbox"] == [52, 54, 64, 58]
+    assert icon["sourceEvidence"]["m29NodeIds"] == ["symbol_icon"]
+    assert icon["replayDecision"] == "icon_replay"
 
 
 def test_selected_tab_indicator_symbol_is_not_standalone_icon(tmp_path: Path) -> None:
@@ -489,6 +533,32 @@ def test_symbol_inside_media_is_not_separately_replayed(tmp_path: Path) -> None:
     assert not [obj for obj in result["sourceObjects"] if obj["sourceEvidence"]["m29NodeIds"] == ["symbol_inside"]]
 
 
+def test_media_blocking_contract_only_blocks_true_image_assets() -> None:
+    assert media_blocks_child_foreground(media_object(reasons=["m29_image_region"])) is True
+    assert media_blocks_child_foreground(media_object(reasons=["large_image_like_region"], risks=["low_confidence_media_region"])) is False
+    assert media_blocks_child_foreground(media_object(reasons=["m29_image_region"], risks=["contains_internal_text"])) is False
+
+
+def test_low_confidence_media_object_does_not_block_inner_symbol(tmp_path: Path) -> None:
+    source = make_png(240, 160, fill=(248, 248, 248), marks=[([42, 48, 44, 44], (252, 216, 188))])
+    media = media_object([20, 20, 190, 100], reasons=["large_image_like_region"], risks=["low_confidence_media_region"])
+
+    icons = cluster_icon_objects(
+        [m29_node("symbol_inside_panel", "symbol", [42, 48, 44, 44])],
+        [media],
+        [],
+        source,
+        source.width,
+        source.height,
+        M292SourcePhysicalOptions(),
+    )
+
+    assert media_blocks_child_foreground(media) is False
+    assert len(icons) == 1
+    assert icons[0].bbox == [42, 48, 44, 44]
+    assert icons[0].source_evidence["m29NodeIds"] == ["symbol_inside_panel"]
+
+
 def test_large_image_like_unknown_becomes_preserved_media_region(tmp_path: Path) -> None:
     source = make_textured_png(240, 180, [20, 20, 170, 120])
     m29 = m29_document(
@@ -757,6 +827,28 @@ def make_textured_png(width: int, height: int, media_bbox: list[int]) -> PngPixe
 
 def png_bytes(pixels: PngPixels) -> bytes:
     return encode_rgb_png(pixels.width, pixels.height, pixels.rows)
+
+
+def media_object(
+    bbox: list[int] | None = None,
+    *,
+    reasons: list[str] | None = None,
+    risks: list[str] | None = None,
+):
+    return make_object(
+        bbox=bbox or [0, 0, 100, 80],
+        visual_kind="media_region",
+        pixel_owner="preserve_raster",
+        replay_decision="image_replay",
+        m29_ids=["media"],
+        ocr_ids=[],
+        local_bg_confidence=0.5,
+        text_overlap=0.0,
+        media_containment=1.0,
+        confidence="medium",
+        reasons=reasons or ["m29_image_region"],
+        risks=risks or [],
+    )
 
 
 def m29_document(tmp_path: Path, *, nodes: list[dict], blocked: list[dict] | None = None) -> dict:
