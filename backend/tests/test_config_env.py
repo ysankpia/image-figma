@@ -56,6 +56,7 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv("OCR_PROVIDER", "baidu_ppocrv5")
     monkeypatch.setenv("UPLOAD_PREVIEW_PROFILE", "development")
+    monkeypatch.setenv("UPLOAD_PREVIEW_RUNTIME_MODE", "diagnostic")
     monkeypatch.setenv("M29_PERCEPTION_MODEL_ENABLED", "true")
     monkeypatch.setenv("M29_PERCEPTION_MODEL_PATH", " /tmp/model.onnx ")
     monkeypatch.setattr(config, "_LOCAL_ENV_LOADED", False)
@@ -64,6 +65,7 @@ def test_get_settings_exposes_current_runtime_config(monkeypatch, tmp_path: Path
 
     assert settings.ocr_provider == "baidu_ppocrv5"
     assert settings.upload_preview_profile == "development"
+    assert settings.upload_preview_runtime_mode == "diagnostic"
     assert settings.m29_perception_model_enabled is True
     assert settings.m29_perception_model_path == "/tmp/model.onnx"
 
@@ -90,6 +92,14 @@ def test_get_settings_can_disable_perception_model(monkeypatch, tmp_path: Path) 
     settings = config.get_settings()
 
     assert settings.m29_perception_model_enabled is False
+
+
+def test_parse_upload_preview_runtime_mode_defaults_invalid_values() -> None:
+    assert config.parse_upload_preview_runtime_mode("interactive") == "interactive"
+    assert config.parse_upload_preview_runtime_mode(" DIAGNOSTIC ") == "diagnostic"
+    assert config.parse_upload_preview_runtime_mode("full") == "full"
+    assert config.parse_upload_preview_runtime_mode("") == "interactive"
+    assert config.parse_upload_preview_runtime_mode("legacy") == "interactive"
 
 
 def test_parse_bool_supports_common_env_values() -> None:

@@ -16,18 +16,13 @@ from .stages import (
     run_m295_replay_plan_stage,
     run_m29_auto_layout_permission_stage,
     run_m29_b_stage_quality_stage,
-    run_m29_bridge_fate_trace_stage,
-    run_m29_evidence_contract_stage,
     run_m29_hierarchy_candidate_stage,
-    run_m29_internal_source_promotion_stage,
     run_m29_layout_energy_stage,
-    run_m29_media_internal_decomposition_stage,
     run_m29_ownership_conservation_stage,
     run_m29_perception_fate_trace_stage,
     run_m29_perception_model_stage,
     run_m29_perception_source_compiler_stage,
     run_m29_sibling_group_candidate_stage,
-    run_m29_transparent_asset_stage,
     run_m29_design_token_stage,
     run_m29_dsl_visual_comparison_stage,
     run_m29_visual_primitive_stage,
@@ -36,7 +31,7 @@ from .stages import (
 )
 from .task_state import complete_task, fail_task, update_task
 from .timings import StageTiming, run_stage, write_stage_timings
-from .types import UploadPreviewArtifactPolicy, UploadPreviewPipelineError
+from .types import UploadPreviewArtifactPolicy, UploadPreviewPipelineError, UploadPreviewRuntimeMode
 
 
 def run_upload_preview_pipeline(task_id: str) -> None:
@@ -51,6 +46,7 @@ def run_upload_preview_pipeline(task_id: str) -> None:
 
 def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
     policy = artifact_policy_from_settings()
+    runtime_mode = runtime_mode_from_settings()
     timings: list[StageTiming] = []
     upload_path = state.storage.upload_path(task_id)
     png_data = upload_path.read_bytes()
@@ -176,120 +172,6 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_media_internal_decomposition", 30, "Checking M29 media internal decomposition.")
-    media_internal_result = run_stage(
-        paths,
-        timings,
-        "m29_media_internal_decomposition",
-        lambda: run_m29_media_internal_decomposition_stage(
-            task_id=task_id,
-            png_data=png_data,
-            paths=paths,
-            m29_document=m29_document,
-            ocr_document=ocr_document,
-            m292_document=m292_document,
-            m2931_report=m2931_result.report,
-            m295_report=m295_result.report,
-        ),
-    )
-
-    update_task(task_id, "m29_transparent_assets", 31, "Checking M29 transparent asset candidates.")
-    transparent_asset_result = run_stage(
-        paths,
-        timings,
-        "m29_transparent_assets",
-        lambda: run_m29_transparent_asset_stage(
-            task_id=task_id,
-            png_data=png_data,
-            paths=paths,
-            ocr_document=ocr_document,
-            m292_document=m292_document,
-            media_internal_report=media_internal_result.report,
-        ),
-    )
-
-    update_task(task_id, "m29_evidence_contract", 32, "Checking M29 evidence contract for internal source objects.")
-    evidence_contract_result = run_stage(
-        paths,
-        timings,
-        "m29_evidence_contract",
-        lambda: run_m29_evidence_contract_stage(
-            task_id=task_id,
-            paths=paths,
-            m292_document=m292_document,
-            media_internal_report=media_internal_result.report,
-            transparent_asset_report=transparent_asset_result.report,
-        ),
-    )
-
-    update_task(task_id, "m29_internal_source_promotion", 33, "Promoting evidence-contract-supported M29 internal source objects.")
-    promotion_result = run_stage(
-        paths,
-        timings,
-        "m29_internal_source_promotion",
-        lambda: run_m29_internal_source_promotion_stage(
-            task_id=task_id,
-            paths=paths,
-            m292_document=m292_document,
-            media_internal_report=media_internal_result.report,
-            transparent_asset_report=transparent_asset_result.report,
-            evidence_contract_report=evidence_contract_result.report,
-        ),
-    )
-    m292_document = promotion_result.m292_document
-
-    update_task(task_id, "m29_3_relation_graph_report", 34, "Rebuilding M29.3.1 source relation graph report.")
-    m2931_result = run_stage(
-        paths,
-        timings,
-        "m29_3_relation_graph_report_promoted",
-        lambda: run_m2931_relation_stage(
-            task_id=task_id,
-            paths=paths,
-            m292_document=m292_document,
-        ),
-    )
-
-    update_task(task_id, "m29_4_stable_design_cluster", 35, "Rebuilding M29.4 stable design cluster report.")
-    m294_result = run_stage(
-        paths,
-        timings,
-        "m29_4_stable_design_cluster_promoted",
-        lambda: run_m294_cluster_stage(
-            task_id=task_id,
-            paths=paths,
-            m2931_report=m2931_result.report,
-        ),
-    )
-
-    update_task(task_id, "m29_5_replay_plan", 36, "Rebuilding M29.5 replay quality plan.")
-    m295_result = run_stage(
-        paths,
-        timings,
-        "m29_5_replay_plan_promoted",
-        lambda: run_m295_replay_plan_stage(
-            task_id=task_id,
-            paths=paths,
-            m292_document=m292_document,
-            m2931_report=m2931_result.report,
-            m294_report=m294_result.report,
-        ),
-    )
-
-    update_task(task_id, "m29_ownership_conservation", 37, "Rechecking M29 ownership conservation.")
-    ownership_result = run_stage(
-        paths,
-        timings,
-        "m29_ownership_conservation_promoted",
-        lambda: run_m29_ownership_conservation_stage(
-            task_id=task_id,
-            paths=paths,
-            m292_document=m292_document,
-            m2931_report=m2931_result.report,
-            m295_report=m295_result.report,
-        ),
-    )
-
     update_task(task_id, "m29_hierarchy_candidates", 38, "Building M29 hierarchy candidate report.")
     hierarchy_result = run_stage(
         paths,
@@ -367,23 +249,6 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
         ),
     )
 
-    update_task(task_id, "m29_bridge_fate_trace", 93, "Tracing M29 internal candidate bridge fate.")
-    run_stage(
-        paths,
-        timings,
-        "m29_bridge_fate_trace",
-        lambda: run_m29_bridge_fate_trace_stage(
-            task_id=task_id,
-            paths=paths,
-            media_internal_report=media_internal_result.report,
-            transparent_asset_report=transparent_asset_result.report,
-            evidence_contract_report=evidence_contract_result.report,
-            promotion_report=promotion_result.report,
-            final_m295_report=m295_result.report,
-            materialization_report=materialized_design_result.report,
-        ),
-    )
-
     if state.settings.m29_perception_model_enabled and perception_model_result is not None and compiler_result is not None:
         update_task(task_id, "m29_perception_fate_trace", 93, "Tracing M29 perception candidate fate.")
         run_stage(
@@ -400,54 +265,56 @@ def run_pipeline(task_id: str, paths: UploadPreviewPaths) -> None:
             ),
         )
 
-    update_task(task_id, "m29_design_tokens", 94, "Extracting M29 single-page design token report.")
-    design_token_result = run_stage(
-        paths,
-        timings,
-        "m29_design_tokens",
-        lambda: run_m29_design_token_stage(
-            task_id=task_id,
-            paths=paths,
-            dsl=materialized_design_result.dsl,
-            materialization_report=materialized_design_result.report,
-            m295_report=m295_result.report,
-        ),
-    )
+    if runtime_mode in {"diagnostic", "full"}:
+        update_task(task_id, "m29_design_tokens", 94, "Extracting M29 single-page design token report.")
+        design_token_result = run_stage(
+            paths,
+            timings,
+            "m29_design_tokens",
+            lambda: run_m29_design_token_stage(
+                task_id=task_id,
+                paths=paths,
+                dsl=materialized_design_result.dsl,
+                materialization_report=materialized_design_result.report,
+                m295_report=m295_result.report,
+            ),
+        )
 
-    update_task(task_id, "m29_b_stage_quality", 95, "Summarizing M29 B-stage quality.")
-    run_stage(
-        paths,
-        timings,
-        "m29_b_stage_quality",
-        lambda: run_m29_b_stage_quality_stage(
-            task_id=task_id,
-            paths=paths,
-            ownership_report=ownership_result.report,
-            hierarchy_report=hierarchy_result.report,
-            sibling_group_report=sibling_group_result.report,
-            layout_energy_report=layout_energy_result.report,
-            auto_layout_permission_report=auto_layout_permission_result.report,
-            design_token_report=design_token_result.report,
-            materialization_report=materialized_design_result.report,
-        ),
-    )
+        update_task(task_id, "m29_b_stage_quality", 95, "Summarizing M29 B-stage quality.")
+        run_stage(
+            paths,
+            timings,
+            "m29_b_stage_quality",
+            lambda: run_m29_b_stage_quality_stage(
+                task_id=task_id,
+                paths=paths,
+                ownership_report=ownership_result.report,
+                hierarchy_report=hierarchy_result.report,
+                sibling_group_report=sibling_group_result.report,
+                layout_energy_report=layout_energy_result.report,
+                auto_layout_permission_report=auto_layout_permission_result.report,
+                design_token_report=design_token_result.report,
+                materialization_report=materialized_design_result.report,
+            ),
+        )
 
     update_task(task_id, "m29_asset_publish", 96, "Publishing M29 assets.")
     run_stage(paths, timings, "m29_asset_publish", lambda: publish_m29_assets(task_id, paths.materialized_design, materialized_design_result.dsl, image))
 
-    update_task(task_id, "m29_dsl_visual_comparison", 97, "Rendering final DSL comparison artifacts.")
-    run_stage(
-        paths,
-        timings,
-        "m29_dsl_visual_comparison",
-        lambda: run_m29_dsl_visual_comparison_stage(
-            task_id=task_id,
-            png_data=png_data,
-            paths=paths,
-            dsl=materialized_design_result.dsl,
-            text_boxes=text_boxes,
-        ),
-    )
+    if runtime_mode in {"diagnostic", "full"}:
+        update_task(task_id, "m29_dsl_visual_comparison", 97, "Rendering final DSL comparison artifacts.")
+        run_stage(
+            paths,
+            timings,
+            "m29_dsl_visual_comparison",
+            lambda: run_m29_dsl_visual_comparison_stage(
+                task_id=task_id,
+                png_data=png_data,
+                paths=paths,
+                dsl=materialized_design_result.dsl,
+                text_boxes=text_boxes,
+            ),
+        )
 
     output_dsl = paths.materialized_design / "design.dsl.json"
     output_dsl.write_text(json.dumps(materialized_design_result.dsl, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -472,3 +339,10 @@ def artifact_policy_from_settings() -> UploadPreviewArtifactPolicy:
     if profile == "development":
         return UploadPreviewArtifactPolicy(profile="development", emit_debug_artifacts=True, emit_preview_artifacts=True)
     return UploadPreviewArtifactPolicy(profile="production", emit_debug_artifacts=False, emit_preview_artifacts=False)
+
+
+def runtime_mode_from_settings() -> UploadPreviewRuntimeMode:
+    mode = state.settings.upload_preview_runtime_mode
+    if mode in {"interactive", "diagnostic", "full"}:
+        return mode
+    return "interactive"

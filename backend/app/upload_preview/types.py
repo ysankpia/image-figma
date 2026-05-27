@@ -5,6 +5,7 @@ from typing import Literal
 
 
 UploadPreviewProfile = Literal["production", "development"]
+UploadPreviewRuntimeMode = Literal["interactive", "full", "diagnostic"]
 
 
 class UploadPreviewPipelineError(RuntimeError):
@@ -19,4 +20,3 @@ class UploadPreviewArtifactPolicy:
     profile: UploadPreviewProfile
     emit_debug_artifacts: bool
     emit_preview_artifacts: bool
-

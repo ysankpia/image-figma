@@ -56,6 +56,7 @@ def main() -> int:
         log_path=log_path,
         enable_perception_model=args.enable_perception_model,
         perception_model_path=perception_model_path,
+        runtime_mode=args.runtime_mode,
         uv_with=uv_with,
     )
     base_url = f"http://127.0.0.1:{port}"
@@ -78,6 +79,7 @@ def main() -> int:
                 storage_root,
                 poll_timeout_seconds=args.poll_timeout,
                 expect_perception_artifacts=args.enable_perception_model,
+                runtime_mode=args.runtime_mode,
             )
             records.append(record)
             print(f"[batch] {index}/{len(inputs)} status={record['status']} errors={len(record['errors'])}", flush=True)
@@ -104,6 +106,7 @@ def main() -> int:
         "runtimeOptions": {
             "enablePerceptionModel": bool(args.enable_perception_model),
             "perceptionModelPath": str(perception_model_path) if perception_model_path is not None else None,
+            "runtimeMode": args.runtime_mode,
             "uvWith": uv_with,
         },
         "summary": summary,
@@ -141,6 +144,12 @@ def parse_args() -> argparse.Namespace:
         "--perception-model-path",
         default=str(DEFAULT_PERCEPTION_MODEL_PATH),
         help="Local ONNX model path used when model-first perception is enabled.",
+    )
+    parser.add_argument(
+        "--runtime-mode",
+        choices=("interactive", "diagnostic", "full"),
+        default="interactive",
+        help="Upload-preview runtime mode. `full` is a diagnostic alias and does not restore the legacy M29.6 promotion loop.",
     )
     parser.add_argument(
         "--uv-with",
@@ -192,6 +201,7 @@ def start_backend(
     log_path: Path,
     enable_perception_model: bool = False,
     perception_model_path: Path | None = None,
+    runtime_mode: str = "interactive",
     uv_with: list[str] | None = None,
 ) -> tuple[subprocess.Popen[str], TextIO]:
     env = os.environ.copy()
@@ -201,6 +211,7 @@ def start_backend(
             "DATABASE_PATH": str(database_path),
             "PUBLIC_BASE_URL": f"http://127.0.0.1:{port}",
             "UPLOAD_PREVIEW_PROFILE": "production",
+            "UPLOAD_PREVIEW_RUNTIME_MODE": runtime_mode,
             "IMAGE_FIGMA_LOAD_LOCAL_ENV": "true",
             "M29_PERCEPTION_MODEL_ENABLED": "true" if enable_perception_model else "false",
         }
@@ -358,6 +369,7 @@ def run_one(
     *,
     poll_timeout_seconds: float,
     expect_perception_artifacts: bool = False,
+    runtime_mode: str = "interactive",
 ) -> dict[str, Any]:
     record: dict[str, Any] = base_record(image_path, input_dir)
     try:
@@ -367,7 +379,14 @@ def run_one(
         task = wait_for_task(base_url, task_id, timeout_seconds=poll_timeout_seconds)
         record["status"] = task["data"]["status"]
         record["taskStage"] = task["data"]["stage"]
-        collect_artifacts(record, storage_root, task_id, base_url=base_url, expect_perception_artifacts=expect_perception_artifacts)
+        collect_artifacts(
+            record,
+            storage_root,
+            task_id,
+            base_url=base_url,
+            expect_perception_artifacts=expect_perception_artifacts,
+            runtime_mode=runtime_mode,
+        )
         if record["status"] != "completed":
             record["failedStage"] = record["taskStage"]
             record["degradedReason"] = "task_not_completed"
@@ -419,7 +438,15 @@ def wait_for_task(base_url: str, task_id: str, *, timeout_seconds: float) -> dic
     raise RuntimeError(f"task {task_id} did not finish before timeout; last={last_task}")
 
 
-def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, *, base_url: str, expect_perception_artifacts: bool = False) -> None:
+def collect_artifacts(
+    record: dict[str, Any],
+    storage_root: Path,
+    task_id: str,
+    *,
+    base_url: str,
+    expect_perception_artifacts: bool = False,
+    runtime_mode: str = "interactive",
+) -> None:
     root = storage_root / "upload_previews" / task_id
     artifact_paths = {
         "stageTimings": root / "stage_timings.json",
@@ -431,22 +458,23 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
         "m293Report": root / "m29_3" / "region_relation_graph_report.json",
         "m294Report": root / "m29_4" / "stable_design_cluster_report.json",
         "ownershipConservationReport": root / "m29_ownership_conservation" / "ownership_conservation_report.json",
-        "mediaInternalDecompositionReport": root / "m29_media_internal_decomposition" / "media_internal_decomposition_report.json",
-        "transparentAssetReport": root / "m29_transparent_assets" / "transparent_asset_report.json",
-        "evidenceContractReport": root / "m29_evidence_contract" / "evidence_contract_report.json",
-        "internalSourcePromotionReport": root / "m29_internal_source_promotion" / "internal_source_promotion_report.json",
         "hierarchyCandidateReport": root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json",
         "siblingGroupCandidateReport": root / "m29_sibling_groups" / "sibling_group_candidate_report.json",
         "layoutEnergyReport": root / "m29_layout_energy" / "layout_energy_report.json",
         "autoLayoutPermissionReport": root / "m29_auto_layout_permission" / "auto_layout_permission_report.json",
-        "designTokenReport": root / "m29_design_tokens" / "design_token_report.json",
-        "bStageQualityReport": root / "m29_b_stage_quality" / "b_stage_quality_report.json",
-        "dslVisualComparisonReport": root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json",
-        "dslRenderPng": root / "m29_dsl_visual_comparison" / "dsl_render.png",
-        "sourceDiffPng": root / "m29_dsl_visual_comparison" / "source_diff.png",
-        "sourceGateDiffPng": root / "m29_dsl_visual_comparison" / "source_gate_diff.png",
         "replayPlan": root / "m29_5" / "replay_plan.json",
     }
+    if runtime_mode in {"diagnostic", "full"}:
+        artifact_paths.update(
+            {
+                "designTokenReport": root / "m29_design_tokens" / "design_token_report.json",
+                "bStageQualityReport": root / "m29_b_stage_quality" / "b_stage_quality_report.json",
+                "dslVisualComparisonReport": root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json",
+                "dslRenderPng": root / "m29_dsl_visual_comparison" / "dsl_render.png",
+                "sourceDiffPng": root / "m29_dsl_visual_comparison" / "source_diff.png",
+                "sourceGateDiffPng": root / "m29_dsl_visual_comparison" / "source_gate_diff.png",
+            }
+        )
     if expect_perception_artifacts:
         artifact_paths.update(
             {
@@ -463,9 +491,9 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
             record["errors"].append({"type": "missing_artifact", "artifact": key, "path": str(path)})
     record["dslPath"] = str(artifact_paths["dsl"])
     record["sourceImagePath"] = str(artifact_paths["sourceImage"])
-    record["renderBackImagePath"] = str(artifact_paths["dslRenderPng"])
-    record["visualDiffImagePath"] = str(artifact_paths["sourceDiffPng"])
-    record["visualGateDiffImagePath"] = str(artifact_paths["sourceGateDiffPng"])
+    record["renderBackImagePath"] = str(artifact_paths["dslRenderPng"]) if "dslRenderPng" in artifact_paths else None
+    record["visualDiffImagePath"] = str(artifact_paths["sourceDiffPng"]) if "sourceDiffPng" in artifact_paths else None
+    record["visualGateDiffImagePath"] = str(artifact_paths["sourceGateDiffPng"]) if "sourceGateDiffPng" in artifact_paths else None
     load_summary(record, "stageTimings", artifact_paths["stageTimings"])
     load_summary(record, "dsl", artifact_paths["dsl"])
     load_summary(record, "materialization", artifact_paths["materializationReport"])
@@ -474,17 +502,14 @@ def collect_artifacts(record: dict[str, Any], storage_root: Path, task_id: str, 
     load_summary(record, "m293", artifact_paths["m293Report"])
     load_summary(record, "m294", artifact_paths["m294Report"])
     load_summary(record, "ownershipConservation", artifact_paths["ownershipConservationReport"])
-    load_summary(record, "mediaInternalDecomposition", artifact_paths["mediaInternalDecompositionReport"])
-    load_summary(record, "transparentAssets", artifact_paths["transparentAssetReport"])
-    load_summary(record, "evidenceContract", artifact_paths["evidenceContractReport"])
-    load_summary(record, "internalSourcePromotion", artifact_paths["internalSourcePromotionReport"])
     load_summary(record, "hierarchyCandidates", artifact_paths["hierarchyCandidateReport"])
     load_summary(record, "siblingGroups", artifact_paths["siblingGroupCandidateReport"])
     load_summary(record, "layoutEnergy", artifact_paths["layoutEnergyReport"])
     load_summary(record, "autoLayoutPermission", artifact_paths["autoLayoutPermissionReport"])
-    load_summary(record, "designTokens", artifact_paths["designTokenReport"])
-    load_summary(record, "bStageQuality", artifact_paths["bStageQualityReport"])
-    load_summary(record, "dslVisualComparison", artifact_paths["dslVisualComparisonReport"])
+    if runtime_mode in {"diagnostic", "full"}:
+        load_summary(record, "designTokens", artifact_paths["designTokenReport"])
+        load_summary(record, "bStageQuality", artifact_paths["bStageQualityReport"])
+        load_summary(record, "dslVisualComparison", artifact_paths["dslVisualComparisonReport"])
     load_summary(record, "replayPlan", artifact_paths["replayPlan"])
     if expect_perception_artifacts:
         load_summary(record, "perceptionModel", artifact_paths["perceptionModelReport"])

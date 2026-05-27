@@ -24,23 +24,18 @@ Figma Plugin
 -> M29.4 weak structural evidence
 -> M29.5 replay plan
 -> M29 ownership conservation report
--> M29.6 media internal decomposition report
--> M29 transparent asset report
--> M29 evidence contract report
--> M29 internal source promotion
--> M29.3/M29.4/M29.5 final reports from promoted M29.2
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
 -> M29 perception fate trace report
--> M29 design token report
--> M29 B-stage quality report
 -> GET /api/tasks/{taskId}/dsl
 -> Renderer
 -> Figma
 ```
+
+The old M29.6 -> transparent asset -> evidence contract -> internal source promotion -> promoted rerun loop is no longer part of the active upload-preview mainline. Do not restore it as a default runtime path. Those packages may remain in the repository only as legacy tests, diagnostics, or archival reference until explicitly deleted.
 
 `/api/upload-preview` is the formal upload entrypoint. `/api/tasks/{taskId}/dsl` is the only formal design-output endpoint. Current mainline details live in [docs/engineering/current-mainline-code-map.md](docs/engineering/current-mainline-code-map.md).
 
@@ -116,19 +111,19 @@ Changes to M29 owner, relation, replay, materializer, cleanup authorization, or 
 
 Bug work starts from `docs/bugs/index.md` and the related bug record. Reproduce before fixing. After the fix, record root cause, fix summary, regression guard, and validation evidence. If automated regression coverage is not practical, document the alternate guard and remaining risk in the bug record.
 
-## M29 Bridge Fate Debugging
+## M29 Perception Fate Debugging
 
-For any M29-visible regression, inspect the latest task's bridge fate trace first:
+For any model-first M29-visible regression, inspect the latest task's perception fate trace first:
 
 ```text
-backend/storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
+backend/storage/upload_previews/{taskId}/m29_perception_fate_trace/perception_fate_trace_report.json
 ```
 
-Use it only as a read-only diagnostic index. Identify `firstBlockingStage`, `firstBlockingReason`, `candidateRole`, `bbox`, `evidenceDecision`, `promotionDecision`, `finalReplayDecision`, and `materializerDecision` before choosing a fix layer.
+Use it only as a read-only diagnostic index. Identify `candidateId`, `bbox`, `compilerDecision`, `firstBlockingStage`, `firstBlockingReason`, `compiledSourceObjectId`, `finalReplayDecision`, and `materializerDecision` before choosing a fix layer.
 
-Fix the owning layer shown by the trace. Do not add sample-specific labels, brands, filenames, task ids, fixed bboxes, fixed coordinates, theme colors, or one-off screenshot rules to bridge fate trace, materializer, Renderer, or plugin code.
+Fix the owning layer shown by the trace. Do not add sample-specific labels, brands, filenames, task ids, fixed bboxes, fixed coordinates, theme colors, or one-off screenshot rules to perception fate trace, materializer, Renderer, or plugin code.
 
-Bridge fate remains diagnostic infrastructure. Failure evidence and regression guards belong in `docs/bugs/`, `docs/plans/`, tests, or validation ledgers.
+Perception fate remains diagnostic infrastructure. Failure evidence and regression guards belong in `docs/bugs/`, `docs/plans/`, tests, or validation ledgers.
 
 ## Commit & Pull Request Guidelines
 
@@ -142,6 +137,8 @@ Do not restore removed M29 Direct compare, legacy M30 materialization product pa
 
 M29 perception model report is enabled by default and report-only; it may propose bbox candidates but must not create source objects, DSL nodes, assets, replay authorization, or cleanup authorization. M29 perception source compiler is the default bridge from model proposals into enhanced M29.2 source ownership; compiled objects must still flow through M29.3/M29.4/M29.5 before materialization. M29 perception fate trace is diagnostic-only and must not feed source ownership, M29.5, materializer, Renderer, or plugin decisions. This model-first path is not the removed legacy ONNX proposer runtime and must not revive that legacy route/module family. Compatibility runs may set `M29_PERCEPTION_MODEL_ENABLED=false`, but normal local upload-preview validation should keep the model path on.
 
-M29.4 weak cluster, M29 ownership conservation, M29.6 media internal decomposition, M29 transparent asset report, M29 evidence contract report, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, M29 Auto Layout permission, M29 design token, and M29 B-stage quality reports are evidence/permission/diagnostic surfaces. C-stage materialization may consume high-confidence structural evidence only to create transparent controlled structure groups around already replayed nodes. It must not create Auto Layout, Figma Component/Instance, variables, variants, vectors, or new visible owner nodes. M29.6 must not promote internal media candidates or authorize cleanup by itself. M29 transparent asset report may generate diagnostic RGBA artifacts only; it must not replace materialized assets or authorize cleanup by itself. M29 evidence contract report may combine M29.6, transparent asset, ownership, relation, and risk evidence into `allow_visible_replay` / `report_only` / `reject`, but remains report-only and cannot create source objects or cleanup authorization by itself. M29 internal source promotion is the compatibility bridge from M29.6/transparent/evidence-contract evidence back into M29.2 source ownership, and promoted objects must be reprocessed through M29.3/M29.4/M29.5 before materialization. M29.5 replay plan is still the only source for materialization order, node budget, dedupe, visible internal icon replay, and cleanup authorization. The M29 plan-driven materializer must not reclassify owners or add cleanup authorization.
+M29.4 weak cluster, M29 ownership conservation, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, and M29 Auto Layout permission are active evidence/permission surfaces. C-stage materialization may consume high-confidence structural evidence only to create transparent controlled structure groups around already replayed nodes. It must not create Auto Layout, Figma Component/Instance, variables, variants, vectors, or new visible owner nodes. M29.5 replay plan is still the only source for materialization order, node budget, dedupe, visible replay, and cleanup authorization. The M29 plan-driven materializer must not reclassify owners or add cleanup authorization.
+
+M29.6 media internal decomposition, M29 transparent asset report, M29 evidence contract report, M29 internal source promotion, and M29 bridge fate trace are legacy compatibility surfaces from the pre-model visual-discovery loop. They must not be wired back into the default upload-preview pipeline. If any future work uses them for archival comparison, they remain report-only/compat-only and must not create source objects, DSL nodes, assets, replay authorization, or cleanup authorization outside an explicitly approved migration.
 
 Source ownership defects must be fixed in raw M29 or M29.2. Do not patch them in the materializer, Renderer, or plugin with color, copy, theme, industry, filename, or fixed-bbox special cases. Root/page background must come from source PNG sampling; do not restore a fixed light default to hide fallback-off failures.

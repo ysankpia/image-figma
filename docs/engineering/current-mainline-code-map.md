@@ -16,25 +16,17 @@ Plugin upload
 -> M29.4 weak cluster
 -> M29.5 replay plan
 -> M29 ownership conservation report
--> M29.6 media internal decomposition report
--> M29 transparent asset report
--> M29 evidence contract report
--> M29 internal source promotion
--> final M29.3/M29.4/M29.5 reports from promoted M29.2
 -> M29 hierarchy candidate report
 -> M29 sibling group candidate report
 -> M29 layout energy report
 -> M29 Auto Layout permission report
 -> M29 plan-driven materializer
--> M29 bridge fate trace report
 -> M29 perception fate trace report
--> M29 design token report
--> M29 B-stage quality report
 -> DSL v0.1
 -> Renderer
 ```
 
-M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and the legacy ONNX proposer have been pruned from active backend runtime.
+M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, the legacy ONNX proposer, and the old M29.6/transparent/evidence/promotion rerun loop have been pruned from active backend runtime.
 
 ## Runtime Entry Surface
 
@@ -61,20 +53,13 @@ run M29 perception model report by default
 run M29/M29.2/M29.3/M29.4/M29.5
 compile perception candidates into enhanced M29.2 source ownership by default
 run M29 ownership conservation report
-run M29.6 media internal decomposition report
-run M29 transparent asset report
-run M29 evidence contract report
-run M29 internal source promotion
-rerun M29.3/M29.4/M29.5/ownership from promoted M29.2
 run M29 hierarchy candidate report
 run M29 sibling group candidate report
 run M29 layout energy report
 run M29 Auto Layout permission report
 run M29 plan-driven materialization
-run M29 bridge fate trace report
 run M29 perception fate trace report by default
-run M29 design token report
-run M29 B-stage quality report
+optionally run M29 design token, B-stage quality, and DSL visual comparison in diagnostic/full mode
 publish M29 assets
 write task status and stage timings
 ```
@@ -83,15 +68,17 @@ write task status and stage timings
 
 ```text
 pipeline.py: upload preview 主编排顺序
-types.py: pipeline error/profile/artifact policy 类型
+types.py: pipeline error/profile/runtime/artifact policy 类型
 paths.py: upload preview storage path layout
 timings.py: stage timing record/write logic
 task_state.py: task status/error/completion writes
-stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/perception-model/perception-source-compiler/ownership-conservation/media-internal-decomposition/transparent-asset/evidence-contract/internal-source-promotion/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/bridge-fate-trace/perception-fate-trace/design-token/B-stage-quality stage wrappers
+stages.py: OCR/M29/M29.2/M29.3/M29.4/M29.5/perception-model/perception-source-compiler/ownership-conservation/hierarchy-candidate/sibling-group/layout-energy/auto-layout-permission/materialization/perception-fate-trace/design-token/B-stage-quality/DSL-visual-comparison stage wrappers
 assets.py: M29 materialized assets publish
 ```
 
 这些模块不承载 owner、relation、cleanup 授权或 materialization 策略。
+
+`UPLOAD_PREVIEW_RUNTIME_MODE=interactive` is the default model-first runtime. `diagnostic` and `full` run additional post-materialization quality artifacts, but they do not restore the legacy M29.6 -> transparent -> evidence -> promotion -> promoted rerun chain.
 
 OCR document to M29 text-box conversion is owned by `backend/app/ocr.py` via `text_boxes_from_ocr_document`. Current mainline packages must import that adapter from `app.ocr`, not from historical M29 audit packages.
 
@@ -319,7 +306,7 @@ M29.3.1 relation graph
 M29.5 replay plan
 ```
 
-它创建：
+显式 compat 调用时创建：
 
 ```text
 storage/upload_previews/{taskId}/m29_ownership_conservation/ownership_conservation_report.json
@@ -341,9 +328,9 @@ validation.py: report schema and report-only invariant checks
 
 这个 package 只报告风险，不改变任何输入对象。它不创建 DSL nodes，不改 M29.5 plan，不授权 cleanup，不被 materializer 消费。
 
-### M29.6 Media Internal Decomposition
+### Legacy M29.6 Media Internal Decomposition
 
-`backend/app/media_internal_decomposition/` 是 ownership conservation 之后、materialization 之前的 report-only composite-media evidence surface。它消费：
+`backend/app/media_internal_decomposition/` 是旧的 pre-model composite-media evidence surface。它不再由 active upload-preview pipeline 调用。保留该 package 仅用于旧测试、归档审计或显式迁移对照。
 
 ```text
 OCR blocks
@@ -354,7 +341,7 @@ M29.3.1 relation graph metadata
 M29.5 replay plan metadata
 ```
 
-它创建：
+显式 compat 调用时创建：
 
 ```text
 storage/upload_previews/{taskId}/m29_media_internal_decomposition/media_internal_decomposition_report.json
@@ -372,13 +359,13 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。OCR anchor 是 relation hint，不是唯一 foreground 扫描入口。Pixel candidates 可以携带 report-only roles，例如 `internal_icon_candidate`、`selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`。这些 role 只是 source-chain 证据；M29.6 本身不创建 DSL nodes，不改 M29.5 plan，不生成透明资产，不提升 source ownership，不授权 cleanup，不被 materializer 消费。内部 icon 必须继续经过 transparent asset、evidence contract、internal source promotion 和 final M29.5；内部 marker/status/table shape role 不要求 transparent PNG，但仍必须经过 evidence contract、internal source promotion 写回 M29.2，并由 final M29.5 授权 visible replay。
+这个 package 只报告 `preserve_raster` media 内部 OCR/text-mask/raw symbol/shape/unknown candidate evidence，以及非 OCR internal foreground component evidence。它不得重新接入默认主链，不得创建 DSL nodes，不改 M29.5 plan，不生成 active assets，不提升 source ownership，不授权 cleanup，不被 materializer 消费。模型优先后，媒体内控件应由 `perception_model_report` 和 `perception_source_compiler` 在 M29.2 之前解决。
 
 M29.6 report meta 记录 `scaleProfile`。Text mask padding、pixel component min/max area、short-edge gate、generic scan window size、generic candidate budget、connected component return budget 都使用该内部 scale profile 或面积密度预算。比例证据仍保持比例形式：overlap ratio、containment ratio、aspect ratio、coverage、text overlap、hero penalty 和 cleanup risk 不应被改成固定样本规则。
 
-### M29 Transparent Asset Report
+### Legacy M29 Transparent Asset Report
 
-`backend/app/transparent_asset_report/` 是 M29.6 之后、materialization 之前的 report-only transparent asset evidence surface。它消费：
+`backend/app/transparent_asset_report/` 是旧 M29.6 loop 的 transparent asset evidence surface。它不再由 active upload-preview pipeline 调用。后续若需要 alpha/mask 能力，应重定位为 accepted perception candidate 的 asset/mask builder，而不是候选发现或 visible replay gate。
 
 ```text
 source PNG pixels
@@ -414,17 +401,17 @@ Transparent asset report 明确拆分四个 gate：
 ```text
 analysisAllowed: 是否允许进入 alpha/background analysis
 assetGenerated: 是否实际生成 diagnostic RGBA asset
-visibleReplayEligible: 是否允许作为 evidence contract / promotion 的可见回放证据
+visibleReplayEligible: legacy evidence/promotion loop 的可见回放证据字段；默认 model-first upload-preview 不消费
 cleanupEligible: 永远 false；cleanup 只能由 final M29.5 replay plan 授权
 ```
 
-`decision=allow` 和 `assetPath` 只表示诊断 alpha asset 生成成功；新代码必须优先读取 `visibleReplayEligible`，旧报告缺少该字段时才回退到 legacy `decision=allow + assetPath` 语义。
+`decision=allow` 和 `assetPath` 只表示诊断 alpha asset 生成成功。只有显式维护 legacy loop 时才应读取 `visibleReplayEligible`；默认 model-first runtime 不读取 transparent report 决策。
 
 Transparent asset report meta 记录 `scaleProfile`。Preflight 的 candidate area 和 short-edge gate 使用同一内部 scale profile，避免高倍率 UI icon 因 1x 面积/短边上限被误拒。Alpha 背景稳定性、edge-alpha、foreground coverage 和 connected-foreground 仍是像素质量 gate，不因为 scale 成功就授权 visible replay 或 cleanup。
 
-### M29 Evidence Contract
+### Legacy M29 Evidence Contract
 
-`backend/app/m29_evidence_contract/` 是 M29.6/transparent evidence 与 internal source promotion 之间的 report-only 证据合同层。它消费：
+`backend/app/m29_evidence_contract/` 是旧 M29.6/transparent evidence 与 internal source promotion 之间的 report-only 证据合同层。它不再由 active upload-preview pipeline 调用。后续证据合同应改造为 perception candidate verifier，验证模型候选是否可进入 M29.2 source ownership。
 
 ```text
 M29.2 source objects
@@ -432,7 +419,7 @@ M29.6 media internal decomposition report
 M29 transparent asset report
 ```
 
-它创建：
+显式 compat 调用时创建：
 
 ```text
 storage/upload_previews/{taskId}/m29_evidence_contract/evidence_contract_report.json
@@ -448,11 +435,11 @@ report.py: summary counts and report-only invariant fields
 validation.py: report schema and report-only invariant checks
 ```
 
-这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent visible replay eligibility、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 `allow_visible_replay` / `report_only` / `reject`。它也把 M29.6 明确标注的 shape role，例如 `selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`，用 role support、compactness、repetition、same-media containment、text-overlap 和 hero/texture penalty 合成 shape replay 合同；shape role 不要求 transparent PNG。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha asset 生成成功直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标或 shape。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。`allow_visible_replay` 只允许 `internal_source_promotion` 把对应 M29.6 candidate 写回 promoted M29.2；之后仍必须重跑 M29.3/M29.4/M29.5。
+这个 package 把 internal UI icon 候选的 source score、size/compactness、text-anchor relation、same-media containment、repetition、transparent visible replay eligibility、text-overlap penalty、hero/texture penalty、cleanup risk 和 repair-cost penalty 合成 legacy `allow_visible_replay` / `report_only` / `reject`。它也把 M29.6 明确标注的 shape role，例如 `selected_marker_candidate`、`status_dot_candidate`、`table_marker_candidate`，用 role support、compactness、repetition、same-media containment、text-overlap 和 hero/texture penalty 合成 legacy shape replay 合同；shape role 不要求 transparent PNG。Generic `pixel_component/non_ocr_foreground` 只能作为 report/reject 证据，不能仅凭 alpha asset 生成成功直接 visible replay，避免地图路线、楼层线、下划线等媒体碎片被误升成图标或 shape。它不创建 source objects，不改 DSL，不改 assets，不授权 cleanup，不被 materializer 直接消费。默认 model-first runtime 不消费该报告；未来若显式维护 legacy loop，`allow_visible_replay` 也只能作为 legacy internal_source_promotion 的输入。
 
-### M29 Internal Source Promotion
+### Legacy M29 Internal Source Promotion
 
-`backend/app/internal_source_promotion/` 是 M29.6/transparent/evidence-contract compatibility evidence 回到 M29.2 source ownership 的当前桥。Opt-in model-first perception 使用 `backend/app/perception_source_compiler/` 在更早的 M29.2 边界完成 source ownership 编译；不要把这两个桥混在一起。`internal_source_promotion` 消费：
+`backend/app/internal_source_promotion/` 是旧 M29.6/transparent/evidence-contract evidence 回到 M29.2 source ownership 的 compatibility bridge。Active model-first runtime 使用 `backend/app/perception_source_compiler/` 在更早的 M29.2 边界完成 source ownership 编译；不要把这两个桥混在一起，也不要恢复 promotion rerun 作为默认主链。
 
 ```text
 M29.2 source objects
@@ -461,7 +448,7 @@ M29 transparent asset report
 M29 evidence contract report
 ```
 
-它创建：
+显式 compat 调用时创建：
 
 ```text
 storage/upload_previews/{taskId}/m29_internal_source_promotion/internal_source_promotion_report.json
@@ -475,11 +462,11 @@ pipeline.py: internal icon promotion and promoted M29.2 document write
 types.py: promotion result and invariant metadata
 ```
 
-这个 package 提升两类 M29.6 internal candidate。Icon path 仍只提升同时满足 M29.6 accepted `internal_icon_candidate`、transparent `visibleReplayEligible=true`，以及 evidence contract `allow_visible_replay` 的对象；若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。Shape path 只提升 evidence contract `allow_visible_replay` 的明确 shape role，例如 selected marker、table marker 和 status dot，写回 `shape_geometry` / `shape_replay` source object；shape path 不要求 transparent asset，也不把普通内部图块猜成按钮背景。Promotion dedupe 使用 IoU、containment、center shift 和 size drift 做 role-compatible spatial merge；同角色高重叠保留 evidence rank 更高者，不同角色高重叠记录 conflict，不静默覆盖。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha asset generation 当 promotion 权限。promotion 后 upload-preview 会用增强版 M29.2 重新生成 final M29.3.1、M29.4、M29.5 和 ownership conservation reports；M29.5 负责为 parent media relation 成立的 promoted internal asset 写 cleanup 授权，materializer 只消费 final M29.5 授权结果。
+这个 package 提升两类 M29.6 internal candidate。Icon path 仍只提升同时满足 M29.6 accepted `internal_icon_candidate`、transparent `visibleReplayEligible=true`，以及 evidence contract `allow_visible_replay` 的对象；若 transparent asset report 提供 `analysisBbox`，promotion 使用该 bbox 作为 promoted source bbox，并在 source evidence 中保留原始 `candidateBbox`，保证带上下文 padding 的透明 PNG 不会在 Figma 中被错误缩放。Shape path 只提升 evidence contract `allow_visible_replay` 的明确 shape role，例如 selected marker、table marker 和 status dot，写回 `shape_geometry` / `shape_replay` source object；shape path 不要求 transparent asset，也不把普通内部图块猜成按钮背景。Promotion dedupe 使用 IoU、containment、center shift 和 size drift 做 role-compatible spatial merge；同角色高重叠保留 evidence rank 更高者，不同角色高重叠记录 conflict，不静默覆盖。它不创建 DSL nodes，不绕过 M29.5，不再直接把 local confidence/alpha asset generation 当 promotion 权限。默认 upload-preview 不运行 promotion rerun；显式 legacy 对照若运行该 package，promoted document 仍必须重新经过 M29.3/M29.4/M29.5 和 ownership conservation，materializer 只能消费 final M29.5 授权结果。
 
-### M29 Bridge Fate Trace
+### Legacy M29 Bridge Fate Trace
 
-`backend/app/m29_bridge_fate_trace/` 是 materialization 之后的 report-only diagnostic surface。它消费：
+`backend/app/m29_bridge_fate_trace/` 是旧 M29.6 bridge 的 materialization 后 diagnostic surface。它不再由 active upload-preview pipeline 调用。Model-first regression debugging should use `m29_perception_fate_trace` first.
 
 ```text
 M29.6 media internal decomposition report
@@ -490,7 +477,7 @@ final M29.5 replay plan
 M29 materialization report
 ```
 
-它创建：
+显式 compat 调用时创建：
 
 ```text
 storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
@@ -629,7 +616,7 @@ validation.py: report schema and permission-only invariant checks
 
 ### M29 Design Tokens
 
-`backend/app/design_token_report/` 是 M29 materialization 之后、asset publish 之前的 report-only single-page token candidate surface。它消费：
+`backend/app/design_token_report/` 是 M29 materialization 之后的 diagnostic-mode report-only single-page token candidate surface。它消费：
 
 ```text
 M29 plan-driven DSL
@@ -661,7 +648,7 @@ validation.py: report schema and read-only invariant checks
 
 ### M29 B-Stage Quality
 
-`backend/app/b_stage_quality_report/` 是 B 阶段 report-only quality summary surface。它消费：
+`backend/app/b_stage_quality_report/` 是 diagnostic-mode B 阶段 report-only quality summary surface。它消费：
 
 ```text
 M29 ownership conservation report
@@ -696,7 +683,7 @@ Repair cost 只统计 actionable materialization skips。`diagnostic_only`、`fa
 
 ### M29 DSL Visual Comparison
 
-`backend/app/dsl_visual_comparison/` 是 C-stage upload-preview artifact surface。它消费：
+`backend/app/dsl_visual_comparison/` 是 diagnostic/full runtime C-stage upload-preview artifact surface。它消费：
 
 ```text
 source PNG

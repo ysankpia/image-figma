@@ -25,6 +25,7 @@ class Settings:
     baidu_paddle_ocr_poll_interval_seconds: float = 5
     baidu_paddle_ocr_timeout_seconds: float = 120
     upload_preview_profile: str = "production"
+    upload_preview_runtime_mode: str = "interactive"
     m29_perception_model_enabled: bool = True
     m29_perception_model_path: str | None = DEFAULT_M29_PERCEPTION_MODEL_PATH
 
@@ -52,6 +53,7 @@ def get_settings() -> Settings:
         baidu_paddle_ocr_poll_interval_seconds=float(os.getenv("BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS", "5")),
         baidu_paddle_ocr_timeout_seconds=float(os.getenv("BAIDU_PADDLE_OCR_TIMEOUT_SECONDS", "120")),
         upload_preview_profile=parse_upload_preview_profile(os.getenv("UPLOAD_PREVIEW_PROFILE", "production")),
+        upload_preview_runtime_mode=parse_upload_preview_runtime_mode(os.getenv("UPLOAD_PREVIEW_RUNTIME_MODE", "interactive")),
         m29_perception_model_enabled=parse_bool(os.getenv("M29_PERCEPTION_MODEL_ENABLED"), default=True),
         m29_perception_model_path=normalized_optional_string(
             os.getenv("M29_PERCEPTION_MODEL_PATH", DEFAULT_M29_PERCEPTION_MODEL_PATH)
@@ -104,6 +106,13 @@ def parse_upload_preview_profile(value: str) -> str:
     if profile not in {"production", "development"}:
         return "production"
     return profile
+
+
+def parse_upload_preview_runtime_mode(value: str) -> str:
+    mode = value.strip().lower() or "interactive"
+    if mode not in {"interactive", "full", "diagnostic"}:
+        return "interactive"
+    return mode
 
 
 def parse_bool(value: str | None, *, default: bool) -> bool:

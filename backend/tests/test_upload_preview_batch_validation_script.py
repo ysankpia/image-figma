@@ -175,6 +175,9 @@ def test_collect_artifacts_can_require_perception_model_outputs(tmp_path: Path, 
     assert not [error for error in record["errors"] if error["type"] == "missing_artifact"]
     assert record["artifacts"]["perceptionModelReport"]["exists"] is True
     assert record["artifacts"]["perceptionFateTraceReport"]["exists"] is True
+    assert "mediaInternalDecompositionReport" not in record["artifacts"]
+    assert "internalSourcePromotionReport" not in record["artifacts"]
+    assert record["renderBackImagePath"] is None
     assert record["perceptionCandidateCount"] == 11
     assert record["compiledSourceObjectCount"] == 5
     assert record["compiledControlBackgroundCount"] == 2
@@ -271,7 +274,32 @@ def test_derive_record_metrics_promotes_visual_gate_metrics(tmp_path: Path) -> N
     assert record["dslVisualGateChangedPixelRatio10"] == 0.045679
 
 
-def write_minimal_artifacts(root: Path, storage_root: Path, task_id: str) -> None:
+def test_collect_artifacts_requires_diagnostic_reports_only_in_diagnostic_mode(tmp_path: Path, monkeypatch) -> None:
+    script = load_script()
+    storage_root = tmp_path / "storage"
+    task_id = "task_diagnostic"
+    root = storage_root / "upload_previews" / task_id
+    write_minimal_artifacts(root, storage_root, task_id, include_diagnostic=True)
+    monkeypatch.setattr(script, "validate_dsl_assets", lambda *args, **kwargs: None)
+    record = script.base_record(tmp_path / "input.png", tmp_path)
+    record["status"] = "completed"
+
+    script.collect_artifacts(
+        record,
+        storage_root,
+        task_id,
+        base_url="http://127.0.0.1:8000",
+        runtime_mode="diagnostic",
+    )
+
+    assert not [error for error in record["errors"] if error["type"] == "missing_artifact"]
+    assert record["artifacts"]["designTokenReport"]["exists"] is True
+    assert record["artifacts"]["bStageQualityReport"]["exists"] is True
+    assert record["artifacts"]["dslVisualComparisonReport"]["exists"] is True
+    assert record["renderBackImagePath"].endswith("m29_dsl_visual_comparison/dsl_render.png")
+
+
+def write_minimal_artifacts(root: Path, storage_root: Path, task_id: str, *, include_diagnostic: bool = False) -> None:
     artifact_summaries = {
         "stage_timings.json": {"stages": []},
         "m29/nodes.json": {"summary": {}},
@@ -279,17 +307,10 @@ def write_minimal_artifacts(root: Path, storage_root: Path, task_id: str) -> Non
         "m29_3/region_relation_graph_report.json": {"summary": {}},
         "m29_4/stable_design_cluster_report.json": {"summary": {}},
         "m29_ownership_conservation/ownership_conservation_report.json": {"summary": {"conflictTypeCounts": {}}},
-        "m29_media_internal_decomposition/media_internal_decomposition_report.json": {"summary": {}},
-        "m29_transparent_assets/transparent_asset_report.json": {"summary": {}},
-        "m29_evidence_contract/evidence_contract_report.json": {"summary": {}},
-        "m29_internal_source_promotion/internal_source_promotion_report.json": {"summary": {}},
         "m29_hierarchy_candidates/hierarchy_candidate_report.json": {"summary": {}},
         "m29_sibling_groups/sibling_group_candidate_report.json": {"summary": {}},
         "m29_layout_energy/layout_energy_report.json": {"summary": {}},
         "m29_auto_layout_permission/auto_layout_permission_report.json": {"summary": {}},
-        "m29_design_tokens/design_token_report.json": {"summary": {}},
-        "m29_b_stage_quality/b_stage_quality_report.json": {"summary": {}},
-        "m29_dsl_visual_comparison/dsl_visual_comparison_report.json": {"summary": {}},
         "m29_5/replay_plan.json": {
             "summary": {
                 "plannedShapeReplayCount": 7,
@@ -309,18 +330,27 @@ def write_minimal_artifacts(root: Path, storage_root: Path, task_id: str) -> Non
         },
         "materialized_design/design.dsl.json": {"assets": [], "root": {"type": "frame", "children": []}},
     }
+    if include_diagnostic:
+        artifact_summaries.update(
+            {
+                "m29_design_tokens/design_token_report.json": {"summary": {}},
+                "m29_b_stage_quality/b_stage_quality_report.json": {"summary": {}},
+                "m29_dsl_visual_comparison/dsl_visual_comparison_report.json": {"summary": {}},
+            }
+        )
     for relative_path, data in artifact_summaries.items():
         path = root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
-    for relative_path in [
-        "m29_dsl_visual_comparison/dsl_render.png",
-        "m29_dsl_visual_comparison/source_diff.png",
-        "m29_dsl_visual_comparison/source_gate_diff.png",
-    ]:
-        path = root / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"png")
+    if include_diagnostic:
+        for relative_path in [
+            "m29_dsl_visual_comparison/dsl_render.png",
+            "m29_dsl_visual_comparison/source_diff.png",
+            "m29_dsl_visual_comparison/source_gate_diff.png",
+        ]:
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"png")
     upload_path = storage_root / "uploads" / task_id / "original.png"
     upload_path.parent.mkdir(parents=True, exist_ok=True)
     upload_path.write_bytes(b"png")

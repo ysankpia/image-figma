@@ -21,6 +21,7 @@
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
 | `UPLOAD_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
+| `UPLOAD_PREVIEW_RUNTIME_MODE` | upload-preview 执行模式，支持 `interactive`、`diagnostic`、`full` | `interactive` | 否 |
 | `M29_PERCEPTION_MODEL_ENABLED` | 是否在 upload-preview 中启用 M29 model-first perception path，生成模型候选报告并运行 perception source compiler | `true` | 否 |
 | `M29_PERCEPTION_MODEL_PATH` | 本地 ONNX perception model 路径；仅 `M29_PERCEPTION_MODEL_ENABLED=true` 时使用 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 开启 model path 时需要 |
 
@@ -56,6 +57,28 @@ UPLOAD_PREVIEW_PROFILE=development
 ```
 
 `development` keeps raw M29 diagnostics such as overlays and preview sheet for local evidence debugging. This variable affects only artifacts; it does not change OCR, M29 classification, replay plan, DSL schema, or Renderer behavior.
+
+## Upload Preview Runtime Mode
+
+```bash
+UPLOAD_PREVIEW_RUNTIME_MODE=interactive
+```
+
+`interactive` is the default model-first Figma preview runtime. It runs OCR, the perception model, the perception source compiler, raw M29 fallback, M29.2/M29.3/M29.4/M29.5, ownership conservation, hierarchy/sibling/layout/auto-layout reports, the plan-driven materializer, asset publish, `design.dsl.json`, and perception fate trace. It does not run the old M29.6 -> transparent asset -> evidence contract -> internal source promotion -> promoted rerun loop.
+
+```bash
+UPLOAD_PREVIEW_RUNTIME_MODE=diagnostic
+```
+
+`diagnostic` keeps the same model-first source ownership and final DSL as `interactive`, then adds post-materialization reports: design tokens, B-stage quality, and DSL visual comparison. These reports are diagnostic-only; they do not change source ownership, replay, cleanup, materialization, Renderer, or plugin output.
+
+```bash
+UPLOAD_PREVIEW_RUNTIME_MODE=full
+```
+
+`full` is currently an alias for diagnostic-depth reporting. It does not restore legacy visual discovery. Do not use it expecting M29.6, transparent asset report, evidence contract, internal source promotion, bridge fate, or promoted rerun artifacts.
+
+`UPLOAD_PREVIEW_PROFILE` and `UPLOAD_PREVIEW_RUNTIME_MODE` are separate. `UPLOAD_PREVIEW_PROFILE` controls artifact/debug file emission. `UPLOAD_PREVIEW_RUNTIME_MODE` controls whether post-materialization diagnostic stages run.
 
 ## M29 Perception Model Path
 

@@ -63,25 +63,17 @@ def test_upload_preview_completes_and_serves_m29_plan_driven_dsl(client: TestCli
         "m29_4_stable_design_cluster",
         "m29_5_replay_plan",
         "m29_ownership_conservation",
-        "m29_media_internal_decomposition",
-        "m29_transparent_assets",
-        "m29_evidence_contract",
-        "m29_internal_source_promotion",
-        "m29_3_relation_graph_report_promoted",
-        "m29_4_stable_design_cluster_promoted",
-        "m29_5_replay_plan_promoted",
-        "m29_ownership_conservation_promoted",
         "m29_hierarchy_candidates",
         "m29_sibling_groups",
         "m29_layout_energy",
         "m29_auto_layout_permission",
         "m29_materialization",
-        "m29_bridge_fate_trace",
-        "m29_design_tokens",
-        "m29_b_stage_quality",
         "m29_asset_publish",
-        "m29_dsl_visual_comparison",
     }
+    assert not stages & legacy_visual_discovery_stages()
+    assert "m29_design_tokens" not in stages
+    assert "m29_b_stage_quality" not in stages
+    assert "m29_dsl_visual_comparison" not in stages
     assert "m29_direct_replay" not in stages
     removed_materialization_stage = "m" + "30_materialization"
     assert removed_materialization_stage not in stages
@@ -112,6 +104,8 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert not (task_root / "m29_0_5").exists()
     assert not (task_root / "m29_0_7").exists()
     assert not (task_root / "m29_perception_model").exists()
+    assert not (task_root / "m29_perception_source_compiler").exists()
+    assert not (task_root / "m29_perception_fate_trace").exists()
     assert not list(task_root.glob("**/overlays"))
     assert not list(task_root.glob("**/preview*.png"))
     assert (task_root / "ocr" / "ocr.json").exists()
@@ -122,28 +116,20 @@ def test_upload_preview_uses_production_artifact_profile_by_default(client: Test
     assert (task_root / "m29_4" / "stable_design_cluster_report.json").exists()
     assert (task_root / "m29_5" / "replay_plan.json").exists()
     assert (task_root / "m29_ownership_conservation" / "ownership_conservation_report.json").exists()
-    assert (task_root / "m29_media_internal_decomposition" / "media_internal_decomposition_report.json").exists()
-    assert (task_root / "m29_transparent_assets" / "transparent_asset_report.json").exists()
-    assert (task_root / "m29_evidence_contract" / "evidence_contract_report.json").exists()
-    assert (task_root / "m29_internal_source_promotion" / "internal_source_promotion_report.json").exists()
-    assert (task_root / "m29_internal_source_promotion" / "source_ui_physical_graph.promoted.json").exists()
-    assert (task_root / "m29_bridge_fate_trace" / "bridge_fate_trace_report.json").exists()
+    assert not (task_root / "m29_media_internal_decomposition").exists()
+    assert not (task_root / "m29_transparent_assets").exists()
+    assert not (task_root / "m29_evidence_contract").exists()
+    assert not (task_root / "m29_internal_source_promotion").exists()
+    assert not (task_root / "m29_bridge_fate_trace").exists()
     assert (task_root / "m29_hierarchy_candidates" / "hierarchy_candidate_report.json").exists()
     assert (task_root / "m29_sibling_groups" / "sibling_group_candidate_report.json").exists()
     assert (task_root / "m29_layout_energy" / "layout_energy_report.json").exists()
     assert (task_root / "m29_auto_layout_permission" / "auto_layout_permission_report.json").exists()
     assert (task_root / "materialized_design" / "design.dsl.json").exists()
     assert (task_root / "materialized_design" / "materialization_report.json").exists()
-    assert (task_root / "m29_design_tokens" / "design_token_report.json").exists()
-    assert (task_root / "m29_b_stage_quality" / "b_stage_quality_report.json").exists()
-    assert (task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").exists()
-    assert (task_root / "m29_dsl_visual_comparison" / "dsl_render.png").exists()
-    assert (task_root / "m29_dsl_visual_comparison" / "source_diff.png").exists()
-    assert (task_root / "m29_dsl_visual_comparison" / "source_gate_diff.png").exists()
-    visual_report = json.loads((task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").read_text(encoding="utf-8"))
-    visual_summary = visual_report["summary"]
-    assert visual_summary["textExclusionSource"] == "dsl_visible_text_plus_source_ocr_text"
-    assert visual_summary["sourceTextBboxCount"] > 0
+    assert not (task_root / "m29_design_tokens").exists()
+    assert not (task_root / "m29_b_stage_quality").exists()
+    assert not (task_root / "m29_dsl_visual_comparison").exists()
 
 
 def test_upload_preview_can_emit_opt_in_perception_model_report(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -221,6 +207,8 @@ def test_upload_preview_emits_perception_model_report_by_default(tmp_path: Path,
     assert (task_root / "m29_perception_model" / "perception_model_report.json").exists()
     assert (task_root / "m29_perception_source_compiler" / "perception_source_compiler_report.json").exists()
     assert (task_root / "m29_perception_fate_trace" / "perception_fate_trace_report.json").exists()
+    stages_seen = {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert not stages_seen & legacy_visual_discovery_stages()
     perception_report = json.loads(
         (task_root / "m29_perception_model" / "perception_model_report.json").read_text(encoding="utf-8")
     )
@@ -275,6 +263,39 @@ def test_upload_preview_development_profile_keeps_m29_diagnostics(tmp_path: Path
     removed_materializer_dir = "m" + "30"
     assert not (task_root / removed_materializer_dir).exists()
     assert not (task_root / "m29_direct").exists()
+    assert not (task_root / "m29_media_internal_decomposition").exists()
+
+
+def test_upload_preview_diagnostic_runtime_adds_quality_reports_without_legacy_loop(
+    tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]
+) -> None:
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_ROOT", str(storage_root))
+    monkeypatch.setenv("DATABASE_PATH", str(storage_root / "app.db"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    monkeypatch.setenv("UPLOAD_PREVIEW_RUNTIME_MODE", "diagnostic")
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name)
+
+    main = importlib.import_module("app.main")
+    with TestClient(main.create_app()) as local_client:
+        upload = local_client.post("/api/upload-preview", files={"file": png_file})
+        assert upload.status_code == 200
+        task_id = upload.json()["data"]["taskId"]
+        report = local_client.get(f"/api/tasks/{task_id}/materialization").json()["data"]
+
+    task_root = Path(report["outputDsl"]).parent.parent
+    stages_seen = {item["stage"] for item in report["stageTimings"]["stages"]}
+    assert not stages_seen & legacy_visual_discovery_stages()
+    assert "m29_design_tokens" in stages_seen
+    assert "m29_b_stage_quality" in stages_seen
+    assert "m29_dsl_visual_comparison" in stages_seen
+    assert (task_root / "m29_design_tokens" / "design_token_report.json").exists()
+    assert (task_root / "m29_b_stage_quality" / "b_stage_quality_report.json").exists()
+    assert (task_root / "m29_dsl_visual_comparison" / "dsl_visual_comparison_report.json").exists()
+    assert not (task_root / "m29_media_internal_decomposition").exists()
 
 
 def test_m29_materialization_failure_blocks_mainline_output(tmp_path: Path, monkeypatch, png_file: tuple[str, bytes, str]) -> None:
@@ -370,6 +391,20 @@ def has_role(dsl: dict, role: str) -> bool:
         return any(visit(child) for child in node.get("children", []) if isinstance(child, dict))
 
     return visit(dsl["root"])
+
+
+def legacy_visual_discovery_stages() -> set[str]:
+    return {
+        "m29_media_internal_decomposition",
+        "m29_transparent_assets",
+        "m29_evidence_contract",
+        "m29_internal_source_promotion",
+        "m29_3_relation_graph_report_promoted",
+        "m29_4_stable_design_cluster_promoted",
+        "m29_5_replay_plan_promoted",
+        "m29_ownership_conservation_promoted",
+        "m29_bridge_fate_trace",
+    }
 
 
 def make_png(width: int, height: int) -> bytes:
