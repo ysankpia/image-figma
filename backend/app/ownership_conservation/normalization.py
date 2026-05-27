@@ -68,6 +68,7 @@ def normalize_plan_items(raw_items: Any) -> tuple[list[dict[str, Any]], list[str
                 "planItemId": plan_id,
                 "sourceObjectId": source_id,
                 "bbox": bbox,
+                "visualKind": str(item.get("visualKind") or ""),
                 "finalReplayAction": str(item.get("finalReplayAction") or ""),
                 "targetRole": item.get("targetRole"),
                 "pixelOwner": str(item.get("pixelOwner") or ""),

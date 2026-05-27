@@ -34,3 +34,10 @@ def overlap_ratio(left: list[int], right: list[int]) -> float:
         return 0.0
     return round(intersection / max(1, min(bbox_area(left), bbox_area(right))), 6)
 
+
+def bbox_iou(left: list[int], right: list[int], intersection: int | None = None) -> float:
+    overlap = intersection_area(left, right) if intersection is None else intersection
+    union = bbox_area(left) + bbox_area(right) - overlap
+    if overlap <= 0 or union <= 0:
+        return 0.0
+    return overlap / union

@@ -819,6 +819,41 @@ def test_near_equal_visible_claims_are_reported_as_overlap(tmp_path: Path) -> No
     assert report["summary"]["conflictTypeCounts"]["visible_ownership_overlap"] == 1
 
 
+def test_adjacent_icon_overlap_accepted_by_replay_plan_is_not_reported_as_conflict(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("left_icon", [10, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+            m292_object("right_icon", [25, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+        ],
+        edges=[edge("edge_icon_overlap", "left_icon", "right_icon", "overlaps")],
+        plan_items=[
+            plan_item("plan_left", "left_icon", [10, 10, 20, 20], "icon_replay", "m29_symbol", visual_kind="raster_icon"),
+            plan_item("plan_right", "right_icon", [25, 10, 20, 20], "icon_replay", "m29_symbol", visual_kind="raster_icon"),
+        ],
+    )
+
+    assert not [item for item in report["conflicts"] if item["type"] == "visible_ownership_overlap"]
+    assert report["summary"]["conflictCount"] == 0
+
+
+def test_high_iou_same_icon_overlap_is_still_reported_as_conflict(tmp_path: Path) -> None:
+    report = ownership_report(
+        tmp_path,
+        objects=[
+            m292_object("icon_a", [10, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+            m292_object("icon_b", [12, 11, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+        ],
+        edges=[edge("edge_icon_overlap", "icon_a", "icon_b", "overlaps")],
+        plan_items=[
+            plan_item("plan_a", "icon_a", [10, 10, 20, 20], "icon_replay", "m29_symbol", visual_kind="raster_icon"),
+            plan_item("plan_b", "icon_b", [12, 11, 20, 20], "icon_replay", "m29_symbol", visual_kind="raster_icon"),
+        ],
+    )
+
+    assert report["summary"]["conflictTypeCounts"]["visible_ownership_overlap"] == 1
+
+
 def test_small_bbox_edge_overlap_is_not_reported_as_visible_ownership_conflict(tmp_path: Path) -> None:
     report = ownership_report(
         tmp_path,
@@ -920,11 +955,13 @@ def plan_item(
     *,
     cleanup_targets: list[dict] | None = None,
     source_evidence: dict | None = None,
+    visual_kind: str = "",
 ) -> dict:
     return {
         "id": plan_id,
         "sourceObjectId": source_id,
         "bbox": bbox,
+        "visualKind": visual_kind,
         "finalReplayAction": action,
         "targetRole": target_role,
         "pixelOwner": "editable_text",

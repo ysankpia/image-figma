@@ -30,6 +30,7 @@ def build_visible_replay_claims(plan_items: list[dict[str, Any]]) -> list[dict[s
                 "planItemId": item["planItemId"],
                 "sourceObjectId": item["sourceObjectId"],
                 "bbox": item["bbox"],
+                "visualKind": item["visualKind"],
                 "finalReplayAction": action,
                 "targetRole": item["targetRole"],
                 "pixelOwner": item["pixelOwner"],

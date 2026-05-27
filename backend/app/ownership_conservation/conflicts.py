@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .geometry import intersection_area, overlap_ratio, union_bbox
+from .geometry import bbox_iou, intersection_area, overlap_ratio, union_bbox
 from .relations import edge_between, edge_is_near_equal, relation_contains_object, relation_contains_text
 from .types import NON_VISIBLE_REPLAY_ACTIONS, VISIBLE_REPLAY_ACTIONS
 
 MAX_PROMOTED_INTERNAL_ICON_LABEL_TEXT_OVERLAP_RATIO = 0.14
+SAME_FOREGROUND_DUPLICATE_IOU_THRESHOLD = 0.60
+SAME_FOREGROUND_DUPLICATE_CONTAINMENT_THRESHOLD = 0.80
 INTERNAL_ICON_FOREGROUND_SOURCES = {
     "m29_6_internal_icon_candidate",
     "m29_6_foreground_claim",
@@ -61,9 +63,12 @@ def detect_visible_overlap_conflicts(
         for right in visible_claims[index + 1 :]:
             intersection = intersection_area(left["bbox"], right["bbox"])
             ratio = overlap_ratio(left["bbox"], right["bbox"])
-            if ratio < 0.20 and not edge_is_near_equal(edge_between(edge_lookup, left["sourceObjectId"], right["sourceObjectId"])):
+            edge = edge_between(edge_lookup, left["sourceObjectId"], right["sourceObjectId"])
+            if ratio < 0.20 and not edge_is_near_equal(edge):
                 continue
             if overlap_is_explainable(left, right, edge_lookup):
+                continue
+            if same_foreground_overlap_is_accepted_by_replay_plan(left, right, edge, intersection, ratio):
                 continue
             conflicts.append(
                 conflict(
@@ -77,6 +82,41 @@ def detect_visible_overlap_conflicts(
                 )
             )
     return conflicts
+
+
+def same_foreground_overlap_is_accepted_by_replay_plan(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    edge: dict[str, Any] | None,
+    intersection: int,
+    containment_ratio: float,
+) -> bool:
+    if left["finalReplayAction"] != right["finalReplayAction"]:
+        return False
+    if left["finalReplayAction"] not in {"icon_replay", "shape_replay"}:
+        return False
+    if edge_is_near_equal(edge):
+        return False
+    if not same_visual_role_family(left, right):
+        return True
+    if bbox_iou(left["bbox"], right["bbox"], intersection) >= SAME_FOREGROUND_DUPLICATE_IOU_THRESHOLD:
+        return False
+    primary = str((edge or {}).get("primarySetRelation") or "")
+    if primary in {"contains", "contained_by"} and containment_ratio >= SAME_FOREGROUND_DUPLICATE_CONTAINMENT_THRESHOLD:
+        return False
+    return True
+
+
+def same_visual_role_family(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if left.get("finalReplayAction") != right.get("finalReplayAction"):
+        return False
+    if left.get("visualKind") and right.get("visualKind") and left.get("visualKind") == right.get("visualKind"):
+        return True
+    left_evidence = left.get("sourceEvidence") if isinstance(left.get("sourceEvidence"), dict) else {}
+    right_evidence = right.get("sourceEvidence") if isinstance(right.get("sourceEvidence"), dict) else {}
+    left_role = str(left_evidence.get("internalRole") or "")
+    right_role = str(right_evidence.get("internalRole") or "")
+    return bool(left_role and right_role and left_role == right_role)
 
 
 def detect_missing_copied_cleanup(
