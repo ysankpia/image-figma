@@ -119,6 +119,89 @@ def test_promoted_internal_icon_uses_m295_authorized_transparent_asset(tmp_path:
     assert symbol_node["meta"]["m29TransparentAssetPath"] == str(transparent_asset)
 
 
+def test_model_foreground_icon_uses_existing_transparent_asset(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(80, 60, fill=(255, 255, 255), marks=[([20, 20, 16, 16], (0, 0, 0))]),
+    )
+    transparent_asset = tmp_path / "m29_transparent_assets" / "assets" / "transparent" / "model_icon.png"
+    transparent_asset.parent.mkdir(parents=True, exist_ok=True)
+    transparent_asset.write_bytes(encode_rgb_png(16, 16, [b"\xaa\xbb\xcc" * 16 for _ in range(16)]))
+    m292 = m292_document(
+        [
+            m292_object(
+                "model_icon",
+                [20, 20, 16, 16],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                source_evidence={
+                    "promotionSource": "perception_model_foreground_claim",
+                    "mediaSourceObjectId": "media",
+                    "transparentAssetPath": "assets/transparent/model_icon.png",
+                },
+            ),
+        ]
+    )
+    plan = m295_plan([m295_item("plan_icon", "model_icon", [20, 20, 16, 16], "icon_replay", "m29_symbol")])
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out_model_transparent",
+    )
+
+    symbol_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "m29_symbol")
+    assert (tmp_path / "out_model_transparent" / symbol_asset["url"]).read_bytes() == transparent_asset.read_bytes()
+    symbol_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_symbol")
+    assert symbol_node["meta"]["m29TransparentAssetPath"] == str(transparent_asset)
+
+
+def test_model_foreground_icon_falls_back_to_crop_when_transparent_asset_is_missing(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(80, 60, fill=(255, 255, 255), marks=[([20, 20, 16, 16], (1, 2, 3))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object(
+                "model_icon",
+                [20, 20, 16, 16],
+                "raster_icon",
+                "raster_icon",
+                "icon_replay",
+                source_evidence={
+                    "promotionSource": "perception_model_foreground_claim",
+                    "mediaSourceObjectId": "media",
+                    "transparentAssetPath": "assets/transparent/missing.png",
+                },
+            ),
+        ]
+    )
+    plan = m295_plan([m295_item("plan_icon", "model_icon", [20, 20, 16, 16], "icon_replay", "m29_symbol")])
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        output_dir=tmp_path / "out_model_missing_transparent",
+    )
+
+    symbol_asset = next(asset for asset in result.dsl["assets"] if asset.get("role") == "m29_symbol")
+    assert (tmp_path / "out_model_missing_transparent" / symbol_asset["url"]).read_bytes() == encode_rgb_png(
+        16,
+        16,
+        [b"\x01\x02\x03" * 16 for _ in range(16)],
+    )
+    symbol_node = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_symbol")
+    assert "m29TransparentAssetPath" not in symbol_node["meta"]
+
+
 def test_copied_media_cleanup_requires_m295_cleanup_target(tmp_path: Path) -> None:
     source = write_png(
         tmp_path / "source.png",

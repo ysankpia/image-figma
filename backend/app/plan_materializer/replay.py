@@ -10,6 +10,12 @@ from .assets import append_image_replay_node
 from .background import build_shape_replay_style, estimate_font_size, sample_text_background, sample_text_foreground
 from .types import PlanMaterializerOptions, ReplayNode
 
+TRANSPARENT_ASSET_PROMOTION_SOURCES = {
+    "m29_6_internal_icon_candidate",
+    "m29_6_foreground_claim",
+    "perception_model_foreground_claim",
+}
+
 
 def replay_m295_plan_items(
     *,
@@ -220,7 +226,7 @@ def m292_source_ids(item: dict[str, Any], key: str) -> list[str]:
 
 def transparent_asset_path_for(item: dict[str, Any], output_dir: Path) -> Path | None:
     evidence = item.get("sourceEvidence") if isinstance(item.get("sourceEvidence"), dict) else {}
-    if evidence.get("promotionSource") not in {"m29_6_internal_icon_candidate", "m29_6_foreground_claim"}:
+    if evidence.get("promotionSource") not in TRANSPARENT_ASSET_PROMOTION_SOURCES:
         return None
     value = str(evidence.get("transparentAssetPath") or "").strip()
     if not value:
