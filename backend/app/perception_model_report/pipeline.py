@@ -6,9 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from app.image_math.perception import decode_yolo_like_output, preprocess_png_for_yolo_like_model
 
-from .decoder import decode_yolo_like_output, preprocess_image
 from .report import build_summary, normalize_candidates
 from .types import PerceptionModelOptions, PerceptionModelReportResult, REPORT_ONLY_META
 from .validation import validate_perception_model_report
@@ -27,8 +26,7 @@ def extract_perception_model_report(
     options = options or PerceptionModelOptions()
     output_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
-    image = Image.open(bytes_to_file_like(source_png)).convert("RGB")
-    tensor, transform = preprocess_image(image, input_size=options.input_size)
+    tensor, transform = preprocess_png_for_yolo_like_model(source_png, input_size=options.input_size)
     output = raw_output
     metadata = dict(model_metadata or {})
     if output is None:
@@ -56,8 +54,8 @@ def extract_perception_model_report(
         "outputReport": str(report_path),
         "model": model_report_metadata(model_path=model_path, metadata=metadata),
         "image": {
-            "width": image.width,
-            "height": image.height,
+            "width": int(transform["imageWidth"]),
+            "height": int(transform["imageHeight"]),
             "preprocess": transform,
         },
         "options": options.to_dict(),
@@ -131,9 +129,3 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def bytes_to_file_like(data: bytes):
-    from io import BytesIO
-
-    return BytesIO(data)
