@@ -179,6 +179,8 @@ def classify_candidate(
             image_height=image_height,
             options=options,
         ):
+            if is_multi_item_text_container(bbox, contained_text, options):
+                return rejected(candidate, "multi_item_container_not_raster_owner", bbox=bbox)
             vertical_icon = build_inferred_vertical_label_icon_object(
                 index=len([item for item in compiled_objects if item.get("visualKind") == "raster_icon"]) + 1,
                 candidate=candidate,
@@ -1057,6 +1059,28 @@ def content_region_too_large_for_text_control(
     if median_text_height > 0 and bbox[3] > round(median_text_height * options.max_text_control_height_to_text_height):
         return True
     return False
+
+
+def is_multi_item_text_container(bbox: list[int], contained_text: list[Any], options: PerceptionSourceCompilerOptions) -> bool:
+    text_boxes = [parse_xywh_bbox(getattr(box, "bbox", None)) for box in contained_text]
+    valid_boxes = [box for box in text_boxes if box is not None]
+    if len(valid_boxes) < 3:
+        return False
+    centers = sorted(box[0] + box[2] / 2 for box in valid_boxes)
+    vertical_centers = sorted(box[1] + box[3] / 2 for box in valid_boxes)
+    text_widths = sorted(box[2] for box in valid_boxes)
+    text_heights = sorted(box[3] for box in valid_boxes)
+    median_text_width = text_widths[len(text_widths) // 2]
+    median_text_height = text_heights[len(text_heights) // 2]
+    horizontal_span = centers[-1] - centers[0]
+    vertical_span = vertical_centers[-1] - vertical_centers[0]
+    gaps = [right - left for left, right in zip(centers, centers[1:], strict=False)]
+    min_gap = min(gaps) if gaps else 0.0
+    return (
+        horizontal_span >= max(median_text_width * 3.0, bbox[2] * 0.45)
+        and vertical_span <= max(median_text_height * 2.5, bbox[3] * 0.35)
+        and min_gap >= max(median_text_width * 1.3, bbox[2] * 0.12)
+    )
 
 
 def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:

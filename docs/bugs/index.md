@@ -9,6 +9,7 @@
 
 最近 resolved bug：
 
+- [020-multi-item-navigation-container-becomes-raster-owner.md](resolved/020-multi-item-navigation-container-becomes-raster-owner.md)：多 item 底部导航容器不再被 perception source compiler 编译成整条 `internal_control_raster_background`，内部 tab icon/text 保持可选 replay。
 - [019-control-radius-inferred-from-bbox-as-pill.md](resolved/019-control-radius-inferred-from-bbox-as-pill.md)：control background 不再按 bbox 宽高比例推断半高胶囊 radius；圆角和 cleanup mask radius 现在必须由像素边界证明。
 - [018-controlled-structure-and-control-icon-model-first-regression.md](resolved/018-controlled-structure-and-control-icon-model-first-regression.md)：model-first interactive 不再把 C-stage 结构组写成可见 DSL group，并为纵向 action tile 推导 icon source。
 - [017-residual-media-overlays-foreground-claims.md](resolved/017-residual-media-overlays-foreground-claims.md)：model-first foreground claim 已进入 M29.5，但 parent residual media image 在 DSL 层级上盖住 foreground shape/text，导致按钮被擦成白底或空心。

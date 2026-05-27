@@ -270,6 +270,81 @@ def test_complex_single_line_text_control_compiles_to_selectable_image_crop(tmp_
     assert control["sourceEvidence"]["controlInferenceReasons"] == ["perception_candidate_complex_text_control_raster_crop"]
 
 
+def test_multi_item_navigation_container_does_not_become_raster_owner(tmp_path: Path) -> None:
+    source = make_png(
+        420,
+        420,
+        fill=(248, 248, 248),
+        marks=[
+            ([20, 80, 380, 112], (255, 255, 255)),
+            ([52, 100, 24, 24], (80, 80, 80)),
+            ([132, 100, 24, 24], (80, 80, 80)),
+            ([212, 100, 24, 24], (20, 170, 86)),
+            ([292, 100, 24, 24], (80, 80, 80)),
+            ([48, 154, 34, 18], (80, 80, 80)),
+            ([128, 154, 34, 18], (80, 80, 80)),
+            ([208, 154, 34, 18], (20, 170, 86)),
+            ([288, 154, 34, 18], (80, 80, 80)),
+        ],
+    )
+    base_objects = [
+        m292_object("icon_home", [52, 100, 24, 24], "raster_icon", "raster_icon", "icon_replay"),
+        m292_object("icon_category", [132, 100, 24, 24], "raster_icon", "raster_icon", "icon_replay"),
+        m292_object("icon_order", [212, 100, 24, 24], "raster_icon", "raster_icon", "icon_replay"),
+        m292_object("icon_profile", [292, 100, 24, 24], "raster_icon", "raster_icon", "icon_replay"),
+        m292_object("text_home", [48, 154, 34, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_home"]}),
+        m292_object("text_category", [128, 154, 34, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_category"]}),
+        m292_object("text_order", [208, 154, 34, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_order"]}),
+        m292_object("text_profile", [288, 154, 34, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_profile"]}),
+    ]
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_multi_item_nav",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document(
+            [
+                ocr_block("ocr_home", "Home", [48, 154, 34, 18]),
+                ocr_block("ocr_category", "Cat", [128, 154, 34, 18]),
+                ocr_block("ocr_order", "Order", [208, 154, 34, 18]),
+                ocr_block("ocr_profile", "Mine", [288, 154, 34, 18]),
+            ]
+        ),
+        perception_model_report=perception_report([candidate("model_bottom_nav", [20, 80, 400, 192], 0.44)]),
+        m292_document=m292_document(base_objects),
+        output_dir=tmp_path / "compiler",
+    )
+
+    assert not [
+        item
+        for item in result.report["compiledSourceObjects"]
+        if item["visualKind"] == "media_region"
+        and item["sourceEvidence"].get("internalRole") == "internal_control_raster_background"
+    ]
+    rejected_candidate_ids = {item["candidateId"] for item in result.report["rejectedCandidates"]}
+    assert "model_bottom_nav" in rejected_candidate_ids
+
+    relation = extract_m2931_region_relation_graph_report(
+        task_id="task_compiler_multi_item_nav",
+        m292_document=result.m292_document,
+        output_dir=tmp_path / "m29_3_1",
+    ).report
+    replay = build_m295_replay_plan(
+        task_id="task_compiler_multi_item_nav",
+        m292_document=result.m292_document,
+        m2931_report=relation,
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    ).report
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in replay["planItems"]}
+    assert actions["icon_home"] == "icon_replay"
+    assert actions["icon_category"] == "icon_replay"
+    assert actions["icon_order"] == "icon_replay"
+    assert actions["icon_profile"] == "icon_replay"
+    assert actions["text_home"] == "text_replay"
+    assert actions["text_category"] == "text_replay"
+    assert actions["text_order"] == "text_replay"
+    assert actions["text_profile"] == "text_replay"
+
+
 def test_geometry_control_candidate_compiles_without_complete_ocr_containment(tmp_path: Path) -> None:
     source = make_png(
         320,
