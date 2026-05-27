@@ -197,6 +197,50 @@ def test_m295_suppresses_same_icon_contained_visible_overlap(tmp_path: Path) -> 
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
 
 
+def test_m295_keeps_adjacent_small_icons_with_partial_bbox_overlap(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_adjacent_icon_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("left_icon", [10, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+                m292_object("right_icon", [25, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["left_icon", "right_icon"],
+            [edge("icon_partial_overlap", "left_icon", "right_icon", "overlaps", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"left_icon": "icon_replay", "right_icon": "icon_replay"}
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
+
+
+def test_m295_suppresses_high_iou_same_icon_duplicate(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_high_iou_icon_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("icon_a", [10, 10, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+                m292_object("icon_b", [12, 11, 20, 20], "raster_icon", "raster_icon", "icon_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["icon_a", "icon_b"],
+            [edge("icon_high_iou", "icon_a", "icon_b", "overlaps", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert sorted(actions.values()) == ["icon_replay", "suppress_duplicate"]
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
 def test_m295_suppresses_same_shape_high_overlap_without_suppressing_text_background(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_shape_overlap",
@@ -223,6 +267,28 @@ def test_m295_suppresses_same_shape_high_overlap_without_suppressing_text_backgr
     assert actions["shape_inner"] == "suppress_duplicate"
     assert actions["label"] == "text_replay"
     assert result.report["summary"]["visibleOverlapSuppressedCount"] == 1
+
+
+def test_m295_keeps_adjacent_markers_with_partial_bbox_overlap(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_adjacent_marker_overlap",
+        m292_document=m292_document(
+            [
+                m292_object("marker_a", [10, 10, 30, 8], "selected_marker", "shape_geometry", "shape_replay"),
+                m292_object("marker_b", [34, 10, 30, 8], "selected_marker", "shape_geometry", "shape_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["marker_a", "marker_b"],
+            [edge("marker_partial_overlap", "marker_a", "marker_b", "overlaps", [])],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    actions = {item["sourceObjectId"]: item["finalReplayAction"] for item in result.report["planItems"]}
+    assert actions == {"marker_a": "shape_replay", "marker_b": "shape_replay"}
+    assert result.report["summary"]["visibleOverlapSuppressedCount"] == 0
 
 
 def test_m295_adds_copied_cleanup_for_text_overlapping_media(tmp_path: Path) -> None:

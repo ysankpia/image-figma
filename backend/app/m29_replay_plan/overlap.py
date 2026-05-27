@@ -40,6 +40,8 @@ def suppress_visible_overlap_duplicates(
 
 
 MAX_PROMOTED_INTERNAL_ICON_TEXT_OVERLAP_RATIO = 0.14
+SAME_FOREGROUND_DUPLICATE_IOU_THRESHOLD = 0.60
+SAME_FOREGROUND_DUPLICATE_CONTAINMENT_THRESHOLD = 0.80
 INTERNAL_ICON_PROMOTION_SOURCES = {
     "m29_6_internal_icon_candidate",
     "m29_6_foreground_claim",
@@ -74,8 +76,7 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
         if left_action == "image_replay" and is_perception_foreground_image_over_parent_media(left, right):
             return False
         if left_action in {"icon_replay", "shape_replay"}:
-            threshold = 0.20 if left_action == "icon_replay" else 0.20
-            return containment_ratio >= threshold
+            return should_suppress_same_foreground_overlap(left, right, primary, intersection, containment_ratio)
         if left_action == "image_replay":
             return containment_ratio >= 0.35 or (primary in {"contains", "contained_by"} and containment_ratio >= 0.20)
         if left_action == "text_replay":
@@ -97,6 +98,32 @@ def should_suppress_visible_overlap(left: dict[str, Any], right: dict[str, Any],
             return False
         return left_action == "text_replay" and containment_ratio >= 0.25
     return False
+
+
+def should_suppress_same_foreground_overlap(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    primary: str,
+    intersection: int,
+    containment_ratio: float,
+) -> bool:
+    if not same_visual_role_family(left, right):
+        return False
+    if bbox_iou(left["bbox"], right["bbox"], intersection) >= SAME_FOREGROUND_DUPLICATE_IOU_THRESHOLD:
+        return True
+    return primary in {"contains", "contained_by"} and containment_ratio >= SAME_FOREGROUND_DUPLICATE_CONTAINMENT_THRESHOLD
+
+
+def same_visual_role_family(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if left.get("finalReplayAction") != right.get("finalReplayAction"):
+        return False
+    if left.get("visualKind") and right.get("visualKind") and left.get("visualKind") == right.get("visualKind"):
+        return True
+    left_evidence = left.get("sourceEvidence") if isinstance(left.get("sourceEvidence"), dict) else {}
+    right_evidence = right.get("sourceEvidence") if isinstance(right.get("sourceEvidence"), dict) else {}
+    left_role = str(left_evidence.get("internalRole") or "")
+    right_role = str(right_evidence.get("internalRole") or "")
+    return bool(left_role and right_role and left_role == right_role)
 
 
 def is_promoted_internal_icon(item: dict[str, Any]) -> bool:
@@ -225,6 +252,16 @@ def suppress_visible_overlap_item(item: dict[str, Any], edge_id: str) -> dict[st
 
 def bbox_area(bbox: list[int]) -> int:
     return max(0, int(bbox[2])) * max(0, int(bbox[3]))
+
+
+def bbox_iou(left: list[int], right: list[int], intersection: int | None = None) -> float:
+    left_area = bbox_area(left)
+    right_area = bbox_area(right)
+    overlap = intersection_area(left, right) if intersection is None else intersection
+    union = left_area + right_area - overlap
+    if overlap <= 0 or union <= 0:
+        return 0.0
+    return overlap / union
 
 
 def intersection_area(left: list[int], right: list[int]) -> int:

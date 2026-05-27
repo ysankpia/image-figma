@@ -62,6 +62,7 @@ def build_m295_replay_plan(
             "id": "",
             "sourceObjectId": item["id"],
             "bbox": item["bbox"],
+            "visualKind": item["visualKind"],
             "finalReplayAction": action,
             "targetRole": target_role,
             "pixelOwner": item["pixelOwner"],
