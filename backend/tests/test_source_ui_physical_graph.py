@@ -603,11 +603,39 @@ def test_low_confidence_unknown_with_finite_control_evidence_becomes_control_bac
     assert shape["sourceEvidence"]["m29NodeIds"] == ["unknown_button_like"]
     assert shape["sourceEvidence"]["ocrBoxIds"] == ["ocr_cta"]
     assert shape["sourceEvidence"]["shapeFillOverride"] == "#52944C"
-    assert shape["sourceEvidence"]["shapeRadiusOverride"] == 22
+    assert "shapeRadiusOverride" not in shape["sourceEvidence"]
     assert "low_confidence_unknown_control_background" in shape["reasons"]
     assert "shape_from_low_confidence_unknown" in shape["risks"]
     assert text["replayDecision"] == "text_replay"
     assert not [item for item in result["sourceObjects"] if item["visualKind"] == "media_region"]
+
+
+def test_low_confidence_unknown_rounded_control_uses_pixel_proven_radius(tmp_path: Path) -> None:
+    source = make_png(600, 400, fill=(248, 248, 248))
+    draw_rounded_rect(source, 34, 48, 190, 44, 12, (82, 148, 76))
+    source = paint_marks(source, [([96, 60, 72, 16], (255, 255, 255))])
+    m29 = m29_document(
+        tmp_path,
+        nodes=[
+            m29_node(
+                "unknown_button_like",
+                "unknown",
+                [34, 48, 190, 44],
+                subtype="image_like_low_confidence",
+                metrics={"colorCount": 50, "textureScore": 0.19, "edgeScore": 0.15, "fillRatio": 0.63, "meanRgb": [94, 121, 90]},
+            ),
+        ],
+    )
+
+    result = extract_source_ui_physical_graph(
+        source_png=png_bytes(source),
+        m29_document=m29,
+        ocr_document=ocr_document([ocr_block("ocr_cta", "Action", [96, 58, 72, 20])]),
+        output_dir=tmp_path / "m29_2",
+    )
+
+    shape = only_object(result, "control_background")
+    assert shape["sourceEvidence"]["shapeRadiusOverride"] == 12
 
 
 def test_large_low_confidence_unknown_with_text_stays_preserved_media(tmp_path: Path) -> None:
@@ -700,6 +728,21 @@ def paint_marks(pixels: PngPixels, marks: list[tuple[list[int], tuple[int, int, 
             for column in range(x, x + w):
                 rows[row_index][column * 3 : column * 3 + 3] = bytes(color)
     return PngPixels(width=pixels.width, height=pixels.height, rows=[bytes(row) for row in rows])
+
+
+def draw_rounded_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, radius: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    radius = max(0, min(radius, min(width, height) // 2))
+    for row_index in range(y, min(canvas.height, y + height)):
+        for column in range(x, min(canvas.width, x + width)):
+            local_x = column - x
+            local_y = row_index - y
+            cx = radius if local_x < radius else width - radius - 1 if local_x >= width - radius else local_x
+            cy = radius if local_y < radius else height - radius - 1 if local_y >= height - radius else local_y
+            if (local_x - cx) * (local_x - cx) + (local_y - cy) * (local_y - cy) <= radius * radius:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
 
 
 def make_textured_png(width: int, height: int, media_bbox: list[int]) -> PngPixels:

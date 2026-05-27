@@ -9,7 +9,7 @@ from typing import Any
 from ..ocr import text_boxes_from_ocr_document
 from ..png_tools import UnsupportedPngCropError, decode_png_pixels, read_png_metadata
 from ..source_ui_physical_graph import local_background_confidence
-from ..source_ui_physical_graph.controls import source_fill_excluding_text
+from ..source_ui_physical_graph.controls import radius_from_control_pixels, source_fill_excluding_text
 from ..visual_primitive_graph import measure_region
 from .geometry import bbox_area, bbox_iou, containment_ratio, intersection_area, overlap_ratio, parse_xywh_bbox, parse_xyxy_bbox, x2, y2
 from .types import PerceptionSourceCompilerOptions, PerceptionSourceCompilerResult
@@ -345,7 +345,8 @@ def build_control_background_object(
     inference_reasons: list[str],
 ) -> dict[str, Any]:
     fill = source_fill_excluding_text(pixels, bbox, ocr_boxes)
-    radius = inferred_radius(bbox, role="control")
+    radius = radius_from_control_pixels(pixels, bbox, ocr_boxes)
+    claim_mask_kind = "rounded_rect" if radius is not None else "bbox"
     return source_object(
         object_id=f"m292_perception_control_{index:04d}",
         bbox=bbox,
@@ -360,10 +361,12 @@ def build_control_background_object(
             "ocrBoxIds": [str(box.id) for box in ocr_boxes if getattr(box, "id", None)],
             "promotionSource": "perception_model_foreground_claim",
             "foregroundClaimId": f"{candidate['candidateId']}:foreground_claim",
-            "claimMaskKind": "rounded_rect",
+            "claimMaskKind": claim_mask_kind,
             "internalRole": "internal_control_background",
             "shapeFillOverride": fill,
-            "shapeRadiusOverride": radius,
+            "shapeGeometryKind": control_geometry_kind(bbox, radius),
+            "shapeGeometryConfidence": "high" if radius is not None else "medium",
+            **({"shapeRadiusOverride": radius} if radius is not None else {}),
             "controlTextAreaRatio": round(text_area_ratio, 4),
             "controlInferenceReasons": inference_reasons,
         },
@@ -999,9 +1002,14 @@ def is_simple_indicator_shape(metrics: Any, bbox: list[int]) -> bool:
 def inferred_radius(bbox: list[int], *, role: str) -> int | None:
     if role == "indicator" and abs(bbox[2] - bbox[3]) <= max(2, round(min(bbox[2], bbox[3]) * 0.18)):
         return min(bbox[2], bbox[3]) // 2
-    if role == "control" and bbox[3] <= 96 and bbox[2] / max(1, bbox[3]) >= 1.6:
-        return min(bbox[2], bbox[3]) // 2
     return None
+
+
+def control_geometry_kind(bbox: list[int], radius: int | None) -> str:
+    if radius is None:
+        return "rect"
+    half_short_edge = max(1, min(bbox[2], bbox[3]) // 2)
+    return "pill" if radius >= round(half_short_edge * 0.75) else "rounded_rect"
 
 
 def rejected(candidate: dict[str, Any], reason: str, *, bbox: list[int]) -> dict[str, Any]:

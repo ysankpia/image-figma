@@ -41,6 +41,8 @@ def test_model_text_container_candidate_compiles_to_control_shape_and_m295_clean
     assert shape["sourceEvidence"]["mediaSourceObjectId"] == "media"
     assert shape["sourceEvidence"]["foregroundClaimId"] == "model_button:foreground_claim"
     assert shape["sourceEvidence"]["shapeFillOverride"] == "#52944C"
+    assert shape["sourceEvidence"]["claimMaskKind"] == "bbox"
+    assert "shapeRadiusOverride" not in shape["sourceEvidence"]
 
     relation = extract_m2931_region_relation_graph_report(
         task_id="task_compiler_control",
@@ -61,7 +63,51 @@ def test_model_text_container_candidate_compiles_to_control_shape_and_m295_clean
         "targetSourceObjectId": "media",
         "reason": "foreground_claim_removed_from_residual_media",
         "foregroundClaimId": "model_button:foreground_claim",
+        "maskKind": "bbox",
+    } in shape_item["cleanupTargets"]
+
+
+def test_model_rounded_button_uses_pixel_proven_radius_and_mask_radius(tmp_path: Path) -> None:
+    source = make_png(240, 160, fill=(248, 248, 248))
+    draw_rounded_rect(source, 20, 30, 180, 44, 12, (82, 148, 76))
+    source = paint_marks(source, [([72, 44, 82, 14], (255, 255, 255))])
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_rounded_control",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_cta", "Action", [72, 42, 82, 18])]),
+        perception_model_report=perception_report([candidate("model_button", [20, 30, 200, 74], 0.86)]),
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 240, 160], "media_region", "preserve_raster", "image_replay"),
+                m292_object("text", [72, 42, 82, 18], "editable_ui_text", "editable_text", "text_replay", source_evidence={"ocrBoxIds": ["ocr_cta"]}),
+            ]
+        ),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    assert shape["sourceEvidence"]["claimMaskKind"] == "rounded_rect"
+    assert shape["sourceEvidence"]["shapeRadiusOverride"] == 12
+    relation = extract_m2931_region_relation_graph_report(
+        task_id="task_compiler_rounded_control",
+        m292_document=result.m292_document,
+        output_dir=tmp_path / "m29_3_1",
+    ).report
+    replay = build_m295_replay_plan(
+        task_id="task_compiler_rounded_control",
+        m292_document=result.m292_document,
+        m2931_report=relation,
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    ).report
+    shape_item = next(item for item in replay["planItems"] if item["sourceObjectId"] == shape["id"])
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "model_button:foreground_claim",
         "maskKind": "rounded_rect",
+        "maskRadius": 12,
     } in shape_item["cleanupTargets"]
 
 
@@ -617,6 +663,31 @@ def make_png(width: int, height: int, *, fill: tuple[int, int, int] = (250, 250,
             for column in range(x, x + w):
                 rows[row_index][column * 3 : column * 3 + 3] = bytes(color)
     return PngPixels(width=width, height=height, rows=[bytes(row) for row in rows])
+
+
+def paint_marks(pixels: PngPixels, marks: list[tuple[list[int], tuple[int, int, int]]]) -> PngPixels:
+    rows = [bytearray(row) for row in pixels.rows]
+    for bbox, color in marks:
+        x, y, w, h = bbox
+        for row_index in range(y, y + h):
+            for column in range(x, x + w):
+                rows[row_index][column * 3 : column * 3 + 3] = bytes(color)
+    return PngPixels(width=pixels.width, height=pixels.height, rows=[bytes(row) for row in rows])
+
+
+def draw_rounded_rect(canvas: PngPixels, x: int, y: int, width: int, height: int, radius: int, color: tuple[int, int, int]) -> None:
+    rows = [bytearray(row) for row in canvas.rows]
+    color_bytes = bytes(color)
+    radius = max(0, min(radius, min(width, height) // 2))
+    for row_index in range(y, min(canvas.height, y + height)):
+        for column in range(x, min(canvas.width, x + width)):
+            local_x = column - x
+            local_y = row_index - y
+            cx = radius if local_x < radius else width - radius - 1 if local_x >= width - radius else local_x
+            cy = radius if local_y < radius else height - radius - 1 if local_y >= height - radius else local_y
+            if (local_x - cx) * (local_x - cx) + (local_y - cy) * (local_y - cy) <= radius * radius:
+                rows[row_index][column * 3 : column * 3 + 3] = color_bytes
+    canvas.rows[:] = [bytes(row) for row in rows]
 
 
 def png_bytes(pixels: PngPixels) -> bytes:

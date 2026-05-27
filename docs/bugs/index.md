@@ -9,6 +9,7 @@
 
 最近 resolved bug：
 
+- [019-control-radius-inferred-from-bbox-as-pill.md](resolved/019-control-radius-inferred-from-bbox-as-pill.md)：control background 不再按 bbox 宽高比例推断半高胶囊 radius；圆角和 cleanup mask radius 现在必须由像素边界证明。
 - [018-controlled-structure-and-control-icon-model-first-regression.md](resolved/018-controlled-structure-and-control-icon-model-first-regression.md)：model-first interactive 不再把 C-stage 结构组写成可见 DSL group，并为纵向 action tile 推导 icon source。
 - [017-residual-media-overlays-foreground-claims.md](resolved/017-residual-media-overlays-foreground-claims.md)：model-first foreground claim 已进入 M29.5，但 parent residual media image 在 DSL 层级上盖住 foreground shape/text，导致按钮被擦成白底或空心。
 - [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)：media 内长 UI 控件 label 不再仅因 OCR bbox 较高/较宽被归为 `preserve_raster_text`，Google/Snapchat 这类已 OCR 的登录方式文本现在能进入 `editable_ui_text / text_replay`，真正大 display text 仍保留在 raster。

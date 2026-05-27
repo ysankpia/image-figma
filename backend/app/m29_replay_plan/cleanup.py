@@ -310,6 +310,9 @@ def foreground_claim_cleanup_fields(evidence: dict[str, Any]) -> dict[str, Any]:
         "foregroundClaimId": evidence.get("foregroundClaimId"),
         "maskKind": evidence.get("claimMaskKind") or "bbox",
     }
+    radius = optional_float(evidence.get("shapeRadiusOverride"))
+    if radius is not None and str(fields["maskKind"]) == "rounded_rect":
+        fields["maskRadius"] = max(0, round(radius))
     return {key: value for key, value in fields.items() if value}
 
 

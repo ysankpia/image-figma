@@ -168,7 +168,7 @@ def clean_shape_backgrounds_from_copied_image_assets(
                 fill = sample_outer_bbox_ring_rgb(pixels, local_bbox)
             except Exception:
                 fill = sample_canvas_background(pixels)
-            erase_with_geometry_mask(rows, local_bbox, fill, str(cleanup_target.get("maskKind") or "bbox"))
+            erase_with_geometry_mask(rows, local_bbox, fill, str(cleanup_target.get("maskKind") or "bbox"), numeric_mask_radius(cleanup_target.get("maskRadius")))
             modified = True
             erased_count += 1
         if modified:
@@ -262,12 +262,12 @@ def erase_with_alpha_mask(
             row[offset + 2] = fill[2]
 
 
-def erase_with_geometry_mask(rows: list[bytearray], local_bbox: list[int], fill: tuple[int, int, int], mask_kind: str) -> None:
+def erase_with_geometry_mask(rows: list[bytearray], local_bbox: list[int], fill: tuple[int, int, int], mask_kind: str, mask_radius: int | None = None) -> None:
     x, y, width, height = local_bbox
     for row_offset in range(height):
         row = rows[y + row_offset]
         for col_offset in range(width):
-            if not geometry_mask_contains(col_offset, row_offset, width, height, mask_kind):
+            if not geometry_mask_contains(col_offset, row_offset, width, height, mask_kind, mask_radius):
                 continue
             col_idx = x + col_offset
             offset = col_idx * 3
@@ -276,14 +276,14 @@ def erase_with_geometry_mask(rows: list[bytearray], local_bbox: list[int], fill:
             row[offset + 2] = fill[2]
 
 
-def geometry_mask_contains(col_offset: int, row_offset: int, width: int, height: int, mask_kind: str) -> bool:
+def geometry_mask_contains(col_offset: int, row_offset: int, width: int, height: int, mask_kind: str, mask_radius: int | None = None) -> bool:
     if mask_kind == "circle":
         radius = min(width, height) / 2.0
         cx = (width - 1) / 2.0
         cy = (height - 1) / 2.0
         return (col_offset - cx) ** 2 + (row_offset - cy) ** 2 <= radius**2
     if mask_kind == "rounded_rect":
-        radius = min(width, height) / 2.0
+        radius = min(width, height) / 2.0 if mask_radius is None else max(0.0, min(float(mask_radius), min(width, height) / 2.0))
         left = radius
         right = width - 1 - radius
         top = radius
@@ -294,6 +294,15 @@ def geometry_mask_contains(col_offset: int, row_offset: int, width: int, height:
         cy = top if row_offset < top else bottom
         return (col_offset - cx) ** 2 + (row_offset - cy) ** 2 <= radius**2
     return True
+
+
+def numeric_mask_radius(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return max(0, round(float(value)))
+    except (TypeError, ValueError):
+        return None
 
 
 def read_png_alpha_mask(path: Path) -> tuple[int, int, bytes] | None:

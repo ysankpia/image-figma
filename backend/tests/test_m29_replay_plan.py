@@ -104,6 +104,7 @@ def test_m295_residual_media_is_ordered_below_foreground_claims(tmp_path: Path) 
         "reason": "foreground_claim_removed_from_residual_media",
         "foregroundClaimId": "button:foreground_claim",
         "maskKind": "rounded_rect",
+        "maskRadius": 16,
     } in button_item["cleanupTargets"]
 
 
@@ -341,6 +342,7 @@ def test_m295_promoted_foreground_claim_pill_creates_residual_cleanup_target(tmp
         "reason": "foreground_claim_removed_from_residual_media",
         "foregroundClaimId": "pill_candidate:foreground_claim",
         "maskKind": "rounded_rect",
+        "maskRadius": 14,
     } in pill_item["cleanupTargets"]
     assert "foreground_claim_cleans_residual_media_asset" in pill_item["reasons"]
 
@@ -381,6 +383,7 @@ def test_m295_low_score_styled_perception_control_creates_residual_cleanup_targe
         "reason": "foreground_claim_removed_from_residual_media",
         "foregroundClaimId": "model_control:foreground_claim",
         "maskKind": "rounded_rect",
+        "maskRadius": 18,
     } in control_item["cleanupTargets"]
     assert "cleanup_rejected_low_shape_evidence" not in control_item["risks"]
 
