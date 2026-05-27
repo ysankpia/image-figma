@@ -25,6 +25,10 @@ class PerceptionSourceCompilerOptions:
     max_control_text_area_ratio: float = 0.55
     max_icon_text_overlap: float = 0.20
     max_control_child_icon_text_overlap: float = 0.04
+    max_control_child_icon_edge_text_overlap: float = 0.36
+    max_control_child_icon_center_text_overlap: float = 0.08
+    max_control_child_icon_width_ratio: float = 0.42
+    max_control_child_icon_height_ratio: float = 0.86
     min_control_child_containment: float = 0.82
     max_report_only_area_ratio: float = 0.35
     min_control_aspect_ratio: float = 2.0
@@ -41,6 +45,10 @@ class PerceptionSourceCompilerOptions:
     min_inferred_leading_icon_fill_ratio: float = 0.12
     min_inferred_leading_icon_aspect_ratio: float = 0.35
     max_inferred_leading_icon_aspect_ratio: float = 3.2
+    max_vertical_label_tile_ocr_count: int = 1
+    min_vertical_label_gap_ratio: float = 0.28
+    max_vertical_icon_text_width_ratio: float = 1.85
+    min_vertical_icon_text_width_ratio: float = 0.45
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

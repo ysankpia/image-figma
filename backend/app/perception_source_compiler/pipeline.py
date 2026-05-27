@@ -179,6 +179,20 @@ def classify_candidate(
             image_height=image_height,
             options=options,
         ):
+            vertical_icon = build_inferred_vertical_label_icon_object(
+                index=len([item for item in compiled_objects if item.get("visualKind") == "raster_icon"]) + 1,
+                candidate=candidate,
+                tile_bbox=bbox,
+                ocr_boxes=contained_text,
+                pixels=pixels,
+                media_source_id=media_source_id,
+                options=options,
+            )
+            if vertical_icon is not None:
+                return {
+                    "mode": "compile_source_object",
+                    "sourceObject": vertical_icon,
+                }
             if geometry_supports_control_background(
                 bbox=bbox,
                 metrics=metrics,
@@ -282,7 +296,7 @@ def classify_candidate(
         and score >= options.min_control_child_icon_score
         and area_ratio <= options.max_icon_area_ratio
     ):
-        if text_overlap > options.max_control_child_icon_text_overlap:
+        if not control_child_icon_has_safe_geometry(bbox, parent_control, ocr_boxes, text_overlap, options):
             return rejected(candidate, "control_child_icon_text_overlap_risk", bbox=bbox)
         return {
             "mode": "compile_source_object",
@@ -300,6 +314,21 @@ def classify_candidate(
 
     if near_equal_media_region(bbox, base_objects, options):
         return rejected(candidate, "near_equal_parent_media_candidate", bbox=bbox)
+
+    vertical_icon = build_inferred_vertical_label_icon_object(
+        index=len([item for item in compiled_objects if item.get("visualKind") == "raster_icon"]) + 1,
+        candidate=candidate,
+        tile_bbox=bbox,
+        ocr_boxes=contained_text,
+        pixels=pixels,
+        media_source_id=media_source_id,
+        options=options,
+    )
+    if vertical_icon is not None:
+        return {
+            "mode": "compile_source_object",
+            "sourceObject": vertical_icon,
+        }
 
     return rejected(candidate, "insufficient_ownership_evidence", bbox=bbox)
 
@@ -454,7 +483,7 @@ def build_inferred_leading_icon_object(
     )
     if leftmost_text is None:
         return None
-    if candidate_contains_real_child_icon(candidate, all_candidates, leftmost_text):
+    if candidate_contains_real_child_icon(candidate, all_candidates, leftmost_text, options):
         return None
     roi = leading_icon_search_bbox(control_bbox, leftmost_text)
     if roi is None:
@@ -489,23 +518,106 @@ def build_inferred_leading_icon_object(
     )
 
 
-def candidate_contains_real_child_icon(candidate: dict[str, Any], all_candidates: list[dict[str, Any]], text_bbox: list[int]) -> bool:
+def build_inferred_vertical_label_icon_object(
+    *,
+    index: int,
+    candidate: dict[str, Any],
+    tile_bbox: list[int],
+    ocr_boxes: list[Any],
+    pixels: Any,
+    media_source_id: str,
+    options: PerceptionSourceCompilerOptions,
+) -> dict[str, Any] | None:
+    if len(ocr_boxes) != options.max_vertical_label_tile_ocr_count:
+        return None
+    text_bbox = parse_xywh_bbox(getattr(ocr_boxes[0], "bbox", None))
+    if text_bbox is None:
+        return None
+    text_top_gap = text_bbox[1] - tile_bbox[1]
+    if text_top_gap < round(tile_bbox[3] * options.min_vertical_label_gap_ratio):
+        return None
+    side_pad = max(4, round(text_bbox[3] * 0.45))
+    vertical_gap = max(3, round(text_bbox[3] * 0.18))
+    roi_left = max(tile_bbox[0], text_bbox[0] - max(text_bbox[2], text_bbox[3]) - side_pad)
+    roi_right = min(x2(tile_bbox), x2(text_bbox) + max(text_bbox[2], text_bbox[3]) + side_pad)
+    roi_top = tile_bbox[1] + max(2, round(tile_bbox[3] * 0.08))
+    roi_bottom = text_bbox[1] - vertical_gap
+    if roi_right <= roi_left or roi_bottom <= roi_top:
+        return None
+    roi = [roi_left, roi_top, roi_right - roi_left, roi_bottom - roi_top]
+    icon_bbox = foreground_component_bbox_in_roi(
+        pixels=pixels,
+        roi=roi,
+        control_bbox=tile_bbox,
+        text_bbox=text_bbox,
+        options=options,
+        axis="vertical",
+    )
+    if icon_bbox is None:
+        return None
+    width_ratio = icon_bbox[2] / max(1, text_bbox[2])
+    if width_ratio < options.min_vertical_icon_text_width_ratio or width_ratio > options.max_vertical_icon_text_width_ratio:
+        return None
+    icon_center_x = icon_bbox[0] + icon_bbox[2] / 2
+    text_center_x = text_bbox[0] + text_bbox[2] / 2
+    if abs(icon_center_x - text_center_x) > max(text_bbox[2], icon_bbox[2]) * 0.75:
+        return None
+    return build_raster_icon_object(
+        index=index,
+        candidate={
+            **candidate,
+            "candidateId": f"{candidate['candidateId']}:vertical_label_icon",
+            "bbox": icon_bbox,
+            "areaRatio": bbox_area(icon_bbox) / max(1, pixels.width * pixels.height),
+        },
+        bbox=icon_bbox,
+        pixels=pixels,
+        media_source_id=media_source_id,
+        text_overlap=0.0,
+        inference_reasons=["inferred_icon_above_ocr_label_inside_model_tile"],
+        parent_control_id=None,
+        extra_evidence={
+            "derivedFromPerceptionCandidateId": candidate["candidateId"],
+            "labelAnchorOcrBoxId": str(getattr(ocr_boxes[0], "id", "") or ""),
+            "verticalIconSource": "tile_pixels_above_ocr_label",
+        },
+    )
+
+
+def candidate_contains_real_child_icon(
+    candidate: dict[str, Any],
+    all_candidates: list[dict[str, Any]],
+    text_bbox: list[int],
+    options: PerceptionSourceCompilerOptions,
+) -> bool:
     parent_bbox = candidate["bbox"]
     parent_id = candidate["candidateId"]
     for item in all_candidates:
         if item["candidateId"] == parent_id:
             continue
         bbox = item["bbox"]
-        text_overlap = intersection_area(bbox, text_bbox) / max(1, bbox_area(bbox))
-        is_left_of_text = x2(bbox) <= text_bbox[0] + max(3, round(text_bbox[3] * 0.25))
+        is_left_of_text = x2(bbox) <= text_bbox[0] + max(3, round(text_bbox[3] * 0.45))
         if (
             is_left_of_text
-            and text_overlap <= 0.04
+            and child_icon_text_overlap_is_safe(bbox, [text_bbox], options)
             and containment_ratio(bbox, parent_bbox) >= 0.82
             and bbox_area(bbox) <= bbox_area(parent_bbox) * 0.32
         ):
             return True
     return False
+
+
+def child_icon_text_overlap_is_safe(bbox: list[int], text_bboxes: list[list[int]], options: PerceptionSourceCompilerOptions) -> bool:
+    text_overlap = max((overlap_ratio(bbox, text_bbox) for text_bbox in text_bboxes), default=0.0)
+    if text_overlap <= options.max_control_child_icon_text_overlap:
+        return True
+    if text_overlap > options.max_control_child_icon_edge_text_overlap:
+        return False
+    shrink_x = max(1, round(bbox[2] * 0.18))
+    shrink_y = max(1, round(bbox[3] * 0.18))
+    center_bbox = [bbox[0] + shrink_x, bbox[1] + shrink_y, max(1, bbox[2] - shrink_x * 2), max(1, bbox[3] - shrink_y * 2)]
+    center_overlap = max((overlap_ratio(center_bbox, text_bbox) for text_bbox in text_bboxes), default=0.0)
+    return center_overlap <= options.max_control_child_icon_center_text_overlap
 
 
 def leading_icon_search_bbox(control_bbox: list[int], text_bbox: list[int]) -> list[int] | None:
@@ -531,6 +643,7 @@ def foreground_component_bbox_in_roi(
     control_bbox: list[int],
     text_bbox: list[int],
     options: PerceptionSourceCompilerOptions,
+    axis: str = "leading",
 ) -> list[int] | None:
     bg = dominant_border_rgb(pixels, control_bbox)
     components = contrast_components(
@@ -544,6 +657,7 @@ def foreground_component_bbox_in_roi(
         return None
     max_edge = max(6, round(text_bbox[3] * options.max_inferred_leading_icon_text_height_ratio))
     scored: list[tuple[float, list[int]]] = []
+    text_center_x = text_bbox[0] + text_bbox[2] / 2
     text_center_y = text_bbox[1] + text_bbox[3] / 2
     for component in components:
         bbox = component["bbox"]
@@ -562,10 +676,16 @@ def foreground_component_bbox_in_roi(
             continue
         if intersection_area(bbox, text_bbox) > 0:
             continue
+        center_x = bbox[0] + bbox[2] / 2
         center_y = bbox[1] + bbox[3] / 2
-        y_score = 1.0 / (1.0 + abs(center_y - text_center_y) / max(1, text_bbox[3]))
+        if axis == "vertical":
+            align_score = 1.0 / (1.0 + abs(center_x - text_center_x) / max(1, text_bbox[2]))
+            position_bonus = 1.0 if center_y < text_bbox[1] else 0.0
+        else:
+            align_score = 1.0 / (1.0 + abs(center_y - text_center_y) / max(1, text_bbox[3]))
+            position_bonus = 0.0
         size_score = min(1.0, (bbox[2] * bbox[3]) / max(1, text_bbox[3] * text_bbox[3]))
-        scored.append((y_score + size_score + fill_ratio, bbox))
+        scored.append((align_score + size_score + fill_ratio + position_bonus, bbox))
     if not scored:
         return None
     return sorted(scored, key=lambda item: (-item[0], item[1][0]))[0][1]
@@ -773,6 +893,31 @@ def parent_control_for_candidate(bbox: list[int], objects: list[dict[str, Any]],
     if not matches:
         return None
     return sorted(matches, key=lambda value: (-value[0], value[1]))[0][2]
+
+
+def control_child_icon_has_safe_geometry(
+    bbox: list[int],
+    parent_control: dict[str, Any],
+    ocr_boxes: list[Any],
+    text_overlap: float,
+    options: PerceptionSourceCompilerOptions,
+) -> bool:
+    control_bbox = parse_xywh_bbox(parent_control.get("bbox"))
+    if control_bbox is None:
+        return False
+    if bbox[2] > round(control_bbox[2] * options.max_control_child_icon_width_ratio):
+        return False
+    if bbox[3] > round(control_bbox[3] * options.max_control_child_icon_height_ratio):
+        return False
+    if text_overlap <= options.max_control_child_icon_text_overlap:
+        return True
+    if text_overlap > options.max_control_child_icon_edge_text_overlap:
+        return False
+    shrink_x = max(1, round(bbox[2] * 0.18))
+    shrink_y = max(1, round(bbox[3] * 0.18))
+    center_bbox = [bbox[0] + shrink_x, bbox[1] + shrink_y, max(1, bbox[2] - shrink_x * 2), max(1, bbox[3] - shrink_y * 2)]
+    center_overlap = max((overlap_ratio(center_bbox, getattr(box, "bbox", [])) for box in ocr_boxes), default=0.0)
+    return center_overlap <= options.max_control_child_icon_center_text_overlap
 
 
 def is_compiled_control_parent(item: dict[str, Any]) -> bool:

@@ -66,17 +66,12 @@ def materialize_controlled_structure_groups(
         if reject_reason is not None:
             rejected.append(rejected_group(candidate, reject_reason))
             continue
-        group_node = build_group_node(candidate, existing_ids, child_by_id, current_children)
-        next_children = replace_members_with_group(current_children, candidate.member_node_ids, group_node)
-        if next_children is current_children:
-            rejected.append(rejected_group(candidate, "member_sequence_not_found"))
-            continue
-        current_children = next_children
+        group_id = next_unique_id(existing_ids, f"m29_c_group_{candidate.source_candidate_id.replace(':', '_')}")
+        existing_ids.add(group_id)
         claimed_node_ids.update(candidate.member_node_ids)
-        accepted.append(asdict(candidate) | {"groupNodeId": group_node["id"]})
+        accepted.append(asdict(candidate) | {"groupNodeId": group_id, "materializationMode": "report_only"})
         if len(accepted) >= options.max_controlled_groups:
             break
-    dsl["root"]["children"] = current_children
     return build_structure_report(accepted, rejected, candidate_warnings)
 
 
@@ -321,7 +316,7 @@ def build_structure_report(accepted: list[dict[str, Any]], rejected: list[dict[s
         "summary": {
             "acceptedGroupCount": len(accepted),
             "rejectedGroupCount": len(rejected),
-            "materializationChanged": bool(accepted),
+            "materializationChanged": False,
             "autoLayoutCreated": False,
             "componentCreated": False,
             "variantCreated": False,
@@ -332,9 +327,10 @@ def build_structure_report(accepted: list[dict[str, Any]], rejected: list[dict[s
         "warnings": warnings,
         "meta": {
             "truthSource": "m29_hierarchy_plus_sibling_group_plus_layout_energy_plus_auto_layout_permission",
-            "dslChanged": bool(accepted),
+            "dslChanged": False,
             "createdVisibleNodeCount": 0,
             "transparentGroupsOnly": True,
+            "reportOnly": True,
         },
     }
 

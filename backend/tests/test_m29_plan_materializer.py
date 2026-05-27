@@ -652,7 +652,7 @@ def test_foreground_claim_shape_cleanup_uses_m295_geometry_mask(tmp_path: Path) 
     assert result.report["summary"]["copiedImageAssetShapeErasedCount"] == 1
 
 
-def test_controlled_structure_materialization_groups_contiguous_high_confidence_members(tmp_path: Path) -> None:
+def test_controlled_structure_materialization_reports_contiguous_high_confidence_members_without_visible_group(tmp_path: Path) -> None:
     source = write_png(tmp_path / "source.png", make_png(140, 90, fill=(248, 248, 248), marks=[([20, 20, 40, 20], (235, 235, 235)), ([70, 20, 40, 20], (20, 20, 20))]))
     m292 = m292_document(
         [
@@ -690,16 +690,13 @@ def test_controlled_structure_materialization_groups_contiguous_high_confidence_
         output_dir=tmp_path / "out",
     )
 
-    group = next(child for child in result.dsl["root"]["children"] if child.get("role") == "m29_controlled_structure_group")
-    assert group["style"]["fill"] is None
-    assert group["meta"]["autoLayoutCreated"] is False
-    assert group["layout"] == {"x": 20, "y": 20, "width": 90, "height": 20}
-    assert [child["role"] for child in group["children"]] == ["m29_shape", "m29_text"]
-    assert group["children"][0]["layout"]["x"] == 0
-    assert group["children"][1]["layout"]["x"] == 50
+    assert not any(child.get("role") == "m29_controlled_structure_group" for child in result.dsl["root"]["children"])
+    assert [child["role"] for child in result.dsl["root"]["children"] if child.get("role", "").startswith("m29_")] == ["m29_shape", "m29_text"]
     assert result.report["summary"]["controlledStructureGroupCount"] == 1
-    assert result.report["summary"]["controlledStructureMaterializationChanged"] is True
+    assert result.report["summary"]["controlledStructureMaterializationChanged"] is False
     assert result.report["controlledStructureMaterialization"]["summary"]["acceptedGroupCount"] == 1
+    assert result.report["controlledStructureMaterialization"]["acceptedGroups"][0]["materializationMode"] == "report_only"
+    assert result.report["controlledStructureMaterialization"]["meta"]["reportOnly"] is True
 
 
 def test_controlled_structure_materialization_keeps_flat_output_without_reports(tmp_path: Path) -> None:

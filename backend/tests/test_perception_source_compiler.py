@@ -322,6 +322,40 @@ def test_low_score_control_child_icon_cannot_claim_text_pixels(tmp_path: Path) -
     assert rejected["model_text_sized_icon"] == "control_child_icon_text_overlap_risk"
 
 
+def test_low_score_control_child_icon_allows_edge_text_overlap_inside_parent_control(tmp_path: Path) -> None:
+    source = make_png(
+        320,
+        700,
+        fill=(248, 248, 248),
+        marks=[
+            ([48, 296, 224, 48], (33, 88, 190)),
+            ([86, 310, 30, 30], (255, 255, 255)),
+            ([112, 312, 84, 16], (255, 255, 255)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_child_icon_edge_overlap",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_label", "Transfer", [112, 312, 84, 16])]),
+        perception_model_report=perception_report(
+            [
+                candidate("model_button_bg", [48, 296, 272, 344], 0.42),
+                candidate("model_icon_edge_touch", [86, 310, 118, 340], 0.09),
+            ]
+        ),
+        m292_document=m292_document([m292_object("media", [0, 0, 320, 700], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    shape = only_compiled(result.report, "control_background")
+    icons = [item for item in result.report["compiledSourceObjects"] if item["visualKind"] == "raster_icon"]
+    assert len(icons) == 1
+    assert icons[0]["bbox"] == [86, 310, 32, 30]
+    assert icons[0]["sourceEvidence"]["parentControlSourceObjectId"] == shape["id"]
+    assert icons[0]["sourceEvidence"]["iconInferenceReasons"] == ["perception_candidate_inside_compiled_control"]
+    assert not any(item["candidateId"] == "model_icon_edge_touch" for item in result.report["rejectedCandidates"])
+
+
 def test_low_score_icon_candidate_compiles_inside_complex_control_image_crop(tmp_path: Path) -> None:
     source = make_png(
         360,
@@ -352,6 +386,35 @@ def test_low_score_icon_candidate_compiles_inside_complex_control_image_crop(tmp
     assert control["sourceEvidence"]["internalRole"] == "internal_control_raster_background"
     assert icon["sourceEvidence"]["parentControlSourceObjectId"] == control["id"]
     assert icon["sourceEvidence"]["iconInferenceReasons"] == ["perception_candidate_inside_compiled_control"]
+
+
+def test_vertical_label_tile_infers_icon_above_text_without_replaying_whole_tile(tmp_path: Path) -> None:
+    source = make_png(
+        360,
+        220,
+        fill=(14, 18, 34),
+        marks=[
+            ([54, 42, 96, 112], (18, 26, 48)),
+            ([82, 58, 40, 32], (30, 190, 245)),
+            ([78, 122, 48, 24], (230, 236, 245)),
+        ],
+    )
+    result = extract_perception_source_compiler_report(
+        task_id="task_compiler_vertical_action_tile",
+        source_png=png_bytes(source),
+        ocr_document=ocr_document([ocr_block("ocr_action", "充值", [78, 122, 48, 24])]),
+        perception_model_report=perception_report([candidate("model_action_tile", [54, 42, 150, 154], 0.48)]),
+        m292_document=m292_document([m292_object("media", [0, 0, 360, 220], "media_region", "preserve_raster", "image_replay")]),
+        output_dir=tmp_path / "compiler",
+    )
+
+    icons = [item for item in result.report["compiledSourceObjects"] if item["visualKind"] == "raster_icon"]
+    controls = [item for item in result.report["compiledSourceObjects"] if item["visualKind"] == "control_background"]
+    assert len(icons) == 1
+    assert controls == []
+    assert icons[0]["bbox"] == [82, 58, 40, 32]
+    assert icons[0]["sourceEvidence"]["labelAnchorOcrBoxId"] == "ocr_action"
+    assert icons[0]["sourceEvidence"]["iconInferenceReasons"] == ["inferred_icon_above_ocr_label_inside_model_tile"]
 
 
 def test_control_candidate_infers_missing_leading_icon_from_pixels_left_of_text(tmp_path: Path) -> None:
