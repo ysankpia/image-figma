@@ -9,6 +9,7 @@
 
 最近 resolved bug：
 
+- [017-residual-media-overlays-foreground-claims.md](resolved/017-residual-media-overlays-foreground-claims.md)：model-first foreground claim 已进入 M29.5，但 parent residual media image 在 DSL 层级上盖住 foreground shape/text，导致按钮被擦成白底或空心。
 - [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)：media 内长 UI 控件 label 不再仅因 OCR bbox 较高/较宽被归为 `preserve_raster_text`，Google/Snapchat 这类已 OCR 的登录方式文本现在能进入 `editable_ui_text / text_replay`，真正大 display text 仍保留在 raster。
 - [015-bottom-tab-selected-icon-stays-non-ocr-foreground.md](resolved/015-bottom-tab-selected-icon-stays-non-ocr-foreground.md)：selected bottom tab icon 现在通过 near-media OCR anchor、evidence-aware soft-edge alpha、evidence contract、promotion、M29.5 去重和 ownership conservation 成为独立 `icon_replay`，selected indicator 仍保持 diagnostic。
 - [014-fragmented-internal-icon-fails-transparent-asset-gate.md](resolved/014-fragmented-internal-icon-fails-transparent-asset-gate.md)：图内 action row icon 被切成相邻碎片时，现在由 M29.6 生成同 OCR anchor 的 union candidate，再通过 transparent/evidence/promotion/M29.5 主链成为可选 icon。

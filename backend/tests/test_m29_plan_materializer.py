@@ -459,6 +459,66 @@ def test_shape_replay_uses_source_shape_inference_overrides(tmp_path: Path) -> N
     assert shape["meta"]["m29ShapeStyleSource"] == "source_shape_inference"
 
 
+def test_residual_media_plan_order_keeps_foreground_shape_above_parent_image(tmp_path: Path) -> None:
+    source = write_png(
+        tmp_path / "source.png",
+        make_png(140, 100, fill=(248, 252, 249), marks=[([10, 10, 120, 60], (250, 250, 250)), ([80, 28, 48, 24], (17, 156, 56))]),
+    )
+    m292 = m292_document(
+        [
+            m292_object("media", [10, 10, 120, 60], "media_region", "preserve_raster", "image_replay", m29_ids=["image_001"]),
+            m292_object(
+                "button",
+                [80, 28, 48, 24],
+                "control_background",
+                "shape_geometry",
+                "shape_replay",
+                source_evidence={"shapeFillOverride": "#119C38", "shapeRadiusOverride": 12},
+            ),
+            m292_object("label", [92, 34, 20, 10], "editable_ui_text", "editable_text", "text_replay", ocr_ids=["ocr_text"]),
+        ]
+    )
+    plan = m295_plan(
+        [
+            m295_item("plan_media", "media", [10, 10, 120, 60], "image_replay", "m29_image"),
+            m295_item(
+                "plan_button",
+                "button",
+                [80, 28, 48, 24],
+                "shape_replay",
+                "m29_shape",
+                cleanup_targets=[
+                    {"target": "fallback", "targetSourceObjectId": None, "reason": "replayed_visible_object"},
+                    {
+                        "target": "copied_image_asset",
+                        "targetSourceObjectId": "media",
+                        "reason": "foreground_claim_removed_from_residual_media",
+                        "foregroundClaimId": "button:foreground_claim",
+                        "maskKind": "rounded_rect",
+                    },
+                ],
+            ),
+            m295_item("plan_label", "label", [92, 34, 20, 10], "text_replay", "m29_text"),
+        ]
+    )
+
+    result = build_plan_driven_dsl(
+        source_png=source.read_bytes(),
+        source_image_path=str(source),
+        m29_document=m29_document(tmp_path, nodes=[m29_node("image_001", "image", [10, 10, 120, 60])]),
+        m292_document=m292,
+        m295_replay_plan=plan,
+        ocr_document=ocr_document([ocr_block("ocr_text", "Go", [92, 34, 20, 10])]),
+        output_dir=tmp_path / "out_residual_order",
+    )
+
+    children = result.dsl["root"]["children"]
+    roles = [child.get("role") for child in children]
+    assert roles.index("m29_image") < roles.index("m29_shape") < roles.index("m29_text")
+    copied = copied_image_pixels(result.dsl, tmp_path / "out_residual_order")
+    assert copied.rows[30][80 * 3 : 80 * 3 + 3] != b"\x11\x9c\x38"
+
+
 def test_shape_background_cleans_parent_media_only_with_m295_target(tmp_path: Path) -> None:
     source = write_png(
         tmp_path / "source.png",

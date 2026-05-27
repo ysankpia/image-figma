@@ -13,7 +13,7 @@ from .normalization import normalize_source_objects
 from .overlap import suppress_visible_overlap_duplicates
 from .report import build_summary, reasons_for
 from .types import M295ReplayPlanOptions, M295ReplayPlanResult
-from .utils import plan_sort_key
+from .utils import sort_plan_items_for_layer_order
 from .validation import validate_replay_plan
 
 
@@ -94,7 +94,7 @@ def build_m295_replay_plan(
     plan_items.extend(visible_overlap_suppressed)
     plan_items.extend(node_budget_suppressed)
     plan_items.extend(suppressed_duplicate_items(source_objects, suppressed_source_ids, edge_lookup, cluster_lookup))
-    plan_items = sorted(plan_items, key=plan_sort_key)
+    plan_items = sort_plan_items_for_layer_order(plan_items)
     for index, item in enumerate(plan_items, start=1):
         item["id"] = f"m295_plan_{index:04d}"
 

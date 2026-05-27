@@ -58,6 +58,55 @@ def test_m295_plan_items_are_sorted_for_replay_layer_order(tmp_path: Path) -> No
     ]
 
 
+def test_m295_residual_media_is_ordered_below_foreground_claims(tmp_path: Path) -> None:
+    result = build_m295_replay_plan(
+        task_id="task_residual_layer_order",
+        m292_document=m292_document(
+            [
+                m292_object("media", [0, 0, 220, 80], "media_region", "preserve_raster", "image_replay"),
+                promoted_internal_shape(
+                    "button",
+                    [120, 18, 80, 32],
+                    "media",
+                    internal_role="internal_control_background",
+                    evidence_score=0.86,
+                    promotion_source="perception_model_foreground_claim",
+                    foreground_claim_id="button:foreground_claim",
+                    claim_mask_kind="rounded_rect",
+                    shape_fill="#119C38",
+                    shape_radius=16,
+                ),
+                m292_object("label", [140, 24, 42, 16], "editable_ui_text", "editable_text", "text_replay"),
+            ]
+        ),
+        m2931_report=m2931_report(
+            ["media", "button", "label"],
+            [
+                edge("media_button", "media", "button", "contains", []),
+                edge("media_label", "media", "label", "contains", []),
+            ],
+        ),
+        m294_report=None,
+        output_dir=tmp_path / "m29_5",
+    )
+
+    visible_source_ids = [
+        item["sourceObjectId"]
+        for item in result.report["planItems"]
+        if item["finalReplayAction"] in {"image_replay", "shape_replay", "text_replay"}
+    ]
+    assert visible_source_ids == ["media", "button", "label"]
+
+    button_item = next(item for item in result.report["planItems"] if item["sourceObjectId"] == "button")
+    assert {
+        "target": "copied_image_asset",
+        "targetSourceObjectId": "media",
+        "reason": "foreground_claim_removed_from_residual_media",
+        "foregroundClaimId": "button:foreground_claim",
+        "maskKind": "rounded_rect",
+    } in button_item["cleanupTargets"]
+
+
 def test_m295_preserve_raster_text_has_no_cleanup_targets(tmp_path: Path) -> None:
     result = build_m295_replay_plan(
         task_id="task_preserve",
