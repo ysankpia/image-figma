@@ -1,8 +1,10 @@
 # 062 M29 First-Principles Source Chain Code Audit
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-26
 - 负责人：Codex
+
+归档说明：本审计计划已产出后续 source-chain 修复方向，并被 063/068 之后的 model-first 主线取代。保留本文作为历史审计合同，不再代表 active work。
 
 ## Goal
 
@@ -55,10 +57,10 @@ docs/engineering/m29-contract-regression-matrix.md
 docs/engineering/testing-strategy.md
 docs/bugs/index.md
 docs/bugs/open/009-specialization-prone-m29-internal-asset-gates.md
-docs/plans/active/056-m29-525-real-sample-batch-hardening.md
-docs/plans/active/057-m29-525-editable-control-quality-hardening.md
-docs/plans/active/058-m29-evidence-contract-for-internal-ui-icons.md
-docs/plans/active/060-gemini-review-first-principles-audit.md
+docs/plans/archive/superseded/056-m29-525-real-sample-batch-hardening.md
+docs/plans/archive/superseded/057-m29-525-editable-control-quality-hardening.md
+docs/plans/archive/superseded/058-m29-evidence-contract-for-internal-ui-icons.md
+docs/plans/archive/superseded/060-gemini-review-first-principles-audit.md
 docs/plans/completed/061-codia-like-real-sample-hardening.md
 ```
 
@@ -628,7 +630,7 @@ No full real-image batch is required to create the audit report. A batch run bec
 
 This plan is accepted when:
 
-- `docs/plans/active/062-m29-first-principles-source-chain-code-audit.md` exists and defines the audit contract.
+- `docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md` exists and preserves the historical audit contract.
 - The audit output directory exists and contains the final report set listed above.
 - Reports are based on current code, current docs, current tests, and current artifacts, not chat memory.
 - Every M29 layer from raw primitive graph through materializer has a source-truth / decision-authority / information-loss section.

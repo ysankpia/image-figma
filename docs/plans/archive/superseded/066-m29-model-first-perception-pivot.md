@@ -2,7 +2,7 @@
 
 ## Status
 
-Active planning and exploration target. Do not treat this document as an implemented runtime contract yet.
+Superseded planning and exploration target. The implemented runtime contract is now captured by `docs/plans/completed/068-m29-model-first-mainline-destructive-refactor.md`, current code map, and later completed regression plans.
 
 The current `main` branch still runs the deterministic M29 source chain. The latest committed direction up to plan 065 improved composite media handling by adding residual media ownership, foreground claim evidence, internal promotion, and cleanup authorization. A final narrow rule-based patch was also kept on `main`: text-contained control backgrounds inside composite media can now become inferred M29.6 foreground claims when the raw primitive graph misses the button background.
 
@@ -90,7 +90,9 @@ size: about 5.8 MB
 format: ONNX-like binary file
 ```
 
-Current backend environment does not have `onnx` installed, and active runtime does not include ONNX inference. Before any integration, the model must be probed in a separate branch to identify:
+Historical context before 067/068: at the time of this plan, the backend environment did not have `onnx` installed, and active runtime did not include ONNX inference. This is no longer the current runtime fact; use `docs/plans/completed/068-m29-model-first-mainline-destructive-refactor.md` and the current code map for implemented model-first behavior.
+
+The original probe questions were:
 
 ```text
 input tensor names and shapes
@@ -167,7 +169,7 @@ Allowed outputs:
 
 ```text
 backend/scripts/probe_onnx_model.py
-docs/plans/active/066 artifacts or notes
+docs/plans/archive/superseded/066 artifacts or notes
 small JSON probe result under a non-storage docs/artifact path if needed
 ```
 

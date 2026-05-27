@@ -2,7 +2,9 @@
 
 ## Status
 
-active
+superseded
+
+This pre-model internal-asset hardening plan is archived as historical context. The active runtime direction was superseded by the completed model-first mainline refactor in `docs/plans/completed/068-m29-model-first-mainline-destructive-refactor.md` and the later replay/asset contract hardening in `docs/plans/completed/069-m29-replay-overlap-and-model-asset-contract-hardening.md`.
 
 ## Objective
 

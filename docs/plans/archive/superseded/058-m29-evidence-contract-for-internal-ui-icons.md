@@ -1,8 +1,10 @@
 # 058 M29 Evidence Contract For Internal UI Icons
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-26
 - 负责人：Codex
+
+归档说明：本计划描述的是 pre-model M29.6/evidence/promotion loop 的 internal icon gate。该 loop 已被 model-first interactive 主线取代，保留本文仅作历史 evidence-contract 背景。
 
 ## Goal
 

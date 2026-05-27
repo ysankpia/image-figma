@@ -1,8 +1,10 @@
 # Gemini Review First-Principles Audit
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-26
 - 负责人：未指定
+
+归档说明：Gemini 审核已作为参考输入使用，后续主线由 062/063/068 及当前 model-first 代码地图收口。本文不再代表 active work。
 
 ## Goal
 
@@ -57,7 +59,7 @@
 
 ## Acceptance
 
-- 本计划文件存在于 `docs/plans/active/`，并明确上述 5 个任务。
+- 本计划文件归档于 `docs/plans/archive/superseded/`，作为 Gemini 审核参考输入的历史记录。
 - Gemini 报告的结论不会被直接当成事实；所有判断必须指向当前代码、docs 或测试。
 - 输出包含提交紧急性判断：哪些需要现在提交，哪些应等审计完成后再提交。
 - 输出包含真实风险优先级：P0/P1/P2/P3 必须基于当前代码证据，而不是报告措辞。

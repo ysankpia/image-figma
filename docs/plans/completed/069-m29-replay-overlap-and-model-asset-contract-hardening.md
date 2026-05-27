@@ -1,7 +1,8 @@
 # 069 M29 Replay Overlap And Model Asset Contract Hardening
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-28
+- 完成日期：2026-05-28
 - 负责人：Codex
 
 ## Goal
@@ -67,6 +68,81 @@ backend/storage/uploads/task_4e22c557223a/original.png
 ```
 
 验收：底部 tab 不出现整条 raster owner 压住 children；底部 icon/text 仍有 `icon_replay` / `text_replay` 和 DSL 节点。
+
+## Completion Evidence
+
+Targeted regression:
+
+```bash
+cd backend
+uv run pytest tests/test_m29_replay_plan.py tests/test_m29_plan_materializer.py tests/test_ownership_conservation.py tests/test_m29_perception_fate_trace.py -q
+```
+
+Result:
+
+```text
+89 passed
+```
+
+Representative model-first batch:
+
+```bash
+cd backend
+UPLOAD_PREVIEW_RUNTIME_MODE=interactive uv run python scripts/run_upload_preview_batch_validation.py \
+  --input-dir /Users/luhui/Downloads/m29 \
+  --poll-timeout 300
+```
+
+Evidence ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260527_180306_969454_35407/upload_preview_batch_validation.json
+```
+
+Summary:
+
+```json
+{
+  "inputCount": 16,
+  "completedTaskCount": 16,
+  "failedTaskCount": 0,
+  "backendCrashCount": 0,
+  "totalVisibleReplayClaimCount": 2196,
+  "totalVisibleOwnershipOverlapConflicts": 0,
+  "totalMaterializedVisibleNodeCount": 2196,
+  "ownershipConflictTypeCounts": {}
+}
+```
+
+Hard regression sample:
+
+```bash
+cd backend
+UPLOAD_PREVIEW_RUNTIME_MODE=interactive uv run python scripts/run_upload_preview_batch_validation.py \
+  --input-dir /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/backend/storage/uploads/task_4e22c557223a \
+  --poll-timeout 300
+```
+
+Evidence ledger:
+
+```text
+backend/tmp/validation/upload_preview_batch_20260527_181106_297892_45198/upload_preview_batch_validation.json
+```
+
+Summary:
+
+```json
+{
+  "inputCount": 1,
+  "completedTaskCount": 1,
+  "backendCrashCount": 0,
+  "totalVisibleReplayClaimCount": 77,
+  "totalVisibleOwnershipOverlapConflicts": 0,
+  "totalPlannedShapeReplayCount": 10,
+  "totalPlannedIconReplayCount": 35,
+  "totalMaterializedVisibleNodeCount": 77
+}
+```
 
 ## Notes
 

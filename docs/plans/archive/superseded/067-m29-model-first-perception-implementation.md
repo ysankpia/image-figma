@@ -1,8 +1,10 @@
 # 067 M29 Model-First Perception Implementation
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-27
 - 负责人：Codex
+
+归档说明：本 implementation plan 的方向已由 068 破坏性主链重构实际落地，并由后续完成计划继续修 model-first 回归。本文保留为实施背景，不再代表 active runtime work。
 
 ## Goal
 

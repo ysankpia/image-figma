@@ -1,8 +1,10 @@
 # 057 M29 525 Editable Control Quality Hardening
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-25
 - 负责人：Codex
+
+归档说明：本计划属于 pre-model internal asset/control quality hardening 路线，已被 model-first 主线收口。当前默认修复入口以 `docs/plans/completed/068-m29-model-first-mainline-destructive-refactor.md`、当前代码地图和后续完成计划为准。
 
 ## Goal
 

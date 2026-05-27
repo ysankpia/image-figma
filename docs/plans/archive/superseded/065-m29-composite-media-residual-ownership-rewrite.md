@@ -1,8 +1,10 @@
 # 065 M29 Composite Media Ownership Rewrite
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-26
 - 负责人：Codex
+
+归档说明：本计划代表 pre-model residual ownership rewrite 路线，已被 model-first perception compiler 主线取代。复合 media 的当前修复入口以 068 之后的 model-first source ownership、M29.5 replay 和 materializer 合同为准。
 
 ## Goal
 

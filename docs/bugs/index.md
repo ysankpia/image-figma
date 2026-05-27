@@ -4,12 +4,12 @@
 
 当前 open bug：
 
-- [021-m29-replay-overlap-and-model-asset-contract-gap.md](open/021-m29-replay-overlap-and-model-asset-contract-gap.md)：M29.5 overlap duplicate suppression 与 materializer transparent asset provenance 在 model-first 主链下存在合同缺口。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
 
 最近 resolved bug：
 
+- [021-m29-replay-overlap-and-model-asset-contract-gap.md](resolved/021-m29-replay-overlap-and-model-asset-contract-gap.md)：M29.5 overlap duplicate suppression 与 materializer transparent asset provenance 在 model-first 主链下合同已对齐，并补齐 ownership conservation 诊断一致性。
 - [020-multi-item-navigation-container-becomes-raster-owner.md](resolved/020-multi-item-navigation-container-becomes-raster-owner.md)：多 item 底部导航容器不再被 perception source compiler 编译成整条 `internal_control_raster_background`，内部 tab icon/text 保持可选 replay。
 - [019-control-radius-inferred-from-bbox-as-pill.md](resolved/019-control-radius-inferred-from-bbox-as-pill.md)：control background 不再按 bbox 宽高比例推断半高胶囊 radius；圆角和 cleanup mask radius 现在必须由像素边界证明。
 - [018-controlled-structure-and-control-icon-model-first-regression.md](resolved/018-controlled-structure-and-control-icon-model-first-regression.md)：model-first interactive 不再把 C-stage 结构组写成可见 DSL group，并为纵向 action tile 推导 icon source。
