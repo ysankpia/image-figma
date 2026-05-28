@@ -228,7 +228,7 @@ func canNodeContain(node Node, tokens map[string]evidence.Token) bool {
 
 func canSyntheticNodeContain(node Node) bool {
 	switch node.Meta.GroupKind {
-	case "raster_parts_group", "band_group", "row_group", "axis_projection_group":
+	case "raster_parts_group", "band_group", "row_group":
 		return !isThinLineNode(node)
 	default:
 		return false
