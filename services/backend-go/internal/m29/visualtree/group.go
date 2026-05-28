@@ -354,7 +354,10 @@ func buildGroupNode(group visualGroup, childByID map[string]Node, counter *int) 
 			Height:   box.Height,
 			Relative: true,
 		},
-		SourceRefs: groupSourceRefs(group, children),
+		SourceRefs: SourceRefs{
+			TokenIDs:    group.memberIDs,
+			RelationIDs: group.relationIDs,
+		},
 		Meta: Meta{
 			Synthetic: true,
 			GroupKind: group.kind,
@@ -363,37 +366,6 @@ func buildGroupNode(group visualGroup, childByID map[string]Node, counter *int) 
 	}
 	refreshChildLayouts(&node)
 	return node
-}
-
-func groupSourceRefs(group visualGroup, children []Node) SourceRefs {
-	tokenIDs := map[string]bool{}
-	relationIDs := map[string]bool{}
-	for _, id := range group.memberIDs {
-		tokenIDs[id] = true
-	}
-	for _, id := range group.relationIDs {
-		relationIDs[id] = true
-	}
-	for _, child := range children {
-		if child.Meta.Synthetic {
-			tokenIDs[child.ID] = false
-		}
-		for _, id := range child.SourceRefs.TokenIDs {
-			tokenIDs[id] = true
-		}
-		for _, id := range child.SourceRefs.RelationIDs {
-			relationIDs[id] = true
-		}
-	}
-	for id, keep := range tokenIDs {
-		if !keep {
-			delete(tokenIDs, id)
-		}
-	}
-	return SourceRefs{
-		TokenIDs:    sortedKeys(tokenIDs),
-		RelationIDs: sortedKeys(relationIDs),
-	}
 }
 
 func refreshChildLayouts(parent *Node) {
@@ -449,8 +421,6 @@ func groupScore(kind string) int {
 		return 400
 	case "band_group":
 		return 300
-	case "axis_projection_group":
-		return 250
 	case "row_group":
 		return 200
 	default:
