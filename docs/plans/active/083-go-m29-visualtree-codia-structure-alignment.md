@@ -1,0 +1,110 @@
+# 083 Go M29 VisualTree 结构对齐 Codia(空间聚类 1:1)
+
+- 状态:active
+- 创建日期:2026-05-29
+- 负责人:未指定(可交由 Codex 执行)
+- 所属链路:`services/backend-go` 的 M29 VisualTree 编译层
+
+## 一、任务背景
+
+本项目目标:截图 PNG → 可编辑 Figma 设计树(类似 Codia AI Design)。正式后端为 Go(`services/backend-go`)。链路:
+
+```
+PNG → m29extract(连通域primitive) → m29tokens(evidence token)
+   → m29relations(关系图) → m29visualtree(编译成可编辑树) → visual_tree.v1.json
+```
+
+**核心认知(已验证,不要推翻):** Codia 没有神秘大模型。其 pipeline = 感知(切图 + OCR + 元件定位)→ **编译(纯几何空间聚类成嵌套树,无语义)** → 机械命名 → 像素测量样式。我们已导出 Codia `.fig` 并解析,拿到它对一张真实图的完整输出树作为"标准答案"。详见 `docs/reference/codia-fig-reverse-engineering.md` 与 `docs/reference/codia-samples/tencent-comic-018.canvas.json`。
+
+**关键事实:** Codia 只用 4 种节点 `FRAME(容器,命名 Groups / 可点 Button) / TEXT / ROUNDED_RECTANGLE(Image 或 Background)`。层级完全靠**空间包含 + 聚类**算出来,不是语义识别。
+
+## 二、当前现状(已完成)
+
+1. **对比工具(标尺)已建好**:`services/backend-go/tools/compare_trees.py`。加载 Codia 真实树与 Go 输出树,归一化到绝对坐标,计算结构相似度。
+   ```bash
+   python3 services/backend-go/tools/compare_trees.py
+   ```
+   核心指标:**分组召回率**(Codia 容器组里 Go 有多少也聚成组 IoU≥0.6)、**综合相似度**(0.7×召回 + 0.3×深度比;1.0=完全 1:1)。
+
+2. **编译层已重写**:`services/backend-go/internal/m29/visualtree/spatial_group.go` 实现 **XY-cut 递归空间聚类 + 邻近连通兜底**,替换旧的"找行 + 魔法阈值"逻辑(旧逻辑在 `group.go` 的 `applyVisualGroups`,已不再被调用)。
+
+3. **进展数据**:综合相似度 **0.219 → 0.539**;深度 3 → 7(已达标 Codia 的 6);分组召回 0.098 → **0.341**。
+
+## 三、最终目标
+
+让 `services/backend-go` 对测试图的输出树与 Codia 官方输出树结构 1:1。量化:`compare_trees.py` 综合相似度逼近 1.0(当前 0.539,目标 **0.85+**),其中**分组召回率是主要瓶颈**(当前 0.341,目标 **0.7+**)。
+
+## 四、要做的事(按优先级)
+
+### 任务 A(最高优先级):补 "文字+背景=Button" 包含配对
+
+当前未匹配的 Codia 组**约一半是 `Button`**(模式:一个 TEXT + 一个紧紧包住它的圆角色块 ROUNDED_RECTANGLE)。两 bbox **完全重叠**,XY-cut 和邻近连通都切不出,需要第三种规则:**bbox 包含配对**。
+
+- 思路:当一个 Text 被一个尺寸相近(背景面积不超过文字面积约 4 倍)的 Image/Layer 紧紧包含时,把两者配成一个组(synthetic 容器)。
+- 数据已确认:对测试图,Go token 里有 11 处"文字被相近色块包含"。
+- 注意:部分可能已在 `containment.go` 阶段建立父子关系,先排查哪些已配对、哪些仍是兄弟未配对。
+
+### 任务 B:对齐分组边界(IoU≈0.5 的 Groups)
+
+另一半未匹配是 IoU≈0.5 的 `Groups`(边界接近但差一点)。调查 XY-cut 切分边界为何与 Codia 差一截:可能 `spatialGapRatio`(当前常量 0.15)需更自适应,或切分点策略改为"每层只切最显著的一条缝"递归。
+
+### 任务 C:大背景图沉底
+
+部分区域一张大背景图(如 665×346)与上面小前景元素重叠,使 XY-cut 当一簇切不开。Codia 会把大背景图沉为 Background 层、不参与前景切分。需识别"覆盖大部分区域的大 Image",空间聚类时排除它(当背景),只对前景元素聚类。参考 token 已有的 `CompileHints.CanContainForeground`。
+
+### 任务 D:修复 3 个过时单元测试
+
+`internal/m29/visualtree/compiler_test.go` 中以下测试断言旧 `row_group` GroupKind(已被 `spatial_group` 取代)而失败:
+
+- `TestCompileGroupsLocalProjectionRowAsSyntheticLayer`
+- `TestCompileLetsSyntheticLayerParentContainedChildByBBox`
+- `TestCompileCompletesRowGroupWithLocalProjectionSibling`
+
+把断言更新为验证新的 XY-cut/spatial_group 行为(不是删除,是改成反映新逻辑的正确契约)。
+
+## 五、硬约束(必须遵守)
+
+1. **纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是本项目失败 3-4 次的根本教训(见 `docs/plans/active/066-m29-model-first-perception-pivot.md`)。
+2. **不分裂主线。** 改进直接写进 Go(`services/backend-go`),不在 Python 另起炉灶;Python 仅用于对比标尺。
+3. **证据驱动,每次改动都用对比工具验证。** 改完跑 `compare_trees.py`,分数升才保留,降就回滚。不要在单一指标上调参陷入局部最优(历史失败模式)。
+4. **节点类型收口在 `Body/Layer/Text/Image`**,不引入语义节点类型(`TestCompileDoesNotCreateSemanticNodeTypes` 必须始终通过)。
+5. **`go test ./services/backend-go/...` 最终必须全绿。**
+
+## 六、验证方式(完整复现命令)
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/backend-go
+
+# 1. 跑完整链路生成 Go 输出树(测试图已压缩到 1440 以内)
+IMG="/Users/luhui/Downloads/腾讯动漫_018_1440.png"   # 若不存在,用任意测试图重新走链路
+OUT="/tmp/go_run"; mkdir -p "$OUT"
+go run ./cmd/m29extract   -input "$IMG" -out "$OUT"
+go run ./cmd/m29tokens    -input "$OUT/m29_physical_evidence.v1.json" -out "$OUT"
+go run ./cmd/m29relations -input "$OUT/evidence_tokens.v1.json" -out "$OUT"
+go run ./cmd/m29visualtree -tokens "$OUT/evidence_tokens.v1.json" -relations "$OUT/relation_graph.v1.json" -out "$OUT"
+
+# 2. 对比打分(核心标尺)
+cd .. && python3 services/backend-go/tools/compare_trees.py
+
+# 3. 单元测试必须全绿
+cd services/backend-go && go test ./internal/m29/visualtree/...
+```
+
+**验收标准:** 综合相似度由 0.539 显著提升(目标 0.85+);分组召回率由 0.341 显著提升(目标 0.7+);`go test ./...` 全绿;不违反任何硬约束。
+
+## 七、关键文件清单
+
+| 文件 | 作用 |
+|---|---|
+| `services/backend-go/internal/m29/visualtree/spatial_group.go` | **主战场**:XY-cut 空间聚类(任务 A/B/C) |
+| `services/backend-go/internal/m29/visualtree/compiler.go` | 建树主流程(`buildTree` 顺序:containment → spatial grouping) |
+| `services/backend-go/internal/m29/visualtree/containment.go` | bbox 包含建父子(任务 A 需了解,避免重复) |
+| `services/backend-go/internal/m29/visualtree/compiler_test.go` | 单元测试(任务 D) |
+| `services/backend-go/tools/compare_trees.py` | 对比标尺(不改其评分逻辑,只用它验证) |
+| `docs/reference/codia-fig-reverse-engineering.md` | Codia 真实结构分析(理解目标) |
+| `docs/reference/codia-samples/tencent-comic-018.canvas.json` | Codia 标准答案树 |
+
+## 八、可选增强(行有余力)
+
+- 再导出 2~3 张不同 App 的 Codia `.fig` 作对照集,扩展 `compare_trees.py` 支持多图平均分,避免只对单图过拟合。
+- XY-cut 切分点策略可参考 ChatGPT 提议的"每层只切最大空白缝 + 邻近连通兜底"的双阶段思路(已部分吸收)。

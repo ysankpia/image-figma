@@ -167,8 +167,9 @@ func buildTree(tokens evidence.Document, relations relation.Document) (Node, Dia
 		root.Children = append(root.Children, buildNode(childID, "", tokenByID, children, relationIDsByChild))
 	}
 	groupCounter := 1
-	applyVisualGroups(&root, relations.Relations, &groupCounter)
 	containmentReport := applyContainmentTree(&root, relations.Relations, tokenByID)
+	applySpatialGrouping(&root, &groupCounter)
+	refreshTreeLayouts(&root)
 	diagnostics := buildDiagnostics(tokens, relations, root, parentByChild, skipped, containmentReport)
 	return root, diagnostics, containmentReport
 }

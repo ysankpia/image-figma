@@ -1,0 +1,303 @@
+package visualtree
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
+)
+
+// spatialGapRatio:判定结构性留白的相对阈值。缝隙 >= 该轴元素中位尺寸 * 比例 才切。
+// 越小越爱切(树更深更碎),越大越粗(树更浅)。经单图对比工具校准。
+const spatialGapRatio = 0.15
+
+// applySpatialGrouping 递归地对每个容器节点的子节点做 XY-cut 空间聚类,
+// 把扁平排列的兄弟节点收拢成嵌套的 synthetic 容器(对标 Codia 的 "Groups")。
+//
+// 动机:containment 只能用 token 已有的 bbox 包含关系建父子。当一批 UI 元素
+// 没有任何"容器型" token 包着它们时(绝大多数情况),它们会全部平铺在 Body 下,
+// 导致树很扁。Codia 的做法是纯几何:递归地沿"最大空白带"把空间切成嵌套块。
+// 这就是经典的 XY-cut 版面分析算法,不依赖任何手写的语义/尺寸阈值。
+func applySpatialGrouping(root *Node, counter *int) {
+	regroupChildren(root, counter)
+}
+
+// regroupChildren 对 node 的直接子节点做一次 XY-cut 重组,然后递归处理每个子节点。
+func regroupChildren(node *Node, counter *int) {
+	// 已经是叶子或只有一个孩子:无需重组,直接递归
+	if len(node.Children) <= 1 {
+		for i := range node.Children {
+			regroupChildren(&node.Children[i], counter)
+		}
+		return
+	}
+
+	items := node.Children
+	grouped := xycut(items, node.BBox, counter, 0)
+
+	// 顶层切出了多个成员:作为该节点的新子节点。
+	// 若 xycut 整体切不开(返回原列表),保持平铺,不强加空壳。
+	node.Children = grouped
+	refreshChildLayouts(node)
+
+	for i := range node.Children {
+		regroupChildren(&node.Children[i], counter)
+	}
+}
+
+// xycut 对一组节点递归做 XY 切分。返回切分后的节点列表(可能含新建的 synthetic 容器)。
+// depth 防止极端情况下无限递归。
+// xycut 对一组兄弟节点做一层 XY 切分,返回切分后的顶层成员列表。
+// 每个能被进一步细分或本身就是紧密簇的多元素子簇,会被递归地包成 synthetic 容器。
+// 顶层若整体切不开(就是一个紧密簇),返回原列表(由调用方 regroupChildren 决定不再加层)。
+func xycut(nodes []Node, parentBox contract.BBox, counter *int, depth int) []Node {
+	if len(nodes) <= 1 || depth > 12 {
+		return nodes
+	}
+
+	clustersY, gapY := splitAxis(nodes, true)  // 按 Y 分行
+	clustersX, gapX := splitAxis(nodes, false) // 按 X 分列
+
+	if len(clustersY) < 2 && len(clustersX) < 2 {
+		// 两个轴都切不开(投影互相重叠)。退一步用"邻近连通分量"兜底:
+		// 按元素之间的边缘间距建图,把空间上分离的连通块分开。
+		// 这能处理"投影重叠但实际分簇"的情况(如交错排列的卡片)。
+		comps := neighborComponents(nodes)
+		if len(comps) >= 2 {
+			out := make([]Node, 0, len(comps))
+			for _, comp := range comps {
+				out = append(out, groupCluster(comp, counter, depth+1))
+			}
+			return out
+		}
+		// 仍是单一连通块:这批节点是一个紧密簇,无法再分,原样返回
+		return nodes
+	}
+
+	// 选间隙更显著的轴先切(XY-cut 经典:每层选更干净的切分)
+	var clusters [][]Node
+	if gapY >= gapX && len(clustersY) >= 2 {
+		clusters = clustersY
+	} else if len(clustersX) >= 2 {
+		clusters = clustersX
+	} else {
+		clusters = clustersY
+	}
+
+	out := make([]Node, 0, len(clusters))
+	for _, cluster := range clusters {
+		out = append(out, groupCluster(cluster, counter, depth+1))
+	}
+	return out
+}
+
+// groupCluster 把一个簇收敛成【单个】节点:
+//   - 单元素:返回该元素本身
+//   - 多元素:递归 xycut 继续细分;无论细分出多个子项、还是整簇切不开,
+//     都包成一个 synthetic 容器(对标 Codia "紧密一组 = 一个 Groups")
+func groupCluster(cluster []Node, counter *int, depth int) Node {
+	if len(cluster) == 1 {
+		return cluster[0]
+	}
+	sub := xycut(cluster, unionNodeBBox(cluster), counter, depth)
+	return makeSpatialGroup(sub, counter)
+}
+
+// splitAxis 把 nodes 沿给定轴(vertical=true 表示沿 Y 轴分行)按空白带切成多个簇。
+// 返回簇列表 和 最大相对间隙(间隙/中位尺寸,用于跨轴比较哪个切分更干净)。
+//
+// 算法(投影空白带 / projection profile cut):
+//  1. 把每个节点在该轴上投影成 [start,end] 区间,按 start 排序;
+//  2. 用扫描线合并所有重叠/接触的区间,得到若干"占用块";占用块之间的空隙即候选切缝;
+//  3. 只在"足够大"的空隙处切(空隙 >= 中位元素尺寸 * ratio),把节点按所属占用块分簇。
+//
+// 关键:簇内节点保持输入(阅读)顺序,排序只用于找切缝,不改变输出顺序。
+//
+// 为什么用相对判据:一行紧密排列的元素(导航文字、价格数字)缝隙远小于元素本身,
+// 不应被切散;而区块之间的结构性留白通常和元素尺寸同量级或更大。无绝对像素阈值,按内容自适应。
+func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
+	n := len(nodes)
+	starts := make([]int, n)
+	ends := make([]int, n)
+	sizes := make([]int, n)
+	for i, nd := range nodes {
+		if vertical {
+			starts[i], ends[i], sizes[i] = nd.BBox.Y, nd.BBox.Y+nd.BBox.Height, nd.BBox.Height
+		} else {
+			starts[i], ends[i], sizes[i] = nd.BBox.X, nd.BBox.X+nd.BBox.Width, nd.BBox.Width
+		}
+	}
+
+	order := make([]int, n)
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		if starts[order[a]] != starts[order[b]] {
+			return starts[order[a]] < starts[order[b]]
+		}
+		return ends[order[a]] < ends[order[b]]
+	})
+
+	medianSize := medianInt(sizes)
+	minGap := 1
+	if medianSize > 0 {
+		minGap = max(minGap, int(float64(medianSize)*spatialGapRatio))
+	}
+
+	// 沿排序后的占用区间找切缝,给每个节点打"簇编号"
+	clusterOf := make([]int, n)
+	cluster := 0
+	curEnd := ends[order[0]]
+	clusterOf[order[0]] = 0
+	maxGap := 0
+	for k := 1; k < n; k++ {
+		idx := order[k]
+		gap := starts[idx] - curEnd
+		if gap >= minGap {
+			if gap > maxGap {
+				maxGap = gap
+			}
+			cluster++
+		}
+		clusterOf[idx] = cluster
+		if ends[idx] > curEnd {
+			curEnd = ends[idx]
+		}
+	}
+
+	clusterCount := cluster + 1
+	clusters := make([][]Node, clusterCount)
+	// 按【原始输入顺序】填充,保持阅读顺序
+	for i := 0; i < n; i++ {
+		c := clusterOf[i]
+		clusters[c] = append(clusters[c], nodes[i])
+	}
+
+	relGap := 0.0
+	if medianSize > 0 {
+		relGap = float64(maxGap) / float64(medianSize)
+	}
+	return clusters, relGap
+}
+
+// neighborComponents 按"边缘间距"把节点分成空间连通分量(并查集)。
+// 两个节点相连的条件:在一个轴上投影重叠,且另一轴的间距 <= 邻近阈值。
+// 阈值 = 这批节点中位尺寸 * spatialGapRatio(与切分判据同源,自适应)。
+//
+// 用途:当投影空白切分切不开(两轴投影都重叠)时,用它把实际分离的簇分开;
+// 若整批是一个连通块,说明它们紧密相邻,应作为一个组。
+func neighborComponents(nodes []Node) [][]Node {
+	n := len(nodes)
+	if n <= 1 {
+		return [][]Node{nodes}
+	}
+	sizes := make([]int, 0, 2*n)
+	for _, nd := range nodes {
+		sizes = append(sizes, nd.BBox.Width, nd.BBox.Height)
+	}
+	med := medianInt(sizes)
+	maxGap := 1
+	if med > 0 {
+		maxGap = max(maxGap, int(float64(med)*spatialGapRatio))
+	}
+
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(x int) int {
+		for parent[x] != x {
+			parent[x] = parent[parent[x]]
+			x = parent[x]
+		}
+		return x
+	}
+	union := func(a, b int) {
+		ra, rb := find(a), find(b)
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+
+	for i := 0; i < n; i++ {
+		a := nodes[i].BBox
+		for j := i + 1; j < n; j++ {
+			b := nodes[j].BBox
+			overlapX := min(a.X+a.Width, b.X+b.Width) - max(a.X, b.X)
+			overlapY := min(a.Y+a.Height, b.Y+b.Height) - max(a.Y, b.Y)
+			gx := axisGap(a.X, a.X+a.Width, b.X, b.X+b.Width)
+			gy := axisGap(a.Y, a.Y+a.Height, b.Y, b.Y+b.Height)
+			connected := false
+			if overlapX > 0 && gy <= maxGap {
+				connected = true
+			} else if overlapY > 0 && gx <= maxGap {
+				connected = true
+			}
+			if connected {
+				union(i, j)
+			}
+		}
+	}
+
+	groups := map[int][]Node{}
+	for i := 0; i < n; i++ {
+		r := find(i)
+		groups[r] = append(groups[r], nodes[i])
+	}
+	out := make([][]Node, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, g)
+	}
+	// 按位置稳定排序(上->下, 左->右)
+	sort.SliceStable(out, func(i, j int) bool {
+		bi, bj := unionNodeBBox(out[i]), unionNodeBBox(out[j])
+		if bi.Y != bj.Y {
+			return bi.Y < bj.Y
+		}
+		return bi.X < bj.X
+	})
+	return out
+}
+
+// axisGap 返回两个区间在某轴上的正间距;若重叠返回 0。
+func axisGap(a1, a2, b1, b2 int) int {
+	if a2 < b1 {
+		return b1 - a2
+	}
+	if b2 < a1 {
+		return a1 - b2
+	}
+	return 0
+}
+
+// makeSpatialGroup 用一组子节点包一个 synthetic 容器(对标 Codia 的 Groups FRAME)。
+func makeSpatialGroup(children []Node, counter *int) Node {
+	id := fmt.Sprintf("sgroup_%04d", *counter)
+	*counter = *counter + 1
+	box := unionNodeBBox(children)
+	// 子节点按阅读顺序(上->下, 左->右)排好
+	sort.SliceStable(children, func(i, j int) bool { return lessNode(children[i], children[j]) })
+	node := Node{
+		ID:   id,
+		Type: "Layer",
+		Name: "Groups / " + id,
+		BBox: box,
+		Layout: Layout{
+			Mode:     "absolute",
+			X:        box.X,
+			Y:        box.Y,
+			Width:    box.Width,
+			Height:   box.Height,
+			Relative: true,
+		},
+		Meta: Meta{
+			Synthetic: true,
+			GroupKind: "spatial_group",
+		},
+		Children: children,
+	}
+	refreshChildLayouts(&node)
+	return node
+}
