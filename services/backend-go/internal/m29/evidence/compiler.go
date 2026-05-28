@@ -129,6 +129,9 @@ func compileTokens(source contract.Document) []Token {
 			continue
 		}
 		if parentID := containingRasterParentID(primitive, rasterParents); parentID != "" {
+			if preserveForegroundInsideRaster(primitive) {
+				continue
+			}
 			token := tokenFromPrimitive(nextID, "texture_fragment_token", primitive, "suppressed", []string{"inside_raster_region", "texture_fragment_not_ast_candidate"})
 			token.Measurements.ContainedByRasterID = parentID
 			tokens = append(tokens, token)
@@ -238,6 +241,15 @@ func containingSurfaceParentID(p contract.Primitive, parents []contract.Primitiv
 		}
 	}
 	return ""
+}
+
+func preserveForegroundInsideRaster(p contract.Primitive) bool {
+	switch p.PrimitiveType {
+	case "symbol_region", "rect", "line":
+		return p.CompileHints.CanBeIcon || p.CompileHints.HasStableRectGeometry
+	default:
+		return false
+	}
 }
 
 func clusterSymbols(primitives []contract.Primitive, consumed map[string]bool) [][]contract.Primitive {

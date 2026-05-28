@@ -116,6 +116,46 @@ func TestCompilePreservesSurfaceRegionTokenInsideRasterParent(t *testing.T) {
 	}
 }
 
+func TestCompilePreservesForegroundSymbolsInsideRasterParent(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "m29_physical_evidence.v1.json")
+	source := contract.Document{
+		SchemaName: "M29PhysicalEvidence",
+		Version:    "1.0",
+		Image:      contract.ImageInfo{Width: 500, Height: 300},
+		Primitives: []contract.Primitive{
+			{ID: "p_raster", PrimitiveType: "image_region", BBox: contract.BBox{X: 0, Y: 0, Width: 500, Height: 240}},
+			{
+				ID:            "p_icon",
+				PrimitiveType: "symbol_region",
+				BBox:          contract.BBox{X: 120, Y: 120, Width: 34, Height: 34},
+				CompileHints:  contract.CompileHints{CanBeIcon: true, Reasons: []string{"compact_foreground_component"}},
+			},
+			{
+				ID:            "p_rule",
+				PrimitiveType: "line",
+				BBox:          contract.BBox{X: 180, Y: 130, Width: 42, Height: 2},
+				CompileHints:  contract.CompileHints{HasStableRectGeometry: true, Reasons: []string{"thin_component"}},
+			},
+		},
+	}
+	writeSource(t, input, source)
+
+	doc, err := Compile(Options{InputPath: input, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.SuppressedCount != 0 {
+		t.Fatalf("foreground evidence inside raster should stay available, got %#v", doc.Diagnostics)
+	}
+	if doc.Diagnostics.TokenTypeCounts["symbol_cluster_token"] != 1 {
+		t.Fatalf("expected preserved icon foreground, got %#v", doc.Diagnostics.TokenTypeCounts)
+	}
+	if doc.Diagnostics.TokenTypeCounts["line_token"] != 1 {
+		t.Fatalf("expected preserved line foreground, got %#v", doc.Diagnostics.TokenTypeCounts)
+	}
+}
+
 func writeSource(t *testing.T, path string, source contract.Document) {
 	t.Helper()
 	data, err := json.Marshal(source)

@@ -31,12 +31,23 @@ func TestCompileBuildsLayerWithParentRelativeText(t *testing.T) {
 	if layer.Type != "Layer" {
 		t.Fatalf("expected surface to become Layer, got %#v", layer)
 	}
-	child := layer.Children[0]
+	background := findChild(layer, "surface_background")
+	if background.ID == "" || background.Type != "Image" || background.Meta.GroupKind != "background_leaf" {
+		t.Fatalf("expected Codia-like background leaf first, got %#v", layer.Children)
+	}
+	child := findDescendant(layer, "title")
 	if child.Type != "Text" {
 		t.Fatalf("expected text child, got %#v", child)
 	}
-	if child.Layout.X != 22 || child.Layout.Y != 22 || !child.Layout.Relative {
-		t.Fatalf("expected parent-relative child layout, got %#v", child.Layout)
+	group := findParentOf(layer, "title")
+	if group.ID == "" || !group.Meta.Synthetic || group.Meta.GroupKind != "text_background_group" {
+		t.Fatalf("expected text to be wrapped in Codia-like text background group, got %#v", layer)
+	}
+	if group.Layout.X != 22 || group.Layout.Y != 22 || !group.Layout.Relative {
+		t.Fatalf("expected group layout relative to physical layer, got %#v", group.Layout)
+	}
+	if child.Layout.X != 0 || child.Layout.Y != 0 || !child.Layout.Relative {
+		t.Fatalf("expected text layout relative to text background group, got %#v", child.Layout)
 	}
 	if child.Content.Text != "Hello" {
 		t.Fatalf("expected OCR text content, got %#v", child.Content)
@@ -66,7 +77,7 @@ func TestCompilePromotesRasterWithChildrenToBackgroundLayer(t *testing.T) {
 	if layer.Type != "Layer" || layer.Style.BackgroundRef != "raster" {
 		t.Fatalf("expected raster background Layer, got %#v", layer)
 	}
-	if len(layer.Children) != 1 || layer.Children[0].Type != "Text" {
+	if len(layer.Children) != 2 || layer.Children[0].Meta.GroupKind != "background_leaf" || findDescendant(layer, "label").Type != "Text" {
 		t.Fatalf("raster background should not swallow foreground children: %#v", layer.Children)
 	}
 	if doc.Diagnostics.BackgroundLayerCount != 1 {
@@ -124,11 +135,12 @@ func TestCompileParentsContainedChildIntoPhysicalLayerByBBox(t *testing.T) {
 		t.Fatalf("expected physical containment parent, got %#v", doc.Root.Children)
 	}
 	layer := doc.Root.Children[0]
-	if len(layer.Children) != 1 || layer.Children[0].ID != "title" {
+	if findDescendant(layer, "title").ID == "" {
 		t.Fatalf("expected title under physical layer, got %#v", layer)
 	}
-	if layer.Children[0].Meta.ParentReason != "bbox_containment" {
-		t.Fatalf("expected bbox containment reason, got %#v", layer.Children[0].Meta)
+	title := findDescendant(layer, "title")
+	if title.Meta.ParentReason != "bbox_containment" {
+		t.Fatalf("expected bbox containment reason, got %#v", title.Meta)
 	}
 	if doc.Diagnostics.ContainmentOnlyParentCount != 1 || doc.Diagnostics.ContainmentAppliedCount != 1 {
 		t.Fatalf("expected containment diagnostics, got %#v", doc.Diagnostics)
@@ -155,9 +167,17 @@ func TestCompileUsesSmallestContainingParent(t *testing.T) {
 		t.Fatalf("Compile() error = %v", err)
 	}
 	outer := doc.Root.Children[0]
-	inner := outer.Children[0]
-	if inner.ID != "inner" || len(inner.Children) != 1 || inner.Children[0].ID != "title" {
+	inner := findChild(outer, "inner")
+	title := findDescendant(inner, "title")
+	if inner.ID != "inner" || title.ID != "title" {
 		t.Fatalf("expected title under smallest containing parent, got %#v", doc.Root)
+	}
+	group := findParentOf(inner, "title")
+	if group.ID == "" || group.Layout.X != 30 || group.Layout.Y != 20 || !group.Layout.Relative {
+		t.Fatalf("expected title group layout relative to inner, got group=%#v title=%#v", group, title)
+	}
+	if title.Layout.X != 0 || title.Layout.Y != 0 || !title.Layout.Relative {
+		t.Fatalf("expected title layout relative to text background group, got %#v", title.Layout)
 	}
 }
 
@@ -179,21 +199,11 @@ func TestCompileGroupsLocalProjectionRowAsSyntheticLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if len(doc.Root.Children) != 1 {
-		t.Fatalf("expected row group under body, got %#v", doc.Root.Children)
+	if len(doc.Root.Children) != 3 {
+		t.Fatalf("single-line text without enclosing visual evidence should stay flat, got %#v", doc.Root.Children)
 	}
-	group := doc.Root.Children[0]
-	if group.Type != "Layer" || !group.Meta.Synthetic || group.Meta.GroupKind != "row_group" {
-		t.Fatalf("expected synthetic row Layer, got %#v", group)
-	}
-	if len(group.Children) != 3 {
-		t.Fatalf("expected three row children, got %#v", group.Children)
-	}
-	if group.Children[0].Type != "Text" || group.Children[0].Layout.X != 0 || !group.Children[0].Layout.Relative {
-		t.Fatalf("expected relative text child in group, got %#v", group.Children[0])
-	}
-	if doc.Diagnostics.SyntheticGroupCount != 1 || doc.Diagnostics.GroupKindCounts["row_group"] != 1 {
-		t.Fatalf("expected group diagnostics, got %#v", doc.Diagnostics)
+	if doc.Diagnostics.GroupKindCounts["row_group"] != 0 {
+		t.Fatalf("same_row must not create legacy row_group, got %#v", doc.Diagnostics)
 	}
 }
 
@@ -243,8 +253,8 @@ func TestCompileDoesNotGroupAcrossDifferentParents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if doc.Diagnostics.SyntheticGroupCount != 0 {
-		t.Fatalf("same_row across different parents must not create group, got %#v", doc.Root)
+	if doc.Diagnostics.GroupKindCounts["row_group"] != 0 {
+		t.Fatalf("same_row across different parents must not create legacy row group, got %#v", doc.Root)
 	}
 }
 
@@ -267,24 +277,14 @@ func TestCompileLetsSyntheticLayerParentContainedChildByBBox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if len(doc.Root.Children) != 1 {
-		t.Fatalf("expected synthetic layer under body, got %#v", doc.Root.Children)
-	}
-	group := doc.Root.Children[0]
-	if !group.Meta.Synthetic || group.Meta.GroupKind != "row_group" {
-		t.Fatalf("expected synthetic row layer, got %#v", group)
-	}
-	if len(group.Children) != 4 {
-		t.Fatalf("expected contained orphan to be parented by synthetic layer, got %#v", group)
-	}
-	var orphan Node
-	for _, child := range group.Children {
-		if child.ID == "orphan" {
-			orphan = child
+	var group Node
+	for _, child := range doc.Root.Children {
+		if child.Meta.Synthetic && child.Meta.GroupKind == "spatial_group" {
+			group = child
 		}
 	}
-	if orphan.ID == "" || orphan.Meta.ParentReason != "bbox_containment" {
-		t.Fatalf("expected orphan bbox containment parent reason, got %#v", orphan)
+	if group.ID == "" || findChild(group, "orphan").ID == "" {
+		t.Fatalf("expected bbox-overlapped text to be grouped by spatial clustering, got %#v", doc.Root.Children)
 	}
 }
 
@@ -309,8 +309,8 @@ func TestCompileCompletesRowGroupWithLocalProjectionSibling(t *testing.T) {
 		t.Fatalf("Compile() error = %v", err)
 	}
 	group := doc.Root.Children[0]
-	if len(group.Children) != 4 {
-		t.Fatalf("expected completed row group, got %#v", group)
+	if !group.Meta.Synthetic || group.Meta.GroupKind != "spatial_group" || len(group.Children) != 3 {
+		t.Fatalf("expected local spatial group, got %#v", group)
 	}
 }
 
@@ -466,6 +466,39 @@ func rel(id string, relationType string, category string, from string, to string
 		Confidence:   0.9,
 		Strength:     "strong",
 	}
+}
+
+func findChild(parent Node, id string) Node {
+	for _, child := range parent.Children {
+		if child.ID == id {
+			return child
+		}
+	}
+	return Node{}
+}
+
+func findDescendant(parent Node, id string) Node {
+	for _, child := range parent.Children {
+		if child.ID == id {
+			return child
+		}
+		if found := findDescendant(child, id); found.ID != "" {
+			return found
+		}
+	}
+	return Node{}
+}
+
+func findParentOf(parent Node, id string) Node {
+	for _, child := range parent.Children {
+		if child.ID == id {
+			return parent
+		}
+		if found := findParentOf(child, id); found.ID != "" {
+			return found
+		}
+	}
+	return Node{}
 }
 
 func writeJSON(t *testing.T, path string, value any) {

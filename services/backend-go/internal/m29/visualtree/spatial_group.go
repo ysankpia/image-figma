@@ -24,6 +24,10 @@ func applySpatialGrouping(root *Node, counter *int) {
 
 // regroupChildren 对 node 的直接子节点做一次 XY-cut 重组,然后递归处理每个子节点。
 func regroupChildren(node *Node, counter *int) {
+	if isAtomicSpatialGroup(*node) {
+		refreshChildLayouts(node)
+		return
+	}
 	// 已经是叶子或只有一个孩子:无需重组,直接递归
 	if len(node.Children) <= 1 {
 		for i := range node.Children {
@@ -32,17 +36,247 @@ func regroupChildren(node *Node, counter *int) {
 		return
 	}
 
-	items := node.Children
-	grouped := xycut(items, node.BBox, counter, 0)
+	backgrounds, foreground := splitBackgroundLeaves(node.Children)
+	foreground = pairContainedForeground(foreground, counter)
+	foreground = pairVerticalForeground(foreground, counter)
+	foreground = pairTextBackedForeground(foreground, counter)
+	grouped := xycut(foreground, node.BBox, counter, 0)
 
 	// 顶层切出了多个成员:作为该节点的新子节点。
 	// 若 xycut 整体切不开(返回原列表),保持平铺,不强加空壳。
-	node.Children = grouped
+	node.Children = append(backgrounds, grouped...)
 	refreshChildLayouts(node)
 
 	for i := range node.Children {
 		regroupChildren(&node.Children[i], counter)
 	}
+}
+
+func splitBackgroundLeaves(children []Node) ([]Node, []Node) {
+	backgrounds := make([]Node, 0)
+	foreground := make([]Node, 0, len(children))
+	for _, child := range children {
+		if isBackgroundLeaf(child) {
+			backgrounds = append(backgrounds, child)
+			continue
+		}
+		foreground = append(foreground, child)
+	}
+	return backgrounds, foreground
+}
+
+func isBackgroundLeaf(node Node) bool {
+	return node.Meta.Synthetic && node.Meta.GroupKind == "background_leaf"
+}
+
+func pairContainedForeground(nodes []Node, counter *int) []Node {
+	if len(nodes) < 2 {
+		return nodes
+	}
+	used := map[int]bool{}
+	pairsByFirst := map[int]Node{}
+	for textIdx, text := range nodes {
+		if used[textIdx] || text.Type != "Text" {
+			continue
+		}
+		bestIdx := -1
+		bestArea := 0
+		for candidateIdx, candidate := range nodes {
+			if candidateIdx == textIdx || used[candidateIdx] {
+				continue
+			}
+			if !canPairAsBackground(candidate, text) {
+				continue
+			}
+			candidateArea := area(candidate.BBox)
+			if bestIdx == -1 || candidateArea < bestArea {
+				bestIdx = candidateIdx
+				bestArea = candidateArea
+			}
+		}
+		if bestIdx < 0 {
+			continue
+		}
+		first := min(textIdx, bestIdx)
+		children := []Node{nodes[bestIdx], text}
+		pairsByFirst[first] = makeContainedPairGroup(children, counter)
+		used[textIdx] = true
+		used[bestIdx] = true
+	}
+	if len(pairsByFirst) == 0 {
+		return nodes
+	}
+	out := make([]Node, 0, len(nodes)-len(used)+len(pairsByFirst))
+	for i, node := range nodes {
+		if pair, ok := pairsByFirst[i]; ok {
+			out = append(out, pair)
+			continue
+		}
+		if used[i] {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func canPairAsBackground(candidate Node, text Node) bool {
+	if candidate.Type == "Text" || candidate.Meta.Synthetic || isThinLineNode(candidate) {
+		return false
+	}
+	if !bboxContains(candidate.BBox, text.BBox, containmentTolerance) {
+		return false
+	}
+	textArea := area(text.BBox)
+	candidateArea := area(candidate.BBox)
+	if textArea == 0 || candidateArea <= textArea {
+		return false
+	}
+	if candidateArea > textArea*7 {
+		return false
+	}
+	if candidate.BBox.Height > text.BBox.Height*4 {
+		return false
+	}
+	return true
+}
+
+func makeContainedPairGroup(children []Node, counter *int) Node {
+	sort.SliceStable(children, func(i, j int) bool {
+		if children[i].Type != children[j].Type {
+			return children[i].Type != "Text"
+		}
+		return lessNode(children[i], children[j])
+	})
+	group := makeSpatialGroup(children, counter)
+	group.Meta.GroupKind = "contained_pair_group"
+	return group
+}
+
+func isAtomicSpatialGroup(node Node) bool {
+	return node.Meta.Synthetic && (node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "text_background_group" || node.Meta.GroupKind == "vertical_pair_group")
+}
+
+func pairTextBackedForeground(nodes []Node, counter *int) []Node {
+	if len(nodes) == 0 {
+		return nodes
+	}
+	out := make([]Node, 0, len(nodes))
+	for _, node := range nodes {
+		if canUseTextBBoxAsBackground(node) {
+			out = append(out, makeTextBackgroundGroup(node, counter))
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func canUseTextBBoxAsBackground(node Node) bool {
+	if node.Type != "Text" || node.Meta.Synthetic || node.BBox.Height <= 0 {
+		return false
+	}
+	if node.BBox.Height > 34 || node.BBox.Width < 40 {
+		return false
+	}
+	if node.BBox.Width*2 < node.BBox.Height*5 {
+		return false
+	}
+	return true
+}
+
+func makeTextBackgroundGroup(text Node, counter *int) Node {
+	bg := Node{
+		ID:   fmt.Sprintf("tbg_%04d", *counter),
+		Type: "Image",
+		Name: "Background / " + text.ID,
+		BBox: text.BBox,
+		Layout: Layout{
+			Mode:     "absolute",
+			Relative: true,
+		},
+		Meta: Meta{
+			Synthetic:    true,
+			GroupKind:    "background_leaf",
+			ParentReason: "text_bbox_background",
+		},
+	}
+	group := makeSpatialGroup([]Node{bg, text}, counter)
+	group.Meta.GroupKind = "text_background_group"
+	return group
+}
+
+func pairVerticalForeground(nodes []Node, counter *int) []Node {
+	if len(nodes) < 2 {
+		return nodes
+	}
+	used := map[int]bool{}
+	pairsByFirst := map[int]Node{}
+	for topIdx, top := range nodes {
+		if used[topIdx] || top.Type == "Text" || top.Meta.Synthetic || isThinLineNode(top) {
+			continue
+		}
+		bestIdx := -1
+		bestGap := 0
+		for textIdx, text := range nodes {
+			if used[textIdx] || textIdx == topIdx || text.Type != "Text" {
+				continue
+			}
+			if !isVerticalLabelPair(top, text) {
+				continue
+			}
+			gap := text.BBox.Y - (top.BBox.Y + top.BBox.Height)
+			if bestIdx == -1 || gap < bestGap {
+				bestIdx = textIdx
+				bestGap = gap
+			}
+		}
+		if bestIdx < 0 {
+			continue
+		}
+		first := min(topIdx, bestIdx)
+		children := []Node{top, nodes[bestIdx]}
+		group := makeSpatialGroup(children, counter)
+		group.Meta.GroupKind = "vertical_pair_group"
+		pairsByFirst[first] = group
+		used[topIdx] = true
+		used[bestIdx] = true
+	}
+	if len(pairsByFirst) == 0 {
+		return nodes
+	}
+	out := make([]Node, 0, len(nodes)-len(used)+len(pairsByFirst))
+	for i, node := range nodes {
+		if pair, ok := pairsByFirst[i]; ok {
+			out = append(out, pair)
+			continue
+		}
+		if used[i] {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func isVerticalLabelPair(top Node, text Node) bool {
+	if text.BBox.Y < top.BBox.Y {
+		return false
+	}
+	gap := text.BBox.Y - (top.BBox.Y + top.BBox.Height)
+	local := max(1, min(top.BBox.Height, text.BBox.Height))
+	if gap < -local/2 || gap > max(8, local) {
+		return false
+	}
+	overlap := min(top.BBox.X+top.BBox.Width, text.BBox.X+text.BBox.Width) - max(top.BBox.X, text.BBox.X)
+	if overlap <= 0 {
+		centerDelta := abs((top.BBox.X + top.BBox.Width/2) - (text.BBox.X + text.BBox.Width/2))
+		if centerDelta > max(top.BBox.Width, text.BBox.Width)/2 {
+			return false
+		}
+		return true
+	}
+	return overlap*2 >= min(top.BBox.Width, text.BBox.Width)
 }
 
 // xycut 对一组节点递归做 XY 切分。返回切分后的节点列表(可能含新建的 synthetic 容器)。

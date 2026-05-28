@@ -168,6 +168,7 @@ func buildTree(tokens evidence.Document, relations relation.Document) (Node, Dia
 	}
 	groupCounter := 1
 	containmentReport := applyContainmentTree(&root, relations.Relations, tokenByID)
+	materializePhysicalBackgroundLeaves(&root, tokenByID)
 	applySpatialGrouping(&root, &groupCounter)
 	refreshTreeLayouts(&root)
 	diagnostics := buildDiagnostics(tokens, relations, root, parentByChild, skipped, containmentReport)
@@ -250,6 +251,58 @@ func nodeTypeForToken(token evidence.Token, hasChildren bool) string {
 }
 
 func canContain(token evidence.Token) bool {
+	switch token.TokenType {
+	case "surface_region_token", "layer_background_token":
+		return true
+	case "raster_region_token":
+		return token.CompileHints.CanContainForeground
+	default:
+		return false
+	}
+}
+
+func addPhysicalBackgroundLeaf(node *Node, token evidence.Token) {
+	if node.Type != "Layer" || !physicalLayerBackgroundToken(token) {
+		return
+	}
+	bg := Node{
+		ID:   node.ID + "_background",
+		Type: "Image",
+		Name: "Background / " + node.ID,
+		BBox: token.BBox,
+		Layout: Layout{
+			Mode:     "absolute",
+			X:        0,
+			Y:        0,
+			Width:    token.BBox.Width,
+			Height:   token.BBox.Height,
+			Relative: true,
+		},
+		SourceRefs: SourceRefs{
+			TokenIDs:      []string{token.ID},
+			BackgroundIDs: []string{token.ID},
+		},
+		Meta: Meta{
+			Synthetic:    true,
+			GroupKind:    "background_leaf",
+			ParentReason: "physical_background",
+		},
+	}
+	node.Style.BackgroundRef = token.ID
+	node.SourceRefs.BackgroundIDs = []string{token.ID}
+	node.Children = append([]Node{bg}, node.Children...)
+}
+
+func materializePhysicalBackgroundLeaves(node *Node, tokens map[string]evidence.Token) {
+	if token, ok := singleSourceToken(*node, tokens); ok {
+		addPhysicalBackgroundLeaf(node, token)
+	}
+	for i := range node.Children {
+		materializePhysicalBackgroundLeaves(&node.Children[i], tokens)
+	}
+}
+
+func physicalLayerBackgroundToken(token evidence.Token) bool {
 	switch token.TokenType {
 	case "surface_region_token", "layer_background_token":
 		return true
