@@ -394,6 +394,198 @@ func TestCompileKeepsSyntheticGroupBBoxStableAfterContainment(t *testing.T) {
 	}
 }
 
+func TestCompileGroupsMultiRowMatrixAsAxisProjectionGroup(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("a1", contract.BBox{X: 20, Y: 30, Width: 40, Height: 20}, "A1"),
+			textToken("a2", contract.BBox{X: 100, Y: 30, Width: 40, Height: 20}, "A2"),
+			textToken("b1", contract.BBox{X: 20, Y: 70, Width: 40, Height: 20}, "B1"),
+			textToken("b2", contract.BBox{X: 100, Y: 70, Width: 40, Height: 20}, "B2"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_column", "layout_hint", "a1", "b1"),
+			rel("rel_0002", "same_column", "layout_hint", "a2", "b2"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if len(doc.Root.Children) != 1 {
+		t.Fatalf("expected axis projection group under body, got %#v", doc.Root.Children)
+	}
+	group := doc.Root.Children[0]
+	if group.Type != "Layer" || !group.Meta.Synthetic || group.Meta.GroupKind != "axis_projection_group" {
+		t.Fatalf("expected axis projection Layer, got %#v", group)
+	}
+	if len(group.Children) != 4 || group.BBox.X != 20 || group.BBox.Y != 30 || group.BBox.Width != 120 || group.BBox.Height != 60 {
+		t.Fatalf("expected stable union bbox and children, got %#v", group)
+	}
+	if group.Children[0].Layout.X != 0 || group.Children[0].Layout.Y != 0 || !group.Children[0].Layout.Relative {
+		t.Fatalf("expected parent-relative child layout, got %#v", group.Children[0])
+	}
+	if doc.Diagnostics.GroupKindCounts["axis_projection_group"] != 1 {
+		t.Fatalf("expected axis projection diagnostics, got %#v", doc.Diagnostics)
+	}
+}
+
+func TestCompileWrapsMultipleRowGroupsAsAxisProjectionGroup(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("a1", contract.BBox{X: 20, Y: 30, Width: 30, Height: 18}, "A1"),
+			textToken("a2", contract.BBox{X: 70, Y: 30, Width: 30, Height: 18}, "A2"),
+			textToken("a3", contract.BBox{X: 120, Y: 30, Width: 30, Height: 18}, "A3"),
+			textToken("b1", contract.BBox{X: 20, Y: 70, Width: 30, Height: 18}, "B1"),
+			textToken("b2", contract.BBox{X: 70, Y: 70, Width: 30, Height: 18}, "B2"),
+			textToken("b3", contract.BBox{X: 120, Y: 70, Width: 30, Height: 18}, "B3"),
+		},
+		[]relation.Relation{},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if len(doc.Root.Children) != 1 {
+		t.Fatalf("expected one axis projection group, got %#v", doc.Root.Children)
+	}
+	group := doc.Root.Children[0]
+	if group.Meta.GroupKind != "axis_projection_group" || len(group.Children) != 2 {
+		t.Fatalf("expected axis projection wrapping two row groups, got %#v", group)
+	}
+	for _, row := range group.Children {
+		if row.Meta.GroupKind != "row_group" || len(row.Children) != 3 {
+			t.Fatalf("expected row group child, got %#v", row)
+		}
+	}
+	if doc.Diagnostics.GroupKindCounts["row_group"] != 2 || doc.Diagnostics.GroupKindCounts["axis_projection_group"] != 1 {
+		t.Fatalf("expected row+axis diagnostics, got %#v", doc.Diagnostics)
+	}
+}
+
+func TestCompileDoesNotCreateAxisProjectionFromRelationHintsAlone(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("a1", contract.BBox{X: 20, Y: 30, Width: 40, Height: 20}, "A1"),
+			textToken("a2", contract.BBox{X: 120, Y: 85, Width: 40, Height: 20}, "A2"),
+			textToken("b1", contract.BBox{X: 20, Y: 190, Width: 40, Height: 20}, "B1"),
+			textToken("b2", contract.BBox{X: 120, Y: 245, Width: 40, Height: 20}, "B2"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_column", "layout_hint", "a1", "b1"),
+			rel("rel_0002", "same_column", "layout_hint", "a2", "b2"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.GroupKindCounts["axis_projection_group"] != 0 {
+		t.Fatalf("relation hints alone must not create axis projection group, got %#v", doc.Root)
+	}
+}
+
+func TestCompileDoesNotCreateAxisProjectionForMultiLineBanner(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("left_raster", "raster_region_token", contract.BBox{X: 145, Y: 186, Width: 386, Height: 177}),
+			token("right_raster", "raster_region_token", contract.BBox{X: 470, Y: 186, Width: 360, Height: 349}),
+			textToken("headline", contract.BBox{X: 57, Y: 288, Width: 328, Height: 66}, "headline"),
+			textToken("subhead", contract.BBox{X: 59, Y: 359, Width: 270, Height: 60}, "subhead"),
+			token("symbol", "symbol_cluster_token", contract.BBox{X: 316, Y: 356, Width: 198, Height: 125}),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_column", "layout_hint", "headline", "subhead"),
+			rel("rel_0002", "same_column", "layout_hint", "left_raster", "right_raster"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.GroupKindCounts["axis_projection_group"] != 0 {
+		t.Fatalf("multi-line banner must not become axis projection group, got %#v", doc.Root)
+	}
+}
+
+func TestCompileDoesNotCreateAxisProjectionAcrossLargeVerticalGap(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("a1", contract.BBox{X: 20, Y: 20, Width: 40, Height: 20}, "A1"),
+			textToken("a2", contract.BBox{X: 100, Y: 20, Width: 40, Height: 20}, "A2"),
+			textToken("b1", contract.BBox{X: 20, Y: 220, Width: 40, Height: 20}, "B1"),
+			textToken("b2", contract.BBox{X: 100, Y: 220, Width: 40, Height: 20}, "B2"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_column", "layout_hint", "a1", "b1"),
+			rel("rel_0002", "same_column", "layout_hint", "a2", "b2"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.GroupKindCounts["axis_projection_group"] != 0 {
+		t.Fatalf("large vertical gap must not create axis projection group, got %#v", doc.Root)
+	}
+}
+
+func TestCompileDoesNotCreateAxisProjectionForThinLineFragments(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("line_a", "line_token", contract.BBox{X: 20, Y: 30, Width: 80, Height: 2}),
+			token("line_b", "line_token", contract.BBox{X: 120, Y: 30, Width: 80, Height: 2}),
+			token("line_c", "line_token", contract.BBox{X: 20, Y: 70, Width: 80, Height: 2}),
+			token("line_d", "line_token", contract.BBox{X: 120, Y: 70, Width: 80, Height: 2}),
+		},
+		[]relation.Relation{},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.SyntheticGroupCount != 0 {
+		t.Fatalf("thin line fragments must not create synthetic groups, got %#v", doc.Root)
+	}
+}
+
+func TestCompileAxisProjectionDoesNotPromoteRasterWithoutContainCapability(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("raster", "raster_region_token", contract.BBox{X: 20, Y: 20, Width: 80, Height: 60}),
+			textToken("a2", contract.BBox{X: 120, Y: 30, Width: 40, Height: 20}, "A2"),
+			textToken("b1", contract.BBox{X: 20, Y: 90, Width: 40, Height: 20}, "B1"),
+			textToken("b2", contract.BBox{X: 120, Y: 90, Width: 40, Height: 20}, "B2"),
+		},
+		[]relation.Relation{},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	for _, child := range flattenForTest(doc.Root) {
+		if child.ID == "raster" && (child.Type != "Image" || child.Style.BackgroundRef != "") {
+			t.Fatalf("raster without contain capability must stay Image, got %#v", child)
+		}
+	}
+	if doc.Diagnostics.BackgroundLayerCount != 0 {
+		t.Fatalf("axis projection must not authorize background layer, got %#v", doc.Diagnostics)
+	}
+}
+
 func TestCompileDoesNotCreateSemanticNodeTypes(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,
@@ -418,6 +610,19 @@ func TestCompileDoesNotCreateSemanticNodeTypes(t *testing.T) {
 			t.Fatalf("unexpected semantic node type %q in %#v", nodeType, doc.Diagnostics.NodeTypeCounts)
 		}
 	}
+}
+
+func flattenForTest(root Node) []Node {
+	var out []Node
+	var walk func(Node)
+	walk = func(node Node) {
+		out = append(out, node)
+		for _, child := range node.Children {
+			walk(child)
+		}
+	}
+	walk(root)
+	return out
 }
 
 func writeInputs(t *testing.T, dir string, tokens []evidence.Token, relations []relation.Relation) (string, string) {
