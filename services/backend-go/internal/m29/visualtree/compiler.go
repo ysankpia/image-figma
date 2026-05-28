@@ -239,7 +239,7 @@ func nodeTypeForToken(token evidence.Token, hasChildren bool) string {
 	case "surface_region_token", "layer_background_token":
 		return "Layer"
 	case "raster_region_token":
-		if hasChildren {
+		if hasChildren && token.CompileHints.CanContainForeground {
 			return "Layer"
 		}
 		return "Image"
@@ -250,8 +250,10 @@ func nodeTypeForToken(token evidence.Token, hasChildren bool) string {
 
 func canContain(token evidence.Token) bool {
 	switch token.TokenType {
-	case "surface_region_token", "layer_background_token", "raster_region_token":
+	case "surface_region_token", "layer_background_token":
 		return true
+	case "raster_region_token":
+		return token.CompileHints.CanContainForeground
 	default:
 		return false
 	}

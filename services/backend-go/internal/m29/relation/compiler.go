@@ -145,12 +145,12 @@ func relationsForPair(a evidence.Token, b evidence.Token, localScale int) []Rela
 	var out []Relation
 	m := relationMetrics(a.BBox, b.BBox)
 	weak := a.Disposition == "review" || b.Disposition == "review"
-	if isContainerToken(a) && contains(a.BBox, b.BBox, max(2, localScale/4)) && area(a.BBox) > area(b.BBox) {
+	if canContainForeground(a) && contains(a.BBox, b.BBox, max(2, localScale/4)) && area(a.BBox) > area(b.BBox) {
 		out = append(out, newRelation("contains", a, b, confidence(0.9, weak), weak, m, []string{"bbox_contains"}))
 		if a.TokenType == "surface_region_token" {
 			out = append(out, newRelation("inside_surface", b, a, confidence(0.88, weak), weak, m, []string{"foreground_inside_surface"}))
 		}
-		if a.TokenType == "raster_region_token" || a.TokenType == "layer_background_token" {
+		if isBackgroundToken(a) {
 			out = append(out, newRelation("foreground_inside_background", b, a, confidence(0.76, weak), weak, m, []string{"foreground_inside_background"}))
 		}
 	}
@@ -214,13 +214,19 @@ func relationCategory(relationType string) string {
 	}
 }
 
-func isContainerToken(token evidence.Token) bool {
+func canContainForeground(token evidence.Token) bool {
 	switch token.TokenType {
-	case "surface_region_token", "raster_region_token", "layer_background_token":
+	case "surface_region_token", "layer_background_token":
 		return true
+	case "raster_region_token":
+		return token.CompileHints.CanContainForeground
 	default:
 		return false
 	}
+}
+
+func isBackgroundToken(token evidence.Token) bool {
+	return token.TokenType == "raster_region_token" || token.TokenType == "layer_background_token"
 }
 
 func adjacentRelationFor(a evidence.Token, b evidence.Token, localScale int, m Metrics) (string, bool) {
@@ -248,6 +254,9 @@ func sameRow(a evidence.Token, b evidence.Token, localScale int, m Metrics) bool
 	if a.ID == b.ID {
 		return false
 	}
+	if !sameAxisCandidate(a, b, localScale, m) {
+		return false
+	}
 	if m.VerticalOverlapRatio < 0.68 {
 		return false
 	}
@@ -258,10 +267,37 @@ func sameColumn(a evidence.Token, b evidence.Token, localScale int, m Metrics) b
 	if a.ID == b.ID {
 		return false
 	}
+	if !sameAxisCandidate(a, b, localScale, m) {
+		return false
+	}
 	if m.HorizontalOverlapRatio < 0.68 {
 		return false
 	}
 	return m.GapY <= max(localScale*3, 8)
+}
+
+func sameAxisCandidate(a evidence.Token, b evidence.Token, localScale int, m Metrics) bool {
+	if contains(a.BBox, b.BBox, max(2, localScale/4)) || contains(b.BBox, a.BBox, max(2, localScale/4)) {
+		return false
+	}
+	if axisBackgroundCandidate(a) || axisBackgroundCandidate(b) {
+		if m.AreaRatio < 0.12 {
+			return false
+		}
+		if m.CenterDistance > float64(max(localScale*8, 96)) {
+			return false
+		}
+	}
+	return true
+}
+
+func axisBackgroundCandidate(token evidence.Token) bool {
+	switch token.TokenType {
+	case "raster_region_token", "surface_region_token", "layer_background_token":
+		return true
+	default:
+		return false
+	}
 }
 
 func sameBand(a evidence.Token, b evidence.Token, localScale int, m Metrics) bool {

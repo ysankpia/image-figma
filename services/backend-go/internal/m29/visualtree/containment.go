@@ -214,13 +214,25 @@ func canNodeContain(node Node, tokens map[string]evidence.Token) bool {
 	if node.Type == "Body" {
 		return true
 	}
-	if node.Type == "Layer" {
-		return true
-	}
 	if token, ok := singleSourceToken(node, tokens); ok {
 		return canContain(token)
 	}
+	if node.Meta.Synthetic {
+		return canSyntheticNodeContain(node)
+	}
+	if node.Type == "Layer" {
+		return false
+	}
 	return false
+}
+
+func canSyntheticNodeContain(node Node) bool {
+	switch node.Meta.GroupKind {
+	case "raster_parts_group", "band_group", "row_group", "axis_projection_group":
+		return !isThinLineNode(node)
+	default:
+		return false
+	}
 }
 
 func bboxContains(parent, child contract.BBox, tolerance int) bool {

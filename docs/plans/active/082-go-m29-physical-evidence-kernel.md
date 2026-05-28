@@ -736,6 +736,35 @@ nodeTypes 仍然只包含 Body / Layer / Text / Image。
 visual_tree_report.md 能看到 synthetic groupKind 和 relation 来源。
 ```
 
+### Stage 11: VisualTree Structure Authority Hardening
+
+收紧 Stage 8-10 暴露出的结构权限风险。目标：
+
+```text
+same_row / same_column 只能作为 layout hint，不能直接成为 parent authority。
+canContainForeground 是结构 parent gate。
+row_group 必须是局部单行，不允许多行大 band 或 1-2px 线段集合伪装成 row。
+宁可少建 group，也不建错 group。
+```
+
+实现边界：
+
+```text
+RelationGraph 的 contains / foreground_inside_background 只允许由具备 contain capability 的 token 产生。
+raster_region_token 只有 compileHints.canContainForeground=true 才能成为结构 parent。
+VisualGroup 不再用 same_row/same_column 连通分量直接建父层。
+row_group 改为局部轴投影候选，受 y-center 分布、group 高度、large raster 数量和 thin line 过滤约束。
+ContainmentTree 只允许可信物理 parent 或可信 synthetic group 做 bbox-only parent。
+```
+
+禁止：
+
+```text
+不引入 Button/Card/Search/Carousel/Nav/Tab/List/Icon/Vector/Component 等语义节点。
+不按文件名、文案、品牌、颜色主题、固定坐标、task id 特化。
+不以 bodyChildren 数量作为通过标准。
+```
+
 ## Validation
 
 开发期至少运行：

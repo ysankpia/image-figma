@@ -45,9 +45,11 @@ func TestCompileBuildsLayerWithParentRelativeText(t *testing.T) {
 
 func TestCompilePromotesRasterWithChildrenToBackgroundLayer(t *testing.T) {
 	tmp := t.TempDir()
+	raster := token("raster", "raster_region_token", contract.BBox{X: 10, Y: 10, Width: 300, Height: 160})
+	raster.CompileHints.CanContainForeground = true
 	tokenPath, relationPath := writeInputs(t, tmp,
 		[]evidence.Token{
-			token("raster", "raster_region_token", contract.BBox{X: 10, Y: 10, Width: 300, Height: 160}),
+			raster,
 			textToken("label", contract.BBox{X: 40, Y: 50, Width: 100, Height: 24}, "Label"),
 		},
 		[]relation.Relation{
@@ -69,6 +71,36 @@ func TestCompilePromotesRasterWithChildrenToBackgroundLayer(t *testing.T) {
 	}
 	if doc.Diagnostics.BackgroundLayerCount != 1 {
 		t.Fatalf("expected background layer diagnostic, got %#v", doc.Diagnostics)
+	}
+}
+
+func TestCompileDoesNotPromoteRasterWithoutContainCapabilityToBackgroundLayer(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("raster", "raster_region_token", contract.BBox{X: 10, Y: 10, Width: 300, Height: 160}),
+			textToken("label", contract.BBox{X: 40, Y: 50, Width: 100, Height: 24}, "Label"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "contains", "structural", "raster", "label"),
+			rel("rel_0002", "foreground_inside_background", "structural", "label", "raster"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if len(doc.Root.Children) != 2 {
+		t.Fatalf("expected raster and text to stay separate, got %#v", doc.Root.Children)
+	}
+	for _, child := range doc.Root.Children {
+		if child.ID == "raster" && (child.Type != "Image" || child.Style.BackgroundRef != "") {
+			t.Fatalf("raster without contain capability must stay Image, got %#v", child)
+		}
+	}
+	if doc.Diagnostics.BackgroundLayerCount != 0 {
+		t.Fatalf("expected no background layer diagnostic, got %#v", doc.Diagnostics)
 	}
 }
 
@@ -107,7 +139,7 @@ func TestCompileUsesSmallestContainingParent(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,
 		[]evidence.Token{
-			token("outer", "raster_region_token", contract.BBox{X: 0, Y: 0, Width: 400, Height: 300}),
+			token("outer", "surface_region_token", contract.BBox{X: 0, Y: 0, Width: 400, Height: 300}),
 			token("inner", "surface_region_token", contract.BBox{X: 40, Y: 60, Width: 200, Height: 80}),
 			textToken("title", contract.BBox{X: 70, Y: 80, Width: 90, Height: 20}, "Hello"),
 		},
@@ -129,7 +161,7 @@ func TestCompileUsesSmallestContainingParent(t *testing.T) {
 	}
 }
 
-func TestCompileGroupsSiblingRowAsSyntheticLayer(t *testing.T) {
+func TestCompileGroupsLocalProjectionRowAsSyntheticLayer(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,
 		[]evidence.Token{
@@ -162,6 +194,29 @@ func TestCompileGroupsSiblingRowAsSyntheticLayer(t *testing.T) {
 	}
 	if doc.Diagnostics.SyntheticGroupCount != 1 || doc.Diagnostics.GroupKindCounts["row_group"] != 1 {
 		t.Fatalf("expected group diagnostics, got %#v", doc.Diagnostics)
+	}
+}
+
+func TestCompileDoesNotGroupRowFromSameRowRelationAlone(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("a", contract.BBox{X: 20, Y: 30, Width: 40, Height: 20}, "A"),
+			textToken("b", contract.BBox{X: 64, Y: 70, Width: 40, Height: 20}, "B"),
+			textToken("c", contract.BBox{X: 108, Y: 110, Width: 40, Height: 20}, "C"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_row", "layout_hint", "a", "b"),
+			rel("rel_0002", "same_row", "layout_hint", "b", "c"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.SyntheticGroupCount != 0 {
+		t.Fatalf("same_row relation alone must not create row group, got %#v", doc.Root)
 	}
 }
 
@@ -233,7 +288,7 @@ func TestCompileLetsSyntheticLayerParentContainedChildByBBox(t *testing.T) {
 	}
 }
 
-func TestCompileCompletesRowGroupWithRelatedSibling(t *testing.T) {
+func TestCompileCompletesRowGroupWithLocalProjectionSibling(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,
 		[]evidence.Token{
@@ -256,6 +311,55 @@ func TestCompileCompletesRowGroupWithRelatedSibling(t *testing.T) {
 	group := doc.Root.Children[0]
 	if len(group.Children) != 4 {
 		t.Fatalf("expected completed row group, got %#v", group)
+	}
+}
+
+func TestCompileDoesNotCreateRowGroupForMultiLineBanner(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("left_raster", "raster_region_token", contract.BBox{X: 145, Y: 186, Width: 386, Height: 177}),
+			token("right_raster", "raster_region_token", contract.BBox{X: 470, Y: 186, Width: 360, Height: 349}),
+			textToken("headline", contract.BBox{X: 57, Y: 288, Width: 328, Height: 66}, "headline"),
+			textToken("subhead", contract.BBox{X: 59, Y: 359, Width: 270, Height: 60}, "subhead"),
+			token("symbol", "symbol_cluster_token", contract.BBox{X: 316, Y: 356, Width: 198, Height: 125}),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_row", "layout_hint", "left_raster", "right_raster"),
+			rel("rel_0002", "same_row", "layout_hint", "headline", "left_raster"),
+			rel("rel_0003", "same_row", "layout_hint", "subhead", "symbol"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.GroupKindCounts["row_group"] != 0 {
+		t.Fatalf("multi-line banner must not become row_group, got %#v", doc.Root)
+	}
+}
+
+func TestCompileDoesNotCreateRowGroupForThinLineFragments(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("line_a", "line_token", contract.BBox{X: 79, Y: 1587, Width: 57, Height: 2}),
+			token("line_b", "line_token", contract.BBox{X: 138, Y: 1587, Width: 61, Height: 2}),
+			token("line_c", "line_token", contract.BBox{X: 200, Y: 1587, Width: 101, Height: 2}),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "same_row", "layout_hint", "line_a", "line_b"),
+			rel("rel_0002", "same_row", "layout_hint", "line_b", "line_c"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.SyntheticGroupCount != 0 {
+		t.Fatalf("thin line fragments must not create row group, got %#v", doc.Root)
 	}
 }
 

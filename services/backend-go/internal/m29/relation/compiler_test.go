@@ -70,6 +70,58 @@ func TestCompileBuildsRasterSameBandRelations(t *testing.T) {
 	}
 }
 
+func TestCompileDoesNotBuildStructuralRelationsForRasterWithoutContainCapability(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "evidence_tokens.v1.json")
+	source := evidence.Document{
+		SchemaName: "M29EvidenceTokens",
+		Version:    "1.0",
+		Source: evidence.Source{
+			ImageWidth:  400,
+			ImageHeight: 300,
+		},
+		Tokens: []evidence.Token{
+			makeToken("token_raster", "raster_region_token", "main", contract.BBox{X: 20, Y: 30, Width: 260, Height: 120}),
+			makeToken("token_text", "text_token", "main", contract.BBox{X: 64, Y: 60, Width: 120, Height: 20}),
+		},
+	}
+	writeEvidence(t, input, source)
+
+	doc, err := Compile(Options{InputPath: input, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	assertNoRelation(t, doc, "contains", "token_raster", "token_text")
+	assertNoRelation(t, doc, "foreground_inside_background", "token_text", "token_raster")
+}
+
+func TestCompileBuildsStructuralRelationsForRasterWithContainCapability(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "evidence_tokens.v1.json")
+	raster := makeToken("token_raster", "raster_region_token", "main", contract.BBox{X: 20, Y: 30, Width: 260, Height: 120})
+	raster.CompileHints.CanContainForeground = true
+	source := evidence.Document{
+		SchemaName: "M29EvidenceTokens",
+		Version:    "1.0",
+		Source: evidence.Source{
+			ImageWidth:  400,
+			ImageHeight: 300,
+		},
+		Tokens: []evidence.Token{
+			raster,
+			makeToken("token_text", "text_token", "main", contract.BBox{X: 64, Y: 60, Width: 120, Height: 20}),
+		},
+	}
+	writeEvidence(t, input, source)
+
+	doc, err := Compile(Options{InputPath: input, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	assertRelation(t, doc, "contains", "token_raster", "token_text")
+	assertRelation(t, doc, "foreground_inside_background", "token_text", "token_raster")
+}
+
 func TestCompileExcludesSuppressedTokensFromRelationGraph(t *testing.T) {
 	tmp := t.TempDir()
 	input := filepath.Join(tmp, "evidence_tokens.v1.json")
@@ -126,6 +178,55 @@ func TestCompileCategorizesLayoutHints(t *testing.T) {
 	}
 }
 
+func TestCompileDoesNotCreateSameAxisHintForDistantBackgroundAndTinyForeground(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "evidence_tokens.v1.json")
+	source := evidence.Document{
+		SchemaName: "M29EvidenceTokens",
+		Version:    "1.0",
+		Source: evidence.Source{
+			ImageWidth:  900,
+			ImageHeight: 700,
+		},
+		Tokens: []evidence.Token{
+			makeToken("token_raster", "raster_region_token", "main", contract.BBox{X: 0, Y: 0, Width: 853, Height: 574}),
+			makeToken("token_icon", "symbol_cluster_token", "main", contract.BBox{X: 471, Y: 588, Width: 112, Height: 93}),
+		},
+	}
+	writeEvidence(t, input, source)
+
+	doc, err := Compile(Options{InputPath: input, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	assertNoRelation(t, doc, "same_column", "token_icon", "token_raster")
+	assertNoRelation(t, doc, "same_row", "token_icon", "token_raster")
+}
+
+func TestCompileKeepsSameAxisHintForComparableTextRow(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "evidence_tokens.v1.json")
+	source := evidence.Document{
+		SchemaName: "M29EvidenceTokens",
+		Version:    "1.0",
+		Source: evidence.Source{
+			ImageWidth:  400,
+			ImageHeight: 300,
+		},
+		Tokens: []evidence.Token{
+			makeToken("token_a", "text_token", "main", contract.BBox{X: 20, Y: 30, Width: 60, Height: 20}),
+			makeToken("token_b", "text_token", "main", contract.BBox{X: 84, Y: 31, Width: 70, Height: 20}),
+		},
+	}
+	writeEvidence(t, input, source)
+
+	doc, err := Compile(Options{InputPath: input, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	assertRelation(t, doc, "same_row", "token_a", "token_b")
+}
+
 func TestCompileDoesNotMarkContainedBackgroundAsSameBand(t *testing.T) {
 	tmp := t.TempDir()
 	input := filepath.Join(tmp, "evidence_tokens.v1.json")
@@ -148,8 +249,8 @@ func TestCompileDoesNotMarkContainedBackgroundAsSameBand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	assertRelation(t, doc, "contains", "token_raster", "token_surface")
 	assertRelation(t, doc, "contains", "token_surface", "token_text")
+	assertNoRelation(t, doc, "contains", "token_raster", "token_surface")
 	assertNoRelation(t, doc, "same_band", "token_raster", "token_surface")
 }
 

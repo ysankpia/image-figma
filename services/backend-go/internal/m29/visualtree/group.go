@@ -25,7 +25,7 @@ func applyVisualGroups(node *Node, relations []relation.Relation, counter *int) 
 	if len(childIDs) < 3 {
 		return
 	}
-	groups := candidateGroups(node.Children, childIDs, relations)
+	groups := candidateGroups(node.Children, childIDs, relations, node.BBox)
 	if len(groups) == 0 {
 		return
 	}
@@ -83,7 +83,7 @@ type visualGroup struct {
 	score       int
 }
 
-func candidateGroups(children []Node, childIDs map[string]bool, relations []relation.Relation) []visualGroup {
+func candidateGroups(children []Node, childIDs map[string]bool, relations []relation.Relation, parentBox contract.BBox) []visualGroup {
 	edges := map[string][]relation.Relation{}
 	for _, rel := range relations {
 		if rel.Strength == "weak" {
@@ -100,7 +100,7 @@ func candidateGroups(children []Node, childIDs map[string]bool, relations []rela
 	var groups []visualGroup
 	groups = append(groups, connectedGroups("raster_parts_same_region", "raster_parts_group", edges["raster_parts_same_region"])...)
 	groups = append(groups, connectedGroups("same_band", "band_group", edges["same_band"])...)
-	groups = append(groups, connectedGroups("same_row", "row_group", edges["same_row"])...)
+	groups = append(groups, rowProjectionGroups(children, parentBox)...)
 	sort.SliceStable(groups, func(i, j int) bool {
 		if groups[i].score != groups[j].score {
 			return groups[i].score > groups[j].score
@@ -115,11 +115,161 @@ func candidateGroups(children []Node, childIDs map[string]bool, relations []rela
 
 func groupableRelation(relationType string) bool {
 	switch relationType {
-	case "same_row", "same_column", "same_band", "raster_parts_same_region":
+	case "same_band", "raster_parts_same_region":
 		return true
 	default:
 		return false
 	}
+}
+
+func rowProjectionGroups(children []Node, parentBox contract.BBox) []visualGroup {
+	candidates := make([]Node, 0, len(children))
+	for _, child := range children {
+		if child.Meta.Synthetic || child.BBox.Width <= 0 || child.BBox.Height <= 0 {
+			continue
+		}
+		if isThinLineNode(child) {
+			continue
+		}
+		candidates = append(candidates, child)
+	}
+	if len(candidates) < 3 {
+		return nil
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if centerY(candidates[i]) != centerY(candidates[j]) {
+			return centerY(candidates[i]) < centerY(candidates[j])
+		}
+		if candidates[i].BBox.X != candidates[j].BBox.X {
+			return candidates[i].BBox.X < candidates[j].BBox.X
+		}
+		return candidates[i].ID < candidates[j].ID
+	})
+
+	used := map[string]bool{}
+	var groups []visualGroup
+	for i := range candidates {
+		if used[candidates[i].ID] {
+			continue
+		}
+		group := []Node{candidates[i]}
+		baseline := centerY(candidates[i])
+		tolerance := rowCenterTolerance(candidates[i].BBox.Height)
+		for j := i + 1; j < len(candidates); j++ {
+			if used[candidates[j].ID] {
+				continue
+			}
+			if abs(centerY(candidates[j])-baseline) > tolerance {
+				if centerY(candidates[j]) > baseline+tolerance {
+					break
+				}
+				continue
+			}
+			group = append(group, candidates[j])
+			tolerance = max(tolerance, rowCenterTolerance(candidates[j].BBox.Height))
+		}
+		if !validRowProjectionGroup(group, parentBox) {
+			continue
+		}
+		memberIDs := make([]string, 0, len(group))
+		for _, member := range group {
+			memberIDs = append(memberIDs, member.ID)
+			used[member.ID] = true
+		}
+		sort.Strings(memberIDs)
+		groups = append(groups, visualGroup{
+			kind:      "row_group",
+			memberIDs: memberIDs,
+			score:     groupScore("row_group"),
+		})
+	}
+	return groups
+}
+
+func validRowProjectionGroup(nodes []Node, parentBox contract.BBox) bool {
+	if len(nodes) < 3 {
+		return false
+	}
+	box := unionNodeBBox(nodes)
+	maxHeight := 0
+	heights := make([]int, 0, len(nodes))
+	minCenter := centerY(nodes[0])
+	maxCenter := minCenter
+	largeRasterCount := 0
+	for _, node := range nodes {
+		maxHeight = max(maxHeight, node.BBox.Height)
+		heights = append(heights, node.BBox.Height)
+		minCenter = min(minCenter, centerY(node))
+		maxCenter = max(maxCenter, centerY(node))
+		if isLargeRasterLikeNode(node, box) {
+			largeRasterCount++
+		}
+	}
+	if maxCenter-minCenter > max(8, int(float64(maxHeight)*0.45)) {
+		return false
+	}
+	if box.Height > int(float64(maxHeight)*1.8) {
+		return false
+	}
+	medianHeight := medianInt(heights)
+	if maxHeight > 64 && medianHeight > 0 && maxHeight > int(float64(medianHeight)*3.0) {
+		return false
+	}
+	if parentBox.Height > 0 && box.Height > max(1, parentBox.Height*8/100) {
+		return false
+	}
+	if largeRasterCount >= 2 {
+		return false
+	}
+	if allThinLineNodes(nodes) {
+		return false
+	}
+	return true
+}
+
+func rowCenterTolerance(height int) int {
+	return max(8, int(float64(height)*0.45))
+}
+
+func centerY(node Node) int {
+	return node.BBox.Y + node.BBox.Height/2
+}
+
+func isLargeRasterLikeNode(node Node, groupBox contract.BBox) bool {
+	if node.Type != "Image" && node.Type != "Layer" {
+		return false
+	}
+	groupArea := max(1, area(groupBox))
+	return area(node.BBox) >= groupArea/4 || node.BBox.Height >= max(1, groupBox.Height*3/4)
+}
+
+func isThinLineNode(node Node) bool {
+	return node.BBox.Height <= 2 || node.BBox.Width <= 2
+}
+
+func allThinLineNodes(nodes []Node) bool {
+	for _, node := range nodes {
+		if !isThinLineNode(node) {
+			return false
+		}
+	}
+	return true
+}
+
+func abs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func medianInt(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := append([]int(nil), values...)
+	sort.Ints(sorted)
+	return sorted[len(sorted)/2]
 }
 
 func connectedGroups(relationType string, kind string, relations []relation.Relation) []visualGroup {
