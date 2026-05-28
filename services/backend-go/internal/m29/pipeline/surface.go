@@ -4,6 +4,7 @@ import (
 	"image"
 	"sort"
 
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/components"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/mask"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/ocr"
@@ -11,8 +12,9 @@ import (
 )
 
 type surfaceCandidate struct {
-	BBox    contract.BBox
-	Reasons []string
+	BBox            contract.BBox
+	Reasons         []string
+	BackgroundColor primitive.RGB
 }
 
 type surfaceSeed struct {
@@ -35,11 +37,61 @@ func detectSurfaceCandidates(img image.Image, blocks []ocr.Block, textMask mask.
 			continue
 		}
 		candidates = append(candidates, surfaceCandidate{
-			BBox:    box,
-			Reasons: []string{"ocr_anchored_low_texture_surface", "local_surface_color_region"},
+			BBox:            box,
+			Reasons:         []string{"ocr_anchored_low_texture_surface", "local_surface_color_region"},
+			BackgroundColor: seeds[0].Color,
 		})
 	}
 	return mergeSurfaceCandidates(candidates)
+}
+
+func detectSurfaceForegroundComponents(img image.Image, surfaces []surfaceCandidate, textMask mask.Mask) []components.Component {
+	bounds := img.Bounds()
+	imageWidth, imageHeight := bounds.Dx(), bounds.Dy()
+	minArea := max(6, imageWidth*imageHeight/180000)
+	var out []components.Component
+	for _, surface := range surfaces {
+		if surface.BBox.Width <= 0 || surface.BBox.Height <= 0 {
+			continue
+		}
+		localMask := mask.New(imageWidth, imageHeight)
+		x1 := max(0, surface.BBox.X)
+		y1 := max(0, surface.BBox.Y)
+		x2 := min(imageWidth, surface.BBox.X+surface.BBox.Width)
+		y2 := min(imageHeight, surface.BBox.Y+surface.BBox.Height)
+		for y := y1; y < y2; y++ {
+			for x := x1; x < x2; x++ {
+				if textMask.Get(x, y) {
+					continue
+				}
+				if primitive.ColorDistance(primitive.RGBAt(img, x, y), surface.BackgroundColor) > 28 {
+					localMask.Set(x, y, true)
+				}
+			}
+		}
+		for _, comp := range components.ConnectedComponents(localMask, minArea, 0.10) {
+			if validSurfaceForegroundComponent(comp, surface.BBox) {
+				out = append(out, comp)
+			}
+		}
+	}
+	return out
+}
+
+func validSurfaceForegroundComponent(comp components.Component, surface contract.BBox) bool {
+	if comp.BBox.Width <= 0 || comp.BBox.Height <= 0 {
+		return false
+	}
+	if area(comp.BBox) > area(surface)/3 {
+		return false
+	}
+	if comp.BBox.Width > surface.Width*3/4 && comp.BBox.Height > surface.Height/3 {
+		return false
+	}
+	if comp.BBox.Width <= 2 && comp.BBox.Height <= 2 {
+		return false
+	}
+	return true
 }
 
 func surfaceSeedsForBlock(img image.Image, bbox contract.BBox, textMask mask.Mask) []surfaceSeed {
@@ -181,9 +233,6 @@ func validSurfaceCandidate(surface contract.BBox, textBox contract.BBox, imageWi
 	if surface.Width < 36 || surface.Height < 24 {
 		return false
 	}
-	if surface.X <= 1 || surface.Y <= 1 || surface.X+surface.Width >= imageWidth-1 || surface.Y+surface.Height >= imageHeight-1 {
-		return false
-	}
 	imageArea := imageWidth * imageHeight
 	surfaceArea := area(surface)
 	if surfaceArea < max(96, imageArea/30000) {
@@ -192,8 +241,28 @@ func validSurfaceCandidate(surface contract.BBox, textBox contract.BBox, imageWi
 	if surfaceArea > imageArea/3 {
 		return false
 	}
+	if touchesImageEdge(surface, imageWidth, imageHeight) && !edgeAnchoredSurface(surface, textBox, imageWidth, imageHeight) {
+		return false
+	}
 	aspect := float64(max(surface.Width, surface.Height)) / float64(max(1, min(surface.Width, surface.Height)))
 	return aspect <= 16
+}
+
+func touchesImageEdge(surface contract.BBox, imageWidth int, imageHeight int) bool {
+	return surface.X <= 1 || surface.Y <= 1 || surface.X+surface.Width >= imageWidth-1 || surface.Y+surface.Height >= imageHeight-1
+}
+
+func edgeAnchoredSurface(surface contract.BBox, textBox contract.BBox, imageWidth int, imageHeight int) bool {
+	if surface.Width < imageWidth/3 && surface.Height < imageHeight/3 {
+		return false
+	}
+	centerX := textBox.X + textBox.Width/2
+	centerY := textBox.Y + textBox.Height/2
+	inBottomBand := surface.Y+surface.Height >= imageHeight-1 && centerY >= surface.Y
+	inTopBand := surface.Y <= 1 && centerY <= surface.Y+surface.Height
+	inLeftBand := surface.X <= 1 && centerX <= surface.X+surface.Width
+	inRightBand := surface.X+surface.Width >= imageWidth-1 && centerX >= surface.X
+	return inBottomBand || inTopBand || inLeftBand || inRightBand
 }
 
 func mergeSurfaceCandidates(candidates []surfaceCandidate) []surfaceCandidate {

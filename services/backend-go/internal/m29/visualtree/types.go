@@ -7,6 +7,7 @@ type Document struct {
 	Version           string            `json:"version"`
 	Source            Source            `json:"source"`
 	Root              Node              `json:"root"`
+	VisualElement     VisualElement     `json:"visualElement"`
 	Diagnostics       Diagnostics       `json:"diagnostics"`
 	ContainmentReport ContainmentReport `json:"containmentReport"`
 }
@@ -104,4 +105,87 @@ type ContainmentDecision struct {
 	BBoxCoverage  float64  `json:"bboxCoverage"`
 	RelationIDs   []string `json:"relationIds,omitempty"`
 	Decision      string   `json:"decision"`
+}
+
+type VisualElementDocument struct {
+	SchemaName    string        `json:"schemaName"`
+	Version       string        `json:"version"`
+	Source        Source        `json:"source"`
+	VisualElement VisualElement `json:"visualElement"`
+	Diagnostics   Diagnostics   `json:"diagnostics"`
+}
+
+type VisualElement struct {
+	ElementID      string              `json:"elementId"`
+	ElementName    string              `json:"elementName"`
+	ElementType    string              `json:"elementType"`
+	DisplayName    string              `json:"displayName,omitempty"`
+	LayoutConfig   LayoutConfiguration `json:"layoutConfig"`
+	StyleConfig    VisualStyle         `json:"styleConfig"`
+	ProcessingMeta ProcessingMeta      `json:"processingMeta"`
+	ContentData    *ElementContent     `json:"contentData,omitempty"`
+	ChildElements  []VisualElement     `json:"childElements,omitempty"`
+	BoundingBox    []int               `json:"boundingBox"`
+}
+
+type LayoutConfiguration struct {
+	PositionMode  string        `json:"positionMode"`
+	AbsoluteAttrs AbsoluteAttrs `json:"absoluteAttrs"`
+}
+
+type AbsoluteAttrs struct {
+	Align      []string `json:"align"`
+	Coord      []int    `json:"coord"`
+	OrginCoord []int    `json:"orginCoord"`
+}
+
+type VisualStyle struct {
+	WidthSpec      SizeSpec        `json:"widthSpec"`
+	HeightSpec     SizeSpec        `json:"heightSpec"`
+	BackgroundSpec *BackgroundSpec `json:"backgroundSpec,omitempty"`
+	TextConfig     *TextConfig     `json:"textConfig,omitempty"`
+	OpacityLevel   int             `json:"opacityLevel"`
+}
+
+type SizeSpec struct {
+	Sizing string `json:"sizing"`
+	Value  int    `json:"value"`
+}
+
+type BackgroundSpec struct {
+	Type               string       `json:"type"`
+	BackgroundColor    *VisualColor `json:"backgroundColor,omitempty"`
+	ImageSource        string       `json:"imageSource,omitempty"`
+	BackgroundSize     string       `json:"backgroundSize,omitempty"`
+	BackgroundPosition string       `json:"backgroundPosition,omitempty"`
+	BackgroundRepeat   string       `json:"backgroundRepeat,omitempty"`
+}
+
+type VisualColor struct {
+	RGBValues []int  `json:"rgbValues"`
+	HexCode   string `json:"hexCode"`
+}
+
+type TextConfig struct {
+	FontSize      int      `json:"fontSize"`
+	FontStyle     string   `json:"fontStyle"`
+	TextAlign     []string `json:"textAlign"`
+	FontFamily    string   `json:"fontFamily"`
+	LineHeight    float64  `json:"lineHeight"`
+	LetterSpacing int      `json:"letterSpacing"`
+}
+
+type ProcessingMeta struct {
+	SourceNodeID       string   `json:"sourceNodeId"`
+	SourceTokenIDs     []string `json:"sourceTokenIds,omitempty"`
+	SourceRelationIDs  []string `json:"sourceRelationIds,omitempty"`
+	Synthetic          bool     `json:"synthetic,omitempty"`
+	GroupKind          string   `json:"groupKind,omitempty"`
+	ParentReason       string   `json:"parentReason,omitempty"`
+	BackgroundTokenIDs []string `json:"backgroundTokenIds,omitempty"`
+}
+
+type ElementContent struct {
+	TextValue   string `json:"textValue,omitempty"`
+	ImageSource string `json:"imageSource,omitempty"`
 }

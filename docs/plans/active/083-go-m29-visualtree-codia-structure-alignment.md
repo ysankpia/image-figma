@@ -28,11 +28,20 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
 
 2. **编译层已重写**:`services/backend-go/internal/m29/visualtree/spatial_group.go` 实现 **XY-cut 递归空间聚类 + 邻近连通兜底**,替换旧的"找行 + 魔法阈值"逻辑(旧逻辑在 `group.go` 的 `applyVisualGroups`,已不再被调用)。
 
-3. **进展数据**:综合相似度 **0.219 → 0.539**;深度 3 → 7(已达标 Codia 的 6);分组召回 0.098 → **0.341**。
+3. **已提交基线**:`03b99f6 feat: align go m29 visual tree closer to codia structure` 把综合相似度推进到 **0.761**,分组召回 **0.659**。该阶段已包含:
+   - `contained_pair_group` / `text_background_group` / `vertical_pair_group` 这类 Codia-like 机械几何配对。
+   - 物理背景叶子沉底,避免大背景参与前景 XY-cut。
+   - `visual_element.v1.json` 输出雏形,用于后续对齐 Codia `VisualElement` envelope。
+
+4. **当前未提交阶段**:M29.0 surface evidence 已进一步放开:
+   - 允许有 OCR 锚点的贴边大 surface,例如顶部/底部大 UI band,不再因触碰图片边缘被无条件拒绝。
+   - 对每个 surface 在排除 OCR mask 后做局部背景残差提取,把 surface 内部 icon / foreground component 保留为物理 primitive。
+   - Tencent Codia 样本验证:primitive **252**,token **151**,VisualTree node **268**,分组召回 **0.756**,综合相似度 **0.829**。
+   - 已尝试 `horizontal_lane_group`,但真实样本降到 **0.812**,因此按证据驱动原则撤回,不进入本阶段。
 
 ## 三、最终目标
 
-让 `services/backend-go` 对测试图的输出树与 Codia 官方输出树结构 1:1。量化:`compare_trees.py` 综合相似度逼近 1.0(当前 0.539,目标 **0.85+**),其中**分组召回率是主要瓶颈**(当前 0.341,目标 **0.7+**)。
+让 `services/backend-go` 对测试图的输出树与 Codia 官方输出树结构 1:1。量化:`compare_trees.py` 综合相似度逼近 1.0(当前验证 **0.829**,目标 **0.85+**),其中**分组召回率是主要瓶颈**(当前验证 **0.756**,目标 **0.8+**)。
 
 ## 四、要做的事(按优先级)
 
@@ -62,6 +71,15 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
 
 把断言更新为验证新的 XY-cut/spatial_group 行为(不是删除,是改成反映新逻辑的正确契约)。
 
+### 任务 E:放开 M29.0 surface-local foreground evidence
+
+当前已实现并验证。它解决的是上游“surface 内 icon / foreground 被背景同化后无法进入树”的问题,不是下游语义补丁:
+
+- `detectSurfaceCandidates` 允许 OCR 锚定的贴边大 surface,但仍要求 surface 包含 OCR、面积受限、比例受限。
+- `detectSurfaceForegroundComponents` 在 surface 内以局部背景色为基准提取残差前景,并继续排除 OCR text mask。
+- 该阶段不引入 OpenCV / GoCV;用现有 Go mask + connected components 即可验证收益。
+- CV 依赖只能作为后续 measurement backend 引入,必须证明它解决的是现有纯 Go kernel 无法稳定解决的测量问题,不能混入本阶段收益判断。
+
 ## 五、硬约束(必须遵守)
 
 1. **纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是本项目失败 3-4 次的根本教训(见 `docs/plans/active/066-m29-model-first-perception-pivot.md`)。
@@ -90,7 +108,7 @@ cd .. && python3 services/backend-go/tools/compare_trees.py
 cd services/backend-go && go test ./internal/m29/visualtree/...
 ```
 
-**验收标准:** 综合相似度由 0.539 显著提升(目标 0.85+);分组召回率由 0.341 显著提升(目标 0.7+);`go test ./...` 全绿;不违反任何硬约束。
+**当前验收标准:** 综合相似度保持 **0.829** 量级且不低于已提交 0.761 基线;分组召回率保持 **0.756** 量级且不低于已提交 0.659 基线;`visual_element.v1.json` 生成;`go test ./...` 全绿;不违反任何硬约束。
 
 ## 七、关键文件清单
 

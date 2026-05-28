@@ -98,7 +98,7 @@ func TestRunEmitsOCRAnchoredSurfaceRegion(t *testing.T) {
 		"blocks": []map[string]any{
 			{
 				"id":   "ocr_0001",
-				"text": "Search",
+				"text": "Label",
 				"bbox": map[string]any{"x": 52, "y": 48, "width": 58, "height": 18},
 			},
 		},
@@ -134,6 +134,91 @@ func TestRunEmitsOCRAnchoredSurfaceRegion(t *testing.T) {
 	}
 }
 
+func TestRunAllowsEdgeAnchoredSurfaceRegion(t *testing.T) {
+	t.Setenv("OCR_PROVIDER", "fake")
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writeEdgeAnchoredSurfacePNG(t, input)
+	ocrPath := filepath.Join(tmp, "ocr.json")
+	ocrDoc := map[string]any{
+		"image": map[string]any{"width": 220, "height": 120},
+		"blocks": []map[string]any{
+			{
+				"id":   "ocr_0001",
+				"text": "Mine",
+				"bbox": map[string]any{"x": 84, "y": 98, "width": 42, "height": 14},
+			},
+		},
+	}
+	data, err := json.Marshal(ocrDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ocrPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Run(Options{InputPath: input, OCRPath: ocrPath, OutputDir: filepath.Join(tmp, "out")})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	var anchored *contract.Primitive
+	for i := range doc.Primitives {
+		p := &doc.Primitives[i]
+		if p.PrimitiveType == "surface_region" && p.BBox.Y+p.BBox.Height >= 119 {
+			anchored = p
+			break
+		}
+	}
+	if anchored == nil {
+		t.Fatalf("expected edge-anchored surface_region, got %#v", primitiveTypes(doc.Primitives))
+	}
+	textBox := contract.BBox{X: 84, Y: 98, Width: 42, Height: 14}
+	if !contains(anchored.BBox, textBox, 4) {
+		t.Fatalf("edge surface should contain OCR text, surface=%#v text=%#v", anchored.BBox, textBox)
+	}
+	if !anchored.CompileHints.CanContainForeground {
+		t.Fatalf("edge surface should keep foreground containment capability: %#v", anchored.CompileHints)
+	}
+}
+
+func TestRunExtractsSurfaceLocalForegroundComponents(t *testing.T) {
+	t.Setenv("OCR_PROVIDER", "fake")
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writeSurfaceForegroundPNG(t, input)
+	ocrPath := filepath.Join(tmp, "ocr.json")
+	ocrDoc := map[string]any{
+		"image": map[string]any{"width": 220, "height": 140},
+		"blocks": []map[string]any{
+			{
+				"id":   "ocr_0001",
+				"text": "Label",
+				"bbox": map[string]any{"x": 52, "y": 56, "width": 58, "height": 18},
+			},
+		},
+	}
+	data, err := json.Marshal(ocrDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ocrPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Run(Options{InputPath: input, OCRPath: ocrPath, OutputDir: filepath.Join(tmp, "out")})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	iconBox := contract.BBox{X: 148, Y: 58, Width: 16, Height: 16}
+	for _, p := range doc.Primitives {
+		if p.PrimitiveType != "text_region" && contains(inflateBBox(iconBox, 2, 2, 220, 140), p.BBox, 0) {
+			return
+		}
+	}
+	t.Fatalf("expected surface-local foreground primitive near %#v, got %#v", iconBox, doc.Primitives)
+}
+
 func writeSyntheticPNG(t *testing.T, path string, withTextLikePixels bool) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 120, 80))
@@ -144,6 +229,40 @@ func writeSyntheticPNG(t *testing.T, path string, withTextLikePixels bool) {
 		draw.Draw(img, image.Rect(12, 12, 44, 16), &image.Uniform{C: color.RGBA{R: 20, G: 20, B: 20, A: 255}}, image.Point{}, draw.Src)
 		draw.Draw(img, image.Rect(12, 20, 38, 24), &image.Uniform{C: color.RGBA{R: 20, G: 20, B: 20, A: 255}}, image.Point{}, draw.Src)
 	}
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeEdgeAnchoredSurfacePNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 220, 120))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 38, G: 116, B: 224, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(0, 88, 220, 120), &image.Uniform{C: color.RGBA{R: 250, G: 250, B: 252, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(84, 100, 126, 104), &image.Uniform{C: color.RGBA{R: 90, G: 96, B: 110, A: 255}}, image.Point{}, draw.Src)
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeSurfaceForegroundPNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 220, 140))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 42, G: 128, B: 240, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(30, 36, 190, 96), &image.Uniform{C: color.RGBA{R: 248, G: 248, B: 250, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(52, 58, 110, 62), &image.Uniform{C: color.RGBA{R: 130, G: 136, B: 148, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(52, 68, 96, 72), &image.Uniform{C: color.RGBA{R: 130, G: 136, B: 148, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(148, 58, 164, 74), &image.Uniform{C: color.RGBA{R: 210, G: 78, B: 82, A: 255}}, image.Point{}, draw.Src)
 	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)

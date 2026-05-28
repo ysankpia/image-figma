@@ -52,6 +52,29 @@ func TestCompileBuildsLayerWithParentRelativeText(t *testing.T) {
 	if child.Content.Text != "Hello" {
 		t.Fatalf("expected OCR text content, got %#v", child.Content)
 	}
+	if doc.VisualElement.ElementType != "Body" || doc.VisualElement.ElementName != "Root" {
+		t.Fatalf("expected Codia-like root visual element, got %#v", doc.VisualElement)
+	}
+	veLayer := doc.VisualElement.ChildElements[0]
+	if veLayer.ElementType != "Layer" || veLayer.ElementName != "Groups" {
+		t.Fatalf("expected physical layer as Codia-like Layer, got %#v", veLayer)
+	}
+	if veLayer.LayoutConfig.PositionMode != "Absolute" || veLayer.LayoutConfig.AbsoluteAttrs.Coord[0] != 20 || veLayer.LayoutConfig.AbsoluteAttrs.Coord[1] != 30 {
+		t.Fatalf("expected Codia-like absolute layer coord, got %#v", veLayer.LayoutConfig)
+	}
+	if veLayer.StyleConfig.BackgroundSpec == nil || veLayer.StyleConfig.BackgroundSpec.Type != "IMAGE" {
+		t.Fatalf("expected layer background spec, got %#v", veLayer.StyleConfig)
+	}
+	veTitle := findVisualElement(veLayer, "title")
+	if veTitle.ElementType != "Text" || veTitle.ContentData == nil || veTitle.ContentData.TextValue != "Hello" {
+		t.Fatalf("expected text contentData in visual element, got %#v", veTitle)
+	}
+	if veTitle.LayoutConfig.AbsoluteAttrs.Coord[0] != 0 || veTitle.LayoutConfig.AbsoluteAttrs.Coord[1] != 0 {
+		t.Fatalf("expected text coord relative to text background group, got %#v", veTitle.LayoutConfig)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "visual_element.v1.json")); err != nil {
+		t.Fatalf("expected visual_element.v1.json artifact: %v", err)
+	}
 }
 
 func TestCompilePromotesRasterWithChildrenToBackgroundLayer(t *testing.T) {
@@ -314,7 +337,7 @@ func TestCompileCompletesRowGroupWithLocalProjectionSibling(t *testing.T) {
 	}
 }
 
-func TestCompileDoesNotCreateRowGroupForMultiLineBanner(t *testing.T) {
+func TestCompileDoesNotCreateRowGroupForMultiLineMixedRegion(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,
 		[]evidence.Token{
@@ -336,7 +359,7 @@ func TestCompileDoesNotCreateRowGroupForMultiLineBanner(t *testing.T) {
 		t.Fatalf("Compile() error = %v", err)
 	}
 	if doc.Diagnostics.GroupKindCounts["row_group"] != 0 {
-		t.Fatalf("multi-line banner must not become row_group, got %#v", doc.Root)
+		t.Fatalf("multi-line mixed region must not become row_group, got %#v", doc.Root)
 	}
 }
 
@@ -499,6 +522,18 @@ func findParentOf(parent Node, id string) Node {
 		}
 	}
 	return Node{}
+}
+
+func findVisualElement(parent VisualElement, id string) VisualElement {
+	if parent.ElementID == id {
+		return parent
+	}
+	for _, child := range parent.ChildElements {
+		if found := findVisualElement(child, id); found.ElementID != "" {
+			return found
+		}
+	}
+	return VisualElement{}
 }
 
 func writeJSON(t *testing.T, path string, value any) {

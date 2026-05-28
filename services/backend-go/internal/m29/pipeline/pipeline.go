@@ -112,7 +112,8 @@ func Run(options Options) (contract.Document, error) {
 		})
 	}
 
-	for _, surface := range detectSurfaceCandidates(img, ocrDoc.Blocks, textMask) {
+	surfaces := detectSurfaceCandidates(img, ocrDoc.Blocks, textMask)
+	for _, surface := range surfaces {
 		id := fmt.Sprintf("prim_%04d", nextID)
 		nextID++
 		surfaceMask := mask.BBoxMask(width, height, surface.BBox)
@@ -134,7 +135,9 @@ func Run(options Options) (contract.Document, error) {
 	}
 
 	imageArea := width * height
-	for _, comp := range comps {
+	componentsForPrimitives := append([]components.Component(nil), comps...)
+	componentsForPrimitives = append(componentsForPrimitives, detectSurfaceForegroundComponents(img, surfaces, textMask)...)
+	for _, comp := range componentsForPrimitives {
 		id := fmt.Sprintf("prim_%04d", nextID)
 		nextID++
 		measurements := primitive.MeasureComponent(img, comp, bg)

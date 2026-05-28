@@ -37,21 +37,23 @@ func Compile(options Options) (Document, error) {
 		return Document{}, err
 	}
 	root, diagnostics, containmentReport := buildTree(tokens, relations)
+	source := Source{
+		TokenSchemaName:    tokens.SchemaName,
+		TokenVersion:       tokens.Version,
+		RelationSchemaName: relations.SchemaName,
+		RelationVersion:    relations.Version,
+		ImageWidth:         tokens.Source.ImageWidth,
+		ImageHeight:        tokens.Source.ImageHeight,
+		SourcePath:         tokens.Source.SourcePath,
+		TokenCount:         len(tokens.Tokens),
+		RelationCount:      len(relations.Relations),
+	}
 	doc := Document{
-		SchemaName: "M29VisualTree",
-		Version:    "1.0",
-		Source: Source{
-			TokenSchemaName:    tokens.SchemaName,
-			TokenVersion:       tokens.Version,
-			RelationSchemaName: relations.SchemaName,
-			RelationVersion:    relations.Version,
-			ImageWidth:         tokens.Source.ImageWidth,
-			ImageHeight:        tokens.Source.ImageHeight,
-			SourcePath:         tokens.Source.SourcePath,
-			TokenCount:         len(tokens.Tokens),
-			RelationCount:      len(relations.Relations),
-		},
+		SchemaName:        "M29VisualTree",
+		Version:           "1.0",
+		Source:            source,
 		Root:              root,
+		VisualElement:     buildVisualElement(root),
 		Diagnostics:       diagnostics,
 		ContainmentReport: containmentReport,
 	}
@@ -63,6 +65,20 @@ func Compile(options Options) (Document, error) {
 		return Document{}, err
 	}
 	if err := os.WriteFile(filepath.Join(options.OutputDir, "visual_tree.v1.json"), data, 0o644); err != nil {
+		return Document{}, err
+	}
+	visualElementDoc := VisualElementDocument{
+		SchemaName:    "M29VisualElement",
+		Version:       "1.0",
+		Source:        source,
+		VisualElement: doc.VisualElement,
+		Diagnostics:   diagnostics,
+	}
+	visualElementData, err := json.MarshalIndent(visualElementDoc, "", "  ")
+	if err != nil {
+		return Document{}, err
+	}
+	if err := os.WriteFile(filepath.Join(options.OutputDir, "visual_element.v1.json"), visualElementData, 0o644); err != nil {
 		return Document{}, err
 	}
 	if err := writeArtifacts(options.OutputDir, tokens.Source.SourcePath, doc); err != nil {

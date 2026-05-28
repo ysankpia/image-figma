@@ -71,6 +71,7 @@ type CaseSummary struct {
 	VisualTreePreviewSheetPath      string                  `json:"visualTreePreviewSheetPath,omitempty"`
 	VisualTreeReportPath            string                  `json:"visualTreeReportPath,omitempty"`
 	VisualTreeContainmentReportPath string                  `json:"visualTreeContainmentReportPath,omitempty"`
+	VisualElementPath               string                  `json:"visualElementPath,omitempty"`
 	OCRPath                         string                  `json:"ocrPath,omitempty"`
 }
 
@@ -186,6 +187,7 @@ func Run(options Options) (Summary, error) {
 		caseSummary.VisualTreePreviewSheetPath = filepath.Join(caseDir, "visual_tree_preview_sheet.png")
 		caseSummary.VisualTreeReportPath = filepath.Join(caseDir, "visual_tree_report.md")
 		caseSummary.VisualTreeContainmentReportPath = filepath.Join(caseDir, "visual_tree_containment_report.md")
+		caseSummary.VisualElementPath = filepath.Join(caseDir, "visual_element.v1.json")
 		if doc.OCR.Provided {
 			caseSummary.OCRPath = filepath.Join(caseDir, "ocr.json")
 		}
