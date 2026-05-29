@@ -29,19 +29,22 @@ var spatialGapRatio = func() float64 {
 // 导致树很扁。Codia 的做法是纯几何:递归地沿"最大空白带"把空间切成嵌套块。
 // 这就是经典的 XY-cut 版面分析算法,不依赖任何手写的语义/尺寸阈值。
 func applySpatialGrouping(root *Node, counter *int) {
-	regroupChildren(root, counter)
+	regroupChildren(root, counter, 0)
 }
 
-// regroupChildren 对 node 的直接子节点做一次 XY-cut 重组,然后递归处理每个子节点。
-func regroupChildren(node *Node, counter *int) {
+// regroupChildren 对 node 的直接子节点做一次重组,然后递归处理每个子节点。
+// spatialDepth 追踪当前嵌套的 spatial_group 层数:
+//   - 物理容器(Body 等)不增加 depth
+//   - 每进入一层 spatial_group,depth+1
+//   - depth >= 2 时跳过 xycut,只跑配对检测
+func regroupChildren(node *Node, counter *int, spatialDepth int) {
 	if isAtomicSpatialGroup(*node) {
 		refreshChildLayouts(node)
 		return
 	}
-	// 已经是叶子或只有一个孩子:无需重组,直接递归
 	if len(node.Children) <= 1 {
 		for i := range node.Children {
-			regroupChildren(&node.Children[i], counter)
+			regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth))
 		}
 		return
 	}
@@ -57,21 +60,34 @@ func regroupChildren(node *Node, counter *int) {
 		foreground = pairVerticalForeground(foreground, counter)
 	}
 	if os.Getenv("ABL_TEXTBG") == "" {
-		foreground = pairTextBackedForeground(foreground, counter)
+		foreground = pairTextBackedForeground(foreground, counter, node.BBox.Width)
 	}
-	grouped := xycut(foreground, counter, 0)
+
+	var grouped []Node
+	skipXycut := spatialDepth >= 1 && len(foreground) <= 5
+	if !skipXycut {
+		grouped = xycut(foreground, counter, 2)
+	} else {
+		grouped = foreground
+	}
+
 	if os.Getenv("ABL_ABSORB") == "" && node.Type == "Body" {
 		grouped = absorbStragglers(grouped, counter)
 	}
 
-	// 顶层切出了多个成员:作为该节点的新子节点。
-	// 若 xycut 整体切不开(返回原列表),保持平铺,不强加空壳。
 	node.Children = append(backgrounds, grouped...)
 	refreshChildLayouts(node)
 
 	for i := range node.Children {
-		regroupChildren(&node.Children[i], counter)
+		regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth))
 	}
+}
+
+func childSpatialDepth(child Node, parentDepth int) int {
+	if child.Meta.Synthetic && child.Meta.GroupKind == "spatial_group" {
+		return parentDepth + 1
+	}
+	return parentDepth
 }
 
 func splitBackgroundLeaves(children []Node) ([]Node, []Node) {
@@ -406,13 +422,13 @@ func isAtomicSpatialGroup(node Node) bool {
 	return node.Meta.Synthetic && (node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "contained_foreground_group" || node.Meta.GroupKind == "contained_slice_group" || node.Meta.GroupKind == "text_background_group" || node.Meta.GroupKind == "vertical_pair_group")
 }
 
-func pairTextBackedForeground(nodes []Node, counter *int) []Node {
+func pairTextBackedForeground(nodes []Node, counter *int, parentWidth int) []Node {
 	if len(nodes) == 0 {
 		return nodes
 	}
 	out := make([]Node, 0, len(nodes))
 	for _, node := range nodes {
-		if canUseTextBBoxAsBackground(node) {
+		if canUseTextBBoxAsBackground(node, parentWidth) {
 			out = append(out, makeTextBackgroundGroup(node, counter))
 			continue
 		}
@@ -421,12 +437,20 @@ func pairTextBackedForeground(nodes []Node, counter *int) []Node {
 	return out
 }
 
-func canUseTextBBoxAsBackground(node Node) bool {
+func canUseTextBBoxAsBackground(node Node, contextWidth int) bool {
 	if node.Type != "Text" || node.Meta.Synthetic || node.BBox.Height <= 0 {
 		return false
 	}
-	// 纯相对判据:宽高比 >= 2.5(短宽型,像按钮/标签)
+	// 宽高比 >= 2.5(短宽型)
 	if node.BBox.Width*2 < node.BBox.Height*5 {
+		return false
+	}
+	// 宽高比 > 6 的大概率是标题/描述,不是按钮
+	if node.BBox.Width > node.BBox.Height*6 {
+		return false
+	}
+	// 文本宽度超过上下文宽度 50% 的大概率是标题
+	if contextWidth > 0 && node.BBox.Width*2 > contextWidth {
 		return false
 	}
 	return true
@@ -526,36 +550,29 @@ func isVerticalLabelPair(top Node, text Node) bool {
 	return overlap*2 >= min(top.BBox.Width, text.BBox.Width)
 }
 
-// xycut 对一组节点递归做 XY 切分。返回切分后的节点列表(可能含新建的 synthetic 容器)。
-// depth 防止极端情况下无限递归。
-// xycut 对一组兄弟节点做一层 XY 切分,返回切分后的顶层成员列表。
-// 每个能被进一步细分或本身就是紧密簇的多元素子簇,会被递归地包成 synthetic 容器。
-// 顶层若整体切不开(就是一个紧密簇),返回原列表(由调用方 regroupChildren 决定不再加层)。
-func xycut(nodes []Node, counter *int, depth int) []Node {
-	if len(nodes) <= 1 || depth > 12 {
+// xycut 对一组节点做 XY 切分。minWrap: 簇至少要有这么多元素才包成容器,
+// 更小的簇直接平铺回输出。minWrap=2 是默认行为(所有多元素簇都包装),
+// minWrap=3 则只包装 ≥3 元素的簇(减少二叉切分产生的冗余容器)。
+func xycut(nodes []Node, counter *int, minWrap int) []Node {
+	if len(nodes) <= 1 {
 		return nodes
 	}
 
-	clustersY, gapY := splitAxis(nodes, true)  // 按 Y 分行
-	clustersX, gapX := splitAxis(nodes, false) // 按 X 分列
+	clustersY, gapY := splitAxis(nodes, true)
+	clustersX, gapX := splitAxis(nodes, false)
 
 	if len(clustersY) < 2 && len(clustersX) < 2 {
-		// 两个轴都切不开(投影互相重叠)。退一步用"邻近连通分量"兜底:
-		// 按元素之间的边缘间距建图,把空间上分离的连通块分开。
-		// 这能处理"投影重叠但实际分簇"的情况(如交错排列的卡片)。
 		comps := neighborComponents(nodes)
 		if len(comps) >= 2 {
 			out := make([]Node, 0, len(comps))
 			for _, comp := range comps {
-				out = append(out, groupCluster(comp, counter, depth+1))
+				out = append(out, groupClusterOrFlatten(comp, counter, minWrap)...)
 			}
 			return out
 		}
-		// 仍是单一连通块:这批节点是一个紧密簇,无法再分,原样返回
 		return nodes
 	}
 
-	// 选间隙更显著的轴先切(XY-cut 经典:每层选更干净的切分)
 	var clusters [][]Node
 	if gapY >= gapX && len(clustersY) >= 2 {
 		clusters = clustersY
@@ -567,7 +584,7 @@ func xycut(nodes []Node, counter *int, depth int) []Node {
 
 	out := make([]Node, 0, len(clusters))
 	for _, cluster := range clusters {
-		out = append(out, groupCluster(cluster, counter, depth+1))
+		out = append(out, groupClusterOrFlatten(cluster, counter, minWrap)...)
 	}
 	return out
 }
@@ -651,16 +668,13 @@ func nodeGap(a, b Node) int {
 	return gx + gy
 }
 
-// groupCluster 把一个簇收敛成【单个】节点:
-//   - 单元素:返回该元素本身
-//   - 多元素:递归 xycut 继续细分;无论细分出多个子项、还是整簇切不开,
-//     都包成一个 synthetic 容器(对标 Codia "紧密一组 = 一个 Groups")
-func groupCluster(cluster []Node, counter *int, depth int) Node {
-	if len(cluster) == 1 {
-		return cluster[0]
+// groupClusterOrFlatten 对 ≤ minWrap 个元素的簇不包装,直接平铺回输出。
+// 只有超过 minWrap 个元素的簇才包成容器。减少二叉切分产生的冗余容器。
+func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int) []Node {
+	if len(cluster) < minWrap {
+		return cluster
 	}
-	sub := xycut(cluster, counter, depth)
-	return makeSpatialGroup(sub, counter)
+	return []Node{makeSpatialGroup(cluster, counter)}
 }
 
 // splitAxis 把 nodes 沿给定轴(vertical=true 表示沿 Y 轴分行)按空白带切成多个簇。
@@ -705,16 +719,18 @@ func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
 		minGap = max(minGap, int(float64(medianSize)*spatialGapRatio))
 	}
 
-	// 沿排序后的占用区间找切缝,给每个节点打"簇编号"
+	cutThreshold := minGap
+
+	// 按排序顺序扫描,在 >= cutThreshold 的间隙处切分
 	clusterOf := make([]int, n)
 	cluster := 0
-	curEnd := ends[order[0]]
 	clusterOf[order[0]] = 0
 	maxGap := 0
+	curEnd := ends[order[0]]
 	for k := 1; k < n; k++ {
 		idx := order[k]
 		gap := starts[idx] - curEnd
-		if gap >= minGap {
+		if gap >= cutThreshold {
 			if gap > maxGap {
 				maxGap = gap
 			}
@@ -728,7 +744,6 @@ func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
 
 	clusterCount := cluster + 1
 	clusters := make([][]Node, clusterCount)
-	// 按【原始输入顺序】填充,保持阅读顺序
 	for i := range n {
 		c := clusterOf[i]
 		clusters[c] = append(clusters[c], nodes[i])
