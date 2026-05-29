@@ -2,6 +2,7 @@ package visualtree
 
 import (
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
@@ -9,7 +10,16 @@ import (
 
 // spatialGapRatio:判定结构性留白的相对阈值。缝隙 >= 该轴元素中位尺寸 * 比例 才切。
 // 越小越爱切(树更深更碎),越大越粗(树更浅)。经单图对比工具校准。
-const spatialGapRatio = 0.15
+var spatialGapRatio = func() float64 {
+	if v := os.Getenv("ABL_GAP"); v != "" {
+		var f float64
+		fmt.Sscanf(v, "%f", &f)
+		if f > 0 {
+			return f
+		}
+	}
+	return 0.15
+}()
 
 // applySpatialGrouping 递归地对每个容器节点的子节点做 XY-cut 空间聚类,
 // 把扁平排列的兄弟节点收拢成嵌套的 synthetic 容器(对标 Codia 的 "Groups")。
@@ -37,10 +47,18 @@ func regroupChildren(node *Node, counter *int) {
 	}
 
 	backgrounds, foreground := splitBackgroundLeaves(node.Children)
-	foreground = groupContainedForegroundSlices(foreground, counter)
-	foreground = pairContainedForeground(foreground, counter)
-	foreground = pairVerticalForeground(foreground, counter)
-	foreground = pairTextBackedForeground(foreground, counter)
+	if os.Getenv("ABL_SLICES") == "" {
+		foreground = groupContainedForegroundSlices(foreground, counter)
+	}
+	if os.Getenv("ABL_PAIRC") == "" {
+		foreground = pairContainedForeground(foreground, counter)
+	}
+	if os.Getenv("ABL_VERT") == "" {
+		foreground = pairVerticalForeground(foreground, counter)
+	}
+	if os.Getenv("ABL_TEXTBG") == "" {
+		foreground = pairTextBackedForeground(foreground, counter)
+	}
 	grouped := xycut(foreground, node.BBox, counter, 0)
 
 	// 顶层切出了多个成员:作为该节点的新子节点。
@@ -61,9 +79,37 @@ func splitBackgroundLeaves(children []Node) ([]Node, []Node) {
 			backgrounds = append(backgrounds, child)
 			continue
 		}
+		if os.Getenv("ABL_BGSPLIT") == "" && coversMostSiblings(child, children) {
+			backgrounds = append(backgrounds, child)
+			continue
+		}
 		foreground = append(foreground, child)
 	}
 	return backgrounds, foreground
+}
+
+// coversMostSiblings:一个真实图层叶子若在空间上罩住了同批多数兄弟(它们的中心
+// 落在其 bbox 内),它是该区块的背景图,而非与兄弟平级的前景。把它从前景剥离,
+// 前景元素才能按行/列被 XY-cut 正常切分,而不被这张大背景图的全尺寸投影吞掉切缝。
+// 纯几何相对判据,不依赖任何绝对像素阈值。
+func coversMostSiblings(child Node, all []Node) bool {
+	if child.Type == "Text" || child.Meta.Synthetic || len(child.Children) > 0 {
+		return false
+	}
+	others, covered := 0, 0
+	for _, sibling := range all {
+		if sibling.ID == child.ID {
+			continue
+		}
+		others++
+		cx := sibling.BBox.X + sibling.BBox.Width/2
+		cy := sibling.BBox.Y + sibling.BBox.Height/2
+		if cx >= child.BBox.X && cx < child.BBox.X+child.BBox.Width &&
+			cy >= child.BBox.Y && cy < child.BBox.Y+child.BBox.Height {
+			covered++
+		}
+	}
+	return others >= 2 && covered*2 >= others
 }
 
 func isBackgroundLeaf(node Node) bool {
