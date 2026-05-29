@@ -25,6 +25,10 @@ var spatialGapRatio = func() float64 {
 // created by XY-cut gaps, not durable Codia-like structure containers.
 const maxUnsupportedSpatialShortSide = 20
 
+// Physical Layer wrappers thinner than this with no text descendants are
+// render-only chrome (dividers, separators) that never match Codia structure.
+const maxTinyLayerShortSide = 8
+
 // applySpatialGrouping 递归地对每个容器节点的子节点做 XY-cut 空间聚类,
 // 把扁平排列的兄弟节点收拢成嵌套的 synthetic 容器(对标 Codia 的 "Groups")。
 //
@@ -1116,6 +1120,32 @@ func collapseLowEvidenceGroups(node *Node, trace *TraceRecorder, spatialDepth in
 			out = append(out, preserved...)
 			continue
 		}
+		if shouldCollapseTinyLayerWrapper(child) {
+			preserved := append([]Node(nil), child.Children...)
+			trace.Record(TraceEvent{
+				Operation:     "group_permission_gate",
+				ParentNodeID:  node.ID,
+				SpatialDepth:  spatialDepth,
+				InputNodeIDs:  append([]string{child.ID}, traceNodeIDs(child.Children)...),
+				OutputNodeIDs: traceNodeIDs(preserved),
+				InputBBox:     &child.BBox,
+				Decision:      "collapse_group",
+				DecisionClass: "diagnostic",
+				GroupKind:     "layer_wrapper",
+				Reason:        "tiny_layer_no_text_render_wrapper",
+				Metrics: map[string]any{
+					"childCount": len(child.Children),
+					"width":      child.BBox.Width,
+					"height":     child.BBox.Height,
+					"shortSide":  min(child.BBox.Width, child.BBox.Height),
+				},
+				Thresholds: map[string]any{
+					"maxTinyLayerShortSide": maxTinyLayerShortSide,
+				},
+			})
+			out = append(out, preserved...)
+			continue
+		}
 		out = append(out, child)
 	}
 	node.Children = out
@@ -1147,6 +1177,19 @@ func shouldCollapseLowEvidenceSpatialGroup(group Node) bool {
 		return false
 	}
 	return min(group.BBox.Width, group.BBox.Height) <= maxUnsupportedSpatialShortSide
+}
+
+func shouldCollapseTinyLayerWrapper(node Node) bool {
+	if node.Type != "Layer" || node.Meta.Synthetic {
+		return false
+	}
+	if len(node.Children) == 0 {
+		return false
+	}
+	if containsTextDescendant(node) {
+		return false
+	}
+	return min(node.BBox.Width, node.BBox.Height) <= maxTinyLayerShortSide
 }
 
 func isSpatialGroupFromProjection(node Node) bool {

@@ -613,6 +613,22 @@ func TestGroupPermissionGateCollapsesLowEvidenceGroups(t *testing.T) {
 					{ID: "tiny_label", Type: "Text", BBox: contract.BBox{X: 20, Y: 80, Width: 90, Height: 8}},
 				},
 			},
+			{
+				ID:   "tiny_layer",
+				Type: "Layer",
+				BBox: contract.BBox{X: 300, Y: 10, Width: 60, Height: 4},
+				Children: []Node{
+					{ID: "divider_img", Type: "Image", BBox: contract.BBox{X: 300, Y: 10, Width: 60, Height: 4}},
+				},
+			},
+			{
+				ID:   "normal_layer",
+				Type: "Layer",
+				BBox: contract.BBox{X: 0, Y: 200, Width: 200, Height: 80},
+				Children: []Node{
+					{ID: "card_img", Type: "Image", BBox: contract.BBox{X: 0, Y: 200, Width: 200, Height: 80}},
+				},
+			},
 		},
 	}
 	trace := NewTraceRecorder()
@@ -637,10 +653,20 @@ func TestGroupPermissionGateCollapsesLowEvidenceGroups(t *testing.T) {
 	if findDescendant(root, "sgroup_text_spatial").ID == "" {
 		t.Fatalf("expected thin spatial group with text evidence to be preserved: %#v", root.Children)
 	}
+	if findDescendant(root, "tiny_layer").ID != "" {
+		t.Fatalf("expected tiny no-text Layer wrapper to be collapsed: %#v", root.Children)
+	}
+	if findDescendant(root, "divider_img").ID == "" {
+		t.Fatalf("expected tiny Layer child to be preserved after collapse: %#v", root.Children)
+	}
+	if findDescendant(root, "normal_layer").ID == "" {
+		t.Fatalf("expected normal-sized Layer to be preserved: %#v", root.Children)
+	}
 
 	events := trace.Events()
 	requireTraceEvent(t, events, "group_permission_gate", "collapse_group", "text_background_group", "low_evidence_text_bbox_background")
 	requireTraceEvent(t, events, "group_permission_gate", "collapse_group", "spatial_group", "degenerate_low_evidence_spatial_group")
+	requireTraceEvent(t, events, "group_permission_gate", "collapse_group", "layer_wrapper", "tiny_layer_no_text_render_wrapper")
 }
 
 func writeInputs(t *testing.T, dir string, tokens []evidence.Token, relations []relation.Relation) (string, string) {
