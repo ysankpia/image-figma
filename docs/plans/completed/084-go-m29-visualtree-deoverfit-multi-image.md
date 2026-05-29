@@ -1,6 +1,6 @@
 # 084 Go M29 VisualTree 瘦身去过拟合(多图稳健化)
 
-- 状态:active (A/C/D 完成,B 部分完成)
+- 状态:completed (A/C/D 完成,B 容器比率需新计划)
 - 创建日期:2026-05-29
 - 前置:083(已让综合分从 0.22 提到单图 0.88)
 - 负责人:未指定(可交由 Codex 执行)
@@ -23,13 +23,41 @@
 ### 任务完成情况
 
 - ✅ **任务 A**: 删除写死像素阈值。`canUseTextBBoxAsBackground` 中 `Height>34`/`Width<40` 已替换为纯相对判据(宽高比 ≥ 2.5)。
-- ⚠️ **任务 B**: 容器灌水未达标(Go/Codia 比 1.44~2.14,目标 ≤1.2)。主要来源是 TEXTBG 为每个宽型文本创建容器。禁用 TEXTBG 会降低召回率,与分数目标冲突。需要更精细的策略(如只在有物理背景证据时才创建 TEXTBG)。
+- ❌ **任务 B**: 容器比率 ≤1.2 不可达(当前 1.44~2.14)。**根因是架构性的,非参数调优问题。** 详见下方实验记录。需要新计划用不同算法架构解决。
 - ✅ **任务 C**: 死代码清理完成。`group.go` 从 429 行缩减到 ~80 行,删除了全部废弃的 relation-based grouping 逻辑(applyVisualGroups/candidateGroups/rowProjectionGroups/connectedGroups/buildGroupNode 等)。`spatial_group.go` 删除了 `xycut` 的未使用参数 `parentBox`,修复了 range-over-int lint 警告。
 - ✅ **任务 D**: 测试更新完成。`TestCompileLetsSyntheticLayerParentContainedChildByBBox` 改用 `findDescendant`(适配 XY-cut 嵌套行为)。`TestCompileSlicesWideContainedForegroundByTextBaseline` 更新为验证 TEXTBG 新行为。`go test ./...` 全绿。
 
 ### 新增功能
 
 - **Straggler absorption**(仅 Body 层级):XY-cut 后,孤立叶节点被吸收进最近的相邻组(距离 < 目标组最大维度/2)。通过 `ABL_ABSORB` 环境变量可禁用。为 t022 和 lizhi 各增加 2 个匹配。
+
+### 任务 B 容器比率实验记录(2026-05-29,结论:需新架构)
+
+**问题本质**: XY-cut 递归二分天然产生 O(N) 个二叉容器;TEXTBG 在 XY-cut 之前运行,两者耦合——移除 TEXTBG 容器会改变 XY-cut 输入,导致不同(更差)的分组结果。
+
+**尝试的方案及结果**:
+
+| 方案 | 做法 | 结果 |
+|---|---|---|
+| 二叉链展平 | 递归展平所有 fanout=2 的 spatial_group | 召回暴跌:~50% 的二叉组是合法的 icon+text 配对,与 Codia 匹配 |
+| 保守展平(≥3 children) | 只展平 children 全为叶子且 ≥3 个的二叉组 | 仅减少 2-3 个容器/图,杯水车薪 |
+| 同质对展平 | 只展平两个 children 类型相同的二叉组 | t018 召回从 0.829 跌到 0.780,得不偿失 |
+| TEXTBG 纵向列表排除 | 检测纵向等距文本列表,不为其创建 TEXTBG | 因耦合效应,移除 1 个 TEXTBG 导致 XY-cut 重新分组,t018 召回跌 0.049 |
+| 规则 run 检测 | 识别等距/等尺寸序列并展平 | 每图仅 2-3 个符合条件的子树,效果微乎其微 |
+
+**数据**:
+- 未匹配容器构成: spatial_group 17-22/图 + text_background_group 3-18/图
+- 70-80% 未匹配容器 fanout=2
+- TEXTBG 精度: t018=5/16, t022=1/19, lizhi=1/7, xianyu=2/5
+
+**结论**: 在当前架构(TEXTBG→XY-cut 串行管线)下,容器比率 ≤1.2 不可增量达成。需要新计划实施以下之一:
+1. **Gap 显著性停止**: XY-cut 在无显著 gap 时停止递归,直接输出 flat group(OpenAI 方案 Phase 1)
+2. **候选容器 scoring**: 将 XY-cut 降级为候选来源之一,用打分+laminar selection 构造最终浅树
+3. **TEXTBG 解耦**: 移到 XY-cut 之后运行,加高置信门控
+
+所有实验代码已回滚,基线保持 avg=0.843, min=0.800。
+
+---
 
 ## 一、背景:083 达标了,但分数有水分
 
