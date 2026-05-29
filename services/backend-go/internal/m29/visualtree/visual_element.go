@@ -82,9 +82,6 @@ func visualElementName(node Node) string {
 		return "Background"
 	}
 	if node.Type == "Layer" {
-		if node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "text_background_group" {
-			return "Button"
-		}
 		return "Groups"
 	}
 	return node.Type

@@ -337,6 +337,43 @@ func TestCompileCompletesRowGroupWithLocalProjectionSibling(t *testing.T) {
 	}
 }
 
+func TestCompileSlicesWideContainedForegroundByTextBaseline(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("surface", "surface_region_token", contract.BBox{X: 20, Y: 20, Width: 340, Height: 170}),
+			token("wide_image", "raster_region_token", contract.BBox{X: 40, Y: 40, Width: 300, Height: 120}),
+			textToken("left_label", contract.BBox{X: 78, Y: 126, Width: 70, Height: 20}, "Left"),
+			textToken("right_label", contract.BBox{X: 232, Y: 126, Width: 74, Height: 20}, "Right"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "contains", "structural", "surface", "wide_image"),
+			rel("rel_0002", "contains", "structural", "surface", "left_label"),
+			rel("rel_0003", "contains", "structural", "surface", "right_label"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if doc.Diagnostics.GroupKindCounts["contained_slice_group"] != 2 {
+		t.Fatalf("expected two contained slice groups, got %#v root=%#v", doc.Diagnostics.GroupKindCounts, doc.Root)
+	}
+	leftParent := findParentOf(doc.Root, "left_label")
+	rightParent := findParentOf(doc.Root, "right_label")
+	if leftParent.Meta.GroupKind != "contained_slice_group" || rightParent.Meta.GroupKind != "contained_slice_group" || leftParent.ID == rightParent.ID {
+		t.Fatalf("expected labels in distinct contained slice groups, left=%#v right=%#v", leftParent, rightParent)
+	}
+	if findChild(leftParent, "wide_image").ID != "" || findChild(rightParent, "wide_image").ID != "" {
+		t.Fatalf("slice groups should use background slice nodes, not move the source image")
+	}
+	source := findDescendant(doc.Root, "wide_image")
+	if source.ID == "" || source.Type != "Image" {
+		t.Fatalf("source wide image evidence should remain in tree, got %#v", doc.Root)
+	}
+}
+
 func TestCompileDoesNotCreateRowGroupForMultiLineMixedRegion(t *testing.T) {
 	tmp := t.TempDir()
 	tokenPath, relationPath := writeInputs(t, tmp,

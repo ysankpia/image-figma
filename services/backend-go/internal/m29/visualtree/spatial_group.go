@@ -37,6 +37,7 @@ func regroupChildren(node *Node, counter *int) {
 	}
 
 	backgrounds, foreground := splitBackgroundLeaves(node.Children)
+	foreground = groupContainedForegroundSlices(foreground, counter)
 	foreground = pairContainedForeground(foreground, counter)
 	foreground = pairVerticalForeground(foreground, counter)
 	foreground = pairTextBackedForeground(foreground, counter)
@@ -85,7 +86,7 @@ func pairContainedForeground(nodes []Node, counter *int) []Node {
 			if candidateIdx == textIdx || used[candidateIdx] {
 				continue
 			}
-			if !canPairAsBackground(candidate, text) {
+			if !canPairAsContainedForeground(candidate, text) {
 				continue
 			}
 			candidateArea := area(candidate.BBox)
@@ -99,7 +100,7 @@ func pairContainedForeground(nodes []Node, counter *int) []Node {
 		}
 		first := min(textIdx, bestIdx)
 		children := []Node{nodes[bestIdx], text}
-		pairsByFirst[first] = makeContainedPairGroup(children, counter)
+		pairsByFirst[first] = makeContainedForegroundGroup(children, counter)
 		used[textIdx] = true
 		used[bestIdx] = true
 	}
@@ -120,7 +121,166 @@ func pairContainedForeground(nodes []Node, counter *int) []Node {
 	return out
 }
 
-func canPairAsBackground(candidate Node, text Node) bool {
+func groupContainedForegroundSlices(nodes []Node, counter *int) []Node {
+	if len(nodes) < 3 {
+		return nodes
+	}
+	usedText := map[int]bool{}
+	groupsByFirst := map[int][]Node{}
+	for imageIdx, imageNode := range nodes {
+		if imageNode.Type != "Image" || imageNode.Meta.Synthetic || isThinLineNode(imageNode) {
+			continue
+		}
+		textIndexes := containedSliceTextIndexes(imageNode, nodes, usedText)
+		if len(textIndexes) < 2 {
+			continue
+		}
+		groups := makeContainedSliceGroups(imageNode, textIndexes, nodes, counter)
+		if len(groups) == 0 {
+			continue
+		}
+		for _, idx := range textIndexes {
+			usedText[idx] = true
+		}
+		insertAt := textIndexes[0]
+		if imageIdx < insertAt {
+			insertAt = imageIdx + 1
+		}
+		groupsByFirst[insertAt] = append(groupsByFirst[insertAt], groups...)
+	}
+	if len(groupsByFirst) == 0 {
+		return nodes
+	}
+	out := make([]Node, 0, len(nodes)-len(usedText))
+	for i, node := range nodes {
+		if groups := groupsByFirst[i]; len(groups) > 0 {
+			out = append(out, groups...)
+		}
+		if usedText[i] {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func containedSliceTextIndexes(imageNode Node, nodes []Node, usedText map[int]bool) []int {
+	var indexes []int
+	for i, node := range nodes {
+		if usedText[i] || node.Type != "Text" || node.Meta.Synthetic {
+			continue
+		}
+		if !bboxContains(imageNode.BBox, node.BBox, containmentTolerance) {
+			continue
+		}
+		if centerY(node) < imageNode.BBox.Y+imageNode.BBox.Height/2 {
+			continue
+		}
+		indexes = append(indexes, i)
+	}
+	if len(indexes) < 2 {
+		return nil
+	}
+	sort.SliceStable(indexes, func(i, j int) bool {
+		return centerX(nodes[indexes[i]]) < centerX(nodes[indexes[j]])
+	})
+	if !sameTextBaseline(indexes, nodes) {
+		return nil
+	}
+	if !imageCanSplitByContainedText(imageNode, indexes, nodes) {
+		return nil
+	}
+	return indexes
+}
+
+func centerX(node Node) int {
+	return node.BBox.X + node.BBox.Width/2
+}
+
+func sameTextBaseline(indexes []int, nodes []Node) bool {
+	minCenter := centerY(nodes[indexes[0]])
+	maxCenter := minCenter
+	medianHeightValues := make([]int, 0, len(indexes))
+	for _, idx := range indexes {
+		cy := centerY(nodes[idx])
+		minCenter = min(minCenter, cy)
+		maxCenter = max(maxCenter, cy)
+		medianHeightValues = append(medianHeightValues, nodes[idx].BBox.Height)
+	}
+	return maxCenter-minCenter <= max(8, medianInt(medianHeightValues)/2)
+}
+
+func imageCanSplitByContainedText(imageNode Node, indexes []int, nodes []Node) bool {
+	heights := make([]int, 0, len(indexes))
+	maxTextWidth := 0
+	for _, idx := range indexes {
+		heights = append(heights, nodes[idx].BBox.Height)
+		maxTextWidth = max(maxTextWidth, nodes[idx].BBox.Width)
+	}
+	medianHeight := max(1, medianInt(heights))
+	if imageNode.BBox.Height > medianHeight*10 {
+		return false
+	}
+	if imageNode.BBox.Width < maxTextWidth*2 {
+		return false
+	}
+	return true
+}
+
+func makeContainedSliceGroups(imageNode Node, indexes []int, nodes []Node, counter *int) []Node {
+	groups := make([]Node, 0, len(indexes))
+	left := imageNode.BBox.X
+	right := imageNode.BBox.X + imageNode.BBox.Width
+	bounds := make([]int, len(indexes)+1)
+	bounds[0] = left
+	bounds[len(bounds)-1] = right
+	for i := 0; i < len(indexes)-1; i++ {
+		a := centerX(nodes[indexes[i]])
+		b := centerX(nodes[indexes[i+1]])
+		bounds[i+1] = (a + b) / 2
+	}
+	for i, idx := range indexes {
+		if bounds[i+1] <= bounds[i] {
+			continue
+		}
+		bg := makeBackgroundSliceNode(imageNode, contract.BBox{
+			X:      bounds[i],
+			Y:      imageNode.BBox.Y,
+			Width:  bounds[i+1] - bounds[i],
+			Height: imageNode.BBox.Height,
+		}, counter)
+		group := makeSpatialGroup([]Node{bg, nodes[idx]}, counter)
+		group.Meta.GroupKind = "contained_slice_group"
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func makeBackgroundSliceNode(source Node, box contract.BBox, counter *int) Node {
+	id := fmt.Sprintf("slice_%04d", *counter)
+	*counter = *counter + 1
+	return Node{
+		ID:   id,
+		Type: "Image",
+		Name: "Background / " + source.ID,
+		BBox: box,
+		Layout: Layout{
+			Mode:     "absolute",
+			Relative: true,
+		},
+		SourceRefs: SourceRefs{
+			TokenIDs:      append([]string(nil), source.SourceRefs.TokenIDs...),
+			BackgroundIDs: append([]string(nil), source.SourceRefs.TokenIDs...),
+		},
+		Meta: Meta{
+			Synthetic:    true,
+			GroupKind:    "background_leaf",
+			ParentReason: "contained_foreground_slice",
+		},
+	}
+}
+
+func canPairAsContainedForeground(candidate Node, text Node) bool {
 	if candidate.Type == "Text" || candidate.Meta.Synthetic || isThinLineNode(candidate) {
 		return false
 	}
@@ -132,16 +292,52 @@ func canPairAsBackground(candidate Node, text Node) bool {
 	if textArea == 0 || candidateArea <= textArea {
 		return false
 	}
-	if candidateArea > textArea*7 {
+	if candidateArea > textArea*14 {
 		return false
 	}
+	if canPairAsCompactBackground(candidate, text) {
+		return true
+	}
+	return canPairAsContainedTile(candidate, text)
+}
+
+func canPairAsCompactBackground(candidate Node, text Node) bool {
 	if candidate.BBox.Height > text.BBox.Height*4 {
+		return false
+	}
+	if candidate.BBox.Width > text.BBox.Width+text.BBox.Height*3 {
 		return false
 	}
 	return true
 }
 
-func makeContainedPairGroup(children []Node, counter *int) Node {
+func canPairAsContainedTile(candidate Node, text Node) bool {
+	if candidate.Type != "Image" {
+		return false
+	}
+	if candidate.BBox.Height <= text.BBox.Height*4 {
+		return false
+	}
+	if candidate.BBox.Width < text.BBox.Width {
+		return false
+	}
+	textBottom := text.BBox.Y + text.BBox.Height
+	candidateBottom := candidate.BBox.Y + candidate.BBox.Height
+	if textBottom < candidate.BBox.Y+candidate.BBox.Height/2 {
+		return false
+	}
+	if candidateBottom-textBottom > max(text.BBox.Height, candidate.BBox.Height/4) {
+		return false
+	}
+	textCenter := text.BBox.X + text.BBox.Width/2
+	candidateCenter := candidate.BBox.X + candidate.BBox.Width/2
+	if abs(textCenter-candidateCenter) > max(candidate.BBox.Width/3, text.BBox.Width) {
+		return false
+	}
+	return true
+}
+
+func makeContainedForegroundGroup(children []Node, counter *int) Node {
 	sort.SliceStable(children, func(i, j int) bool {
 		if children[i].Type != children[j].Type {
 			return children[i].Type != "Text"
@@ -149,12 +345,16 @@ func makeContainedPairGroup(children []Node, counter *int) Node {
 		return lessNode(children[i], children[j])
 	})
 	group := makeSpatialGroup(children, counter)
-	group.Meta.GroupKind = "contained_pair_group"
+	if len(children) == 2 && children[0].Type == "Image" && canPairAsContainedTile(children[0], children[1]) {
+		group.Meta.GroupKind = "contained_foreground_group"
+	} else {
+		group.Meta.GroupKind = "contained_pair_group"
+	}
 	return group
 }
 
 func isAtomicSpatialGroup(node Node) bool {
-	return node.Meta.Synthetic && (node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "text_background_group" || node.Meta.GroupKind == "vertical_pair_group")
+	return node.Meta.Synthetic && (node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "contained_foreground_group" || node.Meta.GroupKind == "contained_slice_group" || node.Meta.GroupKind == "text_background_group" || node.Meta.GroupKind == "vertical_pair_group")
 }
 
 func pairTextBackedForeground(nodes []Node, counter *int) []Node {

@@ -1,6 +1,6 @@
 # 083 Go M29 VisualTree 结构对齐 Codia(空间聚类 1:1)
 
-- 状态:active
+- 状态:completed
 - 创建日期:2026-05-29
 - 负责人:未指定(可交由 Codex 执行)
 - 所属链路:`services/backend-go` 的 M29 VisualTree 编译层
@@ -33,15 +33,21 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
    - 物理背景叶子沉底,避免大背景参与前景 XY-cut。
    - `visual_element.v1.json` 输出雏形,用于后续对齐 Codia `VisualElement` envelope。
 
-4. **当前未提交阶段**:M29.0 surface evidence 已进一步放开:
+4. **已提交 surface evidence 阶段**:`f581d88 feat: emit codia-like visual element and recover surface foreground evidence` 已进一步放开 M29.0 surface evidence:
    - 允许有 OCR 锚点的贴边大 surface,例如顶部/底部大 UI band,不再因触碰图片边缘被无条件拒绝。
    - 对每个 surface 在排除 OCR mask 后做局部背景残差提取,把 surface 内部 icon / foreground component 保留为物理 primitive。
    - Tencent Codia 样本验证:primitive **252**,token **151**,VisualTree node **268**,分组召回 **0.756**,综合相似度 **0.829**。
    - 已尝试 `horizontal_lane_group`,但真实样本降到 **0.812**,因此按证据驱动原则撤回,不进入本阶段。
 
+5. **当前完成阶段**:VisualTree contained foreground grouping 已补齐:
+   - `contained_foreground_group`:保留紧凑 text/background 配对,并允许高一些的 image tile 包住靠下文本。
+   - `contained_slice_group`:当同一可信 parent scope 中,一个宽 Image 内包含多段同基线文本时,按文本中心线生成 source-referenced background slice groups。原始 Image 仍保留,不会被移动或删除。
+   - VisualElement 输出移除 `Button` 机械命名,Layer 统一命名为 `Groups`,语义只保留在 `processingMeta.groupKind`。
+   - Tencent Codia 样本最终验证:primitive **252**,token **151**,VisualTree node **267**,分组召回 **0.829**,综合相似度 **0.880**。
+
 ## 三、最终目标
 
-让 `services/backend-go` 对测试图的输出树与 Codia 官方输出树结构 1:1。量化:`compare_trees.py` 综合相似度逼近 1.0(当前验证 **0.829**,目标 **0.85+**),其中**分组召回率是主要瓶颈**(当前验证 **0.756**,目标 **0.8+**)。
+让 `services/backend-go` 对测试图的输出树与 Codia 官方输出树结构 1:1。量化:`compare_trees.py` 综合相似度逼近 1.0(当前验证 **0.880**,目标 **0.85+**),其中**分组召回率是主要瓶颈**(当前验证 **0.829**,目标 **0.8+**)。
 
 ## 四、要做的事(按优先级)
 
@@ -52,6 +58,7 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
 - 思路:当一个 Text 被一个尺寸相近(背景面积不超过文字面积约 4 倍)的 Image/Layer 紧紧包含时,把两者配成一个组(synthetic 容器)。
 - 数据已确认:对测试图,Go token 里有 11 处"文字被相近色块包含"。
 - 注意:部分可能已在 `containment.go` 阶段建立父子关系,先排查哪些已配对、哪些仍是兄弟未配对。
+- 完成状态:已实现 `contained_pair_group` / `contained_foreground_group` / `contained_slice_group`。仍不引入 Button 节点类型或 Button 命名。
 
 ### 任务 B:对齐分组边界(IoU≈0.5 的 Groups)
 
@@ -108,7 +115,25 @@ cd .. && python3 services/backend-go/tools/compare_trees.py
 cd services/backend-go && go test ./internal/m29/visualtree/...
 ```
 
-**当前验收标准:** 综合相似度保持 **0.829** 量级且不低于已提交 0.761 基线;分组召回率保持 **0.756** 量级且不低于已提交 0.659 基线;`visual_element.v1.json` 生成;`go test ./...` 全绿;不违反任何硬约束。
+**当前验收标准:** 综合相似度保持 **0.880** 量级且高于目标 0.85;分组召回率保持 **0.829** 量级且高于目标 0.8;`visual_element.v1.json` 生成;`go test ./...` 全绿;不违反任何硬约束。
+
+本阶段已验证:
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/backend-go
+go test ./...
+
+OUT=/tmp/go_run_083_final_verify
+rm -rf "$OUT" && mkdir -p "$OUT"
+IMG='/Users/luhui/Downloads/腾讯动漫_018_1440.png'
+go run ./cmd/m29extract -input "$IMG" -out "$OUT"
+go run ./cmd/m29tokens -input "$OUT/m29_physical_evidence.v1.json" -out "$OUT"
+go run ./cmd/m29relations -input "$OUT/evidence_tokens.v1.json" -out "$OUT"
+go run ./cmd/m29visualtree -tokens "$OUT/evidence_tokens.v1.json" -relations "$OUT/relation_graph.v1.json" -out "$OUT"
+test -f "$OUT/visual_element.v1.json"
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma
+python3 services/backend-go/tools/compare_trees.py docs/reference/codia-samples/tencent-comic-018.canvas.json "$OUT/visual_tree.v1.json"
+```
 
 ## 七、关键文件清单
 
