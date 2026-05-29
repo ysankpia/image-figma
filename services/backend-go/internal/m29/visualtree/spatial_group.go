@@ -21,6 +21,10 @@ var spatialGapRatio = func() float64 {
 	return 0.15
 }()
 
+// Projection-only groups thinner than this are usually divider/chrome fragments
+// created by XY-cut gaps, not durable Codia-like structure containers.
+const maxUnsupportedSpatialShortSide = 20
+
 // applySpatialGrouping 递归地对每个容器节点的子节点做 XY-cut 空间聚类,
 // 把扁平排列的兄弟节点收拢成嵌套的 synthetic 容器(对标 Codia 的 "Groups")。
 //
@@ -369,6 +373,9 @@ func makeContainedSliceGroups(imageNode Node, indexes []int, nodes []Node, count
 		}, counter)
 		group := makeSpatialGroup([]Node{bg, nodes[idx]}, counter)
 		group.Meta.GroupKind = "contained_slice_group"
+		group.Meta.GroupRole = "structural"
+		group.Meta.ParentReason = "contained_foreground_slice"
+		group.Meta.EvidenceScore = 0.95
 		trace.Record(TraceEvent{
 			Operation:     "contained_slice_group_create",
 			ParentNodeID:  parentID,
@@ -429,9 +436,11 @@ func makeBackgroundSliceNode(source Node, box contract.BBox, counter *int) Node 
 			BackgroundIDs: append([]string(nil), source.SourceRefs.TokenIDs...),
 		},
 		Meta: Meta{
-			Synthetic:    true,
-			GroupKind:    "background_leaf",
-			ParentReason: "contained_foreground_slice",
+			Synthetic:     true,
+			GroupKind:     "background_leaf",
+			GroupRole:     "auxiliary",
+			ParentReason:  "contained_foreground_slice",
+			EvidenceScore: 0.5,
 		},
 	}
 }
@@ -504,9 +513,13 @@ func makeContainedForegroundGroup(children []Node, counter *int, parentID string
 	group := makeSpatialGroup(children, counter)
 	if len(children) == 2 && children[0].Type == "Image" && canPairAsContainedTile(children[0], children[1]) {
 		group.Meta.GroupKind = "contained_foreground_group"
+		group.Meta.EvidenceScore = 0.95
 	} else {
 		group.Meta.GroupKind = "contained_pair_group"
+		group.Meta.EvidenceScore = 0.75
 	}
+	group.Meta.GroupRole = "structural"
+	group.Meta.ParentReason = "contained_foreground_pair"
 	trace.Record(TraceEvent{
 		Operation:     "contained_pair_group_create",
 		ParentNodeID:  parentID,
@@ -611,13 +624,18 @@ func makeTextBackgroundGroup(text Node, counter *int, parentID string, spatialDe
 			Relative: true,
 		},
 		Meta: Meta{
-			Synthetic:    true,
-			GroupKind:    "background_leaf",
-			ParentReason: "text_bbox_background",
+			Synthetic:     true,
+			GroupKind:     "background_leaf",
+			GroupRole:     "auxiliary",
+			ParentReason:  "text_bbox_background",
+			EvidenceScore: 0.1,
 		},
 	}
 	group := makeSpatialGroup([]Node{bg, text}, counter)
 	group.Meta.GroupKind = "text_background_group"
+	group.Meta.GroupRole = "auxiliary"
+	group.Meta.ParentReason = "text_bbox_background"
+	group.Meta.EvidenceScore = 0.2
 	trace.Record(TraceEvent{
 		Operation:     "text_background_group_create",
 		ParentNodeID:  parentID,
@@ -696,6 +714,9 @@ func pairVerticalForeground(nodes []Node, counter *int, parentID string, spatial
 		children := []Node{top, nodes[bestIdx]}
 		group := makeSpatialGroup(children, counter)
 		group.Meta.GroupKind = "vertical_pair_group"
+		group.Meta.GroupRole = "structural"
+		group.Meta.ParentReason = "vertical_label_pair"
+		group.Meta.EvidenceScore = 0.8
 		trace.Record(TraceEvent{
 			Operation:     "vertical_pair_group_create",
 			ParentNodeID:  parentID,
@@ -932,6 +953,8 @@ func absorbStragglers(nodes []Node, counter *int, parentID string, spatialDepth 
 			} else {
 				all := append([]Node{node}, ex...)
 				node = makeSpatialGroup(all, counter)
+				node.Meta.ParentReason = "absorb_straggler_created_target_group"
+				node.Meta.EvidenceScore = 0.55
 				trace.Record(TraceEvent{
 					Operation:     "spatial_group_create",
 					ParentNodeID:  parentID,
@@ -998,6 +1021,8 @@ func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int, parentID s
 		return cluster
 	}
 	group := makeSpatialGroup(cluster, counter)
+	group.Meta.ParentReason = reason
+	group.Meta.EvidenceScore = 0.5
 	trace.Record(TraceEvent{
 		Operation:     "cluster_wrap_or_flatten",
 		ParentNodeID:  parentID,
@@ -1033,6 +1058,181 @@ func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int, parentID s
 		},
 	})
 	return []Node{group}
+}
+
+func applyGroupPermissionGate(root *Node, trace *TraceRecorder) {
+	collapseLowEvidenceGroups(root, trace, 0)
+}
+
+func collapseLowEvidenceGroups(node *Node, trace *TraceRecorder, spatialDepth int) {
+	if len(node.Children) == 0 {
+		return
+	}
+	out := make([]Node, 0, len(node.Children))
+	for i := range node.Children {
+		child := node.Children[i]
+		collapseLowEvidenceGroups(&child, trace, childSpatialDepth(child, spatialDepth))
+		if shouldCollapseTextBackgroundGroup(child, *node) {
+			preserved := visibleChildrenAfterAuxiliaryCollapse(child)
+			trace.Record(TraceEvent{
+				Operation:     "group_permission_gate",
+				ParentNodeID:  node.ID,
+				SpatialDepth:  spatialDepth,
+				InputNodeIDs:  append([]string{child.ID}, traceNodeIDs(child.Children)...),
+				OutputNodeIDs: traceNodeIDs(preserved),
+				InputBBox:     &child.BBox,
+				Decision:      "collapse_group",
+				DecisionClass: "diagnostic",
+				GroupKind:     child.Meta.GroupKind,
+				Reason:        "low_evidence_text_bbox_background",
+				Metrics:       textBackgroundCollapseMetrics(child, node),
+				Thresholds: map[string]any{
+					"maxUnsupportedAreaRatio": 0.2,
+					"nearPeerGapMultiplier":   2,
+					"nearPeerMinGap":          24,
+				},
+			})
+			out = append(out, preserved...)
+			continue
+		}
+		if shouldCollapseLowEvidenceSpatialGroup(child) {
+			preserved := append([]Node(nil), child.Children...)
+			trace.Record(TraceEvent{
+				Operation:     "group_permission_gate",
+				ParentNodeID:  node.ID,
+				SpatialDepth:  spatialDepth,
+				InputNodeIDs:  append([]string{child.ID}, traceNodeIDs(child.Children)...),
+				OutputNodeIDs: traceNodeIDs(preserved),
+				InputBBox:     &child.BBox,
+				Decision:      "collapse_group",
+				DecisionClass: "diagnostic",
+				GroupKind:     child.Meta.GroupKind,
+				Reason:        "degenerate_low_evidence_spatial_group",
+				Metrics:       spatialGroupCollapseMetrics(child, node),
+				Thresholds: map[string]any{
+					"maxUnsupportedShortSide": maxUnsupportedSpatialShortSide,
+				},
+			})
+			out = append(out, preserved...)
+			continue
+		}
+		out = append(out, child)
+	}
+	node.Children = out
+	refreshChildLayouts(node)
+}
+
+func shouldCollapseTextBackgroundGroup(group Node, parent Node) bool {
+	if !isTextBackgroundGroup(group) {
+		return false
+	}
+	if parent.Type == "Body" {
+		return true
+	}
+	metrics := textBackgroundCollapseMetrics(group, &parent)
+	areaRatio, _ := metrics["areaRatio"].(float64)
+	nearPeerCount, _ := metrics["nearPeerCount"].(int)
+	return nearPeerCount == 0 && areaRatio < 0.2
+}
+
+func isTextBackgroundGroup(node Node) bool {
+	return node.Meta.Synthetic && node.Meta.GroupKind == "text_background_group" && node.Meta.ParentReason == "text_bbox_background"
+}
+
+func shouldCollapseLowEvidenceSpatialGroup(group Node) bool {
+	if !isSpatialGroupFromProjection(group) {
+		return false
+	}
+	if containsTextDescendant(group) {
+		return false
+	}
+	return min(group.BBox.Width, group.BBox.Height) <= maxUnsupportedSpatialShortSide
+}
+
+func isSpatialGroupFromProjection(node Node) bool {
+	if !node.Meta.Synthetic || node.Meta.GroupKind != "spatial_group" || len(node.Children) == 0 {
+		return false
+	}
+	switch node.Meta.ParentReason {
+	case "xycut_x", "xycut_y", "neighbor_component":
+		return true
+	default:
+		return false
+	}
+}
+
+func visibleChildrenAfterAuxiliaryCollapse(group Node) []Node {
+	out := make([]Node, 0, len(group.Children))
+	for _, child := range group.Children {
+		if child.Meta.GroupKind == "background_leaf" && child.Meta.ParentReason == "text_bbox_background" {
+			continue
+		}
+		out = append(out, child)
+	}
+	return out
+}
+
+func containsTextDescendant(node Node) bool {
+	if node.Type == "Text" {
+		return true
+	}
+	for _, child := range node.Children {
+		if containsTextDescendant(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func textBackgroundCollapseMetrics(group Node, parent *Node) map[string]any {
+	metrics := map[string]any{
+		"childCount": len(group.Children),
+	}
+	if parent == nil || parent.BBox.Width <= 0 || parent.BBox.Height <= 0 {
+		metrics["areaRatio"] = 0.0
+		metrics["nearPeerCount"] = 0
+		return metrics
+	}
+	groupArea := group.BBox.Width * group.BBox.Height
+	parentArea := max(1, parent.BBox.Width*parent.BBox.Height)
+	metrics["areaRatio"] = traceRound4(float64(groupArea) / float64(parentArea))
+	metrics["widthRatio"] = traceRound4(float64(group.BBox.Width) / float64(max(1, parent.BBox.Width)))
+	metrics["heightRatio"] = traceRound4(float64(group.BBox.Height) / float64(max(1, parent.BBox.Height)))
+	metrics["nearPeerCount"] = nearPeerCount(group, parent.Children)
+	return metrics
+}
+
+func spatialGroupCollapseMetrics(group Node, parent *Node) map[string]any {
+	metrics := map[string]any{
+		"childCount":         len(group.Children),
+		"parentReason":       group.Meta.ParentReason,
+		"width":              group.BBox.Width,
+		"height":             group.BBox.Height,
+		"shortSide":          min(group.BBox.Width, group.BBox.Height),
+		"containsText":       containsTextDescendant(group),
+		"sourceRelationRefs": len(group.SourceRefs.RelationIDs),
+	}
+	if parent != nil && parent.BBox.Width > 0 && parent.BBox.Height > 0 {
+		parentArea := max(1, parent.BBox.Width*parent.BBox.Height)
+		groupArea := group.BBox.Width * group.BBox.Height
+		metrics["areaRatio"] = traceRound4(float64(groupArea) / float64(parentArea))
+	}
+	return metrics
+}
+
+func nearPeerCount(node Node, siblings []Node) int {
+	count := 0
+	for _, sibling := range siblings {
+		if sibling.ID == node.ID {
+			continue
+		}
+		xGap := max(0, max(node.BBox.X, sibling.BBox.X)-min(node.BBox.X+node.BBox.Width, sibling.BBox.X+sibling.BBox.Width))
+		yOverlap := min(node.BBox.Y+node.BBox.Height, sibling.BBox.Y+sibling.BBox.Height) - max(node.BBox.Y, sibling.BBox.Y)
+		if yOverlap > 0 && xGap <= max(node.BBox.Height*2, 24) {
+			count++
+		}
+	}
+	return count
 }
 
 // splitAxis 把 nodes 沿给定轴(vertical=true 表示沿 Y 轴分行)按空白带切成多个簇。
@@ -1267,8 +1467,10 @@ func makeSpatialGroup(children []Node, counter *int) Node {
 			Relative: true,
 		},
 		Meta: Meta{
-			Synthetic: true,
-			GroupKind: "spatial_group",
+			Synthetic:     true,
+			GroupKind:     "spatial_group",
+			GroupRole:     "structural",
+			EvidenceScore: 0.5,
 		},
 		Children: children,
 	}

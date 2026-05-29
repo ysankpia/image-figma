@@ -887,7 +887,11 @@ visual_tree_trace_report.md
 
 trace 解释 containment、background split、text/background pairing、XY-cut、neighbor components、cluster wrap/flatten、skip xycut 和 straggler absorb 等结构决策。它只用于诊断和批量评测归因，不改变 VisualTree、VisualElement、DSL、assets、M29.5 plan 或 materializer 行为。
 
+VisualTree synthetic groups 会在 `meta` / `processingMeta` 中暴露 `groupRole`、`parentReason` 和 `evidenceScore`。当前 group permission gate 只在 Go VisualTree 输出前做窄范围结构折叠:低证据 `text_background_group` 会回退为原 text child，来自 `xycut` / `neighbor_component` 且无文字后代的退化薄片 `spatial_group` 会回退为其 children。该 gate 不读取 Codia guid、Codia bbox、样本名、文案或固定坐标，也不改变 M29 source ownership、M29.5 replay plan、Renderer 或 plugin。
+
 `services/backend-go/cmd/m29trace` 是只读查询工具，可用 `-node` 追踪一个 synthetic group 的创建原因，也可叠加 `compare_trees.py --trace-dir` 生成的 eval trace 查看 `matched/extra`、best Codia IoU 和对应 Codia bbox。eval trace 中的 normalized Go/Codia 节点保留 `id`、`sourceId`、`path`、`parentId`，用于稳定定位 Codia reference node 和 Go container；这些身份字段只属于评测诊断层，不进入 VisualTree runtime 输出。
+
+`services/backend-go/tools/compare_trees.py --batch` 的 score 公式仍是 `0.7*recall + 0.3*depth_ratio`，同时输出诊断用 precision、F1、container ratio，并在 eval trace summary 中写入 `goPrecision`、`f1`、`containerRatio` 和 `extraByGroupKind`。
 
 ## Removed Runtime Boundary
 

@@ -201,6 +201,7 @@ def grouping_recall(codia, go):
     """
     cc = containers_of(codia)
     gc = containers_of(go)
+    c_boxes = [bbox_of_leaves(lv) for _, lv in cc]
     g_boxes = [bbox_of_leaves(lv) for _, lv in gc]
     matched = 0
     misses = []
@@ -213,11 +214,30 @@ def grouping_recall(codia, go):
             matched += 1
         else:
             misses.append((cn["name"][:20], cbox, round(best, 2)))
+    matched_go = 0
+    extra_by_kind = Counter()
+    for gn, glv in gc:
+        gbox = bbox_of_leaves(glv)
+        best = 0.0
+        for cb in c_boxes:
+            best = max(best, iou(gbox, cb))
+        if best >= 0.6:
+            matched_go += 1
+        else:
+            extra_by_kind[gn.get("groupKind") or gn.get("type", "?")] += 1
+    recall = matched / len(cc) if cc else 0
+    precision = matched_go / len(gc) if gc else 0
+    f1 = 2 * recall * precision / (recall + precision) if recall + precision else 0
     return {
         "codia_containers": len(cc),
         "go_containers": len(gc),
         "matched": matched,
-        "recall": round(matched / len(cc), 3) if cc else 0,
+        "matched_go": matched_go,
+        "recall": round(recall, 3),
+        "precision": round(precision, 3),
+        "f1": round(f1, 3),
+        "container_ratio": round(len(gc) / len(cc), 3) if cc else 0,
+        "extra_by_group_kind": dict(sorted(extra_by_kind.items())),
         "misses": misses,
     }
 
@@ -319,6 +339,7 @@ def grouping_eval_trace(codia, go):
 
     recall = matched_codia / len(cc) if cc else 0.0
     precision = matched_go / len(gc) if gc else 0.0
+    f1 = 2 * recall * precision / (recall + precision) if recall + precision else 0.0
     return {
         "summary": {
             "codiaContainerCount": len(cc),
@@ -327,6 +348,7 @@ def grouping_eval_trace(codia, go):
             "matchedGoCount": matched_go,
             "recall": round(recall, 4),
             "goPrecision": round(precision, 4),
+            "f1": round(f1, 4),
             "containerRatio": round(len(gc) / len(cc), 4) if cc else 0.0,
             "extraByGroupKind": dict(sorted(extra_by_kind.items())),
         },
@@ -389,6 +411,9 @@ def print_single(codia_path, go_path):
     print(f"Codia 容器数: {gr['codia_containers']}")
     print(f"Go    容器数: {gr['go_containers']}")
     print(f"匹配上:       {gr['matched']}")
+    print(f"Go 精度:      {gr['precision']}")
+    print(f"F1:           {gr['f1']}")
+    print(f"容器比:       {gr['container_ratio']}")
     print(f"分组召回率:   {gr['recall']}  <-- 核心指标,越接近1越像Codia")
     print()
     if gr["misses"]:
@@ -418,29 +443,41 @@ def print_batch(manifest_path, trace_dir=None):
             label = parts[2] if len(parts) > 2 else f"{codia_p.split('/')[-1]}"
             pairs.append((label, codia_p, go_p))
 
-    print("=" * 78)
-    print(f"{'图':<22}{'召回':>8}{'深度比':>8}{'Codia容器':>10}{'Go容器':>10}{'综合分':>10}")
-    print("-" * 78)
+    print("=" * 110)
+    print(f"{'图':<22}{'召回':>8}{'精度':>8}{'F1':>8}{'容器比':>8}{'深度比':>8}{'Codia容器':>10}{'Go容器':>10}{'综合分':>10}")
+    print("-" * 110)
     scores = []
     recalls = []
+    precisions = []
+    f1s = []
+    ratios = []
     if trace_dir:
         os.makedirs(trace_dir, exist_ok=True)
     for label, cp, gp in pairs:
         r = score_pair(cp, gp)
         scores.append(r["score"])
         recalls.append(r["gr"]["recall"])
-        print(f"{label[:22]:<22}{r['gr']['recall']:>8.3f}{r['depth_ratio']:>8.3f}"
+        precisions.append(r["gr"]["precision"])
+        f1s.append(r["gr"]["f1"])
+        ratios.append(r["gr"]["container_ratio"])
+        print(f"{label[:22]:<22}{r['gr']['recall']:>8.3f}{r['gr']['precision']:>8.3f}"
+              f"{r['gr']['f1']:>8.3f}{r['gr']['container_ratio']:>8.3f}{r['depth_ratio']:>8.3f}"
               f"{r['gr']['codia_containers']:>10}{r['gr']['go_containers']:>10}{r['score']:>10.3f}")
         if trace_dir:
             trace_path = os.path.join(trace_dir, f"case_{len(scores):03d}_visual_tree_eval_trace.json")
             write_eval_trace(trace_path, label, cp, gp, r)
-    print("-" * 78)
+    print("-" * 110)
     if scores:
+        avg_recall = round(sum(recalls) / len(recalls), 3)
         avg = round(sum(scores) / len(scores), 3)
         worst = round(min(scores), 3)
-        print(f"{'平均综合分':<22}{'':>16}{'':>20}{avg:>10.3f}")
-        print(f"{'最低综合分(防过拟合)':<18}{'':>16}{'':>20}{worst:>10.3f}")
-    print("=" * 78)
+        avg_precision = round(sum(precisions) / len(precisions), 3)
+        avg_f1 = round(sum(f1s) / len(f1s), 3)
+        avg_ratio = round(sum(ratios) / len(ratios), 3)
+        print(f"{'平均指标':<22}{avg_recall:>8.3f}{avg_precision:>8.3f}{avg_f1:>8.3f}{avg_ratio:>8.3f}{'':>46}{avg:>10.3f}")
+        print(f"{'平均综合分':<22}{'':>78}{avg:>10.3f}")
+        print(f"{'最低综合分(防过拟合)':<22}{'':>70}{worst:>10.3f}")
+    print("=" * 110)
 
 
 def main():

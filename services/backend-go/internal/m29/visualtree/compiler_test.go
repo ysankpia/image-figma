@@ -45,6 +45,9 @@ func TestCompileBuildsLayerWithParentRelativeText(t *testing.T) {
 	if group.ID == "" || !group.Meta.Synthetic || group.Meta.GroupKind != "text_background_group" {
 		t.Fatalf("expected text to be wrapped in Codia-like text background group, got %#v", layer)
 	}
+	if group.Meta.GroupRole != "auxiliary" || group.Meta.ParentReason != "text_bbox_background" || group.Meta.EvidenceScore == 0 {
+		t.Fatalf("expected text background group to carry auxiliary evidence metadata, got %#v", group.Meta)
+	}
 	if group.Layout.X != 22 || group.Layout.Y != 22 || !group.Layout.Relative {
 		t.Fatalf("expected group layout relative to physical layer, got %#v", group.Layout)
 	}
@@ -73,6 +76,10 @@ func TestCompileBuildsLayerWithParentRelativeText(t *testing.T) {
 	}
 	if veTitle.LayoutConfig.AbsoluteAttrs.Coord[0] != 0 || veTitle.LayoutConfig.AbsoluteAttrs.Coord[1] != 0 {
 		t.Fatalf("expected text coord relative to text background group, got %#v", veTitle.LayoutConfig)
+	}
+	veGroup := findVisualElement(veLayer, group.ID)
+	if veGroup.ProcessingMeta.GroupRole != "auxiliary" || veGroup.ProcessingMeta.EvidenceScore == 0 {
+		t.Fatalf("expected visual element to expose group permission metadata, got %#v", veGroup.ProcessingMeta)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "visual_element.v1.json")); err != nil {
 		t.Fatalf("expected visual_element.v1.json artifact: %v", err)
@@ -546,6 +553,94 @@ func TestTraceRecordsXycutWrapFlattenAndSkip(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected xycut select_axis event")
+}
+
+func TestGroupPermissionGateCollapsesLowEvidenceGroups(t *testing.T) {
+	root := Node{
+		ID:   "body_0001",
+		Type: "Body",
+		BBox: contract.BBox{X: 0, Y: 0, Width: 400, Height: 300},
+		Children: []Node{
+			{
+				ID:   "sgroup_text",
+				Type: "Layer",
+				BBox: contract.BBox{X: 20, Y: 20, Width: 80, Height: 20},
+				Meta: Meta{
+					Synthetic:     true,
+					GroupKind:     "text_background_group",
+					GroupRole:     "auxiliary",
+					ParentReason:  "text_bbox_background",
+					EvidenceScore: 0.2,
+				},
+				Children: []Node{
+					{
+						ID:   "sgroup_text_background",
+						Type: "Image",
+						BBox: contract.BBox{X: 20, Y: 20, Width: 80, Height: 20},
+						Meta: Meta{Synthetic: true, GroupKind: "background_leaf", ParentReason: "text_bbox_background"},
+					},
+					{ID: "label", Type: "Text", BBox: contract.BBox{X: 20, Y: 20, Width: 80, Height: 20}},
+				},
+			},
+			{
+				ID:   "sgroup_thin",
+				Type: "Layer",
+				BBox: contract.BBox{X: 120, Y: 20, Width: 90, Height: 8},
+				Meta: Meta{
+					Synthetic:     true,
+					GroupKind:     "spatial_group",
+					GroupRole:     "structural",
+					ParentReason:  "xycut_y",
+					EvidenceScore: 0.5,
+				},
+				Children: []Node{
+					{ID: "line_a", Type: "Image", BBox: contract.BBox{X: 120, Y: 20, Width: 20, Height: 8}},
+					{ID: "line_b", Type: "Image", BBox: contract.BBox{X: 190, Y: 20, Width: 20, Height: 8}},
+				},
+			},
+			{
+				ID:   "sgroup_text_spatial",
+				Type: "Layer",
+				BBox: contract.BBox{X: 20, Y: 80, Width: 90, Height: 8},
+				Meta: Meta{
+					Synthetic:     true,
+					GroupKind:     "spatial_group",
+					GroupRole:     "structural",
+					ParentReason:  "xycut_y",
+					EvidenceScore: 0.5,
+				},
+				Children: []Node{
+					{ID: "tiny_label", Type: "Text", BBox: contract.BBox{X: 20, Y: 80, Width: 90, Height: 8}},
+				},
+			},
+		},
+	}
+	trace := NewTraceRecorder()
+
+	applyGroupPermissionGate(&root, trace)
+
+	if findDescendant(root, "sgroup_text").ID != "" {
+		t.Fatalf("expected low-evidence text background group to be collapsed: %#v", root.Children)
+	}
+	if findDescendant(root, "sgroup_text_background").ID != "" {
+		t.Fatalf("expected synthetic text bbox background leaf to be dropped: %#v", root.Children)
+	}
+	if findDescendant(root, "label").ID == "" {
+		t.Fatalf("expected text child to be preserved: %#v", root.Children)
+	}
+	if findDescendant(root, "sgroup_thin").ID != "" {
+		t.Fatalf("expected degenerate low-evidence spatial group to be collapsed: %#v", root.Children)
+	}
+	if findDescendant(root, "line_a").ID == "" || findDescendant(root, "line_b").ID == "" {
+		t.Fatalf("expected spatial group children to be preserved: %#v", root.Children)
+	}
+	if findDescendant(root, "sgroup_text_spatial").ID == "" {
+		t.Fatalf("expected thin spatial group with text evidence to be preserved: %#v", root.Children)
+	}
+
+	events := trace.Events()
+	requireTraceEvent(t, events, "group_permission_gate", "collapse_group", "text_background_group", "low_evidence_text_bbox_background")
+	requireTraceEvent(t, events, "group_permission_gate", "collapse_group", "spatial_group", "degenerate_low_evidence_spatial_group")
 }
 
 func writeInputs(t *testing.T, dir string, tokens []evidence.Token, relations []relation.Relation) (string, string) {

@@ -63,7 +63,80 @@ class CompareTreesIdentityTest(unittest.TestCase):
         self.assertEqual(child["parentId"], "go:body_0001")
         self.assertEqual(child["groupKind"], "text_background_group")
 
+    def test_grouping_eval_trace_reports_precision_f1_and_identities(self):
+        codia = {
+            "id": "codia:1:1",
+            "sourceId": "1:1",
+            "path": "",
+            "parentId": "",
+            "type": "FRAME",
+            "name": "Root",
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 100,
+            "children": [
+                {
+                    "id": "codia:1:2",
+                    "sourceId": "1:2",
+                    "path": "/0",
+                    "parentId": "codia:1:1",
+                    "type": "FRAME",
+                    "name": "Group",
+                    "x": 10,
+                    "y": 10,
+                    "w": 40,
+                    "h": 20,
+                    "children": [
+                        {"id": "codia:1:3", "sourceId": "1:3", "path": "/0/0", "parentId": "codia:1:2", "type": "TEXT", "name": "A", "x": 10, "y": 10, "w": 10, "h": 10, "children": []},
+                        {"id": "codia:1:4", "sourceId": "1:4", "path": "/0/1", "parentId": "codia:1:2", "type": "TEXT", "name": "B", "x": 40, "y": 10, "w": 10, "h": 10, "children": []},
+                    ],
+                }
+            ],
+        }
+        go = {
+            "id": "go:body_0001",
+            "sourceId": "body_0001",
+            "path": "",
+            "parentId": "",
+            "type": "Body",
+            "name": "Body",
+            "groupKind": "",
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 100,
+            "children": [
+                {
+                    "id": "go:sgroup_0001",
+                    "sourceId": "sgroup_0001",
+                    "path": "/0",
+                    "parentId": "go:body_0001",
+                    "type": "Layer",
+                    "name": "Groups",
+                    "groupKind": "spatial_group",
+                    "x": 10,
+                    "y": 10,
+                    "w": 40,
+                    "h": 20,
+                    "children": [
+                        {"id": "go:a", "sourceId": "a", "path": "/0/0", "parentId": "go:sgroup_0001", "type": "Text", "name": "A", "groupKind": "", "x": 10, "y": 10, "w": 10, "h": 10, "children": []},
+                        {"id": "go:b", "sourceId": "b", "path": "/0/1", "parentId": "go:sgroup_0001", "type": "Text", "name": "B", "groupKind": "", "x": 40, "y": 10, "w": 10, "h": 10, "children": []},
+                    ],
+                }
+            ],
+        }
+
+        trace = ct.grouping_eval_trace(codia, go)
+        summary = trace["summary"]
+
+        self.assertEqual(summary["recall"], 1.0)
+        self.assertEqual(summary["goPrecision"], 1.0)
+        self.assertEqual(summary["f1"], 1.0)
+        self.assertEqual(summary["containerRatio"], 1.0)
+        self.assertEqual(trace["goContainers"][0]["normalizedNodeId"], "go:body_0001")
+        self.assertEqual(trace["goContainers"][0]["bestCodia"]["normalizedNodeId"], "codia:1:1")
+
 
 if __name__ == "__main__":
     unittest.main()
-

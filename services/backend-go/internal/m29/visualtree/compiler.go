@@ -204,6 +204,7 @@ func buildTree(tokens evidence.Document, relations relation.Document) (Node, Dia
 	containmentReport := applyContainmentTree(&root, relations.Relations, tokenByID, trace)
 	materializePhysicalBackgroundLeaves(&root, tokenByID, trace)
 	applySpatialGrouping(&root, &groupCounter, trace)
+	applyGroupPermissionGate(&root, trace)
 	refreshTreeLayouts(&root)
 	diagnostics := buildDiagnostics(tokens, relations, root, parentByChild, skipped, containmentReport)
 	return root, diagnostics, containmentReport, trace
@@ -317,9 +318,11 @@ func addPhysicalBackgroundLeaf(node *Node, token evidence.Token, trace *TraceRec
 			BackgroundIDs: []string{token.ID},
 		},
 		Meta: Meta{
-			Synthetic:    true,
-			GroupKind:    "background_leaf",
-			ParentReason: "physical_background",
+			Synthetic:     true,
+			GroupKind:     "background_leaf",
+			GroupRole:     "auxiliary",
+			ParentReason:  "physical_background",
+			EvidenceScore: 0.4,
 		},
 	}
 	node.Style.BackgroundRef = token.ID

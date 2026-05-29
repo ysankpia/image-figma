@@ -61,9 +61,11 @@ type SourceRefs struct {
 }
 
 type Meta struct {
-	Synthetic    bool   `json:"synthetic,omitempty"`
-	GroupKind    string `json:"groupKind,omitempty"`
-	ParentReason string `json:"parentReason,omitempty"`
+	Synthetic     bool    `json:"synthetic,omitempty"`
+	GroupKind     string  `json:"groupKind,omitempty"`
+	GroupRole     string  `json:"groupRole,omitempty"`
+	ParentReason  string  `json:"parentReason,omitempty"`
+	EvidenceScore float64 `json:"evidenceScore,omitempty"`
 }
 
 type Diagnostics struct {
@@ -181,7 +183,9 @@ type ProcessingMeta struct {
 	SourceRelationIDs  []string `json:"sourceRelationIds,omitempty"`
 	Synthetic          bool     `json:"synthetic,omitempty"`
 	GroupKind          string   `json:"groupKind,omitempty"`
+	GroupRole          string   `json:"groupRole,omitempty"`
 	ParentReason       string   `json:"parentReason,omitempty"`
+	EvidenceScore      float64  `json:"evidenceScore,omitempty"`
 	BackgroundTokenIDs []string `json:"backgroundTokenIds,omitempty"`
 }
 
