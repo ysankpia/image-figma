@@ -25,9 +25,30 @@ CODIA_DEFAULT = "/Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-f
 GO_DEFAULT = "/tmp/go_run/visual_tree.v1.json"
 
 
-# ---------- 归一化:把两种格式统一成 {type,name,x,y,w,h,children} 绝对坐标 ----------
+# ---------- 归一化:把两种格式统一成带身份字段的绝对坐标树 ----------
 
-def norm_codia(node, px=0, py=0):
+def child_path(path, index):
+    return f"{path}/{index}" if path else f"/{index}"
+
+
+def codia_identity(node, path):
+    guid = node.get("guid") or {}
+    if isinstance(guid, dict) and guid.get("sessionID") is not None and guid.get("localID") is not None:
+        source_id = f"{guid.get('sessionID')}:{guid.get('localID')}"
+        return f"codia:{source_id}", source_id, False
+    fallback = f"path:{path or '/'}"
+    return f"codia:{fallback}", fallback, True
+
+
+def go_identity(node, path):
+    source_id = node.get("id") or ""
+    if source_id:
+        return f"go:{source_id}", source_id, False
+    fallback = f"path:{path or '/'}"
+    return f"go:{fallback}", fallback, True
+
+
+def norm_codia(node, px=0, py=0, path="", parent_id=""):
     """Codia: transform.m02/m12 相对父;size.x/y。返回绝对坐标节点。"""
     t = node.get("transform") or {}
     s = node.get("size") or {}
@@ -35,27 +56,38 @@ def norm_codia(node, px=0, py=0):
     y = py + (t.get("m12") or 0)
     w = s.get("x") or 0
     h = s.get("y") or 0
+    node_id, source_id, identity_fallback = codia_identity(node, path)
     out = {
+        "id": node_id,
+        "sourceId": source_id,
+        "path": path,
+        "parentId": parent_id,
+        "identityFallback": identity_fallback,
         "type": node.get("type", "?"),
         "name": node.get("name", ""),
         "x": x, "y": y, "w": w, "h": h,
-        "children": [norm_codia(c, x, y) for c in (node.get("children") or [])],
+        "children": [norm_codia(c, x, y, child_path(path, i), node_id) for i, c in enumerate(node.get("children") or [])],
     }
     return out
 
 
-def norm_go(node):
+def norm_go(node, path="", parent_id=""):
     """Go: bbox 绝对坐标。"""
     b = node.get("bbox") or {}
     meta = node.get("meta") or {}
+    node_id, source_id, identity_fallback = go_identity(node, path)
     out = {
-        "id": node.get("id", ""),
+        "id": node_id,
+        "sourceId": source_id,
+        "path": path,
+        "parentId": parent_id,
+        "identityFallback": identity_fallback,
         "type": node.get("type", "?"),
         "name": node.get("name", ""),
         "groupKind": meta.get("groupKind", ""),
         "x": b.get("x", 0), "y": b.get("y", 0),
         "w": b.get("width", 0), "h": b.get("height", 0),
-        "children": [norm_go(c) for c in (node.get("children") or [])],
+        "children": [norm_go(c, child_path(path, i), node_id) for i, c in enumerate(node.get("children") or [])],
     }
     return out
 
@@ -214,12 +246,21 @@ def grouping_eval_trace(codia, go):
         if best_go_idx >= 0:
             gn, _ = gc[best_go_idx]
             best_go = {
-                "nodeId": gn.get("id", ""),
+                "nodeId": gn.get("sourceId", ""),
+                "normalizedNodeId": gn.get("id", ""),
+                "sourceId": gn.get("sourceId", ""),
+                "path": gn.get("path", ""),
+                "parentNodeId": gn.get("parentId", ""),
                 "groupKind": gn.get("groupKind", ""),
                 "bbox": list(map(round, g_boxes[best_go_idx])),
             }
         codia_items.append({
             "index": idx,
+            "codiaNodeId": cn.get("id", ""),
+            "normalizedNodeId": cn.get("id", ""),
+            "sourceId": cn.get("sourceId", ""),
+            "path": cn.get("path", ""),
+            "parentCodiaNodeId": cn.get("parentId", ""),
             "name": cn.get("name", ""),
             "type": cn.get("type", ""),
             "bbox": list(map(round, cbox)),
@@ -251,13 +292,22 @@ def grouping_eval_trace(codia, go):
             cn, _ = cc[best_codia_idx]
             best_codia = {
                 "index": best_codia_idx,
+                "codiaNodeId": cn.get("id", ""),
+                "normalizedNodeId": cn.get("id", ""),
+                "sourceId": cn.get("sourceId", ""),
+                "path": cn.get("path", ""),
+                "parentCodiaNodeId": cn.get("parentId", ""),
                 "name": cn.get("name", ""),
                 "type": cn.get("type", ""),
                 "bbox": list(map(round, c_boxes[best_codia_idx])),
             }
         go_items.append({
             "index": idx,
-            "nodeId": gn.get("id", ""),
+            "nodeId": gn.get("sourceId", ""),
+            "normalizedNodeId": gn.get("id", ""),
+            "sourceId": gn.get("sourceId", ""),
+            "path": gn.get("path", ""),
+            "parentNodeId": gn.get("parentId", ""),
             "name": gn.get("name", ""),
             "type": gn.get("type", ""),
             "groupKind": gn.get("groupKind", ""),

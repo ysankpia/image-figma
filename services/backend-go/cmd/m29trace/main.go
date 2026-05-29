@@ -17,11 +17,15 @@ type evalTrace struct {
 }
 
 type evalGoContainer struct {
-	NodeID       string         `json:"nodeId"`
-	GroupKind    string         `json:"groupKind"`
-	Verdict      string         `json:"verdict"`
-	BestCodiaIoU float64        `json:"bestCodiaIoU"`
-	BestCodia    map[string]any `json:"bestCodia,omitempty"`
+	NodeID           string         `json:"nodeId"`
+	NormalizedNodeID string         `json:"normalizedNodeId"`
+	SourceID         string         `json:"sourceId"`
+	Path             string         `json:"path"`
+	ParentNodeID     string         `json:"parentNodeId"`
+	GroupKind        string         `json:"groupKind"`
+	Verdict          string         `json:"verdict"`
+	BestCodiaIoU     float64        `json:"bestCodiaIoU"`
+	BestCodia        map[string]any `json:"bestCodia,omitempty"`
 }
 
 func main() {
@@ -77,7 +81,12 @@ func main() {
 		}
 		if goEval, ok := eval.ByNode[*nodeID]; ok {
 			fmt.Printf("evalVerdict: %s\n", goEval.Verdict)
+			printOptionalLine("goPath", goEval.Path)
+			printOptionalLine("goParentNodeId", goEval.ParentNodeID)
 			fmt.Printf("bestCodiaIoU: %.4f\n", goEval.BestCodiaIoU)
+			printOptionalLine("bestCodiaNodeId", stringMapValue(goEval.BestCodia, "codiaNodeId"))
+			printOptionalLine("bestCodiaPath", stringMapValue(goEval.BestCodia, "path"))
+			printOptionalLine("bestCodiaParentNodeId", stringMapValue(goEval.BestCodia, "parentCodiaNodeId"))
 			printJSONField("bestCodia", goEval.BestCodia)
 		} else {
 			fmt.Printf("evalVerdict: missing\n")
@@ -186,6 +195,28 @@ func printJSONField(label string, value any) {
 		return
 	}
 	fmt.Printf("%s: %s\n", label, string(data))
+}
+
+func printOptionalLine(label string, value string) {
+	if value == "" {
+		return
+	}
+	fmt.Printf("%s: %s\n", label, value)
+}
+
+func stringMapValue(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return text
 }
 
 func containsString(values []string, target string) bool {

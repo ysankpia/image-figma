@@ -43,3 +43,40 @@ func TestReadEvalTraceIndexesGoContainers(t *testing.T) {
 		t.Fatalf("unexpected eval index: %#v", index.ByNode)
 	}
 }
+
+func TestReadEvalTracePreservesIdentityFields(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "eval.json")
+	data := `{
+		"goContainers": [{
+			"nodeId": "sgroup_0030",
+			"normalizedNodeId": "go:sgroup_0030",
+			"sourceId": "sgroup_0030",
+			"path": "/0/3",
+			"parentNodeId": "go:token_0048",
+			"verdict": "extra",
+			"bestCodiaIoU": 0.3466,
+			"bestCodia": {
+				"codiaNodeId": "codia:1:130",
+				"normalizedNodeId": "codia:1:130",
+				"sourceId": "1:130",
+				"path": "/0/3/4/2",
+				"parentCodiaNodeId": "codia:1:128"
+			}
+		}]
+	}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	index, err := readEvalTrace(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := index.ByNode["sgroup_0030"]
+	if item.NormalizedNodeID != "go:sgroup_0030" || item.Path != "/0/3" || item.ParentNodeID != "go:token_0048" {
+		t.Fatalf("unexpected go identity fields: %#v", item)
+	}
+	if stringMapValue(item.BestCodia, "codiaNodeId") != "codia:1:130" || stringMapValue(item.BestCodia, "path") != "/0/3/4/2" {
+		t.Fatalf("unexpected codia identity fields: %#v", item.BestCodia)
+	}
+}

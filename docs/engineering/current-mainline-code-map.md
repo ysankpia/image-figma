@@ -887,7 +887,7 @@ visual_tree_trace_report.md
 
 trace 解释 containment、background split、text/background pairing、XY-cut、neighbor components、cluster wrap/flatten、skip xycut 和 straggler absorb 等结构决策。它只用于诊断和批量评测归因，不改变 VisualTree、VisualElement、DSL、assets、M29.5 plan 或 materializer 行为。
 
-`services/backend-go/cmd/m29trace` 是只读查询工具，可用 `-node` 追踪一个 synthetic group 的创建原因，也可叠加 `compare_trees.py --trace-dir` 生成的 eval trace 查看 `matched/extra`、best Codia IoU 和对应 Codia bbox。
+`services/backend-go/cmd/m29trace` 是只读查询工具，可用 `-node` 追踪一个 synthetic group 的创建原因，也可叠加 `compare_trees.py --trace-dir` 生成的 eval trace 查看 `matched/extra`、best Codia IoU 和对应 Codia bbox。eval trace 中的 normalized Go/Codia 节点保留 `id`、`sourceId`、`path`、`parentId`，用于稳定定位 Codia reference node 和 Go container；这些身份字段只属于评测诊断层，不进入 VisualTree runtime 输出。
 
 ## Removed Runtime Boundary
 

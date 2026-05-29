@@ -89,3 +89,4 @@
 - [Image Math Dependencies And Boundary Hardening](059-image-math-dependencies-and-boundary-hardening.md) — `completed`
 - [Go M29 VisualTree Codia Structure Alignment](083-go-m29-visualtree-codia-structure-alignment.md) — `completed`
 - [Go M29 VisualTree Decision Trace](085-go-m29-visualtree-decision-trace.md) — `completed`
+- [Go M29 Normalized Tree Identity Contract](086-go-m29-normalized-tree-identity-contract.md) — `completed`
