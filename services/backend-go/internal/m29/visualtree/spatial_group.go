@@ -59,7 +59,10 @@ func regroupChildren(node *Node, counter *int) {
 	if os.Getenv("ABL_TEXTBG") == "" {
 		foreground = pairTextBackedForeground(foreground, counter)
 	}
-	grouped := xycut(foreground, node.BBox, counter, 0)
+	grouped := xycut(foreground, counter, 0)
+	if os.Getenv("ABL_ABSORB") == "" && node.Type == "Body" {
+		grouped = absorbStragglers(grouped, counter)
+	}
 
 	// 顶层切出了多个成员:作为该节点的新子节点。
 	// 若 xycut 整体切不开(返回原列表),保持平铺,不强加空壳。
@@ -422,9 +425,7 @@ func canUseTextBBoxAsBackground(node Node) bool {
 	if node.Type != "Text" || node.Meta.Synthetic || node.BBox.Height <= 0 {
 		return false
 	}
-	if node.BBox.Height > 34 || node.BBox.Width < 40 {
-		return false
-	}
+	// 纯相对判据:宽高比 >= 2.5(短宽型,像按钮/标签)
 	if node.BBox.Width*2 < node.BBox.Height*5 {
 		return false
 	}
@@ -530,7 +531,7 @@ func isVerticalLabelPair(top Node, text Node) bool {
 // xycut 对一组兄弟节点做一层 XY 切分,返回切分后的顶层成员列表。
 // 每个能被进一步细分或本身就是紧密簇的多元素子簇,会被递归地包成 synthetic 容器。
 // 顶层若整体切不开(就是一个紧密簇),返回原列表(由调用方 regroupChildren 决定不再加层)。
-func xycut(nodes []Node, parentBox contract.BBox, counter *int, depth int) []Node {
+func xycut(nodes []Node, counter *int, depth int) []Node {
 	if len(nodes) <= 1 || depth > 12 {
 		return nodes
 	}
@@ -571,6 +572,85 @@ func xycut(nodes []Node, parentBox contract.BBox, counter *int, depth int) []Nod
 	return out
 }
 
+// absorbStragglers 把孤立的小叶子节点吸收进相邻的组。
+// 动机:XY-cut 把所有超过阈值的间隙都切开,导致紧邻大组的小元素(如底部指示条、
+// 分隔线)被单独切出。Codia 会把它们归入相邻的大组。
+// 判据:孤立叶子与相邻组的间隙 < 相邻组在该轴上尺寸的 50%。纯相对,无像素阈值。
+func absorbStragglers(nodes []Node, counter *int) []Node {
+	if len(nodes) < 3 {
+		return nodes
+	}
+	absorbed := map[int]int{} // straggler index -> target group index
+	for i, node := range nodes {
+		if !isStraggler(node) {
+			continue
+		}
+		bestTarget := -1
+		bestGap := 0
+		for j, other := range nodes {
+			if j == i || isStraggler(other) {
+				continue
+			}
+			gap := nodeGap(node, other)
+			limit := max(other.BBox.Height, other.BBox.Width) / 2
+			if gap >= 0 && gap < limit {
+				if bestTarget == -1 || gap < bestGap {
+					bestTarget = j
+					bestGap = gap
+				}
+			}
+		}
+		if bestTarget >= 0 {
+			absorbed[i] = bestTarget
+		}
+	}
+	if len(absorbed) == 0 {
+		return nodes
+	}
+	// 把被吸收的叶子加入目标组的 children
+	extras := map[int][]Node{}
+	for si, ti := range absorbed {
+		extras[ti] = append(extras[ti], nodes[si])
+	}
+	out := make([]Node, 0, len(nodes)-len(absorbed))
+	for i, node := range nodes {
+		if _, ok := absorbed[i]; ok {
+			continue
+		}
+		if ex, ok := extras[i]; ok {
+			if node.Meta.Synthetic && len(node.Children) > 0 {
+				node.Children = append(node.Children, ex...)
+				node.BBox = unionNodeBBox(node.Children)
+				refreshChildLayouts(&node)
+			} else {
+				all := append([]Node{node}, ex...)
+				node = makeSpatialGroup(all, counter)
+			}
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func isStraggler(node Node) bool {
+	return !node.Meta.Synthetic && len(node.Children) == 0
+}
+
+func nodeGap(a, b Node) int {
+	gx := axisGap(a.BBox.X, a.BBox.X+a.BBox.Width, b.BBox.X, b.BBox.X+b.BBox.Width)
+	gy := axisGap(a.BBox.Y, a.BBox.Y+a.BBox.Height, b.BBox.Y, b.BBox.Y+b.BBox.Height)
+	if gx == 0 && gy == 0 {
+		return 0
+	}
+	if gx == 0 {
+		return gy
+	}
+	if gy == 0 {
+		return gx
+	}
+	return gx + gy
+}
+
 // groupCluster 把一个簇收敛成【单个】节点:
 //   - 单元素:返回该元素本身
 //   - 多元素:递归 xycut 继续细分;无论细分出多个子项、还是整簇切不开,
@@ -579,7 +659,7 @@ func groupCluster(cluster []Node, counter *int, depth int) Node {
 	if len(cluster) == 1 {
 		return cluster[0]
 	}
-	sub := xycut(cluster, unionNodeBBox(cluster), counter, depth)
+	sub := xycut(cluster, counter, depth)
 	return makeSpatialGroup(sub, counter)
 }
 
@@ -649,7 +729,7 @@ func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
 	clusterCount := cluster + 1
 	clusters := make([][]Node, clusterCount)
 	// 按【原始输入顺序】填充,保持阅读顺序
-	for i := 0; i < n; i++ {
+	for i := range n {
 		c := clusterOf[i]
 		clusters[c] = append(clusters[c], nodes[i])
 	}
@@ -701,7 +781,7 @@ func neighborComponents(nodes []Node) [][]Node {
 		}
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		a := nodes[i].BBox
 		for j := i + 1; j < n; j++ {
 			b := nodes[j].BBox
@@ -722,7 +802,7 @@ func neighborComponents(nodes []Node) [][]Node {
 	}
 
 	groups := map[int][]Node{}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		r := find(i)
 		groups[r] = append(groups[r], nodes[i])
 	}

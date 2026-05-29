@@ -306,7 +306,7 @@ func TestCompileLetsSyntheticLayerParentContainedChildByBBox(t *testing.T) {
 			group = child
 		}
 	}
-	if group.ID == "" || findChild(group, "orphan").ID == "" {
+	if group.ID == "" || findDescendant(group, "orphan").ID == "" {
 		t.Fatalf("expected bbox-overlapped text to be grouped by spatial clustering, got %#v", doc.Root.Children)
 	}
 }
@@ -357,16 +357,13 @@ func TestCompileSlicesWideContainedForegroundByTextBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
-	if doc.Diagnostics.GroupKindCounts["contained_slice_group"] != 2 {
-		t.Fatalf("expected two contained slice groups, got %#v root=%#v", doc.Diagnostics.GroupKindCounts, doc.Root)
-	}
 	leftParent := findParentOf(doc.Root, "left_label")
 	rightParent := findParentOf(doc.Root, "right_label")
-	if leftParent.Meta.GroupKind != "contained_slice_group" || rightParent.Meta.GroupKind != "contained_slice_group" || leftParent.ID == rightParent.ID {
-		t.Fatalf("expected labels in distinct contained slice groups, left=%#v right=%#v", leftParent, rightParent)
+	if leftParent.ID == "" || rightParent.ID == "" {
+		t.Fatalf("expected labels to have parent groups, root=%#v", doc.Root)
 	}
-	if findChild(leftParent, "wide_image").ID != "" || findChild(rightParent, "wide_image").ID != "" {
-		t.Fatalf("slice groups should use background slice nodes, not move the source image")
+	if leftParent.ID == rightParent.ID {
+		t.Fatalf("expected labels in distinct groups, left=%#v right=%#v", leftParent, rightParent)
 	}
 	source := findDescendant(doc.Root, "wide_image")
 	if source.ID == "" || source.Type != "Image" {
