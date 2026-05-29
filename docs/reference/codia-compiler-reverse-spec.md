@@ -292,5 +292,76 @@ pluginData, autoRename, textTracking, textAutoResize
 6. **命名极度机械化**：容器叫 "Groups"/"Button"/"Text"，矩形叫 "Image"/"Background"，文本用内容
 7. **schema:id 暴露内部分类**：ViewGroup/ListView/Button/StatusBar/EditText/BottomNavigation
 8. **树极浅**：max depth 5，大部分内容在 depth 3-4
-9. **单子节点容器合法**：ViewGroup 可以只包含 1 个 child（提供坐标空间）
+9. **单子节点容器合法**：ViewGroup 可以只包含 1 个 child（提供坐标空间/touch target）
 10. **从底部向顶部编号**：GlobalSeq 从 BottomNavigation 开始递增到 StatusBar
+
+---
+
+## 14. 二次审核关键修正
+
+### 14.1 容器 bbox 不是 children 的紧凑包围盒
+
+容器的 size 通常**大于** children 的包围盒（有 padding）。38 个容器中：
+- 5 个 TIGHT（padding ≤ 2px）
+- 30 个 PADDED（有明确 padding）
+- 3 个 OVERFLOW（children 超出容器边界）
+
+**Button 的 padding 模式**：约 (5-8, 6, 3-5, 0-3)px，不对称。
+
+### 14.2 容器之间允许重叠（非排他空间分割）
+
+**这是与我们 xycut 方法的根本差异。**
+
+Root 的 5 个子节点之间存在大量重叠：
+- 主内容区 (Y=160-1339) 与 header (Y=0-236) 重叠 76px
+- 主内容区与侧边栏完全重叠
+- 主内容区与底部导航重叠 55px
+
+**结论：Codia 的树不是空间分割树，是语义分层树。** 不同语义层（header、content、sidebar、footer）可以在空间上重叠。这意味着 XY-cut（排他空间分割）从根本上就不是正确的算法。
+
+### 14.3 列表项保持平铺，不做子分组
+
+排名列表区域（ViewGroup_21_236_57）有 12 个 children 全部平铺：
+- 7 个 TEXT（标题、副标题、热度值）
+- 5 个 ROUNDED_RECTANGLE（封面、图标、背景）
+
+**Codia 不为每个列表项创建子容器。** 整个列表区域是一个扁平的 ViewGroup。
+
+这与我们的 xycut 行为完全相反——xycut 会在列表项之间的间隙处切分，为每个项创建子容器。
+
+### 14.4 单子节点容器的存在理由
+
+11 个单子节点容器的用途：
+- **Tab 标签**（5 个）：为每个 tab 文本提供 touch target 区域（有 padding）
+- **缩略图**（2 个）：为图片提供点击区域
+- **Tab bar 图片**（3 个）：为底部 tab 图片提供容器
+- **BottomNavigation**（1 个）：语义包装
+
+**规则：单子节点容器存在于需要独立 touch target 或语义边界的场景。**
+
+### 14.5 Constraint 系统完全统一
+
+所有 120 个节点的 `horizontalConstraint` 和 `verticalConstraint` 都是 `"MAX"`。Codia 不使用 constraint 做响应式布局。
+
+### 14.6 容器分组的真正判据（语义而非几何）
+
+**创建子容器的条件**：
+1. 元素是可交互的 touch target（Button、Tab、缩略图）
+2. 元素有独立的视觉背景（Button 有 Background 子节点）
+3. 元素是水平重复列表中的 item（tab 栏的每个 tab）
+
+**不创建子容器的条件**：
+1. 垂直列表中的 item（保持平铺）
+2. 同一区域内的混合内容（标题 + 图标 + 文本 = 平铺）
+3. 没有独立交互意义的元素组合
+
+### 14.7 与我们当前实现的根本差异
+
+| 维度 | Codia | 我们的 xycut |
+|---|---|---|
+| 分组算法 | 语义分类（Android UI 组件识别） | 几何空间分割（gap 检测） |
+| 容器重叠 | 允许（语义层可重叠） | 不允许（排他分割） |
+| 列表项 | 平铺在一个容器里 | 每个 item 一个子容器 |
+| 分组判据 | touch target / 交互边界 | 空间间隙大小 |
+| 背景处理 | 兄弟节点，放在 children 最后 | 包装器容器 |
+| 树深度 | max 5，大部分内容 depth 3-4 | 可达 8+，递归切分 |
