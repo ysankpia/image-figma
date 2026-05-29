@@ -365,3 +365,55 @@ Root 的 5 个子节点之间存在大量重叠：
 | 分组判据 | touch target / 交互边界 | 空间间隙大小 |
 | 背景处理 | 兄弟节点，放在 children 最后 | 包装器容器 |
 | 树深度 | max 5，大部分内容 depth 3-4 | 可达 8+，递归切分 |
+
+---
+
+## 15. 容器 bbox 计算规则（第一轮深度审核）
+
+### 15.1 容器 bbox 来自视觉区域检测，不是 children 包围盒
+
+**证据**：
+- Tab 标签容器（单 TEXT child）的 padding 不对称、不统一（L=17-22, T=9-28, R=15-30, B=13-17）
+- 容器尺寸不规则（152x76, 98x75, 94x63, 91x64, 91x65）
+- 没有一致的 padding 公式能解释这些数值
+
+**结论**：Codia 先从截图中检测 UI 组件的视觉边界（可能用目标检测模型），得到容器 bbox，然后把识别出的内容元素放入容器中。容器不是从 children 计算出来的，children 是放进容器里的。
+
+### 15.2 三层 bbox 嵌套关系
+
+```
+Container bbox >= Background bbox >= Content bbox
+```
+
+- **Container bbox**：从截图视觉检测得到的组件区域（包含 padding/margin）
+- **Background bbox**：实际可见的背景矩形（比 container 小，有 inset）
+- **Content bbox**：文本/图标的紧凑包围盒
+
+Button 的典型关系：
+```
+Container: 177x50
+Background: 166x41 @(8,6)   ← inset 约 5-8px
+Content: 148x23 @(16,15)    ← 在 Background 内部
+```
+
+### 15.3 Padding 按 schema_type 的统计
+
+| SchemaType | 平均 padding (L,T,R,B) | 特征 |
+|---|---|---|
+| ViewGroup | (19, 10, 24, 20) | 变化大，来自视觉检测 |
+| ListView | (1, 0, 0, 10) | 几乎无 padding（紧贴内容） |
+| Button | (16, 10, 13, 5) | 有明确 padding（touch target） |
+| StatusBar | (73, 9, 45, 8) | 大左 padding（避开系统图标） |
+| BottomNavigation | (0, 14, 0, 1) | 顶部有 padding |
+
+### 15.4 Background 的两种模式
+
+1. **FULL-BLEED**：Background size == Container size，起点 (0,0)
+   - 用于大区域背景（header、bottom nav）
+   - fill 可以是 IMAGE 或 SOLID
+
+2. **INSET**：Background 比 Container 小，有 offset
+   - 用于 Button、EditText
+   - offset 约 (3-8, 0-6)px
+   - 有 cornerRadius（圆角）
+   - fill 是 SOLID 颜色
