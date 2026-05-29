@@ -417,3 +417,105 @@ Content: 148x23 @(16,15)    ← 在 Background 内部
    - offset 约 (3-8, 0-6)px
    - 有 cornerRadius（圆角）
    - fill 是 SOLID 颜色
+
+---
+
+## 16. fillPaints 规则（第 2 轮深度审核）
+
+### 16.1 每个 Image 节点有独立的图片数据
+
+41 个 IMAGE fill 有 **41 个不同的 hash**。Codia 为每个视觉元素单独裁剪了图片，不是共享一张截图。每个 ROUNDED_RECTANGLE "Image" 都是一个独立的裁剪区域。
+
+### 16.2 fillPaints 完整规则
+
+| 节点类型 | fill 规则 |
+|---|---|
+| FRAME 容器 | `{type:"SOLID", color:{0,0,0,1}, opacity:0}` — 透明（不可见） |
+| FRAME "Root" | `{type:"SOLID", color:{0.949,0.976,0.996,1}, opacity:1}` — 页面背景色 |
+| ROUNDED_RECT "Image" | `{type:"IMAGE", image:{hash:[...]}}` — 独立裁剪图片 |
+| ROUNDED_RECT "Background" (控件) | `{type:"SOLID", color:{~0.96,~0.96,~0.96,1}}` — 采样的背景色 |
+| ROUNDED_RECT "Background" (区域) | `{type:"IMAGE", image:{hash:[...]}}` — 区域背景裁剪 |
+| TEXT | `{type:"SOLID", color:{r,g,b,1}}` — 从截图采样的文字颜色 |
+
+### 16.3 TEXT 颜色采样
+
+每个 TEXT 有独立的颜色，从截图中对应位置采样：
+- 深灰色文本：rgba(0.17-0.40, ...) — 标题、正文
+- 中灰色文本：rgba(0.50-0.73, ...) — 副标题、辅助信息
+- 彩色文本：蓝色(0.37,0.66,0.95) = 链接，橙色(0.72,0.53,0.25) = 强调
+
+### 16.4 Background SOLID 颜色
+
+所有 Button/EditText 的 Background 颜色都在 (0.95-1.0) 范围内（近白/浅灰），从截图中背景区域采样。
+
+---
+
+## 17. cornerRadius 规则（第 3 轮深度审核）
+
+### 17.1 只有 Button/EditText 的 Background 有 cornerRadius
+
+46 个 ROUNDED_RECTANGLE 中只有 4 个有 cornerRadius，全部是 `bg_Button` 或 `bg_EditText`。
+
+### 17.2 cornerRadius 值
+
+- 总是 uniform（四角相同）
+- 值 = shortSide 的 39-51%（接近半圆/胶囊形）
+- `rectangleCornerRadiiIndependent: true`（即使四角相同也标记为独立）
+
+### 17.3 普通 Image 节点没有 cornerRadius
+
+所有 37 个 "Image" ROUNDED_RECTANGLE 的 cornerRadius = 0。虽然类型名是 ROUNDED_RECTANGLE，但实际是直角矩形。
+
+---
+
+## 18. TEXT 属性规则（第 4 轮深度审核）
+
+### 18.1 字体
+
+- 中文：PingFang SC（Regular 72%, Medium 17%, Semibold 3%）
+- 英文/数字：Inter（Regular + Semi Bold）
+
+### 18.2 fontSize
+
+从截图中检测，范围 10-49px。没有统一的 type scale。
+
+### 18.3 固定属性（所有 TEXT 相同）
+
+- `textAlignVertical: "CENTER"`
+- `lineHeight: {value: 100, units: "PERCENT"}`
+- `textAutoResize: "NONE"`（35/36）
+- `letterSpacing: {value: 0, units: "PERCENT"}`
+
+### 18.4 TEXT size 计算
+
+TEXT 的 size 不等于文字的 intrinsic size。它是从截图中检测到的文字区域 bbox，可能比文字本身大（包含行间距/字间距的视觉空间）。
+
+---
+
+## 19. GlobalSeq 分配算法（第 5 轮深度审核）
+
+### 19.1 遍历算法
+
+**PRE-ORDER DFS，children 逆序遍历**：
+
+```
+function assignSeq(node, counter):
+    node.seq = counter++
+    for child in reverse(node.children):  // 从最后一个 child 开始
+        counter = assignSeq(child, counter)
+    return counter
+```
+
+### 19.2 效果
+
+- Root = seq 0
+- 最后一个 child 的子树先编号（底部导航 = seq 1-19）
+- 第一个 child 的子树最后编号（状态栏 = seq 111-119）
+- 每个子树的 seq range 严格连续（无间隙）
+
+### 19.3 语义含义
+
+由于 children 数组是前景在前（index 0 = z-top），逆序遍历意味着：
+- **低 seq = 背景层**（先画）
+- **高 seq = 前景层**（后画）
+- seq 顺序 = 渲染顺序（从后往前）
