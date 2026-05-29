@@ -91,3 +91,4 @@
 - [Go M29 VisualTree Decision Trace](085-go-m29-visualtree-decision-trace.md) — `completed`
 - [Go M29 Normalized Tree Identity Contract](086-go-m29-normalized-tree-identity-contract.md) — `completed`
 - [Go M29 VisualTree Group Permission Gate](087-go-m29-visualtree-group-permission-gate.md) — `completed`
+- [Go M29 Offline Group Evidence Audit](088-go-m29-offline-group-evidence-audit.md) — `completed`

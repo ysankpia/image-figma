@@ -893,6 +893,8 @@ VisualTree synthetic groups 会在 `meta` / `processingMeta` 中暴露 `groupRol
 
 `services/backend-go/tools/compare_trees.py --batch` 的 score 公式仍是 `0.7*recall + 0.3*depth_ratio`，同时输出诊断用 precision、F1、container ratio，并在 eval trace summary 中写入 `goPrecision`、`f1`、`containerRatio` 和 `extraByGroupKind`。
 
+`services/backend-go/tools/audit_group_evidence.py` 是离线分析工具。它只读取 `visual_tree.v1.json`、`visual_tree_trace.v1.jsonl` 和 `compare_trees.py --trace-dir` 生成的 eval trace，按 Go `nodeId` join 当前树节点、create event 和 `matched/extra` verdict，输出 `parentReason`、`spatialDepth`、`childCount`、`containsText`、`shortSide`、`areaRatio`、`childKinds` 分布和候选规则 backtest。该工具不要求 Go compiler 写新的 runtime artifact，也不把 Codia identity/bbox 输入 VisualTree runtime。
+
 ## Removed Runtime Boundary
 
 These modules or product paths have been removed from active backend runtime:
