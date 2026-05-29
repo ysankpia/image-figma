@@ -17,6 +17,7 @@ Codia vs Go 树结构对比工具。
   3. 空间包含一致性:Codia 的每个容器,在 Go 树里是否有对应的"把同一批叶子聚在一起"的容器
 """
 import json
+import os
 import sys
 from collections import Counter
 
@@ -46,9 +47,12 @@ def norm_codia(node, px=0, py=0):
 def norm_go(node):
     """Go: bbox 绝对坐标。"""
     b = node.get("bbox") or {}
+    meta = node.get("meta") or {}
     out = {
+        "id": node.get("id", ""),
         "type": node.get("type", "?"),
         "name": node.get("name", ""),
+        "groupKind": meta.get("groupKind", ""),
         "x": b.get("x", 0), "y": b.get("y", 0),
         "w": b.get("width", 0), "h": b.get("height", 0),
         "children": [norm_go(c) for c in (node.get("children") or [])],
@@ -186,6 +190,101 @@ def grouping_recall(codia, go):
     }
 
 
+def grouping_eval_trace(codia, go):
+    cc = containers_of(codia)
+    gc = containers_of(go)
+    c_boxes = [bbox_of_leaves(lv) for _, lv in cc]
+    g_boxes = [bbox_of_leaves(lv) for _, lv in gc]
+
+    codia_items = []
+    matched_codia = 0
+    for idx, (cn, clv) in enumerate(cc):
+        cbox = bbox_of_leaves(clv)
+        best_iou = 0.0
+        best_go_idx = -1
+        for go_idx, gb in enumerate(g_boxes):
+            score = iou(cbox, gb)
+            if score > best_iou:
+                best_iou = score
+                best_go_idx = go_idx
+        verdict = "matched" if best_iou >= 0.6 else "missed"
+        if verdict == "matched":
+            matched_codia += 1
+        best_go = {}
+        if best_go_idx >= 0:
+            gn, _ = gc[best_go_idx]
+            best_go = {
+                "nodeId": gn.get("id", ""),
+                "groupKind": gn.get("groupKind", ""),
+                "bbox": list(map(round, g_boxes[best_go_idx])),
+            }
+        codia_items.append({
+            "index": idx,
+            "name": cn.get("name", ""),
+            "type": cn.get("type", ""),
+            "bbox": list(map(round, cbox)),
+            "bestGoNodeId": best_go.get("nodeId", ""),
+            "bestGo": best_go,
+            "bestIoU": round(best_iou, 4),
+            "verdict": verdict,
+        })
+
+    go_items = []
+    matched_go = 0
+    extra_by_kind = Counter()
+    for idx, (gn, glv) in enumerate(gc):
+        gbox = bbox_of_leaves(glv)
+        best_iou = 0.0
+        best_codia_idx = -1
+        for codia_idx, cb in enumerate(c_boxes):
+            score = iou(gbox, cb)
+            if score > best_iou:
+                best_iou = score
+                best_codia_idx = codia_idx
+        verdict = "matched" if best_iou >= 0.6 else "extra"
+        if verdict == "matched":
+            matched_go += 1
+        else:
+            extra_by_kind[gn.get("groupKind") or gn.get("type", "?")] += 1
+        best_codia = {}
+        if best_codia_idx >= 0:
+            cn, _ = cc[best_codia_idx]
+            best_codia = {
+                "index": best_codia_idx,
+                "name": cn.get("name", ""),
+                "type": cn.get("type", ""),
+                "bbox": list(map(round, c_boxes[best_codia_idx])),
+            }
+        go_items.append({
+            "index": idx,
+            "nodeId": gn.get("id", ""),
+            "name": gn.get("name", ""),
+            "type": gn.get("type", ""),
+            "groupKind": gn.get("groupKind", ""),
+            "bbox": list(map(round, gbox)),
+            "bestCodiaIoU": round(best_iou, 4),
+            "bestCodia": best_codia,
+            "verdict": verdict,
+        })
+
+    recall = matched_codia / len(cc) if cc else 0.0
+    precision = matched_go / len(gc) if gc else 0.0
+    return {
+        "summary": {
+            "codiaContainerCount": len(cc),
+            "goContainerCount": len(gc),
+            "matchedCodiaCount": matched_codia,
+            "matchedGoCount": matched_go,
+            "recall": round(recall, 4),
+            "goPrecision": round(precision, 4),
+            "containerRatio": round(len(gc) / len(cc), 4) if cc else 0.0,
+            "extraByGroupKind": dict(sorted(extra_by_kind.items())),
+        },
+        "goContainers": go_items,
+        "codiaContainers": codia_items,
+    }
+
+
 def score_pair(codia_path, go_path):
     """对一组 (codia, go) 打分,返回指标 dict。"""
     codia = load_codia(codia_path)
@@ -196,6 +295,21 @@ def score_pair(codia_path, go_path):
     depth_ratio = min(gm["max_depth"], cm["max_depth"]) / max(cm["max_depth"], 1)
     score = round(0.7 * gr["recall"] + 0.3 * depth_ratio, 3)
     return {"cm": cm, "gm": gm, "gr": gr, "score": score, "depth_ratio": round(depth_ratio, 3)}
+
+
+def write_eval_trace(path, label, codia_path, go_path, pair_score):
+    codia = load_codia(codia_path)
+    go = load_go(go_path)
+    trace = grouping_eval_trace(codia, go)
+    trace["label"] = label
+    trace["inputs"] = {
+        "codiaPath": codia_path,
+        "goPath": go_path,
+    }
+    trace["summary"]["score"] = pair_score["score"]
+    trace["summary"]["depthRatio"] = pair_score["depth_ratio"]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(trace, f, ensure_ascii=False, indent=2)
 
 
 def print_single(codia_path, go_path):
@@ -238,7 +352,7 @@ def print_single(codia_path, go_path):
     print("=" * 64)
 
 
-def print_batch(manifest_path):
+def print_batch(manifest_path, trace_dir=None):
     """批量模式:清单每行 'codia.json|go.json|可选标签',输出每组分数+平均+最低。
 
     多图平均分和最低分是防过拟合的核心:单图刷分会被最低分拉下来。
@@ -259,12 +373,17 @@ def print_batch(manifest_path):
     print("-" * 78)
     scores = []
     recalls = []
+    if trace_dir:
+        os.makedirs(trace_dir, exist_ok=True)
     for label, cp, gp in pairs:
         r = score_pair(cp, gp)
         scores.append(r["score"])
         recalls.append(r["gr"]["recall"])
         print(f"{label[:22]:<22}{r['gr']['recall']:>8.3f}{r['depth_ratio']:>8.3f}"
               f"{r['gr']['codia_containers']:>10}{r['gr']['go_containers']:>10}{r['score']:>10.3f}")
+        if trace_dir:
+            trace_path = os.path.join(trace_dir, f"case_{len(scores):03d}_visual_tree_eval_trace.json")
+            write_eval_trace(trace_path, label, cp, gp, r)
     print("-" * 78)
     if scores:
         avg = round(sum(scores) / len(scores), 3)
@@ -276,7 +395,13 @@ def print_batch(manifest_path):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--batch":
-        print_batch(sys.argv[2])
+        trace_dir = None
+        if "--trace-dir" in sys.argv[3:]:
+            idx = sys.argv.index("--trace-dir")
+            if idx + 1 >= len(sys.argv):
+                raise SystemExit("--trace-dir requires a path")
+            trace_dir = sys.argv[idx + 1]
+        print_batch(sys.argv[2], trace_dir=trace_dir)
         return
     codia_path = sys.argv[1] if len(sys.argv) > 1 else CODIA_DEFAULT
     go_path = sys.argv[2] if len(sys.argv) > 2 else GO_DEFAULT

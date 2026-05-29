@@ -36,7 +36,7 @@ func Compile(options Options) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
-	root, diagnostics, containmentReport := buildTree(tokens, relations)
+	root, diagnostics, containmentReport, trace := buildTree(tokens, relations)
 	source := Source{
 		TokenSchemaName:    tokens.SchemaName,
 		TokenVersion:       tokens.Version,
@@ -81,6 +81,9 @@ func Compile(options Options) (Document, error) {
 	if err := os.WriteFile(filepath.Join(options.OutputDir, "visual_element.v1.json"), visualElementData, 0o644); err != nil {
 		return Document{}, err
 	}
+	if err := writeTraceArtifacts(options.OutputDir, root, trace); err != nil {
+		return Document{}, err
+	}
 	if err := writeArtifacts(options.OutputDir, tokens.Source.SourcePath, doc); err != nil {
 		return Document{}, err
 	}
@@ -117,7 +120,8 @@ func readRelations(path string) (relation.Document, error) {
 	return doc, nil
 }
 
-func buildTree(tokens evidence.Document, relations relation.Document) (Node, Diagnostics, ContainmentReport) {
+func buildTree(tokens evidence.Document, relations relation.Document) (Node, Diagnostics, ContainmentReport, *TraceRecorder) {
+	trace := NewTraceRecorder()
 	tokenByID := map[string]evidence.Token{}
 	skipped := 0
 	for _, token := range tokens.Tokens {
@@ -131,6 +135,20 @@ func buildTree(tokens evidence.Document, relations relation.Document) (Node, Dia
 		}
 		tokenByID[token.ID] = token
 	}
+	trace.Record(TraceEvent{
+		Operation:     "token_filter_summary",
+		Decision:      "record",
+		DecisionClass: "diagnostic",
+		Reason:        "filter_suppressed_or_invalid_bbox_tokens",
+		Metrics: map[string]any{
+			"inputTokenCount":   len(tokens.Tokens),
+			"activeTokenCount":  len(tokenByID),
+			"skippedTokenCount": skipped,
+			"relationCount":     len(relations.Relations),
+			"sourceImageWidth":  tokens.Source.ImageWidth,
+			"sourceImageHeight": tokens.Source.ImageHeight,
+		},
+	})
 	childrenByParent := map[string][]string{}
 	relationIDsByChild := map[string][]string{}
 	for _, rel := range relations.Relations {
@@ -183,12 +201,12 @@ func buildTree(tokens evidence.Document, relations relation.Document) (Node, Dia
 		root.Children = append(root.Children, buildNode(childID, "", tokenByID, children, relationIDsByChild))
 	}
 	groupCounter := 1
-	containmentReport := applyContainmentTree(&root, relations.Relations, tokenByID)
-	materializePhysicalBackgroundLeaves(&root, tokenByID)
-	applySpatialGrouping(&root, &groupCounter)
+	containmentReport := applyContainmentTree(&root, relations.Relations, tokenByID, trace)
+	materializePhysicalBackgroundLeaves(&root, tokenByID, trace)
+	applySpatialGrouping(&root, &groupCounter, trace)
 	refreshTreeLayouts(&root)
 	diagnostics := buildDiagnostics(tokens, relations, root, parentByChild, skipped, containmentReport)
-	return root, diagnostics, containmentReport
+	return root, diagnostics, containmentReport, trace
 }
 
 func chooseSmallestParents(tokens map[string]evidence.Token, childrenByParent map[string][]string) map[string]string {
@@ -277,7 +295,7 @@ func canContain(token evidence.Token) bool {
 	}
 }
 
-func addPhysicalBackgroundLeaf(node *Node, token evidence.Token) {
+func addPhysicalBackgroundLeaf(node *Node, token evidence.Token, trace *TraceRecorder) {
 	if node.Type != "Layer" || !physicalLayerBackgroundToken(token) {
 		return
 	}
@@ -307,14 +325,29 @@ func addPhysicalBackgroundLeaf(node *Node, token evidence.Token) {
 	node.Style.BackgroundRef = token.ID
 	node.SourceRefs.BackgroundIDs = []string{token.ID}
 	node.Children = append([]Node{bg}, node.Children...)
+	trace.Record(TraceEvent{
+		Operation:     "physical_background_leaf_create",
+		ParentNodeID:  node.ID,
+		InputNodeIDs:  []string{node.ID, token.ID},
+		OutputNodeIDs: []string{bg.ID},
+		InputBBox:     &token.BBox,
+		Decision:      "create_group",
+		DecisionClass: "auxiliary",
+		GroupKind:     "background_leaf",
+		Reason:        "physical_background",
+		SourceEvidence: map[string]any{
+			"sourceTokenId": token.ID,
+			"tokenType":     token.TokenType,
+		},
+	})
 }
 
-func materializePhysicalBackgroundLeaves(node *Node, tokens map[string]evidence.Token) {
+func materializePhysicalBackgroundLeaves(node *Node, tokens map[string]evidence.Token, trace *TraceRecorder) {
 	if token, ok := singleSourceToken(*node, tokens); ok {
-		addPhysicalBackgroundLeaf(node, token)
+		addPhysicalBackgroundLeaf(node, token, trace)
 	}
 	for i := range node.Children {
-		materializePhysicalBackgroundLeaves(&node.Children[i], tokens)
+		materializePhysicalBackgroundLeaves(&node.Children[i], tokens, trace)
 	}
 }
 

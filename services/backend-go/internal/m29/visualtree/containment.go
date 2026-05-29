@@ -10,7 +10,7 @@ import (
 
 const containmentTolerance = 3
 
-func applyContainmentTree(root *Node, relations []relation.Relation, tokens map[string]evidence.Token) ContainmentReport {
+func applyContainmentTree(root *Node, relations []relation.Relation, tokens map[string]evidence.Token, trace *TraceRecorder) ContainmentReport {
 	bodyBefore := len(root.Children)
 	oldParentByID := map[string]string{}
 	flattenParentRefs(root, "", oldParentByID)
@@ -64,6 +64,23 @@ func applyContainmentTree(root *Node, relations []relation.Relation, tokens map[
 			BBoxCoverage:  round4(bboxCoverage(parent.BBox, node.BBox)),
 			RelationIDs:   relationIDs,
 			Decision:      "allow",
+		})
+		trace.Record(TraceEvent{
+			Operation:     "containment_parent_apply",
+			ParentNodeID:  newParentID,
+			InputNodeIDs:  []string{node.ID, newParentID},
+			OutputNodeIDs: []string{node.ID},
+			InputBBox:     &node.BBox,
+			Decision:      "allow",
+			DecisionClass: "structural_candidate",
+			Reason:        reason,
+			Metrics: map[string]any{
+				"bboxCoverage": round4(bboxCoverage(parent.BBox, node.BBox)),
+			},
+			SourceEvidence: map[string]any{
+				"relationIds": relationIDs,
+				"parentKind":  parentKind(parent),
+			},
 		})
 	}
 	sort.SliceStable(decisions, func(i, j int) bool {

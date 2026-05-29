@@ -1,9 +1,11 @@
 package visualtree
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
@@ -477,6 +479,75 @@ func TestCompileDoesNotCreateSemanticNodeTypes(t *testing.T) {
 	}
 }
 
+func TestCompileWritesDecisionTraceArtifacts(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			token("surface", "surface_region_token", contract.BBox{X: 20, Y: 30, Width: 260, Height: 100}),
+			textToken("label", contract.BBox{X: 42, Y: 52, Width: 90, Height: 20}, "Hello"),
+			textToken("narrow", contract.BBox{X: 42, Y: 92, Width: 18, Height: 18}, "N"),
+		},
+		[]relation.Relation{
+			rel("rel_0001", "contains", "structural", "surface", "label"),
+			rel("rel_0002", "contains", "structural", "surface", "narrow"),
+		},
+	)
+
+	doc, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	tracePath := filepath.Join(tmp, "visual_tree_trace.v1.jsonl")
+	reportPath := filepath.Join(tmp, "visual_tree_trace_report.md")
+	if _, err := os.Stat(tracePath); err != nil {
+		t.Fatalf("expected visual_tree_trace.v1.jsonl: %v", err)
+	}
+	reportData, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("expected visual_tree_trace_report.md: %v", err)
+	}
+	if !strings.Contains(string(reportData), "- none") {
+		t.Fatalf("expected no orphan synthetic nodes in trace report:\n%s", string(reportData))
+	}
+
+	events := readTraceEventsForTest(t, tracePath)
+	assertEverySyntheticNodeHasCreateTrace(t, doc.Root, events)
+	requireTraceEvent(t, events, "physical_background_leaf_create", "create_group", "background_leaf", "")
+	requireTraceEvent(t, events, "text_background_candidate", "allow", "", "text_bbox_background_candidate")
+	requireTraceEvent(t, events, "text_background_candidate", "reject", "", "aspect_ratio_below_min")
+	requireTraceEvent(t, events, "text_background_group_create", "create_group", "text_background_group", "")
+}
+
+func TestTraceRecordsXycutWrapFlattenAndSkip(t *testing.T) {
+	tmp := t.TempDir()
+	tokenPath, relationPath := writeInputs(t, tmp,
+		[]evidence.Token{
+			textToken("left_a", contract.BBox{X: 10, Y: 10, Width: 25, Height: 18}, "A"),
+			textToken("left_b", contract.BBox{X: 30, Y: 10, Width: 25, Height: 18}, "B"),
+			textToken("right_c", contract.BBox{X: 160, Y: 10, Width: 18, Height: 18}, "C"),
+		},
+		nil,
+	)
+	if _, err := Compile(Options{TokenPath: tokenPath, RelationPath: relationPath, OutputDir: tmp}); err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	events := readTraceEventsForTest(t, filepath.Join(tmp, "visual_tree_trace.v1.jsonl"))
+	requireTraceEvent(t, events, "xycut", "select_axis", "", "")
+	requireTraceEvent(t, events, "cluster_wrap_or_flatten", "wrap", "spatial_group", "")
+	requireTraceEvent(t, events, "cluster_wrap_or_flatten", "flatten", "", "")
+	requireTraceEvent(t, events, "spatial_group_create", "create_group", "spatial_group", "")
+	requireTraceEvent(t, events, "regroup_skip_xycut", "skip", "", "spatial_depth_foreground_limit")
+	for _, event := range events {
+		if event.Operation == "xycut" && event.Decision == "select_axis" {
+			if event.Metrics["x"] == nil || event.Metrics["y"] == nil {
+				t.Fatalf("xycut select_axis must record x/y alternatives: %#v", event.Metrics)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected xycut select_axis event")
+}
+
 func writeInputs(t *testing.T, dir string, tokens []evidence.Token, relations []relation.Relation) (string, string) {
 	t.Helper()
 	tokenPath := filepath.Join(dir, "evidence_tokens.v1.json")
@@ -579,4 +650,71 @@ func writeJSON(t *testing.T, path string, value any) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func readTraceEventsForTest(t *testing.T, path string) []TraceEvent {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	var events []TraceEvent
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var event TraceEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, event)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return events
+}
+
+func assertEverySyntheticNodeHasCreateTrace(t *testing.T, root Node, events []TraceEvent) {
+	t.Helper()
+	created := map[string]bool{}
+	for _, event := range events {
+		if event.Decision != "create_group" {
+			continue
+		}
+		for _, id := range event.OutputNodeIDs {
+			created[id] = true
+		}
+	}
+	var walk func(Node)
+	walk = func(node Node) {
+		if node.Meta.Synthetic && node.ID != "" && !created[node.ID] {
+			t.Fatalf("synthetic node %s (%s) has no create trace", node.ID, node.Meta.GroupKind)
+		}
+		for _, child := range node.Children {
+			walk(child)
+		}
+	}
+	walk(root)
+}
+
+func requireTraceEvent(t *testing.T, events []TraceEvent, operation string, decision string, groupKind string, reason string) TraceEvent {
+	t.Helper()
+	for _, event := range events {
+		if event.Operation != operation || event.Decision != decision {
+			continue
+		}
+		if groupKind != "" && event.GroupKind != groupKind {
+			continue
+		}
+		if reason != "" && event.Reason != reason {
+			continue
+		}
+		return event
+	}
+	t.Fatalf("missing trace event operation=%s decision=%s groupKind=%s reason=%s", operation, decision, groupKind, reason)
+	return TraceEvent{}
 }

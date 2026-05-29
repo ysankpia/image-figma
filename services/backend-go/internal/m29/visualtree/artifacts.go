@@ -35,6 +35,32 @@ func writeArtifacts(outputDir string, sourcePath string, doc Document) error {
 	return writePreviewSheet(filepath.Join(outputDir, "visual_tree_preview_sheet.png"), img, overlayPath)
 }
 
+func writeTraceArtifacts(outputDir string, root Node, trace *TraceRecorder) error {
+	if trace != nil {
+		orphanIDs := orphanSyntheticNodeIDs(root, trace.Events())
+		if orphanIDs == nil {
+			orphanIDs = []string{}
+		}
+		trace.Record(TraceEvent{
+			Operation:     "synthetic_orphan_check",
+			Decision:      "record",
+			DecisionClass: "diagnostic",
+			Reason:        "verify_every_synthetic_node_has_create_event",
+			Metrics: map[string]any{
+				"orphanCount": len(orphanIDs),
+			},
+			SourceEvidence: map[string]any{
+				"orphanNodeIds": orphanIDs,
+			},
+		})
+	}
+	events := trace.Events()
+	if err := writeTraceJSONL(filepath.Join(outputDir, "visual_tree_trace.v1.jsonl"), events); err != nil {
+		return err
+	}
+	return writeTraceReport(filepath.Join(outputDir, "visual_tree_trace_report.md"), root, events)
+}
+
 func writeReport(path string, doc Document) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# M29 Visual Tree Report\n\n")

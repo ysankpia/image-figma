@@ -28,8 +28,8 @@ var spatialGapRatio = func() float64 {
 // 没有任何"容器型" token 包着它们时(绝大多数情况),它们会全部平铺在 Body 下,
 // 导致树很扁。Codia 的做法是纯几何:递归地沿"最大空白带"把空间切成嵌套块。
 // 这就是经典的 XY-cut 版面分析算法,不依赖任何手写的语义/尺寸阈值。
-func applySpatialGrouping(root *Node, counter *int) {
-	regroupChildren(root, counter, 0)
+func applySpatialGrouping(root *Node, counter *int, trace *TraceRecorder) {
+	regroupChildren(root, counter, 0, trace)
 }
 
 // regroupChildren 对 node 的直接子节点做一次重组,然后递归处理每个子节点。
@@ -37,49 +37,80 @@ func applySpatialGrouping(root *Node, counter *int) {
 //   - 物理容器(Body 等)不增加 depth
 //   - 每进入一层 spatial_group,depth+1
 //   - depth >= 2 时跳过 xycut,只跑配对检测
-func regroupChildren(node *Node, counter *int, spatialDepth int) {
+func regroupChildren(node *Node, counter *int, spatialDepth int, trace *TraceRecorder) {
 	if isAtomicSpatialGroup(*node) {
+		trace.Record(TraceEvent{
+			Operation:     "regroup_skip_xycut",
+			ParentNodeID:  node.ID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  traceNodeIDs(node.Children),
+			OutputNodeIDs: []string{node.ID},
+			InputBBox:     traceNodeBBox(node.Children),
+			Decision:      "skip",
+			DecisionClass: "diagnostic",
+			GroupKind:     node.Meta.GroupKind,
+			Reason:        "atomic_synthetic_group",
+		})
 		refreshChildLayouts(node)
 		return
 	}
 	if len(node.Children) <= 1 {
 		for i := range node.Children {
-			regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth))
+			regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth), trace)
 		}
 		return
 	}
 
-	backgrounds, foreground := splitBackgroundLeaves(node.Children)
+	backgrounds, foreground := splitBackgroundLeaves(*node, node.Children, spatialDepth, trace)
 	if os.Getenv("ABL_SLICES") == "" {
-		foreground = groupContainedForegroundSlices(foreground, counter)
+		foreground = groupContainedForegroundSlices(foreground, counter, node.ID, spatialDepth, trace)
 	}
 	if os.Getenv("ABL_PAIRC") == "" {
-		foreground = pairContainedForeground(foreground, counter)
+		foreground = pairContainedForeground(foreground, counter, node.ID, spatialDepth, trace)
 	}
 	if os.Getenv("ABL_VERT") == "" {
-		foreground = pairVerticalForeground(foreground, counter)
+		foreground = pairVerticalForeground(foreground, counter, node.ID, spatialDepth, trace)
 	}
 	if os.Getenv("ABL_TEXTBG") == "" {
-		foreground = pairTextBackedForeground(foreground, counter, node.BBox.Width)
+		foreground = pairTextBackedForeground(foreground, counter, node.BBox.Width, node.ID, spatialDepth, trace)
 	}
 
 	var grouped []Node
 	skipXycut := spatialDepth >= 1 && len(foreground) <= 5
 	if !skipXycut {
-		grouped = xycut(foreground, counter, 2)
+		grouped = xycut(foreground, counter, 2, node.ID, spatialDepth, trace)
 	} else {
+		trace.Record(TraceEvent{
+			Operation:     "regroup_skip_xycut",
+			ParentNodeID:  node.ID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  traceNodeIDs(foreground),
+			OutputNodeIDs: traceNodeIDs(foreground),
+			InputBBox:     traceNodeBBox(foreground),
+			Decision:      "skip",
+			DecisionClass: "diagnostic",
+			Reason:        "spatial_depth_foreground_limit",
+			Metrics: map[string]any{
+				"foregroundCount": len(foreground),
+				"spatialDepth":    spatialDepth,
+			},
+			Thresholds: map[string]any{
+				"skipMinSpatialDepth": 1,
+				"skipMaxForeground":   5,
+			},
+		})
 		grouped = foreground
 	}
 
 	if os.Getenv("ABL_ABSORB") == "" && node.Type == "Body" {
-		grouped = absorbStragglers(grouped, counter)
+		grouped = absorbStragglers(grouped, counter, node.ID, spatialDepth, trace)
 	}
 
 	node.Children = append(backgrounds, grouped...)
 	refreshChildLayouts(node)
 
 	for i := range node.Children {
-		regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth))
+		regroupChildren(&node.Children[i], counter, childSpatialDepth(node.Children[i], spatialDepth), trace)
 	}
 }
 
@@ -90,20 +121,42 @@ func childSpatialDepth(child Node, parentDepth int) int {
 	return parentDepth
 }
 
-func splitBackgroundLeaves(children []Node) ([]Node, []Node) {
+func splitBackgroundLeaves(parent Node, children []Node, spatialDepth int, trace *TraceRecorder) ([]Node, []Node) {
 	backgrounds := make([]Node, 0)
 	foreground := make([]Node, 0, len(children))
+	reasons := map[string]string{}
 	for _, child := range children {
 		if isBackgroundLeaf(child) {
 			backgrounds = append(backgrounds, child)
+			reasons[child.ID] = "existing_background_leaf"
 			continue
 		}
 		if os.Getenv("ABL_BGSPLIT") == "" && coversMostSiblings(child, children) {
 			backgrounds = append(backgrounds, child)
+			reasons[child.ID] = "covers_most_siblings"
 			continue
 		}
 		foreground = append(foreground, child)
 	}
+	trace.Record(TraceEvent{
+		Operation:     "background_split",
+		ParentNodeID:  parent.ID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  traceNodeIDs(children),
+		OutputNodeIDs: append(traceNodeIDs(backgrounds), traceNodeIDs(foreground)...),
+		InputBBox:     traceNodeBBox(children),
+		Decision:      "split",
+		DecisionClass: "diagnostic",
+		Reason:        "separate_background_from_foreground_before_spatial_grouping",
+		Metrics: map[string]any{
+			"inputCount":      len(children),
+			"backgroundCount": len(backgrounds),
+			"foregroundCount": len(foreground),
+		},
+		SourceEvidence: map[string]any{
+			"backgroundReasons": reasons,
+		},
+	})
 	return backgrounds, foreground
 }
 
@@ -135,7 +188,7 @@ func isBackgroundLeaf(node Node) bool {
 	return node.Meta.Synthetic && node.Meta.GroupKind == "background_leaf"
 }
 
-func pairContainedForeground(nodes []Node, counter *int) []Node {
+func pairContainedForeground(nodes []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) < 2 {
 		return nodes
 	}
@@ -165,7 +218,7 @@ func pairContainedForeground(nodes []Node, counter *int) []Node {
 		}
 		first := min(textIdx, bestIdx)
 		children := []Node{nodes[bestIdx], text}
-		pairsByFirst[first] = makeContainedForegroundGroup(children, counter)
+		pairsByFirst[first] = makeContainedForegroundGroup(children, counter, parentID, spatialDepth, trace)
 		used[textIdx] = true
 		used[bestIdx] = true
 	}
@@ -186,7 +239,7 @@ func pairContainedForeground(nodes []Node, counter *int) []Node {
 	return out
 }
 
-func groupContainedForegroundSlices(nodes []Node, counter *int) []Node {
+func groupContainedForegroundSlices(nodes []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) < 3 {
 		return nodes
 	}
@@ -200,7 +253,7 @@ func groupContainedForegroundSlices(nodes []Node, counter *int) []Node {
 		if len(textIndexes) < 2 {
 			continue
 		}
-		groups := makeContainedSliceGroups(imageNode, textIndexes, nodes, counter)
+		groups := makeContainedSliceGroups(imageNode, textIndexes, nodes, counter, parentID, spatialDepth, trace)
 		if len(groups) == 0 {
 			continue
 		}
@@ -292,7 +345,7 @@ func imageCanSplitByContainedText(imageNode Node, indexes []int, nodes []Node) b
 	return true
 }
 
-func makeContainedSliceGroups(imageNode Node, indexes []int, nodes []Node, counter *int) []Node {
+func makeContainedSliceGroups(imageNode Node, indexes []int, nodes []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	groups := make([]Node, 0, len(indexes))
 	left := imageNode.BBox.X
 	right := imageNode.BBox.X + imageNode.BBox.Width
@@ -316,6 +369,44 @@ func makeContainedSliceGroups(imageNode Node, indexes []int, nodes []Node, count
 		}, counter)
 		group := makeSpatialGroup([]Node{bg, nodes[idx]}, counter)
 		group.Meta.GroupKind = "contained_slice_group"
+		trace.Record(TraceEvent{
+			Operation:     "contained_slice_group_create",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  []string{imageNode.ID, nodes[idx].ID},
+			OutputNodeIDs: []string{bg.ID},
+			InputBBox:     &bg.BBox,
+			Decision:      "create_group",
+			DecisionClass: "auxiliary",
+			GroupKind:     "background_leaf",
+			Reason:        "contained_foreground_slice_background",
+			SourceEvidence: map[string]any{
+				"sourceImageNodeId": imageNode.ID,
+				"textNodeId":        nodes[idx].ID,
+			},
+		})
+		trace.Record(TraceEvent{
+			Operation:     "contained_slice_group_create",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  []string{imageNode.ID, bg.ID, nodes[idx].ID},
+			OutputNodeIDs: []string{group.ID},
+			InputBBox:     traceNodeBBox(group.Children),
+			Decision:      "create_group",
+			DecisionClass: "structural_candidate",
+			GroupKind:     "contained_slice_group",
+			Reason:        "wide_image_split_by_contained_text_baseline",
+			Metrics: map[string]any{
+				"sliceIndex": i,
+				"sliceLeft":  bounds[i],
+				"sliceRight": bounds[i+1],
+				"textCount":  len(indexes),
+			},
+			SourceEvidence: map[string]any{
+				"sourceImageNodeId": imageNode.ID,
+				"textNodeId":        nodes[idx].ID,
+			},
+		})
 		groups = append(groups, group)
 	}
 	return groups
@@ -402,7 +493,8 @@ func canPairAsContainedTile(candidate Node, text Node) bool {
 	return true
 }
 
-func makeContainedForegroundGroup(children []Node, counter *int) Node {
+func makeContainedForegroundGroup(children []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) Node {
+	inputIDs := traceNodeIDs(children)
 	sort.SliceStable(children, func(i, j int) bool {
 		if children[i].Type != children[j].Type {
 			return children[i].Type != "Text"
@@ -415,6 +507,21 @@ func makeContainedForegroundGroup(children []Node, counter *int) Node {
 	} else {
 		group.Meta.GroupKind = "contained_pair_group"
 	}
+	trace.Record(TraceEvent{
+		Operation:     "contained_pair_group_create",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  inputIDs,
+		OutputNodeIDs: []string{group.ID},
+		InputBBox:     traceNodeBBox(children),
+		Decision:      "create_group",
+		DecisionClass: "structural_candidate",
+		GroupKind:     group.Meta.GroupKind,
+		Reason:        "contained_foreground_pair",
+		Metrics: map[string]any{
+			"childCount": len(children),
+		},
+	})
 	return group
 }
 
@@ -422,14 +529,34 @@ func isAtomicSpatialGroup(node Node) bool {
 	return node.Meta.Synthetic && (node.Meta.GroupKind == "contained_pair_group" || node.Meta.GroupKind == "contained_foreground_group" || node.Meta.GroupKind == "contained_slice_group" || node.Meta.GroupKind == "text_background_group" || node.Meta.GroupKind == "vertical_pair_group")
 }
 
-func pairTextBackedForeground(nodes []Node, counter *int, parentWidth int) []Node {
+type textBackgroundDecision struct {
+	Allow      bool
+	Reason     string
+	Metrics    map[string]any
+	Thresholds map[string]any
+}
+
+func pairTextBackedForeground(nodes []Node, counter *int, parentWidth int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) == 0 {
 		return nodes
 	}
 	out := make([]Node, 0, len(nodes))
 	for _, node := range nodes {
-		if canUseTextBBoxAsBackground(node, parentWidth) {
-			out = append(out, makeTextBackgroundGroup(node, counter))
+		decision := canUseTextBBoxAsBackground(node, parentWidth)
+		trace.Record(TraceEvent{
+			Operation:     "text_background_candidate",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  []string{node.ID},
+			InputBBox:     &node.BBox,
+			Decision:      mapBoolDecision(decision.Allow),
+			DecisionClass: "diagnostic",
+			Reason:        decision.Reason,
+			Metrics:       decision.Metrics,
+			Thresholds:    decision.Thresholds,
+		})
+		if decision.Allow {
+			out = append(out, makeTextBackgroundGroup(node, counter, parentID, spatialDepth, trace, decision))
 			continue
 		}
 		out = append(out, node)
@@ -437,26 +564,43 @@ func pairTextBackedForeground(nodes []Node, counter *int, parentWidth int) []Nod
 	return out
 }
 
-func canUseTextBBoxAsBackground(node Node, contextWidth int) bool {
+func canUseTextBBoxAsBackground(node Node, contextWidth int) textBackgroundDecision {
+	thresholds := map[string]any{
+		"minAspectNumerator":       5,
+		"minAspectDenominator":     2,
+		"maxAspectRatio":           6,
+		"maxContextWidthNumerator": 1,
+		"maxContextWidthDenom":     2,
+	}
+	metrics := map[string]any{
+		"nodeType":     node.Type,
+		"synthetic":    node.Meta.Synthetic,
+		"textWidth":    node.BBox.Width,
+		"textHeight":   node.BBox.Height,
+		"contextWidth": contextWidth,
+	}
+	if node.BBox.Height > 0 {
+		metrics["aspectRatio"] = traceRound4(float64(node.BBox.Width) / float64(node.BBox.Height))
+	}
 	if node.Type != "Text" || node.Meta.Synthetic || node.BBox.Height <= 0 {
-		return false
+		return textBackgroundDecision{Allow: false, Reason: "not_eligible_text", Metrics: metrics, Thresholds: thresholds}
 	}
 	// 宽高比 >= 2.5(短宽型)
 	if node.BBox.Width*2 < node.BBox.Height*5 {
-		return false
+		return textBackgroundDecision{Allow: false, Reason: "aspect_ratio_below_min", Metrics: metrics, Thresholds: thresholds}
 	}
 	// 宽高比 > 6 的大概率是标题/描述,不是按钮
 	if node.BBox.Width > node.BBox.Height*6 {
-		return false
+		return textBackgroundDecision{Allow: false, Reason: "aspect_ratio_above_max", Metrics: metrics, Thresholds: thresholds}
 	}
 	// 文本宽度超过上下文宽度 50% 的大概率是标题
 	if contextWidth > 0 && node.BBox.Width*2 > contextWidth {
-		return false
+		return textBackgroundDecision{Allow: false, Reason: "too_wide_for_parent_context", Metrics: metrics, Thresholds: thresholds}
 	}
-	return true
+	return textBackgroundDecision{Allow: true, Reason: "text_bbox_background_candidate", Metrics: metrics, Thresholds: thresholds}
 }
 
-func makeTextBackgroundGroup(text Node, counter *int) Node {
+func makeTextBackgroundGroup(text Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder, decision textBackgroundDecision) Node {
 	bg := Node{
 		ID:   fmt.Sprintf("tbg_%04d", *counter),
 		Type: "Image",
@@ -474,10 +618,53 @@ func makeTextBackgroundGroup(text Node, counter *int) Node {
 	}
 	group := makeSpatialGroup([]Node{bg, text}, counter)
 	group.Meta.GroupKind = "text_background_group"
+	trace.Record(TraceEvent{
+		Operation:     "text_background_group_create",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  []string{text.ID},
+		OutputNodeIDs: []string{bg.ID},
+		InputBBox:     &text.BBox,
+		Decision:      "create_group",
+		DecisionClass: "auxiliary",
+		GroupKind:     "background_leaf",
+		Reason:        "text_bbox_background",
+		Metrics:       decision.Metrics,
+		Thresholds:    decision.Thresholds,
+		SourceEvidence: map[string]any{
+			"fromTextBBoxOnly": true,
+			"textNodeId":       text.ID,
+		},
+	})
+	trace.Record(TraceEvent{
+		Operation:     "text_background_group_create",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  []string{bg.ID, text.ID},
+		OutputNodeIDs: []string{group.ID},
+		InputBBox:     &text.BBox,
+		Decision:      "create_group",
+		DecisionClass: "auxiliary",
+		GroupKind:     "text_background_group",
+		Reason:        "text_bbox_background",
+		Metrics:       decision.Metrics,
+		Thresholds:    decision.Thresholds,
+		SourceEvidence: map[string]any{
+			"fromTextBBoxOnly": true,
+			"textNodeId":       text.ID,
+		},
+	})
 	return group
 }
 
-func pairVerticalForeground(nodes []Node, counter *int) []Node {
+func mapBoolDecision(allow bool) string {
+	if allow {
+		return "allow"
+	}
+	return "reject"
+}
+
+func pairVerticalForeground(nodes []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) < 2 {
 		return nodes
 	}
@@ -509,6 +696,21 @@ func pairVerticalForeground(nodes []Node, counter *int) []Node {
 		children := []Node{top, nodes[bestIdx]}
 		group := makeSpatialGroup(children, counter)
 		group.Meta.GroupKind = "vertical_pair_group"
+		trace.Record(TraceEvent{
+			Operation:     "vertical_pair_group_create",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  traceNodeIDs(children),
+			OutputNodeIDs: []string{group.ID},
+			InputBBox:     traceNodeBBox(children),
+			Decision:      "create_group",
+			DecisionClass: "structural_candidate",
+			GroupKind:     "vertical_pair_group",
+			Reason:        "vertical_label_pair",
+			Metrics: map[string]any{
+				"gap": bestGap,
+			},
+		})
 		pairsByFirst[first] = group
 		used[topIdx] = true
 		used[bestIdx] = true
@@ -553,20 +755,61 @@ func isVerticalLabelPair(top Node, text Node) bool {
 // xycut 对一组节点做 XY 切分。minWrap: 簇至少要有这么多元素才包成容器,
 // 更小的簇直接平铺回输出。minWrap=2 是默认行为(所有多元素簇都包装),
 // minWrap=3 则只包装 ≥3 元素的簇(减少二叉切分产生的冗余容器)。
-func xycut(nodes []Node, counter *int, minWrap int) []Node {
+func xycut(nodes []Node, counter *int, minWrap int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) <= 1 {
 		return nodes
 	}
 
-	clustersY, gapY := splitAxis(nodes, true)
-	clustersX, gapX := splitAxis(nodes, false)
+	splitY := splitAxis(nodes, true)
+	splitX := splitAxis(nodes, false)
+	gapY := splitY.RelGap
+	gapX := splitX.RelGap
 
-	if len(clustersY) < 2 && len(clustersX) < 2 {
-		comps := neighborComponents(nodes)
-		if len(comps) >= 2 {
-			out := make([]Node, 0, len(comps))
-			for _, comp := range comps {
-				out = append(out, groupClusterOrFlatten(comp, counter, minWrap)...)
+	trace.Record(TraceEvent{
+		Operation:     "xycut",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  traceNodeIDs(nodes),
+		InputBBox:     traceNodeBBox(nodes),
+		Decision:      "evaluate",
+		DecisionClass: "diagnostic",
+		Reason:        "evaluate_projection_axis_splits",
+		Metrics: map[string]any{
+			"inputCount": len(nodes),
+			"y":          splitY.TraceMetrics(),
+			"x":          splitX.TraceMetrics(),
+			"minWrap":    minWrap,
+		},
+		Thresholds: map[string]any{
+			"spatialGapRatio": spatialGapRatio,
+			"minWrap":         minWrap,
+		},
+	})
+
+	if len(splitY.Clusters) < 2 && len(splitX.Clusters) < 2 {
+		components := neighborComponents(nodes)
+		trace.Record(TraceEvent{
+			Operation:     "neighbor_components",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  traceNodeIDs(nodes),
+			InputBBox:     traceNodeBBox(nodes),
+			Decision:      "evaluate",
+			DecisionClass: "diagnostic",
+			Reason:        "projection_split_not_available",
+			Metrics: map[string]any{
+				"componentCount": len(components.Components),
+				"medianSize":     components.MedianSize,
+				"maxGap":         components.MaxGap,
+			},
+			Thresholds: map[string]any{
+				"spatialGapRatio": spatialGapRatio,
+			},
+		})
+		if len(components.Components) >= 2 {
+			out := make([]Node, 0, len(components.Components))
+			for _, comp := range components.Components {
+				out = append(out, groupClusterOrFlatten(comp, counter, minWrap, parentID, spatialDepth, "neighbor_component", trace)...)
 			}
 			return out
 		}
@@ -574,17 +817,39 @@ func xycut(nodes []Node, counter *int, minWrap int) []Node {
 	}
 
 	var clusters [][]Node
-	if gapY >= gapX && len(clustersY) >= 2 {
-		clusters = clustersY
-	} else if len(clustersX) >= 2 {
-		clusters = clustersX
+	selectedAxis := "y"
+	if gapY >= gapX && len(splitY.Clusters) >= 2 {
+		clusters = splitY.Clusters
+	} else if len(splitX.Clusters) >= 2 {
+		clusters = splitX.Clusters
+		selectedAxis = "x"
 	} else {
-		clusters = clustersY
+		clusters = splitY.Clusters
 	}
+	trace.Record(TraceEvent{
+		Operation:     "xycut",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  traceNodeIDs(nodes),
+		InputBBox:     traceNodeBBox(nodes),
+		Decision:      "select_axis",
+		DecisionClass: "diagnostic",
+		Reason:        selectedAxis + "_gap_selected",
+		Metrics: map[string]any{
+			"selectedAxis": selectedAxis,
+			"clusterCount": len(clusters),
+			"y":            splitY.TraceMetrics(),
+			"x":            splitX.TraceMetrics(),
+		},
+		Thresholds: map[string]any{
+			"spatialGapRatio": spatialGapRatio,
+			"minWrap":         minWrap,
+		},
+	})
 
 	out := make([]Node, 0, len(clusters))
 	for _, cluster := range clusters {
-		out = append(out, groupClusterOrFlatten(cluster, counter, minWrap)...)
+		out = append(out, groupClusterOrFlatten(cluster, counter, minWrap, parentID, spatialDepth, "xycut_"+selectedAxis, trace)...)
 	}
 	return out
 }
@@ -593,11 +858,17 @@ func xycut(nodes []Node, counter *int, minWrap int) []Node {
 // 动机:XY-cut 把所有超过阈值的间隙都切开,导致紧邻大组的小元素(如底部指示条、
 // 分隔线)被单独切出。Codia 会把它们归入相邻的大组。
 // 判据:孤立叶子与相邻组的间隙 < 相邻组在该轴上尺寸的 50%。纯相对,无像素阈值。
-func absorbStragglers(nodes []Node, counter *int) []Node {
+type absorbedStraggler struct {
+	TargetIndex int
+	Gap         int
+	Limit       int
+}
+
+func absorbStragglers(nodes []Node, counter *int, parentID string, spatialDepth int, trace *TraceRecorder) []Node {
 	if len(nodes) < 3 {
 		return nodes
 	}
-	absorbed := map[int]int{} // straggler index -> target group index
+	absorbed := map[int]absorbedStraggler{} // straggler index -> target info
 	for i, node := range nodes {
 		if !isStraggler(node) {
 			continue
@@ -618,7 +889,11 @@ func absorbStragglers(nodes []Node, counter *int) []Node {
 			}
 		}
 		if bestTarget >= 0 {
-			absorbed[i] = bestTarget
+			absorbed[i] = absorbedStraggler{
+				TargetIndex: bestTarget,
+				Gap:         bestGap,
+				Limit:       max(nodes[bestTarget].BBox.Height, nodes[bestTarget].BBox.Width) / 2,
+			}
 		}
 	}
 	if len(absorbed) == 0 {
@@ -626,8 +901,23 @@ func absorbStragglers(nodes []Node, counter *int) []Node {
 	}
 	// 把被吸收的叶子加入目标组的 children
 	extras := map[int][]Node{}
-	for si, ti := range absorbed {
-		extras[ti] = append(extras[ti], nodes[si])
+	for si, info := range absorbed {
+		extras[info.TargetIndex] = append(extras[info.TargetIndex], nodes[si])
+		trace.Record(TraceEvent{
+			Operation:     "absorb_straggler",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  []string{nodes[si].ID, nodes[info.TargetIndex].ID},
+			OutputNodeIDs: []string{nodes[info.TargetIndex].ID},
+			InputBBox:     traceNodeBBox([]Node{nodes[si], nodes[info.TargetIndex]}),
+			Decision:      "absorb",
+			DecisionClass: "structural_candidate",
+			Reason:        "nearby_straggler_absorbed_into_neighbor_group",
+			Metrics: map[string]any{
+				"gap":   info.Gap,
+				"limit": info.Limit,
+			},
+		})
 	}
 	out := make([]Node, 0, len(nodes)-len(absorbed))
 	for i, node := range nodes {
@@ -642,6 +932,21 @@ func absorbStragglers(nodes []Node, counter *int) []Node {
 			} else {
 				all := append([]Node{node}, ex...)
 				node = makeSpatialGroup(all, counter)
+				trace.Record(TraceEvent{
+					Operation:     "spatial_group_create",
+					ParentNodeID:  parentID,
+					SpatialDepth:  spatialDepth,
+					InputNodeIDs:  traceNodeIDs(all),
+					OutputNodeIDs: []string{node.ID},
+					InputBBox:     traceNodeBBox(all),
+					Decision:      "create_group",
+					DecisionClass: "structural_candidate",
+					GroupKind:     node.Meta.GroupKind,
+					Reason:        "absorb_straggler_created_target_group",
+					Metrics: map[string]any{
+						"childCount": len(node.Children),
+					},
+				})
 			}
 		}
 		out = append(out, node)
@@ -670,11 +975,64 @@ func nodeGap(a, b Node) int {
 
 // groupClusterOrFlatten 对 ≤ minWrap 个元素的簇不包装,直接平铺回输出。
 // 只有超过 minWrap 个元素的簇才包成容器。减少二叉切分产生的冗余容器。
-func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int) []Node {
+func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int, parentID string, spatialDepth int, reason string, trace *TraceRecorder) []Node {
 	if len(cluster) < minWrap {
+		trace.Record(TraceEvent{
+			Operation:     "cluster_wrap_or_flatten",
+			ParentNodeID:  parentID,
+			SpatialDepth:  spatialDepth,
+			InputNodeIDs:  traceNodeIDs(cluster),
+			OutputNodeIDs: traceNodeIDs(cluster),
+			InputBBox:     traceNodeBBox(cluster),
+			Decision:      "flatten",
+			DecisionClass: "diagnostic",
+			Reason:        reason + "_cluster_below_min_wrap",
+			Metrics: map[string]any{
+				"clusterSize": len(cluster),
+				"minWrap":     minWrap,
+			},
+			Thresholds: map[string]any{
+				"minWrap": minWrap,
+			},
+		})
 		return cluster
 	}
-	return []Node{makeSpatialGroup(cluster, counter)}
+	group := makeSpatialGroup(cluster, counter)
+	trace.Record(TraceEvent{
+		Operation:     "cluster_wrap_or_flatten",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  traceNodeIDs(cluster),
+		OutputNodeIDs: []string{group.ID},
+		InputBBox:     traceNodeBBox(cluster),
+		Decision:      "wrap",
+		DecisionClass: "diagnostic",
+		GroupKind:     group.Meta.GroupKind,
+		Reason:        reason + "_cluster_meets_min_wrap",
+		Metrics: map[string]any{
+			"clusterSize": len(cluster),
+			"minWrap":     minWrap,
+		},
+		Thresholds: map[string]any{
+			"minWrap": minWrap,
+		},
+	})
+	trace.Record(TraceEvent{
+		Operation:     "spatial_group_create",
+		ParentNodeID:  parentID,
+		SpatialDepth:  spatialDepth,
+		InputNodeIDs:  traceNodeIDs(cluster),
+		OutputNodeIDs: []string{group.ID},
+		InputBBox:     traceNodeBBox(cluster),
+		Decision:      "create_group",
+		DecisionClass: "structural_candidate",
+		GroupKind:     group.Meta.GroupKind,
+		Reason:        reason,
+		Metrics: map[string]any{
+			"childCount": len(group.Children),
+		},
+	})
+	return []Node{group}
 }
 
 // splitAxis 把 nodes 沿给定轴(vertical=true 表示沿 Y 轴分行)按空白带切成多个簇。
@@ -689,8 +1047,32 @@ func groupClusterOrFlatten(cluster []Node, counter *int, minWrap int) []Node {
 //
 // 为什么用相对判据:一行紧密排列的元素(导航文字、价格数字)缝隙远小于元素本身,
 // 不应被切散;而区块之间的结构性留白通常和元素尺寸同量级或更大。无绝对像素阈值,按内容自适应。
-func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
+type axisSplitResult struct {
+	Axis         string
+	Clusters     [][]Node
+	RelGap       float64
+	MaxGap       int
+	MedianSize   int
+	CutThreshold int
+}
+
+func (r axisSplitResult) TraceMetrics() map[string]any {
+	return map[string]any{
+		"axis":         r.Axis,
+		"clusterCount": len(r.Clusters),
+		"maxGap":       r.MaxGap,
+		"medianSize":   r.MedianSize,
+		"cutThreshold": r.CutThreshold,
+		"relGap":       traceRound4(r.RelGap),
+	}
+}
+
+func splitAxis(nodes []Node, vertical bool) axisSplitResult {
 	n := len(nodes)
+	axis := "x"
+	if vertical {
+		axis = "y"
+	}
 	starts := make([]int, n)
 	ends := make([]int, n)
 	sizes := make([]int, n)
@@ -753,7 +1135,14 @@ func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
 	if medianSize > 0 {
 		relGap = float64(maxGap) / float64(medianSize)
 	}
-	return clusters, relGap
+	return axisSplitResult{
+		Axis:         axis,
+		Clusters:     clusters,
+		RelGap:       relGap,
+		MaxGap:       maxGap,
+		MedianSize:   medianSize,
+		CutThreshold: cutThreshold,
+	}
 }
 
 // neighborComponents 按"边缘间距"把节点分成空间连通分量(并查集)。
@@ -762,10 +1151,16 @@ func splitAxis(nodes []Node, vertical bool) ([][]Node, float64) {
 //
 // 用途:当投影空白切分切不开(两轴投影都重叠)时,用它把实际分离的簇分开;
 // 若整批是一个连通块,说明它们紧密相邻,应作为一个组。
-func neighborComponents(nodes []Node) [][]Node {
+type neighborComponentResult struct {
+	Components [][]Node
+	MedianSize int
+	MaxGap     int
+}
+
+func neighborComponents(nodes []Node) neighborComponentResult {
 	n := len(nodes)
 	if n <= 1 {
-		return [][]Node{nodes}
+		return neighborComponentResult{Components: [][]Node{nodes}}
 	}
 	sizes := make([]int, 0, 2*n)
 	for _, nd := range nodes {
@@ -833,7 +1228,11 @@ func neighborComponents(nodes []Node) [][]Node {
 		}
 		return bi.X < bj.X
 	})
-	return out
+	return neighborComponentResult{
+		Components: out,
+		MedianSize: med,
+		MaxGap:     maxGap,
+	}
 }
 
 // axisGap 返回两个区间在某轴上的正间距;若重叠返回 0。

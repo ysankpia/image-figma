@@ -17,6 +17,7 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 run_one() {
   local key="$1" img="$2"
   local out="$WORK/$key"; mkdir -p "$out"
+  mkdir -p "$out/masks" "$out/crops"
   ( cd services/backend-go
     go run ./cmd/m29extract   -input "../../$IMG_DIR/$img" -out "$out" >/dev/null
     go run ./cmd/m29tokens    -input "$out/m29_physical_evidence.v1.json" -out "$out" >/dev/null
@@ -36,4 +37,4 @@ $JSON_DIR/lizhi-011.canvas.json|$WORK/lizhi/visual_tree.v1.json|荔枝011
 $JSON_DIR/xianyu.canvas.json|$WORK/xianyu/visual_tree.v1.json|闲鱼
 EOF
 
-python3 services/backend-go/tools/compare_trees.py --batch "$WORK/manifest.txt"
+python3 services/backend-go/tools/compare_trees.py --batch "$WORK/manifest.txt" --trace-dir "$WORK/eval_trace"

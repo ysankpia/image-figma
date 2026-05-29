@@ -876,6 +876,19 @@ backend/app/errors.py
 
 `backend/app/png_tools/` 是标准库 PNG 支持包，只负责 metadata、decode、encode、crop/fill、background/foreground sampling 和 small geometry helpers；它不承载 source ownership 或 replay policy。
 
+## Go M29 VisualTree Diagnostics
+
+`services/backend-go/cmd/m29visualtree` 是 Go M29/Codia-like 结构编译器的本地 CLI。它消费 `evidence_tokens.v1.json` 和 `relation_graph.v1.json`，输出 `visual_tree.v1.json`、`visual_element.v1.json`、overlay/report artifacts，并额外写 report-only 决策追踪：
+
+```text
+visual_tree_trace.v1.jsonl
+visual_tree_trace_report.md
+```
+
+trace 解释 containment、background split、text/background pairing、XY-cut、neighbor components、cluster wrap/flatten、skip xycut 和 straggler absorb 等结构决策。它只用于诊断和批量评测归因，不改变 VisualTree、VisualElement、DSL、assets、M29.5 plan 或 materializer 行为。
+
+`services/backend-go/cmd/m29trace` 是只读查询工具，可用 `-node` 追踪一个 synthetic group 的创建原因，也可叠加 `compare_trees.py --trace-dir` 生成的 eval trace 查看 `matched/extra`、best Codia IoU 和对应 Codia bbox。
+
 ## Removed Runtime Boundary
 
 These modules or product paths have been removed from active backend runtime:
