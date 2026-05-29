@@ -519,3 +519,139 @@ function assignSeq(node, counter):
 - **低 seq = 背景层**（先画）
 - **高 seq = 前景层**（后画）
 - seq 顺序 = 渲染顺序（从后往前）
+
+---
+
+## 20. ListView vs ViewGroup 判据（第 6 轮）
+
+### 20.1 ListView 的语义
+
+ListView 表示**可滚动或重复内容区域**：
+- 水平 tab 栏（aspect=8.29）
+- 垂直侧边栏（aspect=0.06）
+- 主内容滚动区域（aspect=0.56）
+- 水平 tab 指示条（aspect=21.34）
+
+### 20.2 判据
+
+| 特征 | ListView | ViewGroup |
+|---|---|---|
+| 语义 | 可滚动/重复 | 静态分组 |
+| 典型 children | 重复结构的 ViewGroup | 混合内容 |
+| 嵌套 | 可嵌套 ListView | 不嵌套自身 |
+| 几何 | 无特定约束 | 无特定约束 |
+
+**判据是语义的（Android 组件类型），不是几何的。** 无法从 bbox/children 结构推导出 ListView vs ViewGroup。
+
+---
+
+## 21. Button 识别条件（第 7 轮）
+
+### 21.1 Button 的必要条件
+
+**Button = 有 "Background" 子节点的容器。**
+
+所有 4 个 Button 都有：
+1. 一个 TEXT child（按钮文案）
+2. 一个 ROUNDED_RECTANGLE "Image" child（图标）
+3. 一个 ROUNDED_RECTANGLE "Background" child（背景矩形）
+
+### 21.2 Button vs ViewGroup 的区分
+
+底部导航的 tab 项（ViewGroup）也有 Image + Text，但**没有 Background 子节点**。
+
+**规则：有可见背景矩形 → Button；无背景矩形 → ViewGroup。**
+
+这意味着 Button 分类器检测的是：截图中是否存在一个有颜色/圆角的背景区域在文本后面。
+
+---
+
+## 22. 语义分层模型（第 9 轮）
+
+### 22.1 Android Activity Layout 映射
+
+Codia 将截图映射到 Android 的 Activity 布局模型：
+
+```
+Root
+├── Header (ViewGroup): StatusBar + ActionBar + SearchBar
+├── Sidebar (ListView): 浮动在内容上方的侧边栏
+├── Content (ListView): 主滚动内容区域
+├── Decorative (Background): 小装饰元素
+└── BottomNavigation: 底部导航栏
+```
+
+### 22.2 层级重叠是正确行为
+
+Content 区域 (Y=160-1339) 延伸到 Header (Y=0-236) 和 BottomNav (Y=1284-1440) 的后面。这不是 bug，而是 Android 的 `fitsSystemWindows` / `CoordinatorLayout` 行为的正确表达。
+
+---
+
+## 23. 固定属性（第 8 轮）
+
+所有节点统一设置，Codia 不做个性化：
+- `opacity: 1`
+- `visible: true`
+- `strokeWeight: 1`（Background 为 0）
+- `strokeAlign: "INSIDE"`（TEXT 为 "OUTSIDE"）
+- `horizontalConstraint: "MAX"`
+- `verticalConstraint: "MAX"`
+- `frameMaskDisabled: true`（不裁剪溢出）
+
+---
+
+## 24. guid 系统（第 11 轮）
+
+- 所有节点 `sessionID: 2`（单一 session）
+- `localID` 范围 [5, 124]，连续无间隙
+- 120 个节点 = 120 个唯一 localID
+
+---
+
+## 25. 生成时间戳（第 12 轮）
+
+所有节点在 **5 秒内**创建完成（2026-05-29 12:41:31 ~ 12:41:36）。
+单一 userId。确认：Codia 通过 Figma Plugin API 在一次原子操作中生成整棵树。
+
+---
+
+## 26. schema:id 坐标来源（第 15 轮）
+
+schema:id 中的 (X, Y) 是**检测模型的原始输出坐标**（绝对页面坐标），不是 Figma 树中的相对坐标。
+
+- 86% 的节点：schema 坐标与计算的绝对坐标差 ≤ 5px
+- 97% 的节点：差 ≤ 10px
+- 4 个 outlier 全是 ListView（树构建时位置被调整）
+
+**确认的 pipeline**：
+```
+1. 检测模型输出 bbox（绝对坐标）→ 记录到 schema:id
+2. 分类器标注组件类型（ViewGroup/Button/ListView/...）
+3. 树构建器将元素分组到容器中
+4. 坐标转换为相对于父容器
+5. schema:id 保留原始检测坐标不变
+```
+
+---
+
+## 27. 跨样本验证（第 14 轮）
+
+腾讯动漫018 与 022 对比：
+
+| 维度 | 022 | 018 |
+|---|---|---|
+| 总节点 | 120 | 146 |
+| max depth | 5 | 6 |
+| FRAME | 38 | 41 |
+| ROUNDED_RECT | 46 | 57 |
+| TEXT | 36 | 48 |
+| ViewGroup | 25 | 24 |
+| ListView | 5 | 5 |
+| Button | 4 | 9 |
+
+**一致的模式**：
+- 只有 3 种 Figma 类型
+- schema:id 系统相同
+- ViewGroup/ListView/Button 分类逻辑相同
+- 018 多了 ActionBar（替代 022 的 StatusBar）
+- 018 有更多 Button（更多可交互控件）
