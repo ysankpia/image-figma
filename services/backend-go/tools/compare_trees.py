@@ -186,16 +186,21 @@ def grouping_recall(codia, go):
     }
 
 
-def main():
-    codia_path = sys.argv[1] if len(sys.argv) > 1 else CODIA_DEFAULT
-    go_path = sys.argv[2] if len(sys.argv) > 2 else GO_DEFAULT
-
+def score_pair(codia_path, go_path):
+    """对一组 (codia, go) 打分,返回指标 dict。"""
     codia = load_codia(codia_path)
     go = load_go(go_path)
-
     cm = metrics(codia)
     gm = metrics(go)
+    gr = grouping_recall(codia, go)
+    depth_ratio = min(gm["max_depth"], cm["max_depth"]) / max(cm["max_depth"], 1)
+    score = round(0.7 * gr["recall"] + 0.3 * depth_ratio, 3)
+    return {"cm": cm, "gm": gm, "gr": gr, "score": score, "depth_ratio": round(depth_ratio, 3)}
 
+
+def print_single(codia_path, go_path):
+    r = score_pair(codia_path, go_path)
+    cm, gm, gr = r["cm"], r["gm"], r["gr"]
     print("=" * 64)
     print("规模对比                    Codia        Go")
     print("-" * 64)
@@ -214,8 +219,6 @@ def main():
     print(f"Codia 类型: {cm['types']}")
     print(f"Go    类型: {gm['types']}")
     print()
-
-    gr = grouping_recall(codia, go)
     print("=" * 64)
     print("空间分组一致性 (Codia 的组,Go 是否也聚到了一起 IoU>=0.6)")
     print("-" * 64)
@@ -229,14 +232,55 @@ def main():
         for name, box, best in gr["misses"][:15]:
             bx = tuple(round(v) for v in box)
             print(f"  '{name}' codia_bbox={bx} 最佳IoU={best}")
-
-    # 综合分:分组召回 + 深度接近度
-    depth_ratio = min(gm["max_depth"], cm["max_depth"]) / max(cm["max_depth"], 1)
-    score = round(0.7 * gr["recall"] + 0.3 * depth_ratio, 3)
     print()
     print("=" * 64)
-    print(f"综合相似度: {score}  (0.7*分组召回 + 0.3*深度比;1.0=结构1:1)")
+    print(f"综合相似度: {r['score']}  (0.7*分组召回 + 0.3*深度比;1.0=结构1:1)")
     print("=" * 64)
+
+
+def print_batch(manifest_path):
+    """批量模式:清单每行 'codia.json|go.json|可选标签',输出每组分数+平均+最低。
+
+    多图平均分和最低分是防过拟合的核心:单图刷分会被最低分拉下来。
+    """
+    pairs = []
+    with open(manifest_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            codia_p, go_p = parts[0], parts[1]
+            label = parts[2] if len(parts) > 2 else f"{codia_p.split('/')[-1]}"
+            pairs.append((label, codia_p, go_p))
+
+    print("=" * 78)
+    print(f"{'图':<22}{'召回':>8}{'深度比':>8}{'Codia容器':>10}{'Go容器':>10}{'综合分':>10}")
+    print("-" * 78)
+    scores = []
+    recalls = []
+    for label, cp, gp in pairs:
+        r = score_pair(cp, gp)
+        scores.append(r["score"])
+        recalls.append(r["gr"]["recall"])
+        print(f"{label[:22]:<22}{r['gr']['recall']:>8.3f}{r['depth_ratio']:>8.3f}"
+              f"{r['gr']['codia_containers']:>10}{r['gr']['go_containers']:>10}{r['score']:>10.3f}")
+    print("-" * 78)
+    if scores:
+        avg = round(sum(scores) / len(scores), 3)
+        worst = round(min(scores), 3)
+        print(f"{'平均综合分':<22}{'':>16}{'':>20}{avg:>10.3f}")
+        print(f"{'最低综合分(防过拟合)':<18}{'':>16}{'':>20}{worst:>10.3f}")
+    print("=" * 78)
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--batch":
+        print_batch(sys.argv[2])
+        return
+    codia_path = sys.argv[1] if len(sys.argv) > 1 else CODIA_DEFAULT
+    go_path = sys.argv[2] if len(sys.argv) > 2 else GO_DEFAULT
+    print_single(codia_path, go_path)
 
 
 if __name__ == "__main__":
