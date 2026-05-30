@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/assembly"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/ir"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/leaf"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/tree"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
@@ -30,12 +32,18 @@ func Compile(options Options) (Result, error) {
 
 	paths := outputPaths(options.OutputDir)
 	var detectorManifest *DetectorManifest
+	var detectorDoc *detector.Document
 	if options.DetectorCandidates != "" {
-		manifest, err := writeDetectorManifest(paths.detectorDir, options.DetectorCandidates)
+		doc, err := detector.ReadDocument(options.DetectorCandidates)
+		if err != nil {
+			return Result{}, fmt.Errorf("read detector candidates: %w", err)
+		}
+		manifest, err := writeDetectorManifest(paths.detectorDir, options.DetectorCandidates, doc)
 		if err != nil {
 			return Result{}, fmt.Errorf("detector candidates report-only manifest: %w", err)
 		}
 		detectorManifest = &manifest
+		detectorDoc = &doc
 	}
 	physical, err := m29pipeline.Run(m29pipeline.Options{
 		InputPath:   options.InputPath,
@@ -63,7 +71,27 @@ func Compile(options Options) (Result, error) {
 		return Result{}, fmt.Errorf("write leaf artifacts: %w", err)
 	}
 
-	controlStage, err := control.Compile(control.Options{InputPath: filepath.Join(paths.leavesDir, leaf.ArtifactName)})
+	assemblyResult, err := assembly.Build(assembly.Options{
+		Leaf:             leafIR,
+		Physical:         physical,
+		Tokens:           tokens,
+		Detector:         detectorDoc,
+		DetectorPath:     options.DetectorCandidates,
+		PhysicalPath:     filepath.Join(paths.extractDir, "m29_physical_evidence.v1.json"),
+		TokenPath:        filepath.Join(paths.tokensDir, "evidence_tokens.v1.json"),
+		SourceOutputPath: filepath.Join(paths.assemblyDir, "codia_ir.v1.json"),
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("codia assembly: %w", err)
+	}
+	if err := assembly.WriteArtifacts(paths.assemblyDir, assemblyResult); err != nil {
+		return Result{}, fmt.Errorf("write assembly artifacts: %w", err)
+	}
+	if err := ir.WriteArtifact(paths.assemblyDir, assemblyResult.Document); err != nil {
+		return Result{}, fmt.Errorf("write assembly ir: %w", err)
+	}
+
+	controlStage, err := control.Compile(control.Options{InputPath: filepath.Join(paths.assemblyDir, "codia_ir.v1.json")})
 	if err != nil {
 		return Result{}, fmt.Errorf("codia controls: %w", err)
 	}
@@ -93,6 +121,8 @@ func Compile(options Options) (Result, error) {
 		PhysicalEvidence: physical,
 		EvidenceTokens:   tokens,
 		LeafIR:           leafIR,
+		Assembly:         assemblyResult,
+		AssemblyIR:       assemblyResult.Document,
 		ControlStage:     controlStage,
 		ControlIR:        controlIR,
 		TreeIR:           treeIR,
@@ -102,6 +132,10 @@ func Compile(options Options) (Result, error) {
 			PhysicalEvidence: filepath.ToSlash(filepath.Join("extract", "m29_physical_evidence.v1.json")),
 			EvidenceTokens:   filepath.ToSlash(filepath.Join("tokens", "evidence_tokens.v1.json")),
 			LeafIR:           filepath.ToSlash(filepath.Join("leaves", leaf.ArtifactName)),
+			AssemblyIR:       filepath.ToSlash(filepath.Join("assembly", "codia_ir.v1.json")),
+			SourceCandidates: filepath.ToSlash(filepath.Join("assembly", assembly.SourceCandidatesArtifactName)),
+			OwnershipGraph:   filepath.ToSlash(filepath.Join("assembly", assembly.OwnershipGraphArtifactName)),
+			AssemblyReport:   filepath.ToSlash(filepath.Join("assembly", assembly.ReportArtifactName)),
 			ControlStage:     filepath.ToSlash(filepath.Join("controls", control.StageArtifactName)),
 			ControlIR:        filepath.ToSlash(filepath.Join("controls", control.ArtifactName)),
 			TreeIR:           tree.ArtifactName,
@@ -151,6 +185,7 @@ type paths struct {
 	extractDir  string
 	tokensDir   string
 	leavesDir   string
+	assemblyDir string
 	controlsDir string
 	detectorDir string
 	diffDir     string
@@ -162,6 +197,7 @@ func outputPaths(outputDir string) paths {
 		extractDir:  filepath.Join(outputDir, "extract"),
 		tokensDir:   filepath.Join(outputDir, "tokens"),
 		leavesDir:   filepath.Join(outputDir, "leaves"),
+		assemblyDir: filepath.Join(outputDir, "assembly"),
 		controlsDir: filepath.Join(outputDir, "controls"),
 		detectorDir: filepath.Join(outputDir, "detector"),
 		diffDir:     filepath.Join(outputDir, "diff"),
@@ -169,11 +205,7 @@ func outputPaths(outputDir string) paths {
 	}
 }
 
-func writeDetectorManifest(outputDir string, candidatesPath string) (DetectorManifest, error) {
-	doc, err := detector.ReadDocument(candidatesPath)
-	if err != nil {
-		return DetectorManifest{}, err
-	}
+func writeDetectorManifest(outputDir string, candidatesPath string, doc detector.Document) (DetectorManifest, error) {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return DetectorManifest{}, err
 	}

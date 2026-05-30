@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/assembly"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
@@ -23,6 +24,8 @@ type Result struct {
 	PhysicalEvidence contract.Document `json:"-"`
 	EvidenceTokens   evidence.Document `json:"-"`
 	LeafIR           ir.Document       `json:"-"`
+	Assembly         assembly.Result   `json:"-"`
+	AssemblyIR       ir.Document       `json:"-"`
 	ControlStage     control.Result    `json:"-"`
 	ControlIR        ir.Document       `json:"-"`
 	TreeIR           ir.Document       `json:"-"`
@@ -37,6 +40,10 @@ type Artifacts struct {
 	PhysicalEvidence   string `json:"physicalEvidence"`
 	EvidenceTokens     string `json:"evidenceTokens"`
 	LeafIR             string `json:"leafIR"`
+	AssemblyIR         string `json:"assemblyIR"`
+	SourceCandidates   string `json:"sourceCandidates"`
+	OwnershipGraph     string `json:"ownershipGraph"`
+	AssemblyReport     string `json:"assemblyReport"`
 	ControlStage       string `json:"controlStage"`
 	ControlIR          string `json:"controlIR"`
 	TreeIR             string `json:"treeIR"`
