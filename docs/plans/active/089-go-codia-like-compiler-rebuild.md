@@ -660,6 +660,21 @@ Result:
 | Tencent 018 | `149 / 93 / 56 / 53` | `149 / 94 / 55 / 52` | `Background` matched `6 -> 7`; home indicator no longer appears as an extra/missed pair. |
 | Tencent 022 | `108 / 91 / 17 / 29` | `108 / 92 / 16 / 28` | `Background` recall reaches `1.0`; home indicator no longer appears as an extra/missed pair. |
 
+Latest Beta-quality checkpoint on 2026-05-30:
+
+```bash
+bash services/backend-go/tools/codia_smoke_2img.sh
+```
+
+Result:
+
+| sample | generated | matched | extra | missed | parent edge precision | parent edge recall | topAction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Tencent 018 | 149 | 95 | 54 | 51 | 0.419 | 0.428 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
+| Tencent 022 | 106 | 92 | 14 | 28 | 0.619 | 0.546 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
+
+This branch is usable as a Beta / best-effort Codia-like reconstruction path, but this checkpoint records the current quality ceiling: the dominant remaining failure is upstream ImageView source recall, not tree ordering or XY-cut. The detailed release-quality debt, do-not-fix paths, detector dataset plan, and future closure criteria are tracked in [bug 017](../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md).
+
 ## Documentation Updates
 
 When Phase 0 lands, update:

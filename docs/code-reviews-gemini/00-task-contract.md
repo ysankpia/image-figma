@@ -1,7 +1,7 @@
 # 00 Task Contract
 
 ## Audit Overview
-本审计工作严格遵循 `docs/plans/active/062-m29-first-principles-source-chain-code-audit.md` 中的规范，对 `image-figma` 项目的后端 M29 物理决策与重放管线进行全景式的代码事实审计。
+本审计工作严格遵循 `docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md` 中的规范，对 `image-figma` 项目的后端 M29 物理决策与重放管线进行全景式的代码事实审计。
 
 ## Core Principles (核心审计原则)
 1. **代码事实驱动 (Code-Fact Driven)**：报告的所有结论必须建立在当前仓库的代码行、测试用例和已生成的数据结构基础之上，不得依赖外部臆测或历史过期规划。

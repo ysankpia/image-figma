@@ -155,7 +155,7 @@ grep -nE "BBox\.(Height|Width) [<>] [0-9]+|[<>] [0-9]{2,}" internal/m29/visualtr
 | `services/backend-go/tools/compare_trees.py` | 评分逻辑 + `--batch` 模式(不许改) |
 | `docs/reference/codia-samples/*.canvas.json` | 4 张图的 Codia 标准答案树 |
 | `docs/reference/codia-samples/images/*.png` | 4 张输入图 |
-| `docs/reference/codia-fig-reverse-engineering.md` | Codia 真实结构分析 |
+| `docs/reference/legacy/codia-exploration/codia-fig-reverse-engineering.md` | 历史 Codia 结构分析(只作追溯) |
 
 ## 八、提醒
 

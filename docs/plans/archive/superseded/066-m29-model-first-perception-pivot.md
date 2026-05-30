@@ -167,7 +167,7 @@ Allowed outputs:
 
 ```text
 backend/scripts/probe_onnx_model.py
-docs/plans/active/066 artifacts or notes
+docs/plans/archive/superseded/066 artifacts or notes
 small JSON probe result under a non-storage docs/artifact path if needed
 ```
 
@@ -259,4 +259,3 @@ make bridge fate a decision source
 commit model binaries into the repo
 add inference dependencies to main before probe evidence
 ```
-

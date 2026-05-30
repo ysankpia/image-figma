@@ -18,11 +18,12 @@
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
 - 当前 Go M29.0 physical evidence kernel 计划：[plans/active/082-go-m29-physical-evidence-kernel.md](plans/active/082-go-m29-physical-evidence-kernel.md)
 - 当前 Go Codia-like compiler rebuild 计划：[plans/active/089-go-codia-like-compiler-rebuild.md](plans/active/089-go-codia-like-compiler-rebuild.md)
+- 当前 Codia-like Beta 质量阻塞记录：[bugs/open/017-codia-like-beta-ui-role-detector-gap.md](bugs/open/017-codia-like-beta-ui-role-detector-gap.md)
 - 刚完成的 Go M29 VisualTree 决策追踪计划：[plans/completed/085-go-m29-visualtree-decision-trace.md](plans/completed/085-go-m29-visualtree-decision-trace.md)
 - 刚完成的 Go M29 normalized tree 身份合同计划：[plans/completed/086-go-m29-normalized-tree-identity-contract.md](plans/completed/086-go-m29-normalized-tree-identity-contract.md)
 - 刚完成的 Go M29 VisualTree group permission gate 计划：[plans/completed/087-go-m29-visualtree-group-permission-gate.md](plans/completed/087-go-m29-visualtree-group-permission-gate.md)
 - 刚完成的 Go M29 offline group evidence audit 计划：[plans/completed/088-go-m29-offline-group-evidence-audit.md](plans/completed/088-go-m29-offline-group-evidence-audit.md)
-- 当前 active plan：M29 model-first 感知转向计划见 [plans/active/066-m29-model-first-perception-pivot.md](plans/active/066-m29-model-first-perception-pivot.md)，复合 media 残差 ownership 重构计划见 [plans/active/065-m29-composite-media-residual-ownership-rewrite.md](plans/active/065-m29-composite-media-residual-ownership-rewrite.md)，M29 第一性原理 source-chain 代码审计计划见 [plans/active/062-m29-first-principles-source-chain-code-audit.md](plans/active/062-m29-first-principles-source-chain-code-audit.md)，Gemini 审核核验计划见 [plans/active/060-gemini-review-first-principles-audit.md](plans/active/060-gemini-review-first-principles-audit.md)，M29 internal icon 证据合同计划见 [plans/active/058-m29-evidence-contract-for-internal-ui-icons.md](plans/active/058-m29-evidence-contract-for-internal-ui-icons.md)，525 可编辑控件质量计划见 [plans/active/057-m29-525-editable-control-quality-hardening.md](plans/active/057-m29-525-editable-control-quality-hardening.md)，上一阶段 525 稳定性计划见 [plans/active/056-m29-525-real-sample-batch-hardening.md](plans/active/056-m29-525-real-sample-batch-hardening.md)。刚完成的 media-contained control icon source-chain 计划见 [plans/completed/064-m29-media-contained-control-icon-source-chain-hardening.md](plans/completed/064-m29-media-contained-control-icon-source-chain-hardening.md)，M29 source-chain 修复计划见 [plans/completed/063-m29-source-chain-repair-and-anti-specialization-hardening.md](plans/completed/063-m29-source-chain-repair-and-anti-specialization-hardening.md)，Codia-like 真实样本加固计划见 [plans/completed/061-codia-like-real-sample-hardening.md](plans/completed/061-codia-like-real-sample-hardening.md)，image math 边界计划见 [plans/completed/059-image-math-dependencies-and-boundary-hardening.md](plans/completed/059-image-math-dependencies-and-boundary-hardening.md)。
+- 已替代旧探索：Python M29 525 hardening、Gemini 审计、composite media rewrite、model-first pivot 等旧 active plans 已移入 [plans/archive/superseded/](plans/archive/superseded/index.md)。当前 Codia-like 质量后续以 089 主线和 bug 017 为准。
 
 ## By Task Type
 
@@ -42,6 +43,7 @@
 - [product/non-goals.md](product/non-goals.md)：一期硬性不做事项。
 - [product/acceptance-criteria.md](product/acceptance-criteria.md)：P0/P1/P2 验收。
 - [product/codia_compiler_buildability_audit_zh.md](product/codia_compiler_buildability_audit_zh.md)：Codia-like compiler rebuild 的当前产品合同与可实施审计。
+- [bugs/open/017-codia-like-beta-ui-role-detector-gap.md](bugs/open/017-codia-like-beta-ui-role-detector-gap.md)：Codia-like Beta 上线质量债、UI role detector 缺口、后续训练/接入/验收手册。
 
 ## Architecture
 

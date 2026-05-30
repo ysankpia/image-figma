@@ -2,7 +2,7 @@
 
 ## Objective
 
-按 `docs/plans/active/062-m29-first-principles-source-chain-code-audit.md` 执行 M29 source-chain 只读代码审计。审计目标是把 M29.0 到 DSL/Figma 的当前主链事实讲清楚，并输出后续修复路线。当前阶段不改运行行为。
+按 `docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md` 执行 M29 source-chain 只读代码审计。审计目标是把 M29.0 到 DSL/Figma 的当前主链事实讲清楚，并输出后续修复路线。当前阶段不改运行行为。
 
 ## Mode
 
@@ -20,14 +20,14 @@ first-principles-analysis: judgment gate
 ```text
 AGENTS.md
 docs/index.md
-docs/plans/active/062-m29-first-principles-source-chain-code-audit.md
+docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md
 docs/engineering/current-mainline-code-map.md
 docs/architecture/m29-experimental-mathematical-contract.md
 docs/bugs/open/009-specialization-prone-m29-internal-asset-gates.md
-docs/plans/active/056-m29-525-real-sample-batch-hardening.md
-docs/plans/active/057-m29-525-editable-control-quality-hardening.md
-docs/plans/active/058-m29-evidence-contract-for-internal-ui-icons.md
-docs/plans/active/060-gemini-review-first-principles-audit.md
+docs/plans/archive/superseded/056-m29-525-real-sample-batch-hardening.md
+docs/plans/archive/superseded/057-m29-525-editable-control-quality-hardening.md
+docs/plans/archive/superseded/058-m29-evidence-contract-for-internal-ui-icons.md
+docs/plans/archive/superseded/060-gemini-review-first-principles-audit.md
 docs/plans/completed/061-codia-like-real-sample-hardening.md
 ```
 
@@ -58,7 +58,7 @@ Audit/write docs only:
 
 ```text
 docs/code-reviews/m29-first-principles-source-chain-audit/
-docs/plans/active/062-m29-first-principles-source-chain-code-audit.md
+docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md
 docs/index.md
 ```
 
@@ -133,7 +133,7 @@ uv run pytest tests/test_media_internal_decomposition.py tests/test_transparent_
 ```text
 main...origin/main [ahead 1]
 docs/index.md modified
-docs/plans/active/062-m29-first-principles-source-chain-code-audit.md untracked
+docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md untracked
 docs/reference/code_review_first_principles_Gemini.md untracked, user said do not touch
 ```
 

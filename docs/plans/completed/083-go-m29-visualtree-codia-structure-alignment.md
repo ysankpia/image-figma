@@ -5,6 +5,8 @@
 - 负责人:未指定(可交由 Codex 执行)
 - 所属链路:`services/backend-go` 的 M29 VisualTree 编译层
 
+> 历史说明：本计划记录的是旧 Go M29 VisualTree / XY-cut 对齐阶段。后续 raw Codia canvas 审计和 Codia-like compiler 工作已经替代了“纯几何空间聚类可接近 Codia 1:1”的判断。当前实现主线以 `docs/plans/active/089-go-codia-like-compiler-rebuild.md` 为准；当前 Beta 质量瓶颈和 detector 后续路径见 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。本文保留作历史追溯，不作为新实现合同。
+
 ## 一、任务背景
 
 本项目目标:截图 PNG → 可编辑 Figma 设计树(类似 Codia AI Design)。正式后端为 Go(`services/backend-go`)。链路:
@@ -14,7 +16,7 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
    → m29relations(关系图) → m29visualtree(编译成可编辑树) → visual_tree.v1.json
 ```
 
-**核心认知(已验证,不要推翻):** Codia 没有神秘大模型。其 pipeline = 感知(切图 + OCR + 元件定位)→ **编译(纯几何空间聚类成嵌套树,无语义)** → 机械命名 → 像素测量样式。我们已导出 Codia `.fig` 并解析,拿到它对一张真实图的完整输出树作为"标准答案"。详见 `docs/reference/codia-fig-reverse-engineering.md` 与 `docs/reference/codia-samples/tencent-comic-018.canvas.json`。
+**历史核心认知(后续已降级):** 当时判断 Codia pipeline = 感知(切图 + OCR + 元件定位)→ **编译(纯几何空间聚类成嵌套树,无语义)** → 机械命名 → 像素测量样式。后续多样本 raw canvas 审计和 Xianyu tiny ImageView 证据显示，当前主线不能继续把纯几何聚类当作 Codia-like 质量上限。旧 `.fig` / canvas 解析笔记已归档到 `docs/reference/legacy/codia-exploration/codia-fig-reverse-engineering.md`，raw Codia `.canvas.json` samples 仍是 golden truth。
 
 **关键事实:** Codia 只用 4 种节点 `FRAME(容器,命名 Groups / 可点 Button) / TEXT / ROUNDED_RECTANGLE(Image 或 Background)`。层级完全靠**空间包含 + 聚类**算出来,不是语义识别。
 
@@ -89,7 +91,7 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
 
 ## 五、硬约束(必须遵守)
 
-1. **纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是本项目失败 3-4 次的根本教训(见 `docs/plans/active/066-m29-model-first-perception-pivot.md`)。
+1. **历史约束：纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是旧 VisualTree 阶段的约束；当前 Go Codia-like compiler 已转向 role-aware pipeline，见 `docs/plans/active/089-go-codia-like-compiler-rebuild.md` 和 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。
 2. **不分裂主线。** 改进直接写进 Go(`services/backend-go`),不在 Python 另起炉灶;Python 仅用于对比标尺。
 3. **证据驱动,每次改动都用对比工具验证。** 改完跑 `compare_trees.py`,分数升才保留,降就回滚。不要在单一指标上调参陷入局部最优(历史失败模式)。
 4. **节点类型收口在 `Body/Layer/Text/Image`**,不引入语义节点类型(`TestCompileDoesNotCreateSemanticNodeTypes` 必须始终通过)。
@@ -144,7 +146,7 @@ python3 services/backend-go/tools/compare_trees.py docs/reference/codia-samples/
 | `services/backend-go/internal/m29/visualtree/containment.go` | bbox 包含建父子(任务 A 需了解,避免重复) |
 | `services/backend-go/internal/m29/visualtree/compiler_test.go` | 单元测试(任务 D) |
 | `services/backend-go/tools/compare_trees.py` | 对比标尺(不改其评分逻辑,只用它验证) |
-| `docs/reference/codia-fig-reverse-engineering.md` | Codia 真实结构分析(理解目标) |
+| `docs/reference/legacy/codia-exploration/codia-fig-reverse-engineering.md` | 历史 Codia 结构分析(只作追溯) |
 | `docs/reference/codia-samples/tencent-comic-018.canvas.json` | Codia 标准答案树 |
 
 ## 八、可选增强(行有余力)

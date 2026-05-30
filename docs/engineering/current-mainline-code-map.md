@@ -987,21 +987,19 @@ For right-side floating rails, the tree builder can emit a root-level side `List
 
 Current screenshot-derived compiler smoke against raw golden IR:
 
-| sample | generated nodes | golden nodes | matched | extra | missed | parent edge precision | parent edge recall | structural roles now matched |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Tencent 018 | 150 | 146 | 90 | 60 | 56 | 0.409 | 0.421 | `ActionBar`, `BottomNavigation`, `ListView`, `ViewGroup`; generated `Button` precision is now 1.00 |
-| Tencent 022 | 102 | 120 | 82 | 20 | 38 | 0.554 | 0.471 | `StatusBar`, `BottomNavigation`, `ListView`, side rail `ListView`, `ViewGroup`; generated `Button` precision is now 1.00 |
+| sample | generated nodes | matched | extra | missed | parent edge precision | parent edge recall | topAction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Tencent 018 | 149 | 95 | 54 | 51 | 0.419 | 0.428 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
+| Tencent 022 | 106 | 92 | 14 | 28 | 0.619 | 0.546 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
 
 Current failure audit over the same smoke:
 
 | sample | top owning layer | dominant diagnosis | count | implication |
 | --- | --- | --- | ---: | --- |
-| Tencent 018 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 14 | Source primitive / leaf crop extraction lacks Codia-like ImageView crops. |
-| Tencent 018 | `background_detection_or_permission` | `background_fragment_extra` | 16 | Background fragments need merge/consume/suppress policy before final tree output. |
-| Tencent 022 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 20 | Right rail and body internal cover crops are missing upstream evidence. |
-| Tencent 022 | `codia_tree_builder` | `tree_container_bbox_mismatch ViewGroup` | 8 | Tree bbox fitting remains, but should follow leaf crop recall improvement. |
+| Tencent 018 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Source primitive / leaf crop extraction lacks Codia-like ImageView crops. |
+| Tencent 022 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Remaining side rail, small icon, and internal image crops need stronger upstream role-aware evidence. |
 
-The remaining dominant gaps are not owned by `m29visualtree`: physical leaf bbox mismatch, missing large Background surfaces, rejected control-surface backgrounds that still need card/background ownership cleanup, over-broad card/row grouping, and missing rail/list item crops from upstream leaf evidence. Next work should refine `internal/codia/tree` ownership and upstream physical evidence; do not solve these by tuning XY-cut thresholds or by injecting Codia golden identity into generation.
+The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The compiler can be used as a Beta path, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
 
 Latest evidence-kind breakdown for extra generated nodes shows where the next tree ownership work belongs:
 

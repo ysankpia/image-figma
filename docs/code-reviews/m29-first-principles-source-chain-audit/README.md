@@ -2,7 +2,7 @@
 
 - 状态：reports complete, pending review
 - 创建日期：2026-05-26
-- 对应计划：`docs/plans/active/062-m29-first-principles-source-chain-code-audit.md`
+- 对应计划：`docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md`
 - 审计模式：只读代码审计，不改变 runtime 行为
 
 ## Purpose
@@ -45,7 +45,7 @@ docs/index.md
 docs/engineering/current-mainline-code-map.md
 docs/architecture/m29-experimental-mathematical-contract.md
 docs/engineering/m29-contract-regression-matrix.md
-docs/plans/active/062-m29-first-principles-source-chain-code-audit.md
+docs/plans/archive/superseded/062-m29-first-principles-source-chain-code-audit.md
 ```
 
 硬边界：

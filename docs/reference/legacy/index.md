@@ -2,6 +2,8 @@
 
 本目录保存文档 harness 整理前的原始草稿。它们是背景材料，不是当前正式规范。正式规范以 `docs/product/`、`docs/architecture/`、`docs/engineering/`、`docs/runbooks/`、`docs/reference/`、`docs/decisions/` 中的文档为准。
 
+另有 Codia 逆向探索旧文档已归档到 [codia-exploration/](codia-exploration/)。这些文档记录旧阶段对 Codia API、`.fig`、VisualElement 和早期 reverse spec 的理解，不能覆盖当前 source truth。当前 Go Codia-like compiler 以 [../../product/codia_compiler_buildability_audit_zh.md](../../product/codia_compiler_buildability_audit_zh.md)、[../../plans/active/089-go-codia-like-compiler-rebuild.md](../../plans/active/089-go-codia-like-compiler-rebuild.md)、raw Codia `.canvas.json` samples 和 [../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md](../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md) 为准。
+
 | 原文件 | 归档文件 | 主题 | 已提炼进正式文档 |
 | --- | --- | --- | --- |
 | `01项目总览03一期MVP范围_v0.1.md` | [mvp-scope.original.md](mvp-scope.original.md) | MVP 范围 | 是 |

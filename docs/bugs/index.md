@@ -4,6 +4,7 @@
 
 当前 open bug：
 
+- [017-codia-like-beta-ui-role-detector-gap.md](open/017-codia-like-beta-ui-role-detector-gap.md)：Go Codia-like compiler 可先作为 Beta 上线，但当前质量天花板受限于缺少 UI role detector / role-aware evidence refinement，主要表现为 `upstream_leaf_missing ImageView`。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
 
