@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"image/png"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -193,6 +195,7 @@ func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request, task *T
 		"stage":     task.Stage,
 		"outputDir": task.OutputDir,
 		"artifacts": task.Artifacts,
+		"warnings":  task.Warnings,
 	}})
 }
 
@@ -218,17 +221,31 @@ func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request, task *Task,
 }
 
 func (s *Server) runTask(taskID, inputPath, outputDir string) {
+	defer s.recoverTask(taskID)
+
 	detectorCandidates := strings.TrimSpace(s.config.DetectorCandidates)
+	detectorFallback := ""
 	if detectorCandidates == "" && s.config.DetectorEnabled {
 		s.updateTask(taskID, "processing", "codia_detector", 20, "Running UI detector.", nil)
 		candidatePath, err := s.runDetector(inputPath, filepath.Join(outputDir, "detector"))
 		if err != nil {
-			s.updateTask(taskID, "failed", "codia_detector", 100, err.Error(), &TaskError{Code: "CODIA_DETECTOR_FAILED", Message: err.Error()})
-			return
+			detectorFallback = err.Error()
+			log.Printf("codia detector fallback task=%s: %v", taskID, err)
+			_ = writeDetectorFallback(filepath.Join(outputDir, "detector"), err)
+			s.addTaskWarning(taskID, TaskWarning{
+				Code:    "CODIA_DETECTOR_FALLBACK",
+				Message: detectorFallback,
+				Stage:   "codia_detector",
+			})
+		} else {
+			detectorCandidates = candidatePath
 		}
-		detectorCandidates = candidatePath
 	}
-	s.updateTask(taskID, "processing", "codia_compile", 40, "Running Go Codia compiler.", nil)
+	compileMessage := "Running Go Codia compiler."
+	if detectorFallback != "" {
+		compileMessage = "Running Go Codia compiler without detector candidates after detector fallback."
+	}
+	s.updateTask(taskID, "processing", "codia_compile", 40, compileMessage, nil)
 	result, err := s.compile(compiler.Options{
 		InputPath:          inputPath,
 		OCRProvider:        s.config.OCRProvider,
@@ -247,6 +264,9 @@ func (s *Server) runTask(taskID, inputPath, outputDir string) {
 		task.Stage = "codia_completed"
 		task.Progress = 100
 		task.Message = "Codia Runtime DSL 0.2 is ready."
+		if detectorFallback != "" {
+			task.Message = "Codia Runtime DSL 0.2 is ready. UI detector fallback was used."
+		}
 		task.DSLPath = dslPath
 		task.Artifacts = artifactsToMap(result.Artifacts)
 		task.UpdatedAt = time.Now().UTC()
@@ -262,6 +282,34 @@ func (s *Server) runDetector(inputPath, outputDir string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(outputDir, "ui_detector_candidates.v1.json"), nil
+}
+
+func (s *Server) recoverTask(taskID string) {
+	value := recover()
+	if value == nil {
+		return
+	}
+	message := fmt.Sprintf("Codia task panicked: %v", value)
+	log.Printf("codia task panic task=%s: %v\n%s", taskID, value, debug.Stack())
+	s.updateTask(taskID, "failed", "codia_panic", 100, message, &TaskError{
+		Code:    "CODIA_TASK_PANIC",
+		Message: message,
+	})
+}
+
+func writeDetectorFallback(outputDir string, err error) error {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return err
+	}
+	doc := map[string]any{
+		"version": "codia_detector_fallback.v1",
+		"error":   err.Error(),
+	}
+	data, marshalErr := json.MarshalIndent(doc, "", "  ")
+	if marshalErr != nil {
+		return marshalErr
+	}
+	return os.WriteFile(filepath.Join(outputDir, "detector_fallback.v1.json"), data, 0o644)
 }
 
 func (s *Server) storeTask(task *Task) {
@@ -284,6 +332,9 @@ func (s *Server) getTask(taskID string) *Task {
 			copy.Artifacts[key] = value
 		}
 	}
+	if len(task.Warnings) > 0 {
+		copy.Warnings = append([]TaskWarning(nil), task.Warnings...)
+	}
 	return &copy
 }
 
@@ -302,6 +353,17 @@ func (s *Server) updateTask(taskID, status, stage string, progress int, message 
 	task.UpdatedAt = time.Now().UTC()
 }
 
+func (s *Server) addTaskWarning(taskID string, warning TaskWarning) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task := s.tasks[taskID]
+	if task == nil {
+		return
+	}
+	task.Warnings = append(task.Warnings, warning)
+	task.UpdatedAt = time.Now().UTC()
+}
+
 func (task Task) toPublic() map[string]any {
 	out := map[string]any{
 		"taskId":   task.ID,
@@ -312,6 +374,9 @@ func (task Task) toPublic() map[string]any {
 	}
 	if task.Error != nil {
 		out["error"] = task.Error
+	}
+	if len(task.Warnings) > 0 {
+		out["warnings"] = task.Warnings
 	}
 	return out
 }

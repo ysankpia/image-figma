@@ -41,6 +41,7 @@ type ProviderMeta struct {
 	WireAPI     string `json:"wireApi"`
 	Model       string `json:"model"`
 	BaseURLHost string `json:"baseUrlHost,omitempty"`
+	Stream      bool   `json:"stream,omitempty"`
 }
 
 type Preprocess struct {

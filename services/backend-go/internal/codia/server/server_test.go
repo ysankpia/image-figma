@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -239,12 +240,85 @@ func TestCodiaPreviewRunsDetectorWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestCodiaPreviewFallsBackWhenDetectorFails(t *testing.T) {
+	tmp := t.TempDir()
+	compileCalled := false
+	srv := NewWithCompilerAndDetector(
+		Config{StorageRoot: tmp, DetectorEnabled: true},
+		func(options compiler.Options) (compiler.Result, error) {
+			if options.DetectorCandidates != "" {
+				t.Fatalf("expected no detector candidates after fallback, got %q", options.DetectorCandidates)
+			}
+			compileCalled = true
+			return writeMinimalRuntimeDSL(options)
+		},
+		func(_ context.Context, _ detector.Options) (detector.RunResult, error) {
+			return detector.RunResult{}, errors.New(`pass imageview: Post "https://aicode.cat/v1/responses": local error: tls: bad record MAC`)
+		},
+	)
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	uploadResp := postPNG(t, httpServer.URL+"/api/codia-preview", "input.png", makePNG(t))
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("upload status = %d body=%s", uploadResp.StatusCode, readBody(t, uploadResp))
+	}
+	var upload struct {
+		Data struct {
+			TaskID string `json:"taskId"`
+		} `json:"data"`
+	}
+	decodeResponse(t, uploadResp, &upload)
+	task := waitForCompletedTask(t, httpServer.URL, upload.Data.TaskID)
+	if task.Status != "completed" {
+		t.Fatalf("task status = %q message=%s", task.Status, task.Message)
+	}
+	if !compileCalled {
+		t.Fatalf("compile was not called after detector fallback")
+	}
+	if len(task.Warnings) != 1 || task.Warnings[0].Code != "CODIA_DETECTOR_FALLBACK" {
+		t.Fatalf("warnings = %+v", task.Warnings)
+	}
+	fallbackPath := filepath.Join(tmp, "codia_previews", upload.Data.TaskID, "compile", "detector", "detector_fallback.v1.json")
+	if _, err := os.Stat(fallbackPath); err != nil {
+		t.Fatalf("expected detector fallback artifact: %v", err)
+	}
+}
+
+func TestCodiaPreviewMarksTaskFailedOnPanic(t *testing.T) {
+	srv := NewWithCompiler(Config{StorageRoot: t.TempDir()}, func(_ compiler.Options) (compiler.Result, error) {
+		panic("synthetic compiler panic")
+	})
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	uploadResp := postPNG(t, httpServer.URL+"/api/codia-preview", "input.png", makePNG(t))
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("upload status = %d body=%s", uploadResp.StatusCode, readBody(t, uploadResp))
+	}
+	var upload struct {
+		Data struct {
+			TaskID string `json:"taskId"`
+		} `json:"data"`
+	}
+	decodeResponse(t, uploadResp, &upload)
+	task := waitForCompletedTask(t, httpServer.URL, upload.Data.TaskID)
+	if task.Status != "failed" || task.Stage != "codia_panic" {
+		t.Fatalf("task = %+v", task)
+	}
+	if task.Error == nil || task.Error.Code != "CODIA_TASK_PANIC" {
+		t.Fatalf("task error = %+v", task.Error)
+	}
+}
+
 type publicTask struct {
-	TaskID   string `json:"taskId"`
-	Status   string `json:"status"`
-	Stage    string `json:"stage"`
-	Progress int    `json:"progress"`
-	Message  string `json:"message"`
+	TaskID   string        `json:"taskId"`
+	Status   string        `json:"status"`
+	Stage    string        `json:"stage"`
+	Progress int           `json:"progress"`
+	Message  string        `json:"message"`
+	Error    *TaskError    `json:"error,omitempty"`
+	Warnings []TaskWarning `json:"warnings,omitempty"`
 }
 
 func waitForCompletedTask(t *testing.T, baseURL, taskID string) publicTask {
@@ -309,6 +383,30 @@ func makePNG(t *testing.T) []byte {
 		t.Fatalf("encode png: %v", err)
 	}
 	return buf.Bytes()
+}
+
+func writeMinimalRuntimeDSL(options compiler.Options) (compiler.Result, error) {
+	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
+		return compiler.Result{}, err
+	}
+	doc := dsl02.Document{
+		Version: "0.2",
+		Kind:    "codia_runtime",
+		TaskID:  options.TaskID,
+		Page:    dsl02.Page{Width: 160, Height: 120, Background: dsl02.Background{Type: "color", Value: "#FFFFFF"}},
+		Assets:  []dsl02.Asset{},
+		Root: dsl02.Node{
+			ID:   "root",
+			Role: "Root",
+			Type: "frame",
+			Name: "Root",
+			BBox: dsl02.BBox{X: 0, Y: 0, Width: 160, Height: 120},
+		},
+	}
+	if err := dsl02.WriteArtifact(options.OutputDir, doc); err != nil {
+		return compiler.Result{}, err
+	}
+	return compiler.Result{Artifacts: compiler.Artifacts{RuntimeDSL02: dsl02.ArtifactName}}, nil
 }
 
 func decodeResponse(t *testing.T, resp *http.Response, out any) {

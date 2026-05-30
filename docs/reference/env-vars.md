@@ -31,6 +31,7 @@
 | `CODIA_UI_DETECTOR_MAX_IMAGE_SIDE` | 每个 detector pass 发送给模型的最长边 | `1280` | 否 |
 | `CODIA_UI_DETECTOR_TIMEOUT_SECONDS` | 每个 detector pass 的 provider 超时秒数 | `180` | 否 |
 | `CODIA_UI_DETECTOR_TEMPERATURE` | detector 模型 temperature；`0` 表示不显式传或保持确定性配置 | `0` | 否 |
+| `CODIA_UI_DETECTOR_STREAM` | detector 是否请求 OpenAI-compatible streaming/SSE 响应 | `false` | 否 |
 | `CODIA_SERVER_ADDR` | Go Codia Beta HTTP server 监听地址 | `127.0.0.1:8000` | 否 |
 | `CODIA_SERVER_STORAGE_ROOT` | Go Codia Beta server 存储根目录 | `services/backend-go/storage/codia_server` 启动目录相对路径默认 `./storage/codia_server` | 否 |
 | `CODIA_SERVER_MAX_UPLOAD_BYTES` | Go Codia Beta server PNG 上传大小上限 | `10485760` | 否 |
@@ -68,6 +69,7 @@ CODIA_UI_DETECTOR_WIRE_API=responses
 CODIA_UI_DETECTOR_BASE_URL=https://api.openai.com
 CODIA_UI_DETECTOR_MODEL=gpt-5.5
 CODIA_UI_DETECTOR_API_KEY=...
+CODIA_UI_DETECTOR_STREAM=false
 ```
 
 OpenAI-compatible Chat Completions provider:
@@ -80,7 +82,7 @@ CODIA_UI_DETECTOR_MODEL=provider-model-id
 CODIA_UI_DETECTOR_API_KEY=...
 ```
 
-`CODIA_UI_DETECTOR_BASE_URL`、`CODIA_UI_DETECTOR_MODEL`、`CODIA_UI_DETECTOR_API_KEY` 都是供应商可替换参数，不允许写死在代码里。`codiadetector` 兼容读取 `OPENAI_API_KEY` 作为临时 fallback，但新配置应优先使用 `CODIA_UI_DETECTOR_API_KEY`，避免和历史 OpenAI vision 实验变量混在一起。
+`CODIA_UI_DETECTOR_BASE_URL`、`CODIA_UI_DETECTOR_MODEL`、`CODIA_UI_DETECTOR_API_KEY`、`CODIA_UI_DETECTOR_STREAM` 都是供应商可替换参数，不允许写死在代码里。`codiadetector` 兼容读取 `OPENAI_API_KEY` 作为临时 fallback，但新配置应优先使用 `CODIA_UI_DETECTOR_API_KEY`，避免和历史 OpenAI vision 实验变量混在一起。
 
 Example:
 
@@ -119,9 +121,12 @@ CODIA_SERVER_STORAGE_ROOT=./storage/codia_server
 CODIA_SERVER_MAX_UPLOAD_BYTES=10485760
 CODIA_SERVER_DETECTOR_ENABLED=false
 CODIA_SERVER_DETECTOR_CANDIDATES=/path/to/ui_detector_candidates.v1.json
+CODIA_UI_DETECTOR_STREAM=true
 ```
 
-当 `CODIA_SERVER_DETECTOR_ENABLED=true` 且 `CODIA_SERVER_DETECTOR_CANDIDATES` 为空时，server 会在每次上传后先运行 `internal/codia/detector`，写出 `compile/detector/ui_detector_candidates.v1.json`，再把该文件传给 Go Codia compiler 的 assembly 层。detector provider、baseUrl、model、apiKey 仍由 `CODIA_UI_DETECTOR_*` 控制。
+当 `CODIA_SERVER_DETECTOR_ENABLED=true` 且 `CODIA_SERVER_DETECTOR_CANDIDATES` 为空时，server 会在每次上传后先运行 `internal/codia/detector`，写出 `compile/detector/ui_detector_candidates.v1.json`，再把该文件传给 Go Codia compiler 的 assembly 层。detector provider、baseUrl、model、apiKey、streaming 仍由 `CODIA_UI_DETECTOR_*` 控制。
+
+在线 detector 是可选证据源，不是生成主链的硬依赖。如果 provider 出现 TLS、超时、5xx、空响应或 JSON 解析失败，`codiaserver` 会写出 `compile/detector/detector_fallback.v1.json`，在 task 上记录 `CODIA_DETECTOR_FALLBACK` warning，然后继续用 M29/OCR fallback 编译 DSL。
 
 本地插件默认调用 `API_BASE_URL=http://localhost:8000/api`。如果 Python FastAPI 已占用 8000 端口，要么停止 Python server 后启动 Go `codiaserver`，要么同时修改插件 API base URL 后重新打包。
 

@@ -23,6 +23,7 @@ type Task struct {
 	OutputDir string            `json:"-"`
 	Artifacts map[string]string `json:"artifacts,omitempty"`
 	Error     *TaskError        `json:"error,omitempty"`
+	Warnings  []TaskWarning     `json:"warnings,omitempty"`
 	CreatedAt time.Time         `json:"-"`
 	UpdatedAt time.Time         `json:"-"`
 }
@@ -30,6 +31,12 @@ type Task struct {
 type TaskError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type TaskWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Stage   string `json:"stage,omitempty"`
 }
 
 type apiSuccess struct {

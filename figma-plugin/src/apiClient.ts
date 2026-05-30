@@ -15,6 +15,17 @@ export interface TaskResult {
   stage: string;
   progress: number;
   message: string;
+  warnings?: TaskWarning[];
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+export interface TaskWarning {
+  code: string;
+  message: string;
+  stage?: string;
 }
 
 export class BackendApiError extends Error {

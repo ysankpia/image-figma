@@ -26,6 +26,7 @@ type Options struct {
 	MaxSide     int
 	Timeout     time.Duration
 	Temperature float64
+	Stream      bool
 }
 
 type RunResult struct {
@@ -51,6 +52,7 @@ func OptionsFromEnv() Options {
 		MaxSide:     envInt("CODIA_UI_DETECTOR_MAX_IMAGE_SIDE", envInt("UI_DETECTOR_MAX_IMAGE_SIDE", 1280)),
 		Timeout:     time.Duration(envInt("CODIA_UI_DETECTOR_TIMEOUT_SECONDS", envInt("UI_DETECTOR_TIMEOUT_SECONDS", 180))) * time.Second,
 		Temperature: envFloat("CODIA_UI_DETECTOR_TEMPERATURE", envFloat("UI_DETECTOR_TEMPERATURE", 0)),
+		Stream:      envBool("CODIA_UI_DETECTOR_STREAM", envBool("UI_DETECTOR_STREAM", false)),
 	}
 }
 
@@ -113,6 +115,7 @@ func providerMeta(o Options) ProviderMeta {
 		WireAPI:     o.WireAPI,
 		Model:       o.Model,
 		BaseURLHost: host,
+		Stream:      o.Stream,
 	}
 }
 
@@ -155,6 +158,18 @@ func envFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func envBool(key string, fallback bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(raw)
 	if err != nil {
 		return fallback
 	}

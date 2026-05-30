@@ -964,6 +964,7 @@ report-only detector CLI          [implemented]
 -> ImageView-only permission merge [implemented]
 -> hint-only region/control integration [implemented]
 -> assembly material classification + hard region partition [implemented]
+-> codiaserver detector fallback + optional streaming provider calls [implemented]
 ```
 
 The hard boundary remains:
@@ -972,3 +973,5 @@ The hard boundary remains:
 Detector proposes visible role/bbox candidates.
 Go compiler decides source permission, ownership, structure, and emission.
 ```
+
+For the Beta server path, online detector is best-effort evidence. Provider TLS errors, timeouts, 5xx, empty responses, or invalid model JSON must not fail `/api/codia-preview`; `codiaserver` records `CODIA_DETECTOR_FALLBACK`, writes `compile/detector/detector_fallback.v1.json`, and continues compiling from M29/OCR. OpenAI-compatible streaming is available through `CODIA_UI_DETECTOR_STREAM=true` or `codiadetector -stream`, but it remains a provider transport option, not a new compiler contract.

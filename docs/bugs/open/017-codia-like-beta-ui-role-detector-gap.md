@@ -758,6 +758,16 @@ detector candidates
 
 Detector candidates can suggest roles, but M29 still provides pixel/crop/source evidence. Low-confidence detector outputs should remain report-only until backed by source evidence or accepted by a specific permission gate.
 
+### 2026-05-31 Runtime Reliability Checkpoint
+
+Observed plugin failure:
+
+```text
+pass imageview: Post "https://aicode.cat/v1/responses": local error: tls: bad record MAC
+```
+
+Root cause is provider transport instability during the optional online VLM detector pass. This is not a Codia compiler failure and must not block Beta generation. The server path now treats online detector output as best-effort evidence: on TLS/provider/timeout/empty-response failure it records `CODIA_DETECTOR_FALLBACK`, writes `compile/detector/detector_fallback.v1.json`, and continues with conservative M29/OCR compile. The Go detector also supports OpenAI-compatible streaming via `CODIA_UI_DETECTOR_STREAM=true` / `codiadetector -stream` for providers that expose stream-capable `/v1/responses` or `/v1/chat/completions`.
+
 ### Stage 4: Ownership graph
 
 Use deterministic ownership scoring:

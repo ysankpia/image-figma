@@ -27,6 +27,7 @@ func main() {
 	maxSide := flag.Int("max-side", envOptions.MaxSide, "maximum image side sent to provider")
 	timeoutSeconds := flag.Int("timeout-seconds", int(envOptions.Timeout/time.Second), "per-pass provider timeout in seconds")
 	temperature := flag.Float64("temperature", envOptions.Temperature, "optional model temperature")
+	stream := flag.Bool("stream", envOptions.Stream, "request streaming provider responses")
 
 	evalMode := flag.Bool("eval", false, "evaluate existing ui_detector_candidates.v1.json against golden CodiaIR")
 	candidatesPath := flag.String("candidates", "", "path to ui_detector_candidates.v1.json for -eval")
@@ -73,6 +74,7 @@ func main() {
 		MaxSide:     *maxSide,
 		Timeout:     time.Duration(*timeoutSeconds) * time.Second,
 		Temperature: *temperature,
+		Stream:      *stream,
 	}
 	result, err := detector.Run(context.Background(), options)
 	if err != nil {
