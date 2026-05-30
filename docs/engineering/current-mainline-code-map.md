@@ -1,8 +1,26 @@
-# Current Mainline Code Map
+# Current Runtime Code Map
 
 本文档只描述当前代码职责和阅读顺序，作为后续拆分长文件的依据。它不引入新 runtime stage、不改变 API、不替代架构文档。
 
-当前事实链：
+当前 Codia Beta 事实链是 Go：
+
+```text
+Plugin Generate Beta
+-> Go codiaserver /api/codia-preview
+-> OCR
+-> Go M29 physical evidence
+-> optional OpenAI-compatible UI detector
+-> evidence tokens
+-> Codia assembly/control/tree/emitter
+-> canvas-like export
+-> DSL v0.2 Codia Runtime
+-> local crop assets
+-> renderCodiaRuntimeDesign
+```
+
+Codia Beta 输出质量问题从 `services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/` 查起。优先看 `codia_runtime.dsl.v0_2.json`、`codia_tree_ir.v1.json`、`assembly/`、`detector/`、`assets/`，再判断是不是 renderer 或插件 Beta wiring 问题。
+
+保留的 Python/FastAPI DSL v0.1 preview 事实链：
 
 ```text
 Plugin upload
@@ -33,7 +51,7 @@ Plugin upload
 
 M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and ONNX proposer have been pruned from active backend runtime.
 
-Go Codia-like compiler 是当前 Codia Beta side path，不是 Python `/api/upload-preview` runtime stage：
+Go Codia-like compiler 是当前 Codia Beta 后端，不是 Python `/api/upload-preview` runtime stage：
 
 ```text
 services/backend-go/cmd/codiacompile
@@ -42,7 +60,7 @@ services/backend-go/cmd/codiacompile
 -> codia_runtime.dsl.v0_2.json
 ```
 
-`codia_runtime.dsl.v0_2.json` 是 DSL 0.2 artifact。`services/backend-go/cmd/codiaserver` 已经把它暴露给插件 `Generate Beta` 路径：
+`codia_runtime.dsl.v0_2.json` 是 DSL 0.2 artifact。`services/backend-go/cmd/codiaserver` 把它暴露给插件 `Generate Beta` 路径：
 
 ```text
 Plugin Generate Beta
@@ -54,7 +72,7 @@ Plugin Generate Beta
 -> renderCodiaRuntimeDesign
 ```
 
-它不写入 Python `dsl_results`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。
+它不写入 Python `dsl_results`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。调试 Codia Beta 时不要从 Python `backend/app` 入手，除非 Go artifact 证明输入来自 Python preview。
 
 ## Runtime Entry Surface
 
@@ -69,7 +87,7 @@ backend/app/routes/assets.py
 
 当前产品上传入口是 `POST /api/upload-preview`。旧 `POST /api/upload`、`GET /api/tasks/{taskId}/m29-direct-dsl`、`GET /api/tasks/{taskId}/m30-materialization`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
 
-当前 Codia Beta 上传入口是 Go `POST /api/codia-preview`。它属于 side path，不属于 Python `backend/app/main.py` route modules。
+当前 Codia Beta 上传入口是 Go `POST /api/codia-preview`。它不属于 Python `backend/app/main.py` route modules。
 
 ## Pipeline Orchestrator
 
@@ -903,7 +921,7 @@ backend/app/errors.py
 
 ## Go Codia-like Compiler Validation
 
-This section documents the Codia Beta/offline validation path, not the active product upload mainline. The active product path remains `POST /api/upload-preview` -> DSL v0.1 -> Renderer. The Go Codia-like compiler runs through local CLIs under `services/backend-go` and through the Go `codiaserver` Beta API. It is not wired into Python `/api/upload-preview` or `/api/tasks/{taskId}/dsl`.
+This section documents the active Codia Beta validation path. The retained Python preview path remains `POST /api/upload-preview` -> DSL v0.1 -> Renderer, but Codia Beta output quality is owned by Go CLIs under `services/backend-go` and by the Go `codiaserver` API. It is intentionally not wired into Python `/api/upload-preview` or `/api/tasks/{taskId}/dsl`.
 
 `services/backend-go/cmd/codiaanalyze` 是 Codia-like compiler rebuild 的第一阶段验证工具。它读取原始 Codia/Figma canvas JSON，定位 `Figma design - ... / Root`，解析 `pluginData` 中的 `schema:id`，并输出：
 
@@ -1029,7 +1047,7 @@ Current failure audit over the same smoke:
 | Tencent 018 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Source primitive / leaf crop extraction lacks Codia-like ImageView crops. |
 | Tencent 022 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Remaining side rail, small icon, and internal image crops need stronger upstream role-aware evidence. |
 
-The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The compiler can be used as a future Beta side path, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
+The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The Go compiler is the active Codia Beta backend, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
 
 The active next detector plan is [090 OpenAI-compatible UI Detector Short Pass](../plans/active/090-openai-compatible-ui-detector-short-pass.md). It records the 2026-05-30 VLM probes and defines the `ui_detector_candidates.v1.json` contract:
 
@@ -1042,7 +1060,7 @@ source screenshot
 -> existing Codia leaf/control/tree/emitter pipeline
 ```
 
-This is implemented only as an offline/Beta compiler surface and must not be treated as part of `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, optional `codiacompile -detector-candidates` integration, `services/backend-go/internal/codia/assembly`, and `services/backend-go/internal/codia/canvasexport`.
+This is implemented as the Go Codia Beta compiler surface and must not be treated as part of Python `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, optional `codiacompile -detector-candidates` integration, `services/backend-go/internal/codia/assembly`, and `services/backend-go/internal/codia/canvasexport`.
 
 `cmd/codiaserver` can now run this detector online for every plugin Beta upload when `CODIA_SERVER_DETECTOR_ENABLED=true`. It writes `compile/detector/ui_detector_candidates.v1.json` and passes that path to `compiler.Compile`. If `CODIA_SERVER_DETECTOR_CANDIDATES` is set, that explicit file is used instead of running the detector online.
 

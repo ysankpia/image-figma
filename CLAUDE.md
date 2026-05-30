@@ -4,13 +4,39 @@ This repository uses an agent-first workflow. Repository files are the source of
 
 ## Project Structure & Module Organization
 
-This repository is a pnpm workspace plus a FastAPI backend. `packages/dsl-schema/` owns DSL v0.1 types, schema, and validation. `packages/image-to-figma-renderer/` writes validated DSL into Figma through an adapter. `figma-plugin/` contains the plugin UI, main thread, manifest, and bundle checks. `backend/` contains the FastAPI app, upload mainline, M29 source truth, plan materializer, routes, storage helpers, and `backend/tests/`.
+This repository is a pnpm workspace plus two backend surfaces. `services/backend-go/` is the current Go backend for Codia Beta / `Generate Beta`: it owns `codiaserver`, Go M29 physical evidence, UI detector integration, Codia assembly/control/tree/emitter, DSL v0.2 export, local crop assets, and Go tests. `backend/` is the retained Python/FastAPI M29 DSL v0.1 upload-preview path and historical algorithm/reference surface; do not use it as the starting point for Codia Beta output-quality debugging unless a task explicitly targets `/api/upload-preview`. `packages/dsl-schema/` owns DSL contracts, `packages/image-to-figma-renderer/` writes validated DSL into Figma through an adapter, and `figma-plugin/` contains the plugin UI, main thread, manifest, and bundle checks.
 
 Start from [docs/index.md](docs/index.md). Current specs live in `docs/product/`, `docs/architecture/`, `docs/engineering/`, `docs/runbooks/`, `docs/reference/`, `docs/decisions/`, `docs/plans/`, and `docs/bugs/`. Historical drafts live only in `docs/reference/legacy/`. The Chinese reference snapshot for this file is [docs/reference/agent-guidelines.zh-CN.md](docs/reference/agent-guidelines.zh-CN.md); this root `AGENTS.md` is authoritative.
 
-## Current Mainline
+## Current Runtime Surfaces
 
-The only active product mainline is:
+The current Codia Beta development and debugging mainline is Go:
+
+```text
+Figma Plugin Generate Beta
+-> POST /api/codia-preview
+-> Go codiaserver
+-> OCR
+-> Go M29 physical evidence
+-> optional OpenAI-compatible UI detector
+-> Codia assembly/control/tree/emitter
+-> DSL v0.2 Codia Runtime
+-> GET /api/codia-preview/{taskId}/dsl
+-> GET /api/codia-preview/{taskId}/assets/{assetId}.png
+-> renderCodiaRuntimeDesign
+-> Figma
+```
+
+For Codia Beta defects, inspect these first:
+
+```text
+services/backend-go/
+services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+packages/image-to-figma-renderer/src/renderCodiaRuntimeDesign.ts
+figma-plugin/src/
+```
+
+The retained Python/FastAPI preview surface is:
 
 ```text
 Figma Plugin
@@ -39,7 +65,7 @@ Figma Plugin
 -> Figma
 ```
 
-`/api/upload-preview` is the formal upload entrypoint. `/api/tasks/{taskId}/dsl` is the only formal design-output endpoint. Current mainline details live in [docs/engineering/current-mainline-code-map.md](docs/engineering/current-mainline-code-map.md).
+`/api/codia-preview` is the formal Codia Beta upload entrypoint. `/api/codia-preview/{taskId}/dsl` is the Codia Beta DSL v0.2 output endpoint. `/api/upload-preview` and `/api/tasks/{taskId}/dsl` remain the Python DSL v0.1 preview path and must not be treated as the Codia Beta backend. Current runtime details live in [docs/engineering/current-mainline-code-map.md](docs/engineering/current-mainline-code-map.md).
 
 ## Documentation Routing
 
@@ -67,7 +93,15 @@ pnpm -r run typecheck
 pnpm --filter @image-figma/figma-plugin run build
 ```
 
-The backend uses Python 3.12.7 from `.tool-versions`:
+The current Codia Beta backend is Go:
+
+```bash
+cd services/backend-go
+go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaserver
+CODIA_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/codiaserver
+```
+
+The retained Python/FastAPI preview path uses Python 3.12.7 from `.tool-versions`; use it only when the task explicitly targets `/api/upload-preview`, Python M29 v0.1, or historical M29 reference behavior:
 
 ```bash
 cd backend
@@ -85,9 +119,9 @@ git status --short --branch
 
 ## Coding Style & Boundary Rules
 
-TypeScript uses ESM, two-space indentation, `camelCase` values/functions, and `PascalCase` types. Python uses four-space indentation, `snake_case` modules/functions, and type hints where they clarify boundaries.
+TypeScript uses ESM, two-space indentation, `camelCase` values/functions, and `PascalCase` types. Go code uses `gofmt`, table-driven tests where useful, explicit small packages, and standard-library-first implementations. Python uses four-space indentation, `snake_case` modules/functions, and type hints where they clarify boundaries.
 
-Keep boundaries clean: Renderer must not import backend code; backend must not import plugin code; plugin UI must not call the Figma API directly; shared contracts flow through `packages/dsl-schema/`. Do not commit `dist/`, `backend/storage/`, databases, logs, caches, secrets, or temporary artifacts.
+Keep boundaries clean: Renderer must not import backend code; Go/Python backends must not import plugin code; plugin UI must not call the Figma API directly; shared contracts flow through `packages/dsl-schema/`. Do not commit `dist/`, `backend/storage/`, `services/backend-go/storage/`, databases, logs, caches, secrets, or temporary artifacts.
 
 Prefer simple, current, verifiable implementations. Do not add abstractions for hypothetical future needs, and do not create `utils`, `common`, or `misc` dumping-ground modules. Large central files are design pressure; add new behavior through focused modules with clear responsibility.
 
@@ -113,9 +147,28 @@ Changes to M29 owner, relation, replay, materializer, cleanup authorization, or 
 
 Bug work starts from `docs/bugs/index.md` and the related bug record. Reproduce before fixing. After the fix, record root cause, fix summary, regression guard, and validation evidence. If automated regression coverage is not practical, document the alternate guard and remaining risk in the bug record.
 
-## M29 Bridge Fate Debugging
+## Runtime Debugging
 
-For any M29-visible regression, inspect the latest task's bridge fate trace first:
+For Codia Beta / `Generate Beta` regressions, inspect the latest Go task first:
+
+```text
+services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+```
+
+Start from:
+
+```text
+codia_runtime.dsl.v0_2.json
+codia_tree_ir.v1.json
+assembly/codia_source_candidates.v1.json
+assembly/codia_ownership_graph.v1.json
+detector/ui_detector_candidates.v1.json
+assets/
+```
+
+Fix the owning Go layer: detector, assembly, control, tree, DSL v0.2 export, `codiaserver`, renderer runtime, or plugin Beta wiring. Do not patch Codia Beta issues in Python `backend/app` unless the Go artifact proves Python is the source of the input data.
+
+For Python `/api/upload-preview` M29-visible regressions, inspect the latest task's bridge fate trace first:
 
 ```text
 backend/storage/upload_previews/{taskId}/m29_bridge_fate_trace/bridge_fate_trace_report.json
@@ -139,4 +192,4 @@ Do not restore removed M29 Direct compare, legacy M30 materialization product pa
 
 M29.4 weak cluster, M29 ownership conservation, M29.6 media internal decomposition, M29 transparent asset report, M29 evidence contract report, M29 hierarchy candidates, M29 sibling group candidates, M29 layout energy, M29 Auto Layout permission, M29 design token, and M29 B-stage quality reports are evidence/permission/diagnostic surfaces. C-stage materialization may consume high-confidence structural evidence only to create transparent controlled structure groups around already replayed nodes. It must not create Auto Layout, Figma Component/Instance, variables, variants, vectors, or new visible owner nodes. M29.6 must not promote internal media candidates or authorize cleanup by itself. M29 transparent asset report may generate diagnostic RGBA artifacts only; it must not replace materialized assets or authorize cleanup by itself. M29 evidence contract report may combine M29.6, transparent asset, ownership, relation, and risk evidence into `allow_visible_replay` / `report_only` / `reject`, but remains report-only and cannot create source objects or cleanup authorization by itself. M29 internal source promotion is the only current bridge from M29.6/transparent/evidence-contract evidence back into M29.2 source ownership, and promoted objects must be reprocessed through M29.3/M29.4/M29.5 before materialization. M29.5 replay plan is still the only source for materialization order, node budget, dedupe, visible internal icon replay, and cleanup authorization. The M29 plan-driven materializer must not reclassify owners or add cleanup authorization.
 
-Source ownership defects must be fixed in raw M29 or M29.2. Do not patch them in the materializer, Renderer, or plugin with color, copy, theme, industry, filename, or fixed-bbox special cases. Root/page background must come from source PNG sampling; do not restore a fixed light default to hide fallback-off failures.
+Source ownership defects in the Python preview path must be fixed in raw M29 or M29.2. Codia Beta ownership defects must be fixed in Go M29 physical evidence, detector candidate normalization, assembly ownership, control synthesis, or tree construction. Do not patch either path in the materializer, Renderer, or plugin with color, copy, theme, industry, filename, sample id, or fixed-bbox special cases. Root/page background must come from source PNG sampling; do not restore a fixed light default to hide fallback-off failures.

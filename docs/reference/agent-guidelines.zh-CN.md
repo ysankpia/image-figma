@@ -8,13 +8,39 @@
 
 ## Project Structure & Module Organization
 
-本仓库是 pnpm workspace 加 FastAPI 后端。`packages/dsl-schema/` 维护 DSL v0.1 类型、schema 和校验；`packages/image-to-figma-renderer/` 负责把已校验 DSL 写入 Figma adapter；`figma-plugin/` 包含插件 UI、main thread、manifest 和 bundle 检查；`backend/` 包含 FastAPI app、上传主链、M29 source truth、plan materializer、routes、storage helper 和 `backend/tests/`。
+本仓库是 pnpm workspace 加两条后端运行面。`services/backend-go/` 是当前 Codia Beta / `Generate Beta` 的 Go 后端，负责 `codiaserver`、Go M29 physical evidence、UI detector 接入、Codia assembly/control/tree/emitter、DSL v0.2 export、本地 crop assets 和 Go tests。`backend/` 是保留的 Python/FastAPI M29 DSL v0.1 upload-preview 路径和历史算法/参考面；除非任务明确针对 `/api/upload-preview`，否则不要把它作为 Codia Beta 输出质量调试起点。`packages/dsl-schema/` 维护 DSL 合同；`packages/image-to-figma-renderer/` 负责把已校验 DSL 写入 Figma adapter；`figma-plugin/` 包含插件 UI、main thread、manifest 和 bundle 检查。
 
 当前文档入口是 [../index.md](../index.md)。正式规格在 `docs/product/`、`docs/architecture/`、`docs/engineering/`、`docs/runbooks/`、`docs/reference/`、`docs/decisions/`、`docs/plans/` 和 `docs/bugs/`；历史草稿只保留在 `docs/reference/legacy/`。
 
-## Current Mainline
+## Current Runtime Surfaces
 
-当前唯一产品主链是：
+当前 Codia Beta 开发和调试主链是 Go：
+
+```text
+Figma Plugin Generate Beta
+-> POST /api/codia-preview
+-> Go codiaserver
+-> OCR
+-> Go M29 physical evidence
+-> optional OpenAI-compatible UI detector
+-> Codia assembly/control/tree/emitter
+-> DSL v0.2 Codia Runtime
+-> GET /api/codia-preview/{taskId}/dsl
+-> GET /api/codia-preview/{taskId}/assets/{assetId}.png
+-> renderCodiaRuntimeDesign
+-> Figma
+```
+
+Codia Beta 缺陷先查：
+
+```text
+services/backend-go/
+services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+packages/image-to-figma-renderer/src/renderCodiaRuntimeDesign.ts
+figma-plugin/src/
+```
+
+保留的 Python/FastAPI preview 运行面是：
 
 ```text
 Figma Plugin
@@ -42,7 +68,7 @@ Figma Plugin
 -> Figma
 ```
 
-`/api/upload-preview` 是正式上传入口。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。当前主线详情以 [../engineering/current-mainline-code-map.md](../engineering/current-mainline-code-map.md) 为准。
+`/api/codia-preview` 是 Codia Beta 正式上传入口。`/api/codia-preview/{taskId}/dsl` 是 Codia Beta DSL v0.2 输出端点。`/api/upload-preview` 和 `/api/tasks/{taskId}/dsl` 仍是 Python DSL v0.1 preview 路径，不得当成 Codia Beta 后端。当前运行面详情以 [../engineering/current-mainline-code-map.md](../engineering/current-mainline-code-map.md) 为准。
 
 ## Documentation Routing
 
@@ -70,7 +96,15 @@ pnpm -r run typecheck
 pnpm --filter @image-figma/figma-plugin run build
 ```
 
-后端使用 `.tool-versions` 中的 Python 3.12.7：
+当前 Codia Beta 后端是 Go：
+
+```bash
+cd services/backend-go
+go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaserver
+CODIA_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/codiaserver
+```
+
+保留的 Python/FastAPI preview 路径使用 `.tool-versions` 中的 Python 3.12.7；只有任务明确针对 `/api/upload-preview`、Python M29 v0.1 或历史 M29 参考行为时才使用：
 
 ```bash
 cd backend
@@ -88,9 +122,9 @@ git status --short --branch
 
 ## Coding Style & Boundary Rules
 
-TypeScript 使用 ESM、两空格缩进、`camelCase` 值/函数和 `PascalCase` 类型。Python 使用四空格缩进，模块和函数用 `snake_case`，在有助于边界表达时添加类型提示。
+TypeScript 使用 ESM、两空格缩进、`camelCase` 值/函数和 `PascalCase` 类型。Go 代码使用 `gofmt`，在合适时使用 table-driven tests，包要小而职责清楚，默认优先标准库。Python 使用四空格缩进，模块和函数用 `snake_case`，在有助于边界表达时添加类型提示。
 
-保持边界清楚：Renderer 不导入 backend；backend 不导入插件；插件 UI 不直接调用 Figma API；共享合同只通过 `packages/dsl-schema/`。不要提交 `dist/`、`backend/storage/`、数据库、日志、cache、密钥或临时产物。
+保持边界清楚：Renderer 不导入 backend；Go/Python 后端不导入插件；插件 UI 不直接调用 Figma API；共享合同只通过 `packages/dsl-schema/`。不要提交 `dist/`、`backend/storage/`、`services/backend-go/storage/`、数据库、日志、cache、密钥或临时产物。
 
 优先简单、当前可验证的实现。不要为假想未来加抽象，不创建 `utils`、`common`、`misc` 垃圾桶模块。大型中心文件是设计压力；继续增加行为前优先按真实职责拆模块。
 
@@ -115,6 +149,27 @@ M29 owner、relation、replay、materializer、cleanup 授权或 fallback 行为
 ## Bugfix & Regression Rules
 
 Bug 工作从 `docs/bugs/index.md` 和相关 bug 记录开始。修复前先复现，修复后记录根因、修复摘要、回归保护和验证证据。无法添加自动化回归时，必须在 bug 记录中写明替代 guard 和剩余风险。
+
+## Runtime Debugging
+
+Codia Beta / `Generate Beta` 回归先查最新 Go task：
+
+```text
+services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+```
+
+优先看：
+
+```text
+codia_runtime.dsl.v0_2.json
+codia_tree_ir.v1.json
+assembly/codia_source_candidates.v1.json
+assembly/codia_ownership_graph.v1.json
+detector/ui_detector_candidates.v1.json
+assets/
+```
+
+修复归属层必须在 Go 的 detector、assembly、control、tree、DSL v0.2 export、`codiaserver`、runtime renderer 或插件 Beta wiring 中判断。除非 Go artifact 证明 Python 是输入来源，否则不要在 Python `backend/app` 修 Codia Beta 问题。
 
 ## Commit & Pull Request Guidelines
 

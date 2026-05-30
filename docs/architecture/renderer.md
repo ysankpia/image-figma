@@ -1,6 +1,6 @@
 # Image-to-Figma Renderer
 
-Renderer 的职责是把后端已经裁决好的 DSL 渲染成 Figma 节点。当前产品主线仍是 DSL v0.1；Go Codia Beta side path 额外提供 DSL v0.2 renderer。
+Renderer 的职责是把后端已经裁决好的 DSL 渲染成 Figma 节点。当前 Codia Beta 使用 Go 后端输出的 DSL v0.2，并通过 `renderCodiaRuntimeDesign` 写入 Figma。保留的 Python preview 路径仍使用 DSL v0.1 和 `renderDesign`。
 
 ## Public Interface
 

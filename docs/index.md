@@ -7,8 +7,8 @@
 - 项目入口：[../README.md](../README.md)
 - Agent 工作规则：[../AGENTS.md](../AGENTS.md)
 - 当前项目演进路线图：[roadmap.md](roadmap.md)
-- 当前主链架构入口：[architecture/backend.md](architecture/backend.md)
-- 当前主线代码地图：[engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
+- 当前后端架构入口：[architecture/backend.md](architecture/backend.md)
+- 当前运行代码地图：[engineering/current-mainline-code-map.md](engineering/current-mainline-code-map.md)
 - Image math 边界：[architecture/image_math_boundary.md](architecture/image_math_boundary.md)
 - M29 数学合同：[architecture/m29-experimental-mathematical-contract.md](architecture/m29-experimental-mathematical-contract.md)
 - M29 入门数学推演：[architecture/m29-math-from-first-principles.md](architecture/m29-math-from-first-principles.md)
@@ -17,7 +17,7 @@
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
 - 当前 Go M29.0 physical evidence kernel 计划：[plans/active/082-go-m29-physical-evidence-kernel.md](plans/active/082-go-m29-physical-evidence-kernel.md)
-- 当前 OpenAI-compatible UI detector short-pass 计划：[plans/active/090-openai-compatible-ui-detector-short-pass.md](plans/active/090-openai-compatible-ui-detector-short-pass.md)
+- 当前 Codia Beta / Go detector short-pass 计划：[plans/active/090-openai-compatible-ui-detector-short-pass.md](plans/active/090-openai-compatible-ui-detector-short-pass.md)
 - 已完成的 Codia DSL 0.2 Plugin Beta Runtime 计划：[plans/completed/091-codia-dsl-02-plugin-beta-runtime.md](plans/completed/091-codia-dsl-02-plugin-beta-runtime.md)
 - 已完成的 Codia Beta asset / online detector 接入：[plans/completed/092-codia-beta-assets-and-online-detector.md](plans/completed/092-codia-beta-assets-and-online-detector.md)
 - 已暂停的 Go Codia-like compiler rebuild 计划：[plans/archive/deferred/089-go-codia-like-compiler-rebuild.md](plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
@@ -26,7 +26,7 @@
 - 刚完成的 Go M29 normalized tree 身份合同计划：[plans/completed/086-go-m29-normalized-tree-identity-contract.md](plans/completed/086-go-m29-normalized-tree-identity-contract.md)
 - 刚完成的 Go M29 VisualTree group permission gate 计划：[plans/completed/087-go-m29-visualtree-group-permission-gate.md](plans/completed/087-go-m29-visualtree-group-permission-gate.md)
 - 刚完成的 Go M29 offline group evidence audit 计划：[plans/completed/088-go-m29-offline-group-evidence-audit.md](plans/completed/088-go-m29-offline-group-evidence-audit.md)
-- 已替代旧探索：Python M29 525 hardening、Gemini 审计、composite media rewrite、model-first pivot 等旧 active plans 已移入 [plans/archive/superseded/](plans/archive/superseded/index.md)。Go Codia-like compiler 目前暂停在 Beta checkpoint，后续恢复以 deferred 089、bug 017 和 active 090 为准。
+- 已替代旧探索：Python M29 525 hardening、Gemini 审计、composite media rewrite、model-first pivot 等旧 active plans 已移入 [plans/archive/superseded/](plans/archive/superseded/index.md)。Codia Beta 当前实现和调试归属 Go `services/backend-go`，以 bug 017、active 090、completed 091/092 和当前代码地图为准；不要再按旧 Python M29 计划修 Codia Beta 输出质量。
 
 ## By Task Type
 

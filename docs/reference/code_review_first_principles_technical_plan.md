@@ -1,5 +1,7 @@
 # 图片转 Figma 可编辑设计稿项目：代码审核报告、第一性原理分析与技术规划
 
+> Superseded reference. This report was written before the Go Codia Beta backend became the active `Generate Beta` path. Its Python-first recommendations are historical context only. Current Codia Beta work belongs to `services/backend-go`, `docs/plans/active/090-openai-compatible-ui-detector-short-pass.md`, `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`, and `docs/engineering/current-mainline-code-map.md`.
+
 本报告旨在从第一性原理出发，对 `image-figma` 项目进行全链路代码审计，评估当前架构阶段，识别潜在风险，并为下一步迈向 "Codia 级" 图片转 Figma 可编辑设计稿产品制定严密的演进路线与可靠性体系规划。
 
 ---

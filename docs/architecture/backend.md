@@ -1,10 +1,10 @@
 # 后端架构
 
-后端负责接收单张 PNG、运行 OCR 与 M29 证据链、保存 DSL/资产，并通过 API 提供给 Figma 插件。当前阶段已经把产品主链收口为 M29 plan-driven materialization；旧 M30 materializer、M29 Direct compare、M31-M39/M39.1 downstream experiments 不再是 backend runtime。
+后端负责接收单张 PNG、运行 OCR 与图像证据链、保存 DSL/资产，并通过 API 提供给 Figma 插件。当前 Codia Beta 后端是 Go `services/backend-go/cmd/codiaserver`；它输出 DSL v0.2 Codia Runtime。Python/FastAPI `/api/upload-preview` 仍保留为 DSL v0.1 M29 preview 路径，但不是 Codia Beta 输出质量调试的主线。旧 M30 materializer、M29 Direct compare、M31-M39/M39.1 downstream experiments 不再是 backend runtime。
 
 ## Runtime Surface
 
-当前运行面：
+保留的 Python/FastAPI DSL v0.1 preview 运行面：
 
 ```text
 GET  /api/health
@@ -17,9 +17,9 @@ GET  /files/uploads/*
 GET  /files/assets/*
 ```
 
-`POST /api/upload-preview` 是历史命名的兼容入口。它当前运行 M29 mainline，不运行 legacy M30 product path。
+`POST /api/upload-preview` 是历史命名的兼容入口。它运行 Python M29 preview mainline，不运行 legacy M30 product path，也不运行 Codia Beta assembly/tree/DSL v0.2。
 
-Codia Beta 运行面由 Go `services/backend-go/cmd/codiaserver` 提供，和 Python FastAPI 产品主线并列：
+Codia Beta 运行面由 Go `services/backend-go/cmd/codiaserver` 提供，是当前 `Generate Beta` 后端：
 
 ```text
 GET  /api/health
@@ -30,7 +30,7 @@ GET  /api/codia-preview/{taskId}/assets/{assetId}.png
 GET  /api/codia-preview/{taskId}/artifacts
 ```
 
-Go server 的输出是 DSL v0.2 Codia Runtime artifact，不写入 Python `dsl_results`，不改变 `/api/upload-preview` 或 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。本地插件测试默认也使用 `http://localhost:8000/api`，因此同一时间只能让 Python FastAPI 或 Go `codiaserver` 其中一个监听 8000 端口。
+Go server 的输出是 DSL v0.2 Codia Runtime artifact，不写入 Python `dsl_results`，不改变 `/api/upload-preview` 或 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。本地插件测试默认也使用 `http://localhost:8000/api`，因此同一时间只能让 Python FastAPI 或 Go `codiaserver` 其中一个监听 8000 端口。调试 Codia Beta 时默认启动 Go `codiaserver`，不要启动 Python FastAPI 占用端口。
 
 已移除的接口不再通过环境变量复活，包括：
 

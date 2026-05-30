@@ -4,6 +4,8 @@
 - 创建日期：2026-05-25
 - 核对 commit：`246979acb7a637db55e84320b0b0fda486518778`
 
+> Historical audit snapshot. It predates the current Go Codia Beta backend. Use it only for source-chain reasoning; do not use it to choose Python `/api/upload-preview` over `services/backend-go` for Codia Beta output-quality work.
+
 ## 结论
 
 用户提供的全链路判断方向基本正确：

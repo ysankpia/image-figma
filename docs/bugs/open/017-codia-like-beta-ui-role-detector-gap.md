@@ -10,20 +10,22 @@
 
 ## Executive Summary
 
-当前 Go Codia-like compiler 已经具备可用的第一版主链：
+当前 Go Codia-like compiler 已经接入插件 `Generate Beta`，Codia Beta 主链是：
 
 ```text
 PNG + OCR
 -> Go M29.0 physical evidence
 -> evidence tokens
--> Codia leaf IR
+-> optional OpenAI-compatible UI detector
+-> Codia assembly
 -> control synthesis
 -> role-aware tree builder
 -> Figma-like emitter
--> Codia diff / audit
+-> DSL v0.2 Codia Runtime
+-> renderCodiaRuntimeDesign
 ```
 
-它可以作为 best-effort / Beta reconstruction 上线试用，但不能宣称 Codia 1:1。当前主要质量瓶颈不是 tree builder、XY-cut、children order 或 Button permission，而是上游缺少 learned UI role detector / role-aware evidence refinement。M29.0 是 pixel evidence provider，不是 Codia-level UI component detector。
+它可以作为 best-effort / Beta reconstruction 上线试用，但不能宣称 Codia 1:1。当前主要质量瓶颈不应再回到 Python M29 preview 里修；Codia Beta 的 detector、assembly、tree、DSL v0.2、assets 和 runtime renderer 都归 Go/TypeScript Beta 链路所有。M29.0 是 pixel evidence provider，不是 Codia-level UI component detector。
 
 最新两图 smoke 基线：
 
@@ -71,6 +73,9 @@ raw Codia/Figma canvas JSON
 paired source PNG
 Go M29 physical evidence artifacts
 Codia leaf/control/tree IR artifacts
+Go assembly ownership artifacts
+DSL v0.2 Codia Runtime artifacts
+plugin Beta renderer warnings
 codia_structure_diff.v1.json
 codia_failure_audit.v1.json
 ```

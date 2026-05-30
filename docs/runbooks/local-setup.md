@@ -1,6 +1,6 @@
 # 本地设置
 
-当前仓库已经收口到 M29 plan-driven preview pipeline。历史 M8-M28、M29 Direct compare、M29.0.x/M30 legacy bridge、M31-M39 downstream、SAM2/perception/icon/slice 等实验保留在 ADR、completed plans 和 git history 中，不再是本地默认运行路径。
+当前 Codia Beta 本地默认后端是 Go `services/backend-go/cmd/codiaserver`。历史 Python/FastAPI `/api/upload-preview` 仍保留为 DSL v0.1 M29 preview 路径。历史 M8-M28、M29 Direct compare、M29.0.x/M30 legacy bridge、M31-M39 downstream、SAM2/perception/icon/slice 等实验保留在 ADR、completed plans 和 git history 中，不再是本地默认运行路径。
 
 ## Prerequisites
 
@@ -8,6 +8,7 @@
 
 - Node.js 24.x。当前开发机使用 Homebrew `node@24`。
 - pnpm 10.33.2。
+- Go 1.22+。
 - Python 3.12.7，由 asdf 管理。
 - Git。
 
@@ -27,16 +28,53 @@ python 3.12.7
 pnpm install
 ```
 
-安装后端依赖：
+安装保留 Python preview 依赖：
 
 ```bash
 cd backend
 uv sync
 ```
 
-## Run Backend
+## Run Go Codia Beta Backend
 
-默认 fake OCR、本地文件存储、M29 production artifact profile：
+插件 `Generate Beta` 调试默认启动 Go 后端：
+
+```bash
+cd services/backend-go
+CODIA_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/codiaserver
+```
+
+真实 OCR：
+
+```bash
+cd services/backend-go
+OCR_PROVIDER=baidu_ppocrv5 \
+BAIDU_PADDLE_OCR_TOKEN=... \
+CODIA_SERVER_ADDR=127.0.0.1:8000 \
+go run ./cmd/codiaserver
+```
+
+在线 detector：
+
+```bash
+cd services/backend-go
+CODIA_SERVER_DETECTOR_ENABLED=true \
+CODIA_UI_DETECTOR_BASE_URL=https://example-provider.test \
+CODIA_UI_DETECTOR_MODEL=provider-model-id \
+CODIA_UI_DETECTOR_API_KEY=... \
+CODIA_SERVER_ADDR=127.0.0.1:8000 \
+go run ./cmd/codiaserver
+```
+
+Go task artifacts 写到：
+
+```text
+services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+```
+
+## Run Retained Python Preview Backend
+
+只有调试 `Generate from PNG` / `/api/upload-preview` / DSL v0.1 时启动 Python 后端。默认 fake OCR、本地文件存储、M29 production artifact profile：
 
 ```bash
 cd backend
@@ -110,18 +148,25 @@ pnpm --filter @image-figma/image-to-figma-renderer run typecheck
 pnpm --filter @image-figma/image-to-figma-renderer run test
 ```
 
-运行后端测试：
+运行 Go Codia Beta 测试：
+
+```bash
+cd services/backend-go
+go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaserver
+```
+
+运行保留 Python preview 测试：
 
 ```bash
 cd backend
 uv run pytest -q
 ```
 
-当前阶段完整验收：
+当前 Codia Beta 完整验收：
 
 ```bash
-cd backend && uv run pytest -q
-cd ..
+cd services/backend-go && go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaserver
+cd ../..
 pnpm -r run test
 pnpm -r run typecheck
 git diff --check
@@ -135,13 +180,13 @@ git status --short --branch
 3. 加载 `figma-plugin/manifest.json`。
 4. 运行 `Image-to-Figma Design`。
 5. 插件应打开 `420 x 560` 工具面板。
-6. 启动后端：`cd backend && UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`。
+6. 启动 Go 后端：`cd services/backend-go && CODIA_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/codiaserver`。
 7. 选择一个 PNG。
-8. 点击 `Generate from PNG`。
-9. 插件上传到 `/api/upload-preview`。
-10. 后端完成后，插件拉取 `/api/tasks/{taskId}/dsl`。
+8. 点击 `Generate Beta`。
+9. 插件上传到 `/api/codia-preview`。
+10. 后端完成后，插件拉取 `/api/codia-preview/{taskId}/dsl`，并以 `/api/codia-preview/{taskId}` 作为 asset base URL。
 11. 当前页面应生成尺寸等于 PNG 的 root Frame。
-12. Layers 中应出现 hidden original reference、visible fallback、以及 M29 plan-approved text/shape/image layers。
+12. Layers 中应出现 Codia Runtime Root、Groups、Text、Image、Background/Button 等节点；ImageView crop assets 不应出现 `CODIA_RUNTIME_IMAGE_SOURCE_NOT_FOUND`。
 13. UI 应显示生成节点数和 warning 数。
 
 `Sample` 按钮保留为开发备用入口，不调用后端。
@@ -150,7 +195,26 @@ git status --short --branch
 
 ## API Smoke
 
-上传 PNG：
+Go Codia Beta 上传 PNG：
+
+```bash
+curl -F "file=@/absolute/path/to/input.png" \
+  http://localhost:8000/api/codia-preview
+```
+
+轮询 Go Codia Beta 任务：
+
+```bash
+curl http://localhost:8000/api/codia-preview/{taskId}
+```
+
+获取 Codia Runtime DSL v0.2：
+
+```bash
+curl http://localhost:8000/api/codia-preview/{taskId}/dsl
+```
+
+保留 Python preview 上传 PNG：
 
 ```bash
 curl -F "file=@/absolute/path/to/input.png" \

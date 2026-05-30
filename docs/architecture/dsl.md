@@ -200,12 +200,13 @@ The schema still tolerates historical `meta.maskBBoxes` on image/fallback elemen
 
 Renderer must ignore unknown `meta` fields and must not depend on historical M30/M39 labels.
 
-## Codia Runtime DSL v0.2 Side Path
+## Codia Runtime DSL v0.2
 
-DSL v0.2 是 Go Codia-like compiler 的 Beta artifact，不替代当前 Python `/api/upload-preview` 产品主线。
+DSL v0.2 是 Go Codia-like compiler / Codia Beta 的当前 runtime artifact。它不替代保留的 Python `/api/upload-preview` DSL v0.1 合同；两条路径并行，插件 `Generate Beta` 只消费 DSL v0.2。
 
 ```text
-services/backend-go/cmd/codiacompile
+services/backend-go/cmd/codiaserver
+-> services/backend-go/cmd/codiacompile
 -> codia_tree_ir.v1.json
 -> codia_figma_like_tree.v1.json
 -> codia_runtime.dsl.v0_2.json

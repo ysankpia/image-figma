@@ -1,9 +1,24 @@
 # 测试策略
 
-当前测试目标是保护产品主线：
+当前测试目标先保护 Codia Beta Go 链路：
 
 ```text
 Figma plugin
+-> Generate Beta
+-> Go /api/codia-preview
+-> OCR
+-> Go M29 physical evidence
+-> optional online UI detector
+-> Codia assembly/control/tree/emitter
+-> DSL v0.2 Codia Runtime
+-> local crop asset endpoint
+-> renderCodiaRuntimeDesign
+```
+
+保留的 Python/FastAPI preview 链路仍需测试，但它不是 Codia Beta 输出质量调试主线：
+
+```text
+Figma plugin Generate from PNG
 -> /api/upload-preview
 -> OCR
 -> raw M29 / M29.2 / M29.3 / M29.4 / M29.5
@@ -15,20 +30,6 @@ Figma plugin
 
 M30.2.2 已删除 pre-M29 legacy upload chain。M29 backend downstream pruning 已删除 M31-M39/M39.1 和 ONNX proposer runtime。本阶段已下线 M29 Direct compare 产品入口和 legacy M30 materialization 产品路径。测试不再要求这些旧 routes、env、modules 或 reports 存在。
 
-Codia Beta side path 另走 Go `codiaserver`：
-
-```text
-Figma plugin Generate Beta
--> /api/codia-preview
--> optional online UI detector
--> Go Codia compiler
--> DSL v0.2 Codia Runtime
--> local crop asset endpoint
--> renderCodiaRuntimeDesign
-```
-
-它不替换产品主线，也不改变 `/api/tasks/{taskId}/dsl`。
-
 ## Validation Focus
 
 v0.1 重点验证：
@@ -37,10 +38,10 @@ v0.1 重点验证：
 - Renderer 可消费 DSL v0.1。
 - 后端当前 API 可创建任务、更新状态、返回 M29 plan-driven DSL。
 - M29 evidence chain 不污染 visible DSL children。
-- 插件默认上传走 `/api/upload-preview`。
-- 插件 completed 后只调用 `/api/tasks/{taskId}/dsl`。
 - 插件 Beta 上传走 Go `/api/codia-preview`。
 - 插件 Beta completed 后只调用 `/api/codia-preview/{taskId}/dsl`。
+- 插件默认上传走保留的 Python `/api/upload-preview`。
+- 插件 default completed 后只调用 `/api/tasks/{taskId}/dsl`。
 - M29.5 replay plan 可被写出并被 M29 materializer 消费。
 - 本地 M29 image/raster/icon asset URL 可由 renderer fetch。
 - fallback-off 深色/浅色/混合背景不依赖固定浅色默认背景。

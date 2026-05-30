@@ -1,6 +1,6 @@
 # 090 OpenAI-compatible UI Detector Short Pass
 
-- 状态：active / detector integration implemented; 2026-05-31 output-quality repair validated
+- 状态：active / Go Codia Beta runtime path; detector integration implemented; 2026-05-31 output-quality repair ongoing
 - 创建日期：2026-05-30
 - 负责人：未指定
 - 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../archive/deferred/089-go-codia-like-compiler-rebuild.md)
@@ -8,7 +8,7 @@
 
 ## Goal
 
-把 2026-05-30 的 VLM detector 实验结果固化为 Go Codia-like compiler 的下一阶段计划。
+把 2026-05-30 的 VLM detector 实验结果固化为 Go Codia-like compiler / Codia Beta 的当前实现计划。
 
 核心目标不是让大模型直接生成 Codia 树，而是建立一个稳定的上游候选层：
 
@@ -21,7 +21,7 @@ source screenshot
 -> existing Codia leaf/control/tree/emitter pipeline
 ```
 
-这条线先作为 `services/backend-go` 的 offline / Beta side path，不进入当前 Python/FastAPI `/api/upload-preview` 产品主链。
+这条线现在是插件 `Generate Beta` 的 Go 后端路径：`services/backend-go/cmd/codiaserver -> /api/codia-preview -> DSL v0.2 -> renderCodiaRuntimeDesign`。它仍不进入保留的 Python/FastAPI `/api/upload-preview` DSL v0.1 路径；调试 Codia Beta 输出质量时必须从 Go artifacts 和 renderer runtime 入手。
 
 ## Why
 

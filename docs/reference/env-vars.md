@@ -1,12 +1,12 @@
 # 环境变量
 
-后端有本地默认值，不需要 `.env` 才能启动。`.env.local` 会在默认情况下被加载；设置 `IMAGE_FIGMA_LOAD_LOCAL_ENV=false` 可关闭本地 env 文件加载。
+后端有本地默认值，不需要 `.env` 才能启动。当前 Codia Beta 后端是 Go `services/backend-go/cmd/codiaserver`；保留的 Python/FastAPI `/api/upload-preview` 使用同一个本地 env 文件。`.env.local` 会在默认情况下被加载；设置 `IMAGE_FIGMA_LOAD_LOCAL_ENV=false` 可关闭本地 env 文件加载。
 
 ## Current Variables
 
 | 名称 | 用途 | 默认值 | 是否必需 |
 | --- | --- | --- | --- |
-| `API_BASE_URL` | 插件调用后端 API | `http://localhost:8000/api` | 否 |
+| `API_BASE_URL` | 插件调用后端 API；`Generate Beta` 默认期望这里指向 Go `codiaserver` | `http://localhost:8000/api` | 否 |
 | `PUBLIC_BASE_URL` | 后端生成 `/files/...` URL | `http://localhost:8000` | 否 |
 | `CORS_ALLOW_ORIGINS` | 允许调用后端的 Origin，逗号分隔 | `*` | 否 |
 | `STORAGE_ROOT` | 本地文件存储根目录 | `backend/storage` | 否 |
@@ -59,7 +59,7 @@ OCR failure fails the current M29 preview task. The backend must not mark a task
 
 ## Go Codia-like UI Detector
 
-`CODIA_UI_DETECTOR_*` 只用于 `services/backend-go/cmd/codiadetector` 和 `codiacompile -detector-candidates` 这一条 offline / Beta side path。它不属于当前 `/api/upload-preview` 产品主链，默认不会改变现有 DSL 输出。
+`CODIA_UI_DETECTOR_*` 用于 `services/backend-go/cmd/codiadetector`、`codiacompile -detector-candidates`，以及 `CODIA_SERVER_DETECTOR_ENABLED=true` 时的 Go `codiaserver` 在线 detector。它不属于 Python `/api/upload-preview` 路径，默认不会改变 DSL v0.1 输出。
 
 OpenAI-compatible Responses provider:
 
@@ -128,7 +128,7 @@ CODIA_UI_DETECTOR_STREAM=true
 
 在线 detector 是可选证据源，不是生成主链的硬依赖。如果 provider 出现 TLS、超时、5xx、空响应或 JSON 解析失败，`codiaserver` 会写出 `compile/detector/detector_fallback.v1.json`，在 task 上记录 `CODIA_DETECTOR_FALLBACK` warning，然后继续用 M29/OCR fallback 编译 DSL。
 
-本地插件默认调用 `API_BASE_URL=http://localhost:8000/api`。如果 Python FastAPI 已占用 8000 端口，要么停止 Python server 后启动 Go `codiaserver`，要么同时修改插件 API base URL 后重新打包。
+本地插件默认调用 `API_BASE_URL=http://localhost:8000/api`。调试 `Generate Beta` / Codia Beta 时，应让 Go `codiaserver` 监听 8000。只有明确调试保留的 Python `/api/upload-preview` 时才启动 Python FastAPI；如果 Python FastAPI 已占用 8000 端口，要么停止 Python server 后启动 Go `codiaserver`，要么同时修改插件 API base URL 后重新打包。
 
 ## M29 Preview Profile
 

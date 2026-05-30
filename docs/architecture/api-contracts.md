@@ -1,6 +1,8 @@
 # API Contracts
 
-API v0.1 serves the current single-image M29 plan-driven preview path:
+The current Codia Beta API is served by Go `services/backend-go/cmd/codiaserver` under `/api/codia-preview`. It returns DSL v0.2 Codia Runtime data for `renderCodiaRuntimeDesign` and local image crop assets.
+
+The retained API v0.1 serves the Python single-image M29 plan-driven preview path:
 
 ```text
 PNG upload
@@ -10,9 +12,7 @@ PNG upload
 -> Figma Renderer
 ```
 
-`POST /api/upload-preview` is the product upload endpoint. Runtime semantics are M29 mainline.
-
-Codia Beta has a separate Go server contract under `/api/codia-preview`. It returns DSL v0.2 Codia Runtime data for `renderCodiaRuntimeDesign`. It is not the formal product DSL endpoint and must not change `/api/tasks/{taskId}/dsl`.
+`POST /api/codia-preview` is the Codia Beta upload endpoint. `POST /api/upload-preview` remains the Python DSL v0.1 preview endpoint. The two contracts are intentionally separate: Codia Beta must not change `/api/tasks/{taskId}/dsl`, and Python preview fixes must not be used to hide Go Codia assembly/tree defects.
 
 M29 Direct compare, legacy M30 materialization diagnostics, M31/M37/M38/M39/M39.1 downstream diagnostics, and old M8-M28 debug endpoints have been removed from current runtime.
 
@@ -22,7 +22,7 @@ Backend and Figma plugin jointly own this contract. Any endpoint, response shape
 
 ## Base URL
 
-Development default:
+Development default for either local server:
 
 ```text
 http://localhost:8000/api
@@ -55,6 +55,8 @@ Failure:
 ```
 
 ## Required Endpoints
+
+Use the Codia Beta endpoints for plugin `Generate Beta` work. Use the Python preview endpoints only when the task explicitly targets `/api/upload-preview` or DSL v0.1.
 
 ### `GET /api/health`
 

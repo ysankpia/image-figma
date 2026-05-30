@@ -36,9 +36,27 @@ M29.5 replay plan 是可见 materialization 的订单。
 
 这条不变量优先级高于所有下游 grouping、unit promotion、layout semantics 和 componentization。它不禁止 Figma layer bbox 重叠；背景 shape 可以和 child text/image/icon 在空间上重叠，因为它们拥有不同 source evidence。
 
-## Current Mainline
+## Current Runtime Surfaces
 
-当前产品主链：
+当前 Codia Beta 主链已经是 Go：
+
+```text
+Figma Plugin Generate Beta
+-> POST /api/codia-preview
+-> Go codiaserver
+-> OCR
+-> Go M29 physical evidence
+-> optional OpenAI-compatible UI detector
+-> Codia assembly/control/tree/emitter
+-> DSL v0.2 Codia Runtime
+-> GET /api/codia-preview/{taskId}/dsl
+-> renderCodiaRuntimeDesign
+-> Figma Canvas
+```
+
+Codia Beta 输出质量、detector、assembly、tree、DSL v0.2、asset 和插件 Beta wiring 问题都先归到 `services/backend-go` / `packages/image-to-figma-renderer` / `figma-plugin`，不要回到 Python M29 旧计划里调。
+
+保留的 Python/FastAPI preview 链路：
 
 ```text
 Figma Plugin
@@ -55,7 +73,7 @@ Figma Plugin
 -> Figma Canvas
 ```
 
-`/api/upload-preview` 是当前正式上传入口。`/api/tasks/{taskId}/dsl` 是唯一正式设计稿出口。
+`/api/upload-preview` 是 DSL v0.1 preview 入口，不是 Codia Beta 后端。`/api/codia-preview` 是 Codia Beta 上传入口。
 
 当前已经下线：
 

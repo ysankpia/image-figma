@@ -1,5 +1,7 @@
 # 01 Current Runtime Chain
 
+> Historical Python M29 preview audit. Current Codia Beta `Generate Beta` debugging starts from Go `services/backend-go/cmd/codiaserver` and `/api/codia-preview`, not from `/api/upload-preview`.
+
 ## Source Truth
 
 当前产品主链以 `POST /api/upload-preview` 上传的 PNG 为 source input。正式 Figma-visible 设计输出来自 `GET /api/tasks/{taskId}/dsl` 返回的 `materialized_design/design.dsl.json`。

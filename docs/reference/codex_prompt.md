@@ -1,3 +1,6 @@
+> Historical prompt snapshot. Do not use this file as current agent or development guidance.
+> Current Codia Beta backend work belongs to Go `services/backend-go`; see `AGENTS.md`, `docs/engineering/current-mainline-code-map.md`, and `docs/plans/active/090-openai-compatible-ui-detector-short-pass.md`.
+
 你是一个资深 Python 后端架构师、CV/图像处理工程师和代码重构专家。
 
 你现在要接手一个图片转 Figma 可编辑设计稿项目。请先完整阅读我提供的《图片转 Figma 可编辑设计稿项目：代码审核报告、第一性原理分析与技术规划》，然后基于这份报告对当前代码库进行一次分阶段升级。
