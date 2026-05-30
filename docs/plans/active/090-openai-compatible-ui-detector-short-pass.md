@@ -965,6 +965,7 @@ report-only detector CLI          [implemented]
 -> hint-only region/control integration [implemented]
 -> assembly material classification + hard region partition [implemented]
 -> codiaserver detector fallback + optional streaming provider calls [implemented]
+-> runtime full-body backing suppression [implemented]
 ```
 
 The hard boundary remains:
@@ -975,3 +976,5 @@ Go compiler decides source permission, ownership, structure, and emission.
 ```
 
 For the Beta server path, online detector is best-effort evidence. Provider TLS errors, timeouts, 5xx, empty responses, or invalid model JSON must not fail `/api/codia-preview`; `codiaserver` records `CODIA_DETECTOR_FALLBACK`, writes `compile/detector/detector_fallback.v1.json`, and continues compiling from M29/OCR. OpenAI-compatible streaming is available through `CODIA_UI_DETECTOR_STREAM=true` or `codiadetector -stream`, but it remains a provider transport option, not a new compiler contract.
+
+Runtime DSL v0.2 must not use a full body/source crop as a visible backing layer under editable TextView/ImageView/shape nodes. That creates duplicate source foreground pixels and text ghosting. Large structural backgrounds should remain as Background evidence or region-owned shapes; if a raster cannot be cleanly separated from foreground, it must stay a local media ImageView or be suppressed by ownership, not repaired by dsl02 asset inpainting.

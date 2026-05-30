@@ -221,6 +221,7 @@ some backgrounds remain fragments or extras
 root/header-scale raster crops can be over-promoted as editable ImageView
 body regions can overlap BottomNavigation when region hints are not hard boundaries
 runtime rendering can place TextView below image/background siblings if Codia logical child order is used as Figma append order
+full body/source crop can be emitted as visible runtime backing, duplicating editable text/image foreground pixels
 parent-child structure is usable but not Codia-like 1:1
 ```
 
@@ -772,6 +773,8 @@ pass imageview: Post "https://aicode.cat/v1/responses": local error: tls: bad re
 ```
 
 Root cause is provider transport instability during the optional online VLM detector pass. This is not a Codia compiler failure and must not block Beta generation. The server path now treats online detector output as best-effort evidence: on TLS/provider/timeout/empty-response failure it records `CODIA_DETECTOR_FALLBACK`, writes `compile/detector/detector_fallback.v1.json`, and continues with conservative M29/OCR compile. The Go detector also supports OpenAI-compatible streaming via `CODIA_UI_DETECTOR_STREAM=true` / `codiadetector -stream` for providers that expose stream-capable `/v1/responses` or `/v1/chat/completions`.
+
+Additional runtime-quality root cause found during plugin Beta validation: `tree_body_backing_0001` was a full body crop under editable children. This violates one-owner-per-foreground-pixel: original text/icons remained inside the backing asset while the compiler also emitted editable TextView/ImageView/shape nodes. The rejected repair path is dsl02 asset inpainting; it produces visible patches and hides ownership decisions in the export layer. The accepted fix is to stop creating visible full-body backing ImageViews and preserve structural backgrounds as Background evidence instead.
 
 ### Stage 4: Ownership graph
 

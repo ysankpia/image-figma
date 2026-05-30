@@ -126,7 +126,6 @@ const (
 	proposalBottomTab        proposalKind = "bottom_navigation_tab"
 	proposalBottomNavWrapper proposalKind = "bottom_navigation_wrapper"
 	proposalBodyList         proposalKind = "body_list_owner"
-	proposalVisualBacking    proposalKind = "visual_backing_image"
 	proposalRepeatedRowList  proposalKind = "repeated_row_list"
 	proposalRepeatedRowItem  proposalKind = "repeated_row_item"
 	proposalMajorSection     proposalKind = "major_section_owner"
@@ -640,7 +639,6 @@ func (b *builder) buildBody(hasTopSearch bool, bottomNav ir.Node) ir.Node {
 		return ir.Node{}
 	}
 	body := b.makeContainer("tree_body_0001", ir.RoleListView, ir.BBox{X: 0, Y: bodyY, Width: b.root.Width, Height: bodyEnd - bodyY}, proposalBodyList)
-	body.Children = append(body.Children, visualBackingImage("tree_body_backing_0001", body.SourceBBox, proposalVisualBacking))
 	if !hasTopSearch {
 		if action := b.buildActionBar(); action.ID != "" {
 			body.Children = append(body.Children, action)
@@ -990,10 +988,6 @@ func (b *builder) buildMajorSections(body ir.BBox) []ir.Node {
 				continue
 			}
 			if centerInside(sectionBox, node.SourceBBox) || overlapRatio(node.SourceBBox, sectionBox) >= 0.40 {
-				if structuralBackgroundCoveredByBacking(node, body, b.root) {
-					b.mark(node)
-					continue
-				}
 				nodes = append(nodes, node)
 			}
 		}
@@ -1242,10 +1236,6 @@ func (b *builder) remainingIn(box ir.BBox) []ir.Node {
 		if b.isUsed(node) || discardPhysicalNoise(node) || !centerInside(box, node.SourceBBox) {
 			continue
 		}
-		if structuralBackgroundCoveredByBacking(node, box, b.root) {
-			b.mark(node)
-			continue
-		}
 		out = append(out, node)
 	}
 	sortNodes(out)
@@ -1256,10 +1246,6 @@ func (b *builder) remainingRootChildren() []ir.Node {
 	var out []ir.Node
 	for _, node := range b.children() {
 		if b.isUsed(node) || discardPhysicalNoise(node) {
-			continue
-		}
-		if structuralBackgroundCoveredByBacking(node, b.root, b.root) {
-			b.mark(node)
 			continue
 		}
 		out = append(out, node)
@@ -1283,27 +1269,6 @@ func (b *builder) makeContainer(id string, role ir.Role, box ir.BBox, kind propo
 			BBox:       box,
 			Confidence: 0.62,
 			SourceID:   id,
-		}},
-		Style: ir.Style{Visible: true, Opacity: 1},
-	}
-}
-
-func visualBackingImage(id string, box ir.BBox, kind proposalKind) ir.Node {
-	return ir.Node{
-		ID:          id,
-		Role:        ir.RoleImageView,
-		SourceBBox:  box,
-		FigmaBBox:   box,
-		FigmaType:   ir.FigmaRoundedRectangle,
-		VisibleName: "Image",
-		SourcePath:  id,
-		Asset:       &ir.Asset{Kind: "crop"},
-		Evidence: []ir.Evidence{{
-			Kind:       string(kind),
-			BBox:       box,
-			Confidence: 0.9,
-			SourceID:   "source_png",
-			Notes:      "body_visual_backing",
 		}},
 		Style: ir.Style{Visible: true, Opacity: 1},
 	}
@@ -1457,29 +1422,6 @@ func bottomNavItem(node ir.Node, root ir.BBox, navY int) bool {
 		return false
 	}
 	return node.Role == ir.RoleTextView || node.Role == ir.RoleImageView
-}
-
-func structuralBackgroundCoveredByBacking(node ir.Node, owner ir.BBox, root ir.BBox) bool {
-	if node.Role != ir.RoleBackground || root.Width <= 0 || root.Height <= 0 || owner.Width <= 0 || owner.Height <= 0 {
-		return false
-	}
-	box := node.SourceBBox
-	if box.Width <= 0 || box.Height <= 0 || !intersects(box, owner) {
-		return false
-	}
-	if firstEvidenceKind(node) == "control_surface_background" {
-		return false
-	}
-	widthRatio := float64(box.Width) / float64(max(1, root.Width))
-	heightRatio := float64(box.Height) / float64(max(1, root.Height))
-	areaRatio := float64(area(box)) / float64(max(1, area(root)))
-	if widthRatio >= 0.72 && box.Height >= max(72, root.Height/18) {
-		return true
-	}
-	if widthRatio >= 0.50 && (heightRatio >= 0.10 || areaRatio >= 0.08) {
-		return true
-	}
-	return false
 }
 
 func homeIndicatorBBox(root ir.BBox) ir.BBox {

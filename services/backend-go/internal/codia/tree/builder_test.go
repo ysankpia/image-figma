@@ -268,7 +268,7 @@ func TestBuildRejectsLowerActionBarHintAndKeepsLargeImageOutOfTopChrome(t *testi
 	}
 }
 
-func TestBuildAddsBodyVisualBackingImage(t *testing.T) {
+func TestBuildDoesNotAddFullBodyVisualBackingImage(t *testing.T) {
 	doc := fixtureDoc([]ir.Node{
 		text("content", 52, 320, 120, 28, "Content"),
 	})
@@ -281,19 +281,12 @@ func TestBuildAddsBodyVisualBackingImage(t *testing.T) {
 	if body == nil {
 		t.Fatalf("expected body:\n%s", MarkdownReport(out))
 	}
-	backing := firstEvidence(*body, string(proposalVisualBacking))
-	if backing == nil {
-		t.Fatalf("expected visual backing image in body: %#v", body.Children)
-	}
-	if backing.Role != ir.RoleImageView || backing.SourceBBox != body.SourceBBox {
-		t.Fatalf("unexpected backing image: role=%s bbox=%#v body=%#v", backing.Role, backing.SourceBBox, body.SourceBBox)
-	}
-	if backing.Asset == nil || backing.Asset.Kind != "crop" {
-		t.Fatalf("backing image must crop from source PNG: %#v", backing.Asset)
+	if containsID(*body, "tree_body_backing_0001") {
+		t.Fatalf("body must not use a full-source crop as visible backing:\n%s", MarkdownReport(out))
 	}
 }
 
-func TestBuildSuppressesStructuralBackgroundCoveredByBodyBacking(t *testing.T) {
+func TestBuildPreservesStructuralBackgroundWithoutBodyBacking(t *testing.T) {
 	doc := fixtureDoc([]ir.Node{
 		backgroundWithEvidence("header-bg", "solid_background", 0, 0, 665, 220),
 		image("logo", 36, 68, 80, 80),
@@ -305,8 +298,8 @@ func TestBuildSuppressesStructuralBackgroundCoveredByBodyBacking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if containsID(out.Root, "header-bg") {
-		t.Fatalf("large structural background should be covered by body backing, not emitted:\n%s", MarkdownReport(out))
+	if !containsID(out.Root, "header-bg") {
+		t.Fatalf("large structural background should remain as editable background evidence:\n%s", MarkdownReport(out))
 	}
 	if !containsID(out.Root, "title") || !containsID(out.Root, "logo") {
 		t.Fatalf("foreground children must remain editable:\n%s", MarkdownReport(out))
