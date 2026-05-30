@@ -5,7 +5,7 @@
 - 负责人:未指定(可交由 Codex 执行)
 - 所属链路:`services/backend-go` 的 M29 VisualTree 编译层
 
-> 历史说明：本计划记录的是旧 Go M29 VisualTree / XY-cut 对齐阶段。后续 raw Codia canvas 审计和 Codia-like compiler 工作已经替代了“纯几何空间聚类可接近 Codia 1:1”的判断。当前实现主线以 `docs/plans/active/089-go-codia-like-compiler-rebuild.md` 为准；当前 Beta 质量瓶颈和 detector 后续路径见 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。本文保留作历史追溯，不作为新实现合同。
+> 历史说明：本计划记录的是旧 Go M29 VisualTree / XY-cut 对齐阶段。后续 raw Codia canvas 审计和 Codia-like compiler 工作已经替代了“纯几何空间聚类可接近 Codia 1:1”的判断。Go Codia-like compiler 目前暂停在 `docs/plans/archive/deferred/089-go-codia-like-compiler-rebuild.md` 的 Beta checkpoint；当前 Beta 质量瓶颈和 detector 后续路径见 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。本文保留作历史追溯，不作为新实现合同。
 
 ## 一、任务背景
 
@@ -91,7 +91,7 @@ PNG → m29extract(连通域primitive) → m29tokens(evidence token)
 
 ## 五、硬约束(必须遵守)
 
-1. **历史约束：纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是旧 VisualTree 阶段的约束；当前 Go Codia-like compiler 已转向 role-aware pipeline，见 `docs/plans/active/089-go-codia-like-compiler-rebuild.md` 和 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。
+1. **历史约束：纯几何/通用规则,严禁语义特化。** 不许写 `bottom_nav`/`tab`/`card`/固定文案/固定坐标/主题色/文件名 等特化。只用通用空间关系:bbox 包含、投影空白带、局部密度、邻近连通、递归切分。这是旧 VisualTree 阶段的约束；当前 Go Codia-like compiler 已转向 role-aware pipeline 且暂停在 Beta checkpoint，见 `docs/plans/archive/deferred/089-go-codia-like-compiler-rebuild.md` 和 `docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md`。
 2. **不分裂主线。** 改进直接写进 Go(`services/backend-go`),不在 Python 另起炉灶;Python 仅用于对比标尺。
 3. **证据驱动,每次改动都用对比工具验证。** 改完跑 `compare_trees.py`,分数升才保留,降就回滚。不要在单一指标上调参陷入局部最优(历史失败模式)。
 4. **节点类型收口在 `Body/Layer/Text/Image`**,不引入语义节点类型(`TestCompileDoesNotCreateSemanticNodeTypes` 必须始终通过)。

@@ -878,6 +878,8 @@ backend/app/errors.py
 
 ## Go Codia-like Compiler Validation
 
+This section documents a paused Beta/offline validation path, not the active product upload mainline. The active product path remains `POST /api/upload-preview` -> DSL v0.1 -> Renderer. The Go Codia-like compiler currently runs through local CLIs under `services/backend-go` and is not wired into `/api/upload-preview` or `/api/tasks/{taskId}/dsl`.
+
 `services/backend-go/cmd/codiaanalyze` 是 Codia-like compiler rebuild 的第一阶段验证工具。它读取原始 Codia/Figma canvas JSON，定位 `Figma design - ... / Root`，解析 `pluginData` 中的 `schema:id`，并输出：
 
 ```text
@@ -999,7 +1001,9 @@ Current failure audit over the same smoke:
 | Tencent 018 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Source primitive / leaf crop extraction lacks Codia-like ImageView crops. |
 | Tencent 022 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 13 | Remaining side rail, small icon, and internal image crops need stronger upstream role-aware evidence. |
 
-The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The compiler can be used as a Beta path, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
+The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The compiler can be used as a future Beta side path, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
+
+If this paused line is resumed for product use, the next step is a separate Beta API/artifact path, not replacement of the formal DSL endpoint. The resume plan is archived in [089 Go Codia-like Compiler Rebuild](../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md).
 
 Latest evidence-kind breakdown for extra generated nodes shows where the next tree ownership work belongs:
 

@@ -17,13 +17,13 @@
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
 - 当前 Go M29.0 physical evidence kernel 计划：[plans/active/082-go-m29-physical-evidence-kernel.md](plans/active/082-go-m29-physical-evidence-kernel.md)
-- 当前 Go Codia-like compiler rebuild 计划：[plans/active/089-go-codia-like-compiler-rebuild.md](plans/active/089-go-codia-like-compiler-rebuild.md)
+- 已暂停的 Go Codia-like compiler rebuild 计划：[plans/archive/deferred/089-go-codia-like-compiler-rebuild.md](plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
 - 当前 Codia-like Beta 质量阻塞记录：[bugs/open/017-codia-like-beta-ui-role-detector-gap.md](bugs/open/017-codia-like-beta-ui-role-detector-gap.md)
 - 刚完成的 Go M29 VisualTree 决策追踪计划：[plans/completed/085-go-m29-visualtree-decision-trace.md](plans/completed/085-go-m29-visualtree-decision-trace.md)
 - 刚完成的 Go M29 normalized tree 身份合同计划：[plans/completed/086-go-m29-normalized-tree-identity-contract.md](plans/completed/086-go-m29-normalized-tree-identity-contract.md)
 - 刚完成的 Go M29 VisualTree group permission gate 计划：[plans/completed/087-go-m29-visualtree-group-permission-gate.md](plans/completed/087-go-m29-visualtree-group-permission-gate.md)
 - 刚完成的 Go M29 offline group evidence audit 计划：[plans/completed/088-go-m29-offline-group-evidence-audit.md](plans/completed/088-go-m29-offline-group-evidence-audit.md)
-- 已替代旧探索：Python M29 525 hardening、Gemini 审计、composite media rewrite、model-first pivot 等旧 active plans 已移入 [plans/archive/superseded/](plans/archive/superseded/index.md)。当前 Codia-like 质量后续以 089 主线和 bug 017 为准。
+- 已替代旧探索：Python M29 525 hardening、Gemini 审计、composite media rewrite、model-first pivot 等旧 active plans 已移入 [plans/archive/superseded/](plans/archive/superseded/index.md)。Go Codia-like compiler 目前暂停在 Beta checkpoint，后续恢复以 deferred 089 和 bug 017 为准。
 
 ## By Task Type
 

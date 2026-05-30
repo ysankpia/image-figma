@@ -4,7 +4,7 @@
 - 创建日期：2026-05-30
 - 所属主线：Go Codia-like compiler rebuild
 - 当前上线判断：不阻塞 Beta / 内部试用上线，但阻塞 Codia 1:1 质量目标
-- 关联计划：[089 Go Codia-like Compiler Rebuild](../../plans/active/089-go-codia-like-compiler-rebuild.md)
+- 关联计划：[089 Go Codia-like Compiler Rebuild](../../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
 - 当前 smoke gate：`services/backend-go/tools/codia_smoke_2img.sh`
 
 ## Executive Summary

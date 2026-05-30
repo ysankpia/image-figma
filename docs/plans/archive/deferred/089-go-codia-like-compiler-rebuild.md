@@ -2,7 +2,16 @@
 
 ## Status
 
-active
+deferred / paused at Beta checkpoint
+
+This plan is no longer an active execution plan. The current branch is preserved as a Beta / best-effort Go Codia-like compiler line, but further investment is paused. Future work should resume from the checkpoint and Beta wiring plan below, not from chat history.
+
+Reason for pause:
+
+- The offline Go compiler path is useful and measurable.
+- The product runtime still uses the existing Python/FastAPI upload-preview -> DSL v0.1 -> Renderer mainline.
+- The remaining Codia-like quality ceiling is dominated by upstream UI role detection / `ImageView` source recall, not by `xycut`, final tree ordering, or local threshold tuning.
+- The next work is either Beta productization or detector-backed role-aware evidence; both are larger than the current branch should continue absorbing opportunistically.
 
 ## Source Of Truth
 
@@ -673,7 +682,235 @@ Result:
 | Tencent 018 | 149 | 95 | 54 | 51 | 0.419 | 0.428 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
 | Tencent 022 | 106 | 92 | 14 | 28 | 0.619 | 0.546 | `m29_physical_evidence_or_codia_leaf:upstream_leaf_missing:ImageView:13` |
 
-This branch is usable as a Beta / best-effort Codia-like reconstruction path, but this checkpoint records the current quality ceiling: the dominant remaining failure is upstream ImageView source recall, not tree ordering or XY-cut. The detailed release-quality debt, do-not-fix paths, detector dataset plan, and future closure criteria are tracked in [bug 017](../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md).
+This branch is usable as a Beta / best-effort Codia-like reconstruction path, but this checkpoint records the current quality ceiling: the dominant remaining failure is upstream ImageView source recall, not tree ordering or XY-cut. The detailed release-quality debt, do-not-fix paths, detector dataset plan, and future closure criteria are tracked in [bug 017](../../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md).
+
+## Pause Checkpoint And Resume Plan
+
+This project line is paused after the 2026-05-30 Beta-quality checkpoint. Do not treat the pause as a failed implementation or as permission to revive old VisualTree tuning. The current branch contains a working offline compiler and diagnostics; what it lacks is product wiring and a stronger perception source for Codia-like small visual elements.
+
+Current usable contract:
+
+```text
+Beta screenshot-to-Figma reconstruction.
+The output is editable and structured on a best-effort basis.
+Small icons, fine UI glyphs, internal image crops, and exact Codia-like hierarchy may be incomplete.
+```
+
+Forbidden claim:
+
+```text
+Codia 1:1
+complete ImageView recall
+complete Button/EditText/Background ownership parity
+complete hierarchy parity
+```
+
+The correct next work is not another local threshold pass. It is one of two explicit tracks:
+
+1. Productize the current compiler as a separate Beta side path.
+2. Improve the source evidence layer with a detector-backed role-aware candidate path.
+
+### Recommended Beta Productization
+
+Default route: keep the existing formal product mainline unchanged and expose the Go Codia-like compiler as a separate Beta path first.
+
+Current formal mainline remains:
+
+```text
+POST /api/upload-preview
+GET /api/tasks/{taskId}/dsl
+```
+
+Do not replace that output yet. It produces DSL v0.1 for the current Renderer. The Go Codia compiler currently emits Codia IR and controlled Figma-like tree artifacts, not the existing Renderer DSL contract.
+
+Recommended Beta API surface:
+
+```text
+POST /api/upload-preview-codia-beta
+GET  /api/tasks/{taskId}/codia-beta
+GET  /api/tasks/{taskId}/codia-beta/artifacts
+```
+
+Behavior:
+
+```text
+user PNG upload
+-> Python FastAPI saves task
+-> Python runner invokes services/backend-go/cmd/codiacompile
+-> Go compiler writes Codia artifacts
+-> API returns taskId, status, quality notice, and artifact index
+```
+
+The API response must label the path honestly:
+
+```text
+mode = "codia_beta"
+quality = "best_effort"
+notices = [
+  "small_icons_may_be_missing",
+  "not_codia_1_to_1"
+]
+```
+
+### Required Beta Artifacts
+
+Each Beta task must write a complete evidence bundle under:
+
+```text
+backend/storage/upload_previews/{taskId}/codia_beta/
+```
+
+Required files:
+
+```text
+input.png
+ocr.json
+extract/m29_physical_evidence.v1.json
+tokens/evidence_tokens.v1.json
+leaves/codia_leaf_ir.v1.json
+controls/codia_control_stage.v1.json
+tree/codia_tree_ir.v1.json
+emitter/codia_figma_like_tree.v1.json
+audit/codia_failure_audit.v1.json
+audit/codia_failure_audit_report.md
+manifest.json
+logs/stdout.log
+logs/stderr.log
+```
+
+`manifest.json` is required. It should record:
+
+```text
+taskId
+input image path
+compiler git commit
+startedAt / finishedAt
+status
+topAction
+artifact paths
+known quality limitations
+```
+
+Without the manifest and logs, a bad online result cannot be replayed. That would recreate the original failure mode: guessing from the final tree instead of tracing the evidence chain.
+
+### Python To Go Bridge
+
+The FastAPI layer should not reimplement Codia compiler logic. It should only own task storage, subprocess execution, status, error mapping, and artifact indexing.
+
+Expected module shape:
+
+```text
+backend/app/codia_beta/runner.py
+backend/app/codia_beta/manifest.py
+backend/app/routes/codia_beta.py
+```
+
+Rules:
+
+- `cmd/codiacompile` remains the only compiler executor.
+- Python must save stdout/stderr into `codia_beta/logs/`.
+- Non-zero compiler exit marks the Beta task failed but preserves partial artifacts.
+- Timeout, missing OCR, invalid PNG, and missing Go binary failures must have explicit failure reasons.
+- No queue system is required for the first version; reuse the existing upload-preview task pattern unless real runtime evidence says otherwise.
+
+### Rendering Strategy
+
+Do not quietly stuff `codia_figma_like_tree.v1.json` into the current DSL endpoint. That would mix two contracts.
+
+Use two stages:
+
+1. First expose the artifact bundle and reports for internal use.
+2. Then add a separate adapter or emitter:
+
+```text
+codia_figma_like_tree.v1.json
+-> beta DSL adapter or plugin emitter
+-> Figma nodes
+```
+
+Minimum adapter mapping:
+
+```text
+ViewGroup/ListView/ActionBar/StatusBar/BottomNavigation -> frame/group
+TextView -> text
+ImageView -> image asset
+Background/bg_Button/bg_EditText -> rectangle
+Button/EditText -> group/frame with owned children
+```
+
+This adapter is a separate implementation phase because it affects user-visible output. It must be validated by node count, hierarchy, bbox, text, image asset paths, and background ordering.
+
+### Bad Case Capture
+
+If this Beta path is used, every poor output must be capturable as a future detector/eval sample.
+
+Recommended storage:
+
+```text
+backend/storage/codia_beta_feedback/{feedbackId}/
+```
+
+Record:
+
+```text
+taskId
+issueType: missing_icon | wrong_crop | bad_grouping | text_error | background_error | other
+artifactManifestPath
+source PNG
+audit report
+user/internal notes
+optional corrected output or reference JSON
+createdAt
+```
+
+This is how the project turns Beta usage into future detector data. Without this loop, using the branch only produces anecdotal failures.
+
+### Detector Track
+
+The detector track is the path toward Codia 1:1 quality. It does not block Beta use.
+
+Recommended sequence:
+
+```text
+RICO / Codia golden / synthetic UI samples
+-> train or probe UI role detector
+-> ui_detector_candidates.v1.json
+-> report-only offline eval
+-> permission-gated merge into leaf/control stage
+-> ownership graph / tree emitter convergence
+```
+
+First useful roles:
+
+```text
+ImageView
+Button
+EditText
+Background/control surface
+StatusBar
+BottomNavigation
+```
+
+Do not train or integrate a model that directly emits a full Codia tree as the first production path. The first learned component should emit normalized detector candidates only. M29 remains useful as pixel/source evidence; the detector supplies role-aware candidates that current M29 evidence misses.
+
+### Resume Acceptance Criteria
+
+If this paused work is resumed for Beta productization, acceptance is:
+
+- Existing `/api/upload-preview` and `/api/tasks/{taskId}/dsl` behavior remains unchanged.
+- Codia Beta has a separate API surface or explicit feature flag.
+- Every Beta task writes `manifest.json`, artifact index, logs, and failure audit.
+- A task ID is enough to find the complete evidence chain.
+- User-facing copy says Beta / best-effort and does not claim Codia 1:1.
+- `services/backend-go/tools/codia_smoke_2img.sh` still passes the current non-regression floor.
+- Bad cases can be saved as detector/eval data.
+
+If this paused work is resumed for quality improvement, acceptance is:
+
+- The improvement targets `m29_physical_evidence_or_codia_leaf` or detector candidate integration first.
+- The smoke topAction improves or remains explainable.
+- No runtime generation reads Codia golden JSON.
+- No sample-specific names, text, fixed bbox, theme colors, file paths, or task IDs enter production logic.
 
 ## Documentation Updates
 
