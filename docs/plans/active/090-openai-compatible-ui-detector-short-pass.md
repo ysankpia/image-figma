@@ -1,6 +1,6 @@
 # 090 OpenAI-compatible UI Detector Short Pass
 
-- 状态：active / report-only stages 1-4 implemented
+- 状态：active / stages 1-5 implemented; stage 6 region hints pending
 - 创建日期：2026-05-30
 - 负责人：未指定
 - 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../archive/deferred/089-go-codia-like-compiler-rebuild.md)
@@ -416,18 +416,24 @@ services/backend-go/internal/codia/detector/merge.go
 services/backend-go/cmd/codiadetector/
 ```
 
-Implemented report-only surface:
+Implemented surface as of 2026-05-30:
 
 ```text
 services/backend-go/internal/codia/detector/
 services/backend-go/cmd/codiadetector/
-services/backend-go/internal/codia/compiler detector manifest hook
+services/backend-go/internal/codia/assembly/
+services/backend-go/internal/codia/canvasexport/
+services/backend-go/internal/codia/compiler detector manifest + assembly hook
 services/backend-go/cmd/codiacompile -detector-candidates
 ```
 
-Current implementation deliberately stops before ImageView merge. It can call OpenAI-compatible providers, write candidates, report, overlay, raw responses, run detector-vs-golden eval, and attach a report-only detector manifest to `codiacompile`. It does not alter Codia leaf/control/tree generation.
+Current implementation no longer stops at report-only. `codiadetector` can call OpenAI-compatible providers, write candidates, report, overlay, raw responses, and run detector-vs-golden eval. `codiacompile -detector-candidates` now feeds detector candidates into `internal/codia/assembly`, where only detector-supported `ImageView` candidates may become bbox-authority source candidates. `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, and `BottomNavigation` detector outputs remain hint-only/report-only; they cannot directly create controls or regions yet.
 
-Python was useful for probes, but production side-path should be Go-first because the compiler, diff, audit, and future merge gates are already Go. Python can remain an optional research harness, not the runtime boundary.
+`assembly` is the ownership arbitration layer between raw leaves and `control/tree`: it emits `assembly/codia_ir.v1.json`, `codia_source_candidates.v1.json`, `codia_ownership_graph.v1.json`, and `codia_assembly_report.md`. Destructive consume/suppress is gated on detector ImageView support. Without detector ImageView candidates, assembly preserves M29/OCR leaves conservatively so the existing smoke baseline does not regress.
+
+`canvasexport` writes `codia_canvas_like.v1.canvas.json` and `codia_canvas_export_report.md` from the final Codia IR. The output is analyzer-compatible `version/root/blobs` canvas JSON with `DOCUMENT -> CANVAS -> FRAME "Figma design - ..." -> Root`, deterministic GUIDs, transforms, sizes, role/name/schema pluginData, textData, and basic fills. It deliberately does not claim byte-for-byte Figma internals for commandsBlob, derived geometry, glyph geometry, or true image blob hashes.
+
+Python was useful for probes, but production side-path is Go-first because the compiler, diff, audit, merge gates, and canvas export are already Go. Python can remain an optional research harness, not the runtime boundary.
 
 ### Stage 1: Report-only `codiadetector`
 
@@ -537,9 +543,9 @@ The eval command may read golden.
 The generation command may not read golden.
 ```
 
-### Stage 4: `codiacompile` report-only integration
+### Stage 4: `codiacompile` integration
 
-Add optional detector artifact input:
+Implemented optional detector artifact input:
 
 ```bash
 go run ./cmd/codiacompile \
@@ -550,20 +556,21 @@ go run ./cmd/codiacompile \
   -out /tmp/codia-compile-018
 ```
 
-Stage 4 behavior:
+Stage 4 behavior now includes:
 
 ```text
 Copy/reference detector candidates into compile manifest.
-Run failure audit coverage: which missed golden leaves had nearby detector candidates?
-Do not change generated CodiaIR.
-Smoke score must remain unchanged.
+Feed detector candidates into assembly before control synthesis.
+Write assembly source candidates and ownership graph artifacts.
+Keep Button/Background/ViewGroup/ListView detector output hint-only.
+Keep no-detector smoke score unchanged.
 ```
 
-This proves the detector is useful without risking pipeline regression.
+Generation still never reads golden. Golden is used only by diff/eval after generation.
 
 ### Stage 5: ImageView-only permission merge
 
-Add merge gate after M29 evidence tokens / Codia leaves, before control synthesis:
+Implemented merge gate after M29 evidence tokens / Codia leaves, before control synthesis:
 
 ```text
 detector ImageView candidate
@@ -606,7 +613,7 @@ Existing Codia smoke artifacts still explain all detector-origin leaves by candi
 
 ### Stage 6: Hint-only region/control use
 
-Only after Stage 5 works:
+Pending after Stage 5:
 
 ```text
 EditText: bbox hint for search/input surfaces; still needs M29 surface/OCR context.
@@ -691,16 +698,31 @@ Stage 3 acceptance:
 
 Stage 4 acceptance:
 
-- `codiacompile -detector-candidates` changes no generated tree.
-- It writes `detector/detector_manifest.v1.json` with `mode=report_only`.
-- Failure audit coverage of missed ImageView leaves remains future work.
+- `codiacompile -detector-candidates` writes `detector/detector_manifest.v1.json` and assembly artifacts.
+- No-detector smoke remains unchanged against the existing two-image gate.
+- Detector candidates remain traceable by candidate id; generation does not read golden.
 
 Stage 5 acceptance:
 
-- `upstream_leaf_missing:ImageView` decreases on 018/022.
+- `upstream_leaf_missing:ImageView` decreases on Tencent 018 when detector candidates are provided.
 - Generated ImageView extras remain controlled.
 - Button precision is not hurt.
+- BottomNavigation remains matched.
 - Every detector-origin emitted leaf is traceable to one candidate id.
+
+Validated 2026-05-30 on Tencent 018 with `/private/tmp/ui-detector-018-short-pass/ui_detector_candidates.v1.json`:
+
+| path | generated | matched | extra | missed | ImageView precision | ImageView recall | Button precision | BottomNavigation precision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| no detector smoke baseline | 149 | 95 | 54 | 51 | 0.429 | 0.538 | 1.000 | 1.000 |
+| detector assembly | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
+
+The detector assembly run also passed `codiaanalyze` on `codia_canvas_like.v1.canvas.json` with 123 analyzable nodes and 3 root children. The no-detector `services/backend-go/tools/codia_smoke_2img.sh` gate remains:
+
+| sample | generated | matched | extra | missed |
+| --- | ---: | ---: | ---: | ---: |
+| Tencent 018 | 149 | 95 | 54 | 51 |
+| Tencent 022 | 106 | 92 | 14 | 28 |
 
 ## Validation
 
@@ -716,7 +738,7 @@ Future implementation validation:
 
 ```bash
 cd services/backend-go
-go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiadetector
+go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiadetector ./cmd/codiaanalyze
 
 go run ./cmd/codiadetector \
   -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
@@ -780,15 +802,15 @@ No secret may be persisted. Reports should record provider type and model, not c
 
 Use OpenAI-compatible VLM short-pass as the immediate upstream candidate provider. Defer RICO/YOLO self-training as a future replacement or cost-reduction path.
 
-The implementation order is:
+The implementation order is now:
 
 ```text
-report-only detector CLI
--> multi-pass + dedupe + overlay
--> detector eval
--> codiacompile report-only integration
--> ImageView-only permission merge
--> hint-only region/control integration
+report-only detector CLI          [implemented]
+-> multi-pass + dedupe + overlay  [implemented]
+-> detector eval                  [implemented]
+-> codiacompile assembly hook      [implemented]
+-> ImageView-only permission merge [implemented]
+-> hint-only region/control integration [pending]
 ```
 
 The hard boundary remains:

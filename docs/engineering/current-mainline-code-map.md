@@ -1014,7 +1014,37 @@ source screenshot
 -> existing Codia leaf/control/tree/emitter pipeline
 ```
 
-This is implemented only as an offline/Beta report-only surface and must not be treated as part of `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, and optional `codiacompile -detector-candidates` manifest integration. The detector adapter preserves all known-role model candidates and records whether each one was preferred by the pass in `source.preferredByPass`; pass focus is not allowed to erase evidence. The compile integration writes `detector/detector_manifest.v1.json` and intentionally changes no generated Codia tree. Only after eval proves coverage should an ImageView-only permission merge be enabled. `Button`, `Background`, `ViewGroup`, and `ListView` detector candidates remain report-only or hint-only until backed by M29 source/pixel evidence and ownership gates.
+This is implemented only as an offline/Beta compiler surface and must not be treated as part of `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, optional `codiacompile -detector-candidates` integration, `services/backend-go/internal/codia/assembly`, and `services/backend-go/internal/codia/canvasexport`.
+
+The detector adapter preserves all known-role model candidates and records whether each one was preferred by the pass in `source.preferredByPass`; pass focus is not allowed to erase evidence. `codiacompile -detector-candidates` now enters the assembly layer before control synthesis. Assembly writes:
+
+```text
+assembly/codia_ir.v1.json
+assembly/codia_source_candidates.v1.json
+assembly/codia_ownership_graph.v1.json
+assembly/codia_assembly_report.md
+```
+
+Assembly is allowed to use detector-supported `ImageView` candidates as bbox-authority source candidates and to consume/suppress M29 image fragments that are owned by those detector images. This destructive ownership is deliberately gated on detector ImageView support. Without detector ImageView candidates, assembly preserves M29/OCR leaves conservatively so the existing two-image smoke baseline remains unchanged. `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, and `BottomNavigation` detector candidates remain hint-only/report-only and cannot directly create controls or structural regions.
+
+`canvasexport` writes:
+
+```text
+codia_canvas_like.v1.canvas.json
+codia_canvas_export_report.md
+```
+
+The exported canvas JSON is Codia/Figma-canvas shaped and analyzable by `codiaanalyze`: top-level `version/root/blobs`, `DOCUMENT -> CANVAS -> FRAME "Figma design - ..." -> Root`, deterministic GUIDs, transforms/sizes, role/name/schema pluginData, textData, and basic fills. It does not claim byte-for-byte parity with Figma internals: `commandsBlob`, derived fill/stroke geometry, glyph geometry, and true image blob hashes are omitted or deterministic placeholders and are listed in the export report.
+
+Validated 2026-05-30:
+
+| path | generated | matched | extra | missed | ImageView precision | ImageView recall | Button precision | BottomNavigation precision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tencent 018 no detector smoke | 149 | 95 | 54 | 51 | 0.429 | 0.538 | 1.000 | 1.000 |
+| Tencent 018 detector assembly | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
+| Tencent 022 no detector smoke | 106 | 92 | 14 | 28 | not recorded here | not recorded here | not recorded here | not recorded here |
+
+The detector assembly canvas export at `/private/tmp/codia-assembly-detector-018/codia_canvas_like.v1.canvas.json` was read back by `codiaanalyze` as 123 nodes with 3 root children. Golden raw Codia data remains validation-only; it must not be read by detector, assembly, control, tree, emitter, or canvas export generation logic.
 
 If this paused line is resumed for product use, the next step is a separate Beta API/artifact path, not replacement of the formal DSL endpoint. The resume plan is archived in [089 Go Codia-like Compiler Rebuild](../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md).
 
