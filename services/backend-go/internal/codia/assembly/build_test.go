@@ -40,38 +40,52 @@ func TestDetectorImageMergesM29Fragments(t *testing.T) {
 	}
 }
 
-func TestM29SmallFragmentConsumedByLargerImageOwner(t *testing.T) {
+func TestNoDetectorPreservesM29LeavesConservatively(t *testing.T) {
 	doc := leafDoc([]ir.Node{
 		image("large", 10, 10, 160, 120),
 		image("small", 40, 40, 18, 18),
+		backgroundWithEvidence("tiny_bg", "solid_background", 5, 5, 6, 4),
+		text("inside", 50, 60, 45, 18, "VIP"),
 	})
 
 	result, err := Build(Options{Leaf: doc})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if len(result.Document.Root.Children) != 1 || result.Document.Root.Children[0].ID != "large" {
-		t.Fatalf("expected only large owner emitted, got %#v", result.Document.Root.Children)
+	for _, id := range []string{"large", "small", "tiny_bg", "inside"} {
+		if findID(result.Document.Root.Children, id) == nil {
+			t.Fatalf("expected no-detector assembly to preserve %s, children=%#v", id, result.Document.Root.Children)
+		}
 	}
-	records := findRecords(result, decisionConsume, "small")
-	if len(records) != 1 || records[0].OwnerID != "large" {
-		t.Fatalf("expected small consumed by large, records=%#v", records)
+	if result.Diagnostics.ConsumedCount != 0 || result.Diagnostics.SuppressedCount != 0 {
+		t.Fatalf("no-detector mode must not destructively consume/suppress, diagnostics=%#v", result.Diagnostics)
 	}
 }
 
-func TestOCRImageInternalTextConsumedAndPlainTextPreserved(t *testing.T) {
+func TestDetectorImageConsumesInternalTextAndFragments(t *testing.T) {
 	doc := leafDoc([]ir.Node{
+		image("frag", 45, 56, 20, 20),
 		image("cover", 20, 20, 180, 140),
 		text("inside", 50, 60, 45, 18, "VIP"),
 		text("outside", 240, 60, 60, 18, "Title"),
 	})
+	det := detectorDoc(detector.Candidate{
+		ID:         "det_cover",
+		Role:       detector.RoleImageView,
+		Confidence: 0.92,
+		BBox:       detector.BBox{X: 20, Y: 20, Width: 180, Height: 140},
+		Source:     detector.CandidateSource{Kind: "vision_model", PassID: "imageview"},
+	})
 
-	result, err := Build(Options{Leaf: doc})
+	result, err := Build(Options{Leaf: doc, Detector: &det})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
 	if findID(result.Document.Root.Children, "inside") != nil {
 		t.Fatalf("expected image-internal OCR text consumed, children=%#v", result.Document.Root.Children)
+	}
+	if findID(result.Document.Root.Children, "frag") != nil {
+		t.Fatalf("expected image fragment consumed, children=%#v", result.Document.Root.Children)
 	}
 	if findID(result.Document.Root.Children, "outside") == nil {
 		t.Fatalf("expected ordinary OCR text preserved, children=%#v", result.Document.Root.Children)
@@ -87,8 +101,15 @@ func TestBackgroundFragmentSuppressesButControlEligibleBackgroundStays(t *testin
 		backgroundWithEvidence("button_bg", "control_surface_background", 30, 30, 120, 42),
 		text("button_text", 52, 42, 60, 18, "Pay"),
 	})
+	det := detectorDoc(detector.Candidate{
+		ID:         "det_icon",
+		Role:       detector.RoleImageView,
+		Confidence: 0.9,
+		BBox:       detector.BBox{X: 260, Y: 30, Width: 24, Height: 24},
+		Source:     detector.CandidateSource{Kind: "vision_model", PassID: "imageview"},
+	})
 
-	result, err := Build(Options{Leaf: doc})
+	result, err := Build(Options{Leaf: doc, Detector: &det})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}

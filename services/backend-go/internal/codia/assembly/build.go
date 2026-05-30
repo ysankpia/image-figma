@@ -58,6 +58,7 @@ type builder struct {
 }
 
 func (b *builder) build() ir.Document {
+	hasDetectorImage := false
 	for _, item := range b.detectorCandidates() {
 		if isRegionHint(item.Role) {
 			b.addDetectorHint(item)
@@ -78,6 +79,7 @@ func (b *builder) build() ir.Document {
 		if item.Role != detector.RoleImageView || !detectorImageCandidateAccepted(item) {
 			continue
 		}
+		hasDetectorImage = true
 		b.mergeDetectorImage(item)
 	}
 
@@ -88,19 +90,35 @@ func (b *builder) build() ir.Document {
 		}
 		switch node.Role {
 		case ir.RoleImageView:
-			if owner, ok := containedByLargeImageOwner(node, imageOwners); ok {
-				b.consumeNode(node, owner.ID, 0.72, "m29_image_fragment_owned_by_larger_image", "m29")
+			if hasDetectorImage {
+				if owner, ok := containedByLargeImageOwner(node, imageOwners, b.leaf.Root.SourceBBox); ok {
+					b.consumeNode(node, owner.ID, 0.72, "m29_image_fragment_owned_by_larger_image", "m29")
+					continue
+				}
+				if unsupportedM29ImageFragment(node, b.leaf.Root.SourceBBox) {
+					b.suppressNode(node, 0.57, "unsupported_m29_image_fragment_with_detector_present", "m29")
+					continue
+				}
+			}
+			if !hasDetectorImage && falsePositiveMicroImage(node) {
+				b.suppressNode(node, 0.52, "micro_image_noise_without_detector", "m29")
 				continue
 			}
 			b.emitLeaf(node, 0.66, "m29_independent_image_candidate", "m29")
 			imageOwners = append(imageOwners, node)
 		case ir.RoleTextView:
-			if owner, ok := textOwnedByImage(node, imageOwners); ok {
-				b.consumeNode(node, owner.ID, 0.68, "ocr_text_inside_image_owner", "image_owner")
-				continue
+			if hasDetectorImage {
+				if owner, ok := textOwnedByImage(node, imageOwners, b.leaf.Root.SourceBBox); ok {
+					b.consumeNode(node, owner.ID, 0.68, "ocr_text_inside_image_owner", "image_owner")
+					continue
+				}
 			}
 			b.emitLeaf(node, 0.82, "ocr_text_default_emit", "ocr")
 		case ir.RoleBackground:
+			if !hasDetectorImage {
+				b.emitLeaf(node, 0.6, "m29_background_preserved_without_detector", "m29")
+				continue
+			}
 			if b.keepBackground(node) {
 				b.emitLeaf(node, 0.61, "background_allowed_for_region_or_control", "m29")
 				continue
@@ -232,6 +250,35 @@ func (b *builder) findExistingImageOwner(box ir.BBox) (ir.Node, bool) {
 		}
 	}
 	return ir.Node{}, false
+}
+
+func falsePositiveMicroImage(node ir.Node) bool {
+	box := node.SourceBBox
+	return area(box) > 0 && area(box) < 18 && box.Width <= 4 && box.Height <= 4
+}
+
+func unsupportedM29ImageFragment(node ir.Node, root ir.BBox) bool {
+	box := node.SourceBBox
+	if area(box) <= 0 {
+		return true
+	}
+	if area(box) < 32 {
+		return true
+	}
+	shortSide := min(box.Width, box.Height)
+	longSide := max(box.Width, box.Height)
+	if shortSide <= 10 && longSide >= 24 {
+		return true
+	}
+	if shortSide <= 18 && longSide >= 3*max(1, shortSide) && area(box) <= 4200 {
+		return true
+	}
+	if root.Width > 0 && root.Height > 0 {
+		if box.Width >= int(float64(root.Width)*0.55) && box.Height <= int(float64(root.Height)*0.07) {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *builder) matchImageFragments(box ir.BBox) []ir.Node {
@@ -455,9 +502,12 @@ func isRegionHint(role detector.Role) bool {
 	}
 }
 
-func containedByLargeImageOwner(node ir.Node, owners []ir.Node) (ir.Node, bool) {
+func containedByLargeImageOwner(node ir.Node, owners []ir.Node, root ir.BBox) (ir.Node, bool) {
 	for _, owner := range owners {
 		if owner.ID == node.ID || owner.Role != ir.RoleImageView {
+			continue
+		}
+		if !imageOwnerCanConsumeInternals(owner, root) {
 			continue
 		}
 		if area(owner.SourceBBox) < max(1, area(node.SourceBBox))*4 {
@@ -470,11 +520,14 @@ func containedByLargeImageOwner(node ir.Node, owners []ir.Node) (ir.Node, bool) 
 	return ir.Node{}, false
 }
 
-func textOwnedByImage(text ir.Node, owners []ir.Node) (ir.Node, bool) {
+func textOwnedByImage(text ir.Node, owners []ir.Node, root ir.BBox) (ir.Node, bool) {
 	if text.Role != ir.RoleTextView || area(text.SourceBBox) <= 0 {
 		return ir.Node{}, false
 	}
 	for _, owner := range owners {
+		if !imageOwnerCanConsumeInternals(owner, root) {
+			continue
+		}
 		if owner.Role != ir.RoleImageView || area(owner.SourceBBox) < area(text.SourceBBox)*8 {
 			continue
 		}
@@ -487,6 +540,27 @@ func textOwnedByImage(text ir.Node, owners []ir.Node) (ir.Node, bool) {
 		return owner, true
 	}
 	return ir.Node{}, false
+}
+
+func imageOwnerCanConsumeInternals(owner ir.Node, root ir.BBox) bool {
+	if firstEvidenceKind(owner) == "vision_detector_image_candidate" {
+		return true
+	}
+	if root.Width <= 0 || root.Height <= 0 {
+		return true
+	}
+	box := owner.SourceBBox
+	rootArea := max(1, area(root))
+	if float64(area(box))/float64(rootArea) > 0.24 {
+		return false
+	}
+	if box.Width > int(float64(root.Width)*0.78) && box.Height > int(float64(root.Height)*0.20) {
+		return false
+	}
+	if box.Height > int(float64(root.Height)*0.38) {
+		return false
+	}
+	return true
 }
 
 func controlEligibleBackground(node ir.Node, root ir.BBox) bool {
