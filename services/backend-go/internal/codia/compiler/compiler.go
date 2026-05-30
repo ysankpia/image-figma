@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/assembly"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
@@ -12,6 +13,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/dsl02"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/ir"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/leaf"
@@ -126,6 +128,14 @@ func Compile(options Options) (Result, error) {
 		return Result{}, fmt.Errorf("write canvas export: %w", err)
 	}
 
+	runtimeDSL02, err := dsl02.Export(taskID(options), emitted)
+	if err != nil {
+		return Result{}, fmt.Errorf("codia runtime dsl 0.2 export: %w", err)
+	}
+	if err := dsl02.WriteArtifact(options.OutputDir, runtimeDSL02); err != nil {
+		return Result{}, fmt.Errorf("write codia runtime dsl 0.2: %w", err)
+	}
+
 	result := Result{
 		PhysicalEvidence: physical,
 		EvidenceTokens:   tokens,
@@ -137,6 +147,7 @@ func Compile(options Options) (Result, error) {
 		TreeIR:           treeIR,
 		FigmaLikeTree:    emitted,
 		CanvasExport:     canvasLike,
+		RuntimeDSL02:     runtimeDSL02,
 		DetectorManifest: detectorManifest,
 		Artifacts: Artifacts{
 			PhysicalEvidence:   filepath.ToSlash(filepath.Join("extract", "m29_physical_evidence.v1.json")),
@@ -152,6 +163,7 @@ func Compile(options Options) (Result, error) {
 			FigmaLikeTree:      "codia_figma_like_tree.v1.json",
 			CanvasLike:         canvasexport.CanvasArtifactName,
 			CanvasExportReport: canvasexport.ReportArtifactName,
+			RuntimeDSL02:       dsl02.ArtifactName,
 		},
 	}
 	if detectorManifest != nil {
@@ -191,6 +203,35 @@ func Compile(options Options) (Result, error) {
 	}
 
 	return result, nil
+}
+
+func taskID(options Options) string {
+	if strings.TrimSpace(options.TaskID) != "" {
+		return strings.TrimSpace(options.TaskID)
+	}
+	base := strings.TrimSuffix(filepath.Base(options.InputPath), filepath.Ext(options.InputPath))
+	base = strings.TrimSpace(base)
+	if base == "" || base == "." {
+		return "task_codia"
+	}
+	var builder strings.Builder
+	lastUnderscore := false
+	for _, r := range strings.ToLower(base) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			builder.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	slug := strings.Trim(builder.String(), "_")
+	if slug == "" {
+		return "task_codia"
+	}
+	return "task_" + slug
 }
 
 type paths struct {

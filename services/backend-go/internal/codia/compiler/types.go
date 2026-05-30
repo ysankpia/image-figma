@@ -6,6 +6,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/canvasexport"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/dsl02"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/ir"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
@@ -16,6 +17,7 @@ type Options struct {
 	InputPath          string
 	OCRPath            string
 	OCRProvider        string
+	TaskID             string
 	GoldenPath         string
 	DetectorCandidates string
 	OutputDir          string
@@ -32,6 +34,7 @@ type Result struct {
 	TreeIR           ir.Document         `json:"-"`
 	FigmaLikeTree    emitter.Document    `json:"-"`
 	CanvasExport     canvasexport.Result `json:"-"`
+	RuntimeDSL02     dsl02.Document      `json:"-"`
 	StructureDiff    *codiadiff.Document
 	FailureAudit     *audit.Document
 	DetectorManifest *DetectorManifest
@@ -52,6 +55,7 @@ type Artifacts struct {
 	FigmaLikeTree      string `json:"figmaLikeTree"`
 	CanvasLike         string `json:"canvasLike"`
 	CanvasExportReport string `json:"canvasExportReport"`
+	RuntimeDSL02       string `json:"runtimeDsl02"`
 	StructureDiff      string `json:"structureDiff,omitempty"`
 	StructureReport    string `json:"structureReport,omitempty"`
 	FailureAudit       string `json:"failureAudit,omitempty"`

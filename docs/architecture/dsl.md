@@ -200,6 +200,44 @@ The schema still tolerates historical `meta.maskBBoxes` on image/fallback elemen
 
 Renderer must ignore unknown `meta` fields and must not depend on historical M30/M39 labels.
 
+## Codia Runtime DSL v0.2 Side Path
+
+DSL v0.2 是 Go Codia-like compiler 的 Beta artifact，不替代当前 Python `/api/upload-preview` 产品主线。
+
+```text
+services/backend-go/cmd/codiacompile
+-> codia_tree_ir.v1.json
+-> codia_figma_like_tree.v1.json
+-> codia_runtime.dsl.v0_2.json
+-> renderCodiaRuntimeDesign
+```
+
+顶层固定：
+
+```text
+version = "0.2"
+kind = "codia_runtime"
+```
+
+v0.2 节点使用 Codia runtime roles：
+
+```text
+Root
+ViewGroup / ListView / ActionBar / StatusBar / BottomNavigation
+Button / EditText / TextView / ImageView
+Background / bg_Button / bg_EditText
+```
+
+v0.2 渲染类型只允许：
+
+```text
+frame / group / text / shape / image
+```
+
+v0.2 的职责只是把 Go Codia 已经裁决好的 tree 转成 Renderer 可消费的 runtime DSL。它不做 OCR、detector 调用、ownership 仲裁、control synthesis、parent assignment、golden diff 或样本规则。
+
+第一版 v0.2 `ImageView` 允许没有可 fetch asset；Renderer 会用占位矩形继续渲染并记录 warning。后续如果 Go server 产出 crop asset，再把 `image.assetId` 或 `image.url` 接入同一个 DSL 0.2 合同。
+
 ## Removed Legacy DSL Paths
 
 M30.2.2 removed the old pre-M29 upload chain. This stage removed M29 Direct compare and legacy M30 materialization from the product path. DSL patch, visible text replacement, component annotation, slice candidate, icon fallback replay, perception, SAM harness outputs, M29 Direct compare DSL, and M30 materialized DSL are historical and no longer part of the active upload DSL path.

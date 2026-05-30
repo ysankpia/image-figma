@@ -1,6 +1,6 @@
 # Image-to-Figma Renderer
 
-Renderer 的职责只有一个：把 DSL v0.1 渲染成 Figma 节点。
+Renderer 的职责是把后端已经裁决好的 DSL 渲染成 Figma 节点。当前产品主线仍是 DSL v0.1；Go Codia Beta side path 额外提供 DSL v0.2 renderer。
 
 ## Public Interface
 
@@ -8,6 +8,12 @@ Renderer 的职责只有一个：把 DSL v0.1 渲染成 Figma 节点。
 
 ```ts
 renderDesign(dsl, options)
+```
+
+Go Codia Beta 入口：
+
+```ts
+renderCodiaRuntimeDesign(dsl, options)
 ```
 
 `options` 必须提供 `FigmaAdapter`。Renderer 不直接依赖全局 `figma`，真实 Figma API 只在 adapter 中封装。
@@ -45,6 +51,7 @@ Renderer 不做：
 - 图片裁切。
 - DSL 生成。
 - 业务语义判断。
+- Codia ownership / consume / suppress 仲裁。
 - 页面类型判断。
 - Auto Layout。
 - Figma Component。

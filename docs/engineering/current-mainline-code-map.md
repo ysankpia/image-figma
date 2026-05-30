@@ -33,6 +33,17 @@ Plugin upload
 
 M29 Direct compare, legacy M30 materialization, M31-M39/M39.1 downstream experiments, and ONNX proposer have been pruned from active backend runtime.
 
+Go Codia-like compiler 是当前 Codia Beta side path，不是 Python `/api/upload-preview` runtime stage：
+
+```text
+services/backend-go/cmd/codiacompile
+-> M29 physical evidence
+-> Codia assembly/control/tree/emitter
+-> codia_runtime.dsl.v0_2.json
+```
+
+`codia_runtime.dsl.v0_2.json` 是 DSL 0.2 artifact，供后续 Go HTTP server / plugin Beta 接入。它不写入 Python `dsl_results`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。
+
 ## Runtime Entry Surface
 
 `backend/app/main.py` 装配当前 route modules：

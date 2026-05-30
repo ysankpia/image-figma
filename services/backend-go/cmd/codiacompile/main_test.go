@@ -39,10 +39,18 @@ func TestCodiaCompileCLIWritesEndToEndArtifacts(t *testing.T) {
 		filepath.Join("controls", "codia_control_ir.v1.json"),
 		"codia_tree_ir.v1.json",
 		"codia_figma_like_tree.v1.json",
+		"codia_runtime.dsl.v0_2.json",
 	} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected artifact %s: %v", name, err)
 		}
+	}
+	runtimeDSL, err := os.ReadFile(filepath.Join(out, "codia_runtime.dsl.v0_2.json"))
+	if err != nil {
+		t.Fatalf("read runtime dsl: %v", err)
+	}
+	if !strings.Contains(string(runtimeDSL), `"version": "0.2"`) || !strings.Contains(string(runtimeDSL), `"kind": "codia_runtime"`) {
+		t.Fatalf("runtime dsl missing DSL 0.2 identity: %s", string(runtimeDSL))
 	}
 }
 

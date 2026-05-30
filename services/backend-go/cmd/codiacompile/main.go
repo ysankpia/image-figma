@@ -14,6 +14,7 @@ func main() {
 	inputPath := flag.String("input", "", "path to input PNG")
 	ocrPath := flag.String("ocr", "", "optional OCR JSON path")
 	ocrProvider := flag.String("ocr-provider", os.Getenv("OCR_PROVIDER"), "optional OCR provider: baidu_ppocrv5")
+	taskID := flag.String("task-id", "", "optional task id for codia_runtime.dsl.v0_2.json")
 	goldenPath := flag.String("golden", "", "optional golden codia_ir.v1.json for structural diff")
 	detectorCandidates := flag.String("detector-candidates", "", "optional ui_detector_candidates.v1.json for report-only manifest")
 	outputDir := flag.String("out", "", "output directory")
@@ -27,6 +28,7 @@ func main() {
 		InputPath:          *inputPath,
 		OCRPath:            *ocrPath,
 		OCRProvider:        *ocrProvider,
+		TaskID:             *taskID,
 		GoldenPath:         *goldenPath,
 		DetectorCandidates: *detectorCandidates,
 		OutputDir:          *outputDir,

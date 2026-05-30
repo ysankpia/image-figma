@@ -61,6 +61,22 @@ pnpm --filter @image-figma/image-to-figma-renderer run test
 - 单元素失败不拖垮整页。
 - 图片加载失败产生 warning。
 - M29 materialized roles 作为普通 DSL element 渲染。
+- Codia Runtime DSL v0.2 通过 `renderCodiaRuntimeDesign` 渲染 frame/group/text/shape/image。
+- v0.2 ImageView 缺少 fetchable asset 时渲染占位并记录 warning，不阻断整页。
+
+## Go Codia Runtime DSL 0.2
+
+```bash
+cd services/backend-go
+go test ./internal/codia/dsl02 ./internal/codia/compiler ./cmd/codiacompile
+```
+
+必须覆盖：
+
+- `codiacompile` 写出 `codia_runtime.dsl.v0_2.json`。
+- DSL 0.2 顶层包含 `version="0.2"` 和 `kind="codia_runtime"`。
+- Go Codia role/type/name/bbox 被机械翻译，不在 DSL 0.2 exporter 里重新做 ownership 仲裁。
+- `ImageView` 没有 fetchable crop asset 时保留 provenance，交给 renderer 占位。
 
 ## Figma Plugin
 

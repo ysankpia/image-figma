@@ -45,10 +45,14 @@ func TestCompileWritesEndToEndArtifacts(t *testing.T) {
 		"codia_figma_like_tree.v1.json",
 		"codia_canvas_like.v1.canvas.json",
 		"codia_canvas_export_report.md",
+		"codia_runtime.dsl.v0_2.json",
 	} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected artifact %s: %v", name, err)
 		}
+	}
+	if result.RuntimeDSL02.Version != "0.2" || result.RuntimeDSL02.Kind != "codia_runtime" {
+		t.Fatalf("expected runtime DSL 0.2 in result: %+v", result.RuntimeDSL02)
 	}
 	analysis, err := canvas.AnalyzeFile(filepath.Join(out, "codia_canvas_like.v1.canvas.json"), "")
 	if err != nil {
