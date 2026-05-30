@@ -15,6 +15,18 @@ Figma plugin
 
 M30.2.2 已删除 pre-M29 legacy upload chain。M29 backend downstream pruning 已删除 M31-M39/M39.1 和 ONNX proposer runtime。本阶段已下线 M29 Direct compare 产品入口和 legacy M30 materialization 产品路径。测试不再要求这些旧 routes、env、modules 或 reports 存在。
 
+Codia Beta side path 另走 Go `codiaserver`：
+
+```text
+Figma plugin Generate Beta
+-> /api/codia-preview
+-> Go Codia compiler
+-> DSL v0.2 Codia Runtime
+-> renderCodiaRuntimeDesign
+```
+
+它不替换产品主线，也不改变 `/api/tasks/{taskId}/dsl`。
+
 ## Validation Focus
 
 v0.1 重点验证：
@@ -25,6 +37,8 @@ v0.1 重点验证：
 - M29 evidence chain 不污染 visible DSL children。
 - 插件默认上传走 `/api/upload-preview`。
 - 插件 completed 后只调用 `/api/tasks/{taskId}/dsl`。
+- 插件 Beta 上传走 Go `/api/codia-preview`。
+- 插件 Beta completed 后只调用 `/api/codia-preview/{taskId}/dsl`。
 - M29.5 replay plan 可被写出并被 M29 materializer 消费。
 - 本地 M29 image/raster/icon asset URL 可由 renderer fetch。
 - fallback-off 深色/浅色/混合背景不依赖固定浅色默认背景。
@@ -68,12 +82,13 @@ pnpm --filter @image-figma/image-to-figma-renderer run test
 
 ```bash
 cd services/backend-go
-go test ./internal/codia/dsl02 ./internal/codia/compiler ./cmd/codiacompile
+go test ./internal/codia/dsl02 ./internal/codia/compiler ./internal/codia/server ./cmd/codiacompile ./cmd/codiaserver
 ```
 
 必须覆盖：
 
 - `codiacompile` 写出 `codia_runtime.dsl.v0_2.json`。
+- `codiaserver` 接受 PNG 上传，运行 Go Codia compiler，并从 `/api/codia-preview/{taskId}/dsl` 返回 DSL 0.2。
 - DSL 0.2 顶层包含 `version="0.2"` 和 `kind="codia_runtime"`。
 - Go Codia role/type/name/bbox 被机械翻译，不在 DSL 0.2 exporter 里重新做 ownership 仲裁。
 - `ImageView` 没有 fetchable crop asset 时保留 provenance，交给 renderer 占位。
@@ -90,6 +105,9 @@ pnpm --filter @image-figma/figma-plugin run build
 - 默认上传调用 `/api/upload-preview`。
 - 上传后轮询 `/api/tasks/{taskId}`。
 - completed 后调用 `/api/tasks/{taskId}/dsl`。
+- Beta 上传调用 `/api/codia-preview`。
+- Beta 上传后轮询 `/api/codia-preview/{taskId}`。
+- Beta completed 后调用 `/api/codia-preview/{taskId}/dsl` 并使用 `renderCodiaRuntimeDesign`。
 - 不再调用 `/api/tasks/{taskId}/m29-direct-dsl` 或 `/api/tasks/{taskId}/m30-materialization`。
 - renderer writes M29 plan-driven DSL to Figma。
 - UI 能显示 upload、processing、fetching DSL、rendering、success/failure 状态。

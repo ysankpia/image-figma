@@ -2,12 +2,22 @@ import type { DesignDSL } from "@image-figma/dsl-schema";
 import {
   createFigmaAdapter,
   type RenderResult,
+  renderCodiaRuntimeDesign,
   renderDesign,
   type RenderError,
   type RenderWarning
 } from "@image-figma/image-to-figma-renderer";
 import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json";
-import { API_BASE_URL, BackendApiError, getTask, getTaskDsl, uploadPngPreview } from "./apiClient";
+import {
+  API_BASE_URL,
+  BackendApiError,
+  getCodiaPreviewDsl,
+  getCodiaPreviewTask,
+  getTask,
+  getTaskDsl,
+  uploadPngCodiaPreview,
+  uploadPngPreview
+} from "./apiClient";
 import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
 
 declare const __html__: string;
@@ -40,6 +50,11 @@ figma.ui.onmessage = async (message: PluginToMainMessage) => {
 
     if (message.type === "render-uploaded-png") {
       await renderUploadedPng(message.fileName, toUint8Array(message.bytes));
+      return;
+    }
+
+    if (message.type === "render-uploaded-png-codia") {
+      await renderUploadedPngCodia(message.fileName, toUint8Array(message.bytes));
       return;
     }
 
@@ -99,15 +114,43 @@ async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<v
   reportRenderResult(result);
 }
 
+async function renderUploadedPngCodia(fileName: string, bytes: Uint8Array): Promise<void> {
+  postToUI({ type: "render-started", source: "codia" });
+  postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
+
+  const upload = await uploadPngCodiaPreview(fileName, bytes);
+  postToUI({ type: "status", message: "Running Go Codia compiler.", tone: "normal" });
+
+  const task = await waitForCompletedTaskWith(upload.taskId, getCodiaPreviewTask, "codia_preview_poll");
+  if (task.status === "failed") {
+    throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
+  }
+
+  postToUI({ type: "status", message: "Fetching Codia Runtime design.", tone: "normal" });
+  const dsl = await getCodiaPreviewDsl(upload.taskId);
+
+  postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });
+  const result = await renderCodiaRuntimeDesign(dsl, {
+    figma: createFigmaAdapter(figma as never),
+    validate: true,
+    createOriginalReference: false
+  });
+  reportRenderResult(result);
+}
+
 async function waitForCompletedTask(taskId: string) {
+  return waitForCompletedTaskWith(taskId, getTask, "task_poll");
+}
+
+async function waitForCompletedTaskWith(taskId: string, getTaskFn: (taskId: string) => ReturnType<typeof getTask>, stage: string) {
   for (let index = 0; index < 180; index += 1) {
-    const task = await getTask(taskId);
+    const task = await getTaskFn(taskId);
     if (task.status === "completed" || task.status === "failed") {
       return task;
     }
     await delay(1000);
   }
-  throw new BackendApiError("BACKEND_TASK_TIMEOUT", "Backend task timed out.", "task_poll", taskId);
+  throw new BackendApiError("BACKEND_TASK_TIMEOUT", "Backend task timed out.", stage, taskId);
 }
 
 function reportRenderResult(result: RenderResult): void {

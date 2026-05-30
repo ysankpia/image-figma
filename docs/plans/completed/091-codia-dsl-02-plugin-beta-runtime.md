@@ -1,6 +1,6 @@
 # 091 Codia DSL 0.2 Plugin Beta Runtime
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-05-30
 - 负责人：未指定
 - 关联计划：[090 OpenAI-compatible UI Detector Short Pass](090-openai-compatible-ui-detector-short-pass.md)
@@ -11,8 +11,10 @@
 新增一条不破坏当前产品主线的 Codia Beta 闭环：
 
 ```text
-PNG + OCR JSON
--> Go codiacompile
+PNG
+-> Go codiaserver /api/codia-preview
+-> OCR / M29 physical evidence / optional detector candidates
+-> Go codiacompile core
 -> Codia tree / figma-like artifacts
 -> DSL 0.2 Codia Runtime DSL
 -> renderCodiaRuntimeDesign
@@ -35,6 +37,8 @@ DSL 0.2 是 Codia Runtime DSL，只服务 Codia Beta。
 - 在 `packages/image-to-figma-renderer` 增加 `renderCodiaRuntimeDesign`。
 - 在 `services/backend-go` 增加 DSL 0.2 exporter。
 - 让 Go `cmd/codiacompile` 直接写出 `codia_runtime.dsl.v0_2.json`。
+- 在 `services/backend-go` 增加 `cmd/codiaserver`，提供 Codia Beta 专用 HTTP API。
+- 在插件新增 `Generate Beta` 路径，调用 Go server 并渲染 DSL 0.2。
 - 更新架构、Renderer 和测试文档，记录 DSL 0.2 边界。
 
 不包含：
@@ -42,7 +46,6 @@ DSL 0.2 是 Codia Runtime DSL，只服务 Codia Beta。
 - 不替换 `/api/upload-preview`。
 - 不改变 `/api/tasks/{taskId}/dsl` 的 v0.1 含义。
 - 不在本轮新增 Python FastAPI `codia-preview` route。
-- 不在本轮新增 Go HTTP server；插件 HTTP 接入下一轮通过 Go server 处理。
 - 不恢复 M29 Direct、legacy M30、M31-M39/M39.1 runtime 或 ONNX proposer。
 - 不让 VLM detector 成为 Beta 路径必需条件。
 - 不承诺 Codia/Figma canvas JSON byte-for-byte 一致。
@@ -100,8 +103,15 @@ Generate from PNG -> /api/upload-preview -> DesignDSL v0.1 -> renderDesign
 Beta 按钮：
 
 ```text
-下一轮：Generate Beta -> Go HTTP server -> Codia Runtime DSL v0.2 -> renderCodiaRuntimeDesign
+Generate Beta
+-> POST /api/codia-preview
+-> GET /api/codia-preview/{taskId}
+-> GET /api/codia-preview/{taskId}/dsl
+-> Codia Runtime DSL v0.2
+-> renderCodiaRuntimeDesign
 ```
+
+Beta path 由 `services/backend-go/cmd/codiaserver` 提供 HTTP API。插件仍使用同一个 `API_BASE_URL` 默认值 `http://localhost:8000/api`，所以本地测试时 Python FastAPI 和 Go `codiaserver` 不能同时占用 8000 端口。
 
 ## Steps
 
@@ -111,6 +121,8 @@ Beta 按钮：
 4. 接入 `cmd/codiacompile` artifact 输出。
 5. 同步文档和验证策略。
 6. 跑 DSL、Renderer、Go Codia tests 和 smoke。
+7. 增加 Go `codiaserver` HTTP wrapper，暴露 `/api/codia-preview`。
+8. 插件新增 Beta 按钮，走 DSL 0.2 renderer。
 
 ## Acceptance
 
@@ -120,6 +132,8 @@ Beta 按钮：
 - Go `codiacompile` 能输出 `codia_runtime.dsl.v0_2.json`。
 - Go Codia 四图 smoke 仍可运行，当前 Go compiler ownership/tree artifacts 不被 DSL 0.2 适配层污染。
 - Python FastAPI `/api/upload-preview` 和插件默认 v0.1 上传路径不变。
+- Go `codiaserver` 能接受 PNG，后台运行 Go Codia compiler，并通过 `/api/codia-preview/{taskId}/dsl` 返回 DSL 0.2。
+- 插件 `Generate Beta` 能上传 PNG、轮询 Go Codia task、获取 DSL 0.2，并调用 `renderCodiaRuntimeDesign` 写入 Figma。
 
 ## Validation
 
@@ -129,9 +143,35 @@ pnpm --filter @image-figma/dsl-schema run test
 pnpm --filter @image-figma/image-to-figma-renderer run typecheck
 pnpm --filter @image-figma/image-to-figma-renderer run test
 cd services/backend-go && go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaanalyze
+cd services/backend-go && go test ./internal/codia/server ./cmd/codiaserver
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
 bash services/backend-go/tools/codia_smoke_4img.sh
 git diff --check
 git status --short --branch
+```
+
+已验证：
+
+```text
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
+cd services/backend-go && go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaanalyze ./cmd/codiaserver
+bash services/backend-go/tools/codia_smoke_4img.sh
+git diff --check
+```
+
+Go HTTP 闭环也已用临时端口验证：
+
+```text
+codiaserver POST /api/codia-preview
+-> GET /api/codia-preview/{taskId}
+-> GET /api/codia-preview/{taskId}/dsl
+-> version=0.2 kind=codia_runtime stage=codia_completed progress=100
 ```
 
 ## Notes
@@ -140,4 +180,4 @@ git status --short --branch
 
 Detector candidates 继续保持可选输入。没有 detector 时，Beta 路径使用 conservative M29/OCR/Go assembly 输出；有 detector 时，Go compiler 自己决定是否消费。Python/Plugin 不参与 role 仲裁。
 
-当前仓库事实是：Python FastAPI 仍是旧产品 HTTP API，Go 是最新 Codia compiler 内核。本计划先把 Go 输出合同做实；插件 HTTP 接入应新增 Go server，而不是把 Codia Beta 绕回 Python adapter。
+当前仓库事实是：Python FastAPI 仍是正式产品 HTTP API，Go 是最新 Codia compiler 内核。Codia Beta 插件路径已经通过 Go `codiaserver` 接入；不要把 Codia Beta 绕回 Python adapter。

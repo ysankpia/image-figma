@@ -31,6 +31,10 @@
 | `CODIA_UI_DETECTOR_MAX_IMAGE_SIDE` | 每个 detector pass 发送给模型的最长边 | `1280` | 否 |
 | `CODIA_UI_DETECTOR_TIMEOUT_SECONDS` | 每个 detector pass 的 provider 超时秒数 | `180` | 否 |
 | `CODIA_UI_DETECTOR_TEMPERATURE` | detector 模型 temperature；`0` 表示不显式传或保持确定性配置 | `0` | 否 |
+| `CODIA_SERVER_ADDR` | Go Codia Beta HTTP server 监听地址 | `127.0.0.1:8000` | 否 |
+| `CODIA_SERVER_STORAGE_ROOT` | Go Codia Beta server 存储根目录 | `services/backend-go/storage/codia_server` 启动目录相对路径默认 `./storage/codia_server` | 否 |
+| `CODIA_SERVER_MAX_UPLOAD_BYTES` | Go Codia Beta server PNG 上传大小上限 | `10485760` | 否 |
+| `CODIA_SERVER_DETECTOR_CANDIDATES` | 可选 detector candidates JSON 文件，传给 Go Codia compiler | 无 | 否 |
 
 ## OCR
 
@@ -95,6 +99,27 @@ ui_detector_report.md
 ui_detector_overlay.png
 raw_model_response/
 ```
+
+## Go Codia Beta Server
+
+`services/backend-go/cmd/codiaserver` 是插件 `Generate Beta` 路径的本地 HTTP server。它复用 `OCR_PROVIDER`，并把 PNG 交给 Go Codia compiler 输出 DSL v0.2：
+
+```bash
+cd services/backend-go
+CODIA_SERVER_ADDR=127.0.0.1:8000 \
+OCR_PROVIDER=baidu_ppocrv5 \
+go run ./cmd/codiaserver
+```
+
+可选配置：
+
+```bash
+CODIA_SERVER_STORAGE_ROOT=./storage/codia_server
+CODIA_SERVER_MAX_UPLOAD_BYTES=10485760
+CODIA_SERVER_DETECTOR_CANDIDATES=/path/to/ui_detector_candidates.v1.json
+```
+
+本地插件默认调用 `API_BASE_URL=http://localhost:8000/api`。如果 Python FastAPI 已占用 8000 端口，要么停止 Python server 后启动 Go `codiaserver`，要么同时修改插件 API base URL 后重新打包。
 
 ## M29 Preview Profile
 

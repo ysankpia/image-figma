@@ -312,6 +312,7 @@
 
       <footer class="actions">
         <button id="renderButton" class="button button-primary" type="button" disabled>Generate from PNG</button>
+        <button id="betaButton" class="button button-secondary" type="button" disabled>Generate Beta</button>
         <button id="sampleButton" class="button button-secondary button-dev" type="button">Sample</button>
         <button id="closeButton" class="button button-secondary" type="button">Close</button>
       </footer>
@@ -319,6 +320,7 @@
 
     <script>
       const renderButton = document.getElementById("renderButton");
+      const betaButton = document.getElementById("betaButton");
       const sampleButton = document.getElementById("sampleButton");
       const closeButton = document.getElementById("closeButton");
       const fileInput = document.getElementById("fileInput");
@@ -378,6 +380,28 @@
         }
       });
 
+      betaButton.addEventListener("click", async () => {
+        if (!selectedFile) {
+          setStatus("Failed", "Choose a PNG file first.", "error");
+          return;
+        }
+        updateButtons(true);
+        setStatus("Uploading", "Uploading PNG.", "normal");
+        setWarnings([]);
+        try {
+          const bytes = await selectedFile.arrayBuffer();
+          postPluginMessage({
+            type: "render-uploaded-png-codia",
+            fileName: selectedFile.name,
+            mimeType: "image/png",
+            bytes
+          });
+        } catch (error) {
+          updateButtons(false);
+          setStatus("Failed", error instanceof Error ? error.message : "Could not read PNG file.", "error");
+        }
+      });
+
       sampleButton.addEventListener("click", () => {
         updateButtons(true);
         setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
@@ -402,6 +426,8 @@
         if (message.type === "render-started") {
           updateButtons(true);
           if (message.source === "upload") {
+            setStatus("Uploading", "Uploading PNG.", "normal");
+          } else if (message.source === "codia") {
             setStatus("Uploading", "Uploading PNG.", "normal");
           } else {
             setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
@@ -475,6 +501,7 @@
 
       function updateButtons(isBusy) {
         renderButton.disabled = isBusy || !selectedFile;
+        betaButton.disabled = isBusy || !selectedFile;
         sampleButton.disabled = isBusy;
         chooseFileButton.disabled = isBusy;
       }
@@ -496,7 +523,13 @@
         if (message.message === "Uploading PNG.") {
           return "Uploading";
         }
-        if (message.message === "Processing uploaded PNG." || message.message === "Fetching generated design." || message.message === "Fetching M29 plan-driven design.") {
+        if (
+          message.message === "Processing uploaded PNG." ||
+          message.message === "Fetching generated design." ||
+          message.message === "Fetching M29 plan-driven design." ||
+          message.message === "Running Go Codia compiler." ||
+          message.message === "Fetching Codia Runtime design."
+        ) {
           return "Processing";
         }
         if (message.message === "Writing design to Figma.") {

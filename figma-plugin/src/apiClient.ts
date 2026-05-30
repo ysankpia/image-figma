@@ -1,4 +1,4 @@
-import type { DesignDSL } from "@image-figma/dsl-schema";
+import type { CodiaRuntimeDSL, DesignDSL } from "@image-figma/dsl-schema";
 
 export const API_BASE_URL = "http://localhost:8000/api";
 
@@ -39,6 +39,10 @@ export async function uploadPngPreview(fileName: string, bytes: Uint8Array): Pro
   return uploadPngTo("/upload-preview", fileName, bytes);
 }
 
+export async function uploadPngCodiaPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
+  return uploadPngTo("/codia-preview", fileName, bytes);
+}
+
 async function uploadPngTo(endpoint: string, fileName: string, bytes: Uint8Array): Promise<UploadResult> {
   const boundary = `image-figma-${Date.now().toString(16)}`;
   const body = createMultipartBody(boundary, fileName, bytes);
@@ -57,6 +61,11 @@ export async function getTask(taskId: string): Promise<TaskResult> {
   return response.data as TaskResult;
 }
 
+export async function getCodiaPreviewTask(taskId: string): Promise<TaskResult> {
+  const response = await apiFetch(`${API_BASE_URL}/codia-preview/${encodeURIComponent(taskId)}`);
+  return response.data as TaskResult;
+}
+
 export async function getTaskDsl(taskId: string): Promise<DesignDSL> {
   const response = await apiFetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/dsl`);
   const data = response.data as { dsl?: unknown };
@@ -64,6 +73,15 @@ export async function getTaskDsl(taskId: string): Promise<DesignDSL> {
     throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid DSL response.");
   }
   return data.dsl as DesignDSL;
+}
+
+export async function getCodiaPreviewDsl(taskId: string): Promise<CodiaRuntimeDSL> {
+  const response = await apiFetch(`${API_BASE_URL}/codia-preview/${encodeURIComponent(taskId)}/dsl`);
+  const data = response.data as { dsl?: unknown };
+  if (!data || typeof data !== "object" || !data.dsl) {
+    throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid Codia Runtime DSL response.");
+  }
+  return data.dsl as CodiaRuntimeDSL;
 }
 
 async function apiFetch(url: string, init?: ApiRequestInit): Promise<ApiSuccessResponse> {

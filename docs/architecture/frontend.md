@@ -12,7 +12,7 @@ React + TypeScript + Vite 不是当前实现前提。后续如果上传、预览
 
 - 上传 PNG。
 - 显示文件信息。
-- 触发开始生成。
+- 触发正式生成或 Codia Beta 生成。
 - 显示进度。
 - 显示完成或失败。
 - 保留 sample DSL 生成作为开发备用入口。
@@ -47,6 +47,7 @@ Plugin Main 运行在 Figma 插件主线程。
 
 - `Choose PNG`。
 - `Generate from PNG`。
+- `Generate Beta`，开发/验证用，走 Go Codia Runtime DSL v0.2。
 - `Sample` 开发备用入口。
 - 当前状态。
 - warning 列表。
@@ -86,6 +87,20 @@ UI selects PNG
 ```
 
 `/api/upload-preview` 是历史命名。当前它返回 M29 plan-driven DSL，不再返回 legacy M30 DSL，也不再提供 M29 Direct compare 双画布路径。
+
+Codia Beta 上传流：
+
+```text
+UI selects PNG
+-> UI clicks Generate Beta
+-> Main uploads PNG to Go codiaserver /api/codia-preview
+-> Main polls /api/codia-preview/{taskId}
+-> Main fetches /api/codia-preview/{taskId}/dsl
+-> Main calls renderCodiaRuntimeDesign
+-> Main reports done or error
+```
+
+这个路径只服务 Codia Beta。它不替换默认 `Generate from PNG`，不调用 Python FastAPI `upload-preview`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 合同。
 
 ## User Language
 

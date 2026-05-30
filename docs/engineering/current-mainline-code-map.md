@@ -42,7 +42,17 @@ services/backend-go/cmd/codiacompile
 -> codia_runtime.dsl.v0_2.json
 ```
 
-`codia_runtime.dsl.v0_2.json` 是 DSL 0.2 artifact，供后续 Go HTTP server / plugin Beta 接入。它不写入 Python `dsl_results`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。
+`codia_runtime.dsl.v0_2.json` 是 DSL 0.2 artifact。`services/backend-go/cmd/codiaserver` 已经把它暴露给插件 `Generate Beta` 路径：
+
+```text
+Plugin Generate Beta
+-> Go codiaserver /api/codia-preview
+-> Go Codia compiler
+-> /api/codia-preview/{taskId}/dsl
+-> renderCodiaRuntimeDesign
+```
+
+它不写入 Python `dsl_results`，也不改变 `/api/tasks/{taskId}/dsl` 的 DSL v0.1 含义。
 
 ## Runtime Entry Surface
 
@@ -56,6 +66,8 @@ backend/app/routes/assets.py
 ```
 
 当前产品上传入口是 `POST /api/upload-preview`。旧 `POST /api/upload`、`GET /api/tasks/{taskId}/m29-direct-dsl`、`GET /api/tasks/{taskId}/m30-materialization`、旧 M8-M28 debug endpoints，以及 M31/M39/M39.1 diagnostic endpoints 已从 active runtime 移除；不要在新工作里恢复它们。
+
+当前 Codia Beta 上传入口是 Go `POST /api/codia-preview`。它属于 side path，不属于 Python `backend/app/main.py` route modules。
 
 ## Pipeline Orchestrator
 
@@ -889,7 +901,7 @@ backend/app/errors.py
 
 ## Go Codia-like Compiler Validation
 
-This section documents a paused Beta/offline validation path, not the active product upload mainline. The active product path remains `POST /api/upload-preview` -> DSL v0.1 -> Renderer. The Go Codia-like compiler currently runs through local CLIs under `services/backend-go` and is not wired into `/api/upload-preview` or `/api/tasks/{taskId}/dsl`.
+This section documents the Codia Beta/offline validation path, not the active product upload mainline. The active product path remains `POST /api/upload-preview` -> DSL v0.1 -> Renderer. The Go Codia-like compiler runs through local CLIs under `services/backend-go` and through the Go `codiaserver` Beta API. It is not wired into Python `/api/upload-preview` or `/api/tasks/{taskId}/dsl`.
 
 `services/backend-go/cmd/codiaanalyze` 是 Codia-like compiler rebuild 的第一阶段验证工具。它读取原始 Codia/Figma canvas JSON，定位 `Figma design - ... / Root`，解析 `pluginData` 中的 `schema:id`，并输出：
 
@@ -963,6 +975,9 @@ internal/codia/audit      // read-only failure audit over structural diff
 cmd/codiaaudit            // standalone failure audit CLI
 internal/codia/compiler   // screenshot evidence -> CodiaIR orchestration
 cmd/codiacompile          // end-to-end local compiler CLI
+internal/codia/dsl02      // CodiaIR -> DSL v0.2 Codia Runtime artifact
+internal/codia/server     // Go HTTP task wrapper for plugin Beta path
+cmd/codiaserver           // local Go Codia Beta server
 internal/codia/tree       // ActionBar/StatusBar/BottomNavigation/ListView/ViewGroup tree builder
 ```
 

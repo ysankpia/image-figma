@@ -12,6 +12,8 @@ PNG upload
 
 `POST /api/upload-preview` is the product upload endpoint. Runtime semantics are M29 mainline.
 
+Codia Beta has a separate Go server contract under `/api/codia-preview`. It returns DSL v0.2 Codia Runtime data for `renderCodiaRuntimeDesign`. It is not the formal product DSL endpoint and must not change `/api/tasks/{taskId}/dsl`.
+
 M29 Direct compare, legacy M30 materialization diagnostics, M31/M37/M38/M39/M39.1 downstream diagnostics, and old M8-M28 debug endpoints have been removed from current runtime.
 
 ## Contract Ownership
@@ -63,6 +65,8 @@ status
 version
 time
 ```
+
+Both Python FastAPI and Go `codiaserver` expose this path. The Go server reports `version=codia-server-v0.1`.
 
 ### `POST /api/upload-preview`
 
@@ -213,6 +217,119 @@ GET /files/assets/*
 ```
 
 M29 materialized image assets referenced by the renderer must be fetchable through `/files/assets/...`.
+
+## Codia Beta Go Server Endpoints
+
+These endpoints are served by `services/backend-go/cmd/codiaserver`.
+
+### `POST /api/codia-preview`
+
+Plugin Beta upload endpoint. The task it creates runs the Go Codia compiler and writes DSL v0.2.
+
+Request:
+
+```text
+multipart/form-data
+file: image/png
+```
+
+Validation:
+
+- PNG signature must be valid.
+- IHDR dimensions must be readable.
+- File size must be <= `CODIA_SERVER_MAX_UPLOAD_BYTES`.
+
+Immediate success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "taskId": "task_abc",
+    "status": "processing",
+    "stage": "codia_queued",
+    "progress": 1,
+    "file": {
+      "filename": "upload.png",
+      "mimeType": "image/png",
+      "size": 1234
+    }
+  }
+}
+```
+
+### `GET /api/codia-preview/{taskId}`
+
+Returns Go Codia task status:
+
+```json
+{
+  "success": true,
+  "data": {
+    "taskId": "task_abc",
+    "status": "processing",
+    "stage": "codia_compile",
+    "progress": 40,
+    "message": "Running Go Codia compiler."
+  }
+}
+```
+
+Status values:
+
+```text
+processing
+completed
+failed
+```
+
+Current stage values:
+
+```text
+codia_queued
+codia_compile
+codia_completed
+```
+
+### `GET /api/codia-preview/{taskId}/dsl`
+
+Returns the generated DSL v0.2 only after the task is completed.
+
+Current preview DSL file:
+
+```text
+storage/codia_server/codia_previews/{taskId}/compile/codia_runtime.dsl.v0_2.json
+```
+
+The response shape is:
+
+```json
+{
+  "success": true,
+  "data": {
+    "dsl": {
+      "version": "0.2",
+      "kind": "codia_runtime"
+    }
+  }
+}
+```
+
+If the task is not completed, the endpoint returns `DSL_NOT_READY`.
+
+### `GET /api/codia-preview/{taskId}/artifacts`
+
+Returns task artifact paths for local debugging:
+
+```text
+taskId
+status
+stage
+outputDir
+artifacts
+```
+
+This endpoint is read-only and not required by the plugin renderer.
 
 ## Removed Endpoints
 
