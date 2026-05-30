@@ -12,6 +12,9 @@ export function applyBaseStyle(figma: FigmaAdapter, node: FigmaNode, style: DSLS
   if (style.opacity !== undefined) {
     figma.setOpacity(node, style.opacity);
   }
+  if (style.clipContent !== undefined) {
+    figma.setClipsContent?.(node, style.clipContent);
+  }
   if (style.fill === null) {
     figma.setFills(node, []);
   }

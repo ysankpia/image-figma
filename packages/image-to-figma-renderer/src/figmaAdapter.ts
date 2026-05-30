@@ -32,6 +32,7 @@ export interface FigmaNodeLike {
   y: number;
   visible: boolean;
   opacity: number;
+  clipsContent?: boolean;
   fills?: FigmaPaintLike[];
   strokes?: FigmaPaintLike[];
   strokeWeight?: number;
@@ -93,6 +94,9 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
     },
     setOpacity(node, opacity) {
       toFigmaNode(node).opacity = opacity;
+    },
+    setClipsContent(node, clipsContent) {
+      toFigmaNode(node).clipsContent = clipsContent;
     },
     setFills(node, fills) {
       toFigmaNode(node).fills = fills.map(toFigmaPaint);

@@ -126,6 +126,7 @@ const (
 	proposalBottomTab        proposalKind = "bottom_navigation_tab"
 	proposalBottomNavWrapper proposalKind = "bottom_navigation_wrapper"
 	proposalBodyList         proposalKind = "body_list_owner"
+	proposalVisualBacking    proposalKind = "visual_backing_image"
 	proposalRepeatedRowList  proposalKind = "repeated_row_list"
 	proposalRepeatedRowItem  proposalKind = "repeated_row_item"
 	proposalMajorSection     proposalKind = "major_section_owner"
@@ -394,7 +395,7 @@ func (b *builder) buildSearchRow() ir.Node {
 func (b *builder) buildActionBar() ir.Node {
 	box := ir.BBox{X: 0, Y: 0, Width: b.root.Width, Height: 74}
 	var actionHint *regionHint
-	if hint, ok := b.bestRegionHint(ir.RoleActionBar, 0.80); ok && plausibleTopRegionHint(hint.BBox, b.root) {
+	if hint, ok := b.bestRegionHint(ir.RoleActionBar, 0.80); ok && plausibleActionBarHint(hint.BBox, b.root) {
 		box = hint.BBox
 		actionHint = &hint
 	}
@@ -639,6 +640,7 @@ func (b *builder) buildBody(hasTopSearch bool, bottomNav ir.Node) ir.Node {
 		return ir.Node{}
 	}
 	body := b.makeContainer("tree_body_0001", ir.RoleListView, ir.BBox{X: 0, Y: bodyY, Width: b.root.Width, Height: bodyEnd - bodyY}, proposalBodyList)
+	body.Children = append(body.Children, visualBackingImage("tree_body_backing_0001", body.SourceBBox, proposalVisualBacking))
 	if !hasTopSearch {
 		if action := b.buildActionBar(); action.ID != "" {
 			body.Children = append(body.Children, action)
@@ -1274,6 +1276,27 @@ func (b *builder) makeContainer(id string, role ir.Role, box ir.BBox, kind propo
 	}
 }
 
+func visualBackingImage(id string, box ir.BBox, kind proposalKind) ir.Node {
+	return ir.Node{
+		ID:          id,
+		Role:        ir.RoleImageView,
+		SourceBBox:  box,
+		FigmaBBox:   box,
+		FigmaType:   ir.FigmaRoundedRectangle,
+		VisibleName: "Image",
+		SourcePath:  id,
+		Asset:       &ir.Asset{Kind: "crop"},
+		Evidence: []ir.Evidence{{
+			Kind:       string(kind),
+			BBox:       box,
+			Confidence: 0.9,
+			SourceID:   "source_png",
+			Notes:      "body_visual_backing",
+		}},
+		Style: ir.Style{Visible: true, Opacity: 1},
+	}
+}
+
 func applyRegionHintEvidence(node *ir.Node, hint regionHint) {
 	if len(node.Evidence) == 0 {
 		return
@@ -1347,6 +1370,13 @@ func plausibleTopRegionHint(box ir.BBox, root ir.BBox) bool {
 	return box.Height >= 24 && box.Height <= max(96, root.Height/5)
 }
 
+func plausibleActionBarHint(box ir.BBox, root ir.BBox) bool {
+	if !plausibleTopRegionHint(box, root) {
+		return false
+	}
+	return box.Y <= topStatusHeight(root)+8
+}
+
 func plausibleBottomNavigationHint(box ir.BBox, root ir.BBox) bool {
 	if box.Width < int(float64(max(1, root.Width))*0.70) {
 		return false
@@ -1358,17 +1388,40 @@ func plausibleBottomNavigationHint(box ir.BBox, root ir.BBox) bool {
 }
 
 func topChromeNode(node ir.Node, box ir.BBox) bool {
-	if !intersects(node.SourceBBox, box) && centerY(node.SourceBBox) > bottom(box)+8 {
+	nodeBox := node.SourceBBox
+	if nodeBox.Width <= 0 || nodeBox.Height <= 0 {
 		return false
 	}
 	switch node.Role {
 	case ir.RoleTextView, ir.RoleImageView, ir.RoleButton:
-		return true
+		if !nearTopChrome(nodeBox, box) {
+			return false
+		}
+		if centerInside(box, nodeBox) && compactTopChromeNode(nodeBox, box) {
+			return true
+		}
+		if overlapRatio(nodeBox, box) >= 0.55 {
+			return true
+		}
+		return !intersects(nodeBox, box) && centerY(nodeBox) <= bottom(box)+8 && compactTopChromeNode(nodeBox, box)
 	case ir.RoleBackground:
-		return area(node.SourceBBox) > 0 && node.SourceBBox.Height <= 18
+		return nearTopChrome(nodeBox, box) && area(nodeBox) > 0 && nodeBox.Height <= 18
 	default:
 		return false
 	}
+}
+
+func nearTopChrome(nodeBox ir.BBox, chromeBox ir.BBox) bool {
+	if intersects(nodeBox, chromeBox) {
+		return true
+	}
+	return centerY(nodeBox) >= chromeBox.Y-max(74, chromeBox.Height) && centerY(nodeBox) <= bottom(chromeBox)+8
+}
+
+func compactTopChromeNode(nodeBox ir.BBox, chromeBox ir.BBox) bool {
+	maxHeight := max(64, chromeBox.Height)
+	maxWidth := max(240, chromeBox.Width*2/3)
+	return nodeBox.Height <= maxHeight && nodeBox.Width <= maxWidth
 }
 
 func smallChromeLeaf(node ir.Node) bool {

@@ -13,6 +13,7 @@ export interface FakeNode extends FigmaNode {
   layout?: FigmaLayout;
   visible?: boolean;
   opacity?: number;
+  clipsContent?: boolean;
   fills?: FigmaPaint[];
   strokes?: FigmaPaint[];
   strokeWeight?: number;
@@ -75,6 +76,10 @@ export class FakeFigmaAdapter implements FigmaAdapter {
 
   setOpacity(node: FigmaNode, opacity: number): void {
     this.asFakeNode(node).opacity = opacity;
+  }
+
+  setClipsContent(node: FigmaNode, clipsContent: boolean): void {
+    this.asFakeNode(node).clipsContent = clipsContent;
   }
 
   setFills(node: FigmaNode, fills: FigmaPaint[]): void {

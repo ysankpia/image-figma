@@ -238,6 +238,61 @@ func TestBuildClipsBodyToBottomNavigationHint(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsLowerActionBarHintAndKeepsLargeImageOutOfTopChrome(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		control("browser-pill", ir.RoleButton, 250, 15, 166, 40),
+		text("time", 68, 27, 79, 31, "11:02"),
+		image("wifi", 573, 33, 45, 22),
+		text("section-title", 268, 90, 124, 41, "会员专区"),
+		image("large-card", 27, 150, 611, 681),
+	})
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_action_wrong", ir.RoleActionBar, ir.BBox{X: 0, Y: 84, Width: 665, Height: 76}, 0.98)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	action := firstEvidence(out.Root, string(proposalActionBar))
+	if action == nil {
+		t.Fatalf("expected action bar from real top chrome:\n%s", MarkdownReport(out))
+	}
+	if action.SourceBBox.Y != 0 || action.SourceBBox.Height != 74 {
+		t.Fatalf("lower detector hint must not become the top chrome bbox: %#v", action.SourceBBox)
+	}
+	if containsID(*action, "large-card") {
+		t.Fatalf("top chrome consumed a large body image: %#v", action.Children)
+	}
+	body := firstEvidence(out.Root, string(proposalBodyList))
+	if body == nil || !containsID(*body, "large-card") {
+		t.Fatalf("large body image should remain in body ownership:\n%s", MarkdownReport(out))
+	}
+}
+
+func TestBuildAddsBodyVisualBackingImage(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		text("content", 52, 320, 120, 28, "Content"),
+	})
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	body := firstEvidence(out.Root, string(proposalBodyList))
+	if body == nil {
+		t.Fatalf("expected body:\n%s", MarkdownReport(out))
+	}
+	backing := firstEvidence(*body, string(proposalVisualBacking))
+	if backing == nil {
+		t.Fatalf("expected visual backing image in body: %#v", body.Children)
+	}
+	if backing.Role != ir.RoleImageView || backing.SourceBBox != body.SourceBBox {
+		t.Fatalf("unexpected backing image: role=%s bbox=%#v body=%#v", backing.Role, backing.SourceBBox, body.SourceBBox)
+	}
+	if backing.Asset == nil || backing.Asset.Kind != "crop" {
+		t.Fatalf("backing image must crop from source PNG: %#v", backing.Asset)
+	}
+}
+
 func TestBuildCreatesHintedSlotListOnlyWithRealChildren(t *testing.T) {
 	doc := fixtureDoc([]ir.Node{
 		image("slot1i", 60, 300, 80, 60),

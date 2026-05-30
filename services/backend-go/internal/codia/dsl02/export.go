@@ -306,6 +306,9 @@ func fromIRBBox(bbox ir.BBox) BBox {
 
 func runtimeStyle(node emitter.Node) map[string]any {
 	style := map[string]any{}
+	if node.Type == ir.FigmaFrame {
+		style["clipContent"] = false
+	}
 	if node.Style.Visible {
 		style["visible"] = true
 	}

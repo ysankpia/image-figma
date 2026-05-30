@@ -51,6 +51,7 @@ export interface FigmaAdapter {
   setLayout(node: FigmaNode, layout: FigmaLayout): void;
   setVisible(node: FigmaNode, visible: boolean): void;
   setOpacity(node: FigmaNode, opacity: number): void;
+  setClipsContent?(node: FigmaNode, clipsContent: boolean): void;
   setFills(node: FigmaNode, fills: FigmaPaint[]): void;
   setStrokes(node: FigmaNode, strokes: FigmaPaint[], strokeWeight?: number): void;
   setCornerRadius(node: FigmaNode, radius: number): void;

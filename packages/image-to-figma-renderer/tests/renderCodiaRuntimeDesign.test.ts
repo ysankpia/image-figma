@@ -14,6 +14,8 @@ describe("renderCodiaRuntimeDesign", () => {
     expect(result.renderedElementCount).toBe(7);
     expect(result.warnings).toEqual([]);
     expect(adapter.findNodeByName("Root")).toBeDefined();
+    expect(adapter.findNodeByName("Root")?.clipsContent).toBe(false);
+    expect(adapter.findNodeByName("Groups")?.clipsContent).toBe(false);
     expect(adapter.findNodeByName("Groups")?.children.map((child) => child.name)).toEqual([
       "Image",
       "Button",
@@ -97,7 +99,7 @@ function makeCodiaRuntimeDsl(): CodiaRuntimeDSL {
       type: "frame",
       name: "Root",
       bbox: { x: 0, y: 0, width: 390, height: 844 },
-      style: { fill: "#FFFFFF" },
+      style: { fill: "#FFFFFF", clipContent: false },
       children: [
         {
           id: "group_1",
@@ -105,7 +107,7 @@ function makeCodiaRuntimeDsl(): CodiaRuntimeDSL {
           type: "frame",
           name: "Groups",
           bbox: { x: 0, y: 0, width: 390, height: 844 },
-          style: { fill: null },
+          style: { fill: null, clipContent: false },
           children: [
             {
               id: "title",

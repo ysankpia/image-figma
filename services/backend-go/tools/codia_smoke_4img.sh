@@ -120,13 +120,15 @@ import sys
 work = pathlib.Path(sys.argv[1])
 
 # These gates lock the current deterministic four-image no-detector closure.
+# The compiler now emits one visual backing image for each body region so the
+# plugin keeps Codia-like visual fidelity while editable overlays remain on top.
 # Detector-enhanced runs may improve these numbers, but must not fall below the
 # same structural floor unless the plan document is deliberately updated.
 expected = {
     "t018": {"matched_min": 95, "extra_max": 54, "missed_max": 51},
-    "t022": {"matched_min": 92, "extra_max": 14, "missed_max": 28},
+    "t022": {"matched_min": 92, "extra_max": 15, "missed_max": 28},
     "lizhi": {"matched_min": 61, "extra_max": 28, "missed_max": 32},
-    "xianyu": {"matched_min": 64, "extra_max": 52, "missed_max": 68},
+    "xianyu": {"matched_min": 64, "extra_max": 53, "missed_max": 68},
 }
 
 failed = False
