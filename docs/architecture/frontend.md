@@ -96,7 +96,7 @@ UI selects PNG
 -> Main uploads PNG to Go codiaserver /api/codia-preview
 -> Main polls /api/codia-preview/{taskId}
 -> Main fetches /api/codia-preview/{taskId}/dsl
--> Main calls renderCodiaRuntimeDesign
+-> Main calls renderCodiaRuntimeDesign with assetBaseUrl=/api/codia-preview/{taskId}
 -> Main reports done or error
 ```
 

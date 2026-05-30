@@ -56,6 +56,7 @@ type Artifacts struct {
 	CanvasLike         string `json:"canvasLike"`
 	CanvasExportReport string `json:"canvasExportReport"`
 	RuntimeDSL02       string `json:"runtimeDsl02"`
+	RuntimeAssets      string `json:"runtimeAssets,omitempty"`
 	StructureDiff      string `json:"structureDiff,omitempty"`
 	StructureReport    string `json:"structureReport,omitempty"`
 	FailureAudit       string `json:"failureAudit,omitempty"`

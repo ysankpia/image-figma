@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -11,10 +12,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/compiler"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/dsl02"
 )
 
@@ -24,7 +27,10 @@ func TestCodiaPreviewUploadCompletesAndServesRuntimeDSL(t *testing.T) {
 		if options.InputPath == "" || options.OutputDir == "" || options.TaskID == "" {
 			t.Fatalf("compile options missing required fields: %+v", options)
 		}
-		if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(options.OutputDir, dsl02.AssetDirName), 0o755); err != nil {
+			return compiler.Result{}, err
+		}
+		if err := os.WriteFile(filepath.Join(options.OutputDir, dsl02.AssetDirName, "asset_cover.png"), makePNG(t), 0o644); err != nil {
 			return compiler.Result{}, err
 		}
 		doc := dsl02.Document{
@@ -32,13 +38,29 @@ func TestCodiaPreviewUploadCompletesAndServesRuntimeDSL(t *testing.T) {
 			Kind:    "codia_runtime",
 			TaskID:  options.TaskID,
 			Page:    dsl02.Page{Width: 160, Height: 120, Background: dsl02.Background{Type: "color", Value: "#FFFFFF"}},
-			Assets:  []dsl02.Asset{},
+			Assets: []dsl02.Asset{{
+				AssetID: "asset_cover",
+				Type:    "image",
+				URL:     "assets/asset_cover.png",
+				Format:  "png",
+				Width:   160,
+				Height:  120,
+				Storage: "local",
+			}},
 			Root: dsl02.Node{
 				ID:   "root",
 				Role: "Root",
 				Type: "frame",
 				Name: "Root",
 				BBox: dsl02.BBox{X: 0, Y: 0, Width: 160, Height: 120},
+				Children: []dsl02.Node{{
+					ID:    "cover",
+					Role:  "ImageView",
+					Type:  "image",
+					Name:  "Image",
+					BBox:  dsl02.BBox{X: 0, Y: 0, Width: 160, Height: 120},
+					Image: &dsl02.Image{AssetID: "asset_cover", Mode: "fill"},
+				}},
 			},
 		}
 		if err := dsl02.WriteArtifact(options.OutputDir, doc); err != nil {
@@ -102,6 +124,18 @@ func TestCodiaPreviewUploadCompletesAndServesRuntimeDSL(t *testing.T) {
 	if artifactsResp.StatusCode != http.StatusOK {
 		t.Fatalf("artifacts status = %d body=%s", artifactsResp.StatusCode, readBody(t, artifactsResp))
 	}
+
+	assetResp, err := http.Get(httpServer.URL + "/api/codia-preview/" + upload.Data.TaskID + "/assets/asset_cover.png")
+	if err != nil {
+		t.Fatalf("get asset: %v", err)
+	}
+	defer assetResp.Body.Close()
+	if assetResp.StatusCode != http.StatusOK {
+		t.Fatalf("asset status = %d body=%s", assetResp.StatusCode, readBody(t, assetResp))
+	}
+	if contentType := assetResp.Header.Get("Content-Type"); contentType != "image/png" {
+		t.Fatalf("asset content-type = %q", contentType)
+	}
 }
 
 func TestCodiaPreviewRejectsNonPNG(t *testing.T) {
@@ -131,6 +165,77 @@ func TestCodiaPreviewRejectsNonPNG(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d body=%s", resp.StatusCode, readBody(t, resp))
+	}
+}
+
+func TestCodiaPreviewRunsDetectorWhenEnabled(t *testing.T) {
+	tmp := t.TempDir()
+	compileSawDetector := false
+	srv := NewWithCompilerAndDetector(
+		Config{StorageRoot: tmp, DetectorEnabled: true},
+		func(options compiler.Options) (compiler.Result, error) {
+			if options.DetectorCandidates == "" {
+				t.Fatalf("expected detector candidates path")
+			}
+			if _, err := os.Stat(options.DetectorCandidates); err != nil {
+				t.Fatalf("detector candidates missing: %v", err)
+			}
+			compileSawDetector = true
+			if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
+				return compiler.Result{}, err
+			}
+			doc := dsl02.Document{
+				Version: "0.2",
+				Kind:    "codia_runtime",
+				TaskID:  options.TaskID,
+				Page:    dsl02.Page{Width: 160, Height: 120, Background: dsl02.Background{Type: "color", Value: "#FFFFFF"}},
+				Assets:  []dsl02.Asset{},
+				Root: dsl02.Node{
+					ID:   "root",
+					Role: "Root",
+					Type: "frame",
+					Name: "Root",
+					BBox: dsl02.BBox{X: 0, Y: 0, Width: 160, Height: 120},
+				},
+			}
+			if err := dsl02.WriteArtifact(options.OutputDir, doc); err != nil {
+				return compiler.Result{}, err
+			}
+			return compiler.Result{Artifacts: compiler.Artifacts{RuntimeDSL02: dsl02.ArtifactName}}, nil
+		},
+		func(_ context.Context, options detector.Options) (detector.RunResult, error) {
+			if options.InputPath == "" || options.OutputDir == "" {
+				t.Fatalf("detector options missing paths: %+v", options)
+			}
+			if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
+				return detector.RunResult{}, err
+			}
+			data := []byte(`{"version":"ui_detector_candidates.v1","image":{"path":"input.png","width":160,"height":120},"provider":{"name":"test","wireApi":"test","model":"test"},"preprocess":{"passes":[]},"candidates":[],"summary":{"total":0,"roleCounts":{}}}`)
+			if err := os.WriteFile(filepath.Join(options.OutputDir, "ui_detector_candidates.v1.json"), data, 0o644); err != nil {
+				return detector.RunResult{}, err
+			}
+			return detector.RunResult{}, nil
+		},
+	)
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	uploadResp := postPNG(t, httpServer.URL+"/api/codia-preview", "input.png", makePNG(t))
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("upload status = %d body=%s", uploadResp.StatusCode, readBody(t, uploadResp))
+	}
+	var upload struct {
+		Data struct {
+			TaskID string `json:"taskId"`
+		} `json:"data"`
+	}
+	decodeResponse(t, uploadResp, &upload)
+	task := waitForCompletedTask(t, httpServer.URL, upload.Data.TaskID)
+	if task.Status != "completed" {
+		t.Fatalf("task status = %q message=%s", task.Status, task.Message)
+	}
+	if !compileSawDetector {
+		t.Fatalf("compile did not receive detector candidates")
 	}
 }
 

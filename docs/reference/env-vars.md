@@ -34,6 +34,7 @@
 | `CODIA_SERVER_ADDR` | Go Codia Beta HTTP server 监听地址 | `127.0.0.1:8000` | 否 |
 | `CODIA_SERVER_STORAGE_ROOT` | Go Codia Beta server 存储根目录 | `services/backend-go/storage/codia_server` 启动目录相对路径默认 `./storage/codia_server` | 否 |
 | `CODIA_SERVER_MAX_UPLOAD_BYTES` | Go Codia Beta server PNG 上传大小上限 | `10485760` | 否 |
+| `CODIA_SERVER_DETECTOR_ENABLED` | Go Codia Beta server 每次上传后是否在线调用 UI detector/VLM | `false` | 否 |
 | `CODIA_SERVER_DETECTOR_CANDIDATES` | 可选 detector candidates JSON 文件，传给 Go Codia compiler | 无 | 否 |
 
 ## OCR
@@ -116,8 +117,11 @@ go run ./cmd/codiaserver
 ```bash
 CODIA_SERVER_STORAGE_ROOT=./storage/codia_server
 CODIA_SERVER_MAX_UPLOAD_BYTES=10485760
+CODIA_SERVER_DETECTOR_ENABLED=false
 CODIA_SERVER_DETECTOR_CANDIDATES=/path/to/ui_detector_candidates.v1.json
 ```
+
+当 `CODIA_SERVER_DETECTOR_ENABLED=true` 且 `CODIA_SERVER_DETECTOR_CANDIDATES` 为空时，server 会在每次上传后先运行 `internal/codia/detector`，写出 `compile/detector/ui_detector_candidates.v1.json`，再把该文件传给 Go Codia compiler 的 assembly 层。detector provider、baseUrl、model、apiKey 仍由 `CODIA_UI_DETECTOR_*` 控制。
 
 本地插件默认调用 `API_BASE_URL=http://localhost:8000/api`。如果 Python FastAPI 已占用 8000 端口，要么停止 Python server 后启动 Go `codiaserver`，要么同时修改插件 API base URL 后重新打包。
 

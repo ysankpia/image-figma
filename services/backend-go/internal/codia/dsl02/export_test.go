@@ -2,6 +2,9 @@ package dsl02
 
 import (
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,6 +66,50 @@ func TestExportConvertsFigmaLikeTreeToRuntimeDSL(t *testing.T) {
 	}
 }
 
+func TestExportWithAssetsCropsImageNodes(t *testing.T) {
+	tmp := t.TempDir()
+	sourcePath := filepath.Join(tmp, "source.png")
+	writeTestSourcePNG(t, sourcePath)
+
+	out, err := ExportWithAssets(ExportAssetOptions{
+		TaskID:          "task_test",
+		Document:        sampleFigmaLikeTree(),
+		SourceImagePath: sourcePath,
+		OutputDir:       tmp,
+	})
+	if err != nil {
+		t.Fatalf("ExportWithAssets() error = %v", err)
+	}
+	if len(out.Assets) != 1 {
+		t.Fatalf("assets = %d, want 1", len(out.Assets))
+	}
+	asset := out.Assets[0]
+	if asset.AssetID != "asset_image_1" || asset.URL != "assets/asset_image_1.png" || asset.Width != 120 || asset.Height != 80 {
+		t.Fatalf("unexpected asset: %+v", asset)
+	}
+	imageNode := out.Root.Children[1]
+	if imageNode.Image == nil || imageNode.Image.AssetID != asset.AssetID {
+		t.Fatalf("image node missing asset reference: %+v", imageNode.Image)
+	}
+	file, err := os.Open(filepath.Join(tmp, asset.URL))
+	if err != nil {
+		t.Fatalf("open cropped asset: %v", err)
+	}
+	defer file.Close()
+	crop, err := png.Decode(file)
+	if err != nil {
+		t.Fatalf("decode cropped asset: %v", err)
+	}
+	bounds := crop.Bounds()
+	if bounds.Dx() != 120 || bounds.Dy() != 80 {
+		t.Fatalf("crop size = %dx%d", bounds.Dx(), bounds.Dy())
+	}
+	got := color.RGBAModel.Convert(crop.At(0, 0)).(color.RGBA)
+	if got.R != 220 || got.G != 40 || got.B != 80 {
+		t.Fatalf("crop pixel = %+v", got)
+	}
+}
+
 func TestWriteArtifact(t *testing.T) {
 	tmp := t.TempDir()
 	out, err := Export("task_test", sampleFigmaLikeTree())
@@ -82,6 +129,29 @@ func TestWriteArtifact(t *testing.T) {
 	}
 	if decoded.Version != "0.2" || decoded.Kind != "codia_runtime" {
 		t.Fatalf("decoded artifact = %+v", decoded)
+	}
+}
+
+func writeTestSourcePNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 390, 844))
+	for y := 0; y < 844; y++ {
+		for x := 0; x < 390; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 245, G: 245, B: 245, A: 255})
+		}
+	}
+	for y := 80; y < 160; y++ {
+		for x := 20; x < 140; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 220, G: 40, B: 80, A: 255})
+		}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create source png: %v", err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("encode source png: %v", err)
 	}
 }
 

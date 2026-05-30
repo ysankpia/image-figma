@@ -20,8 +20,10 @@ Codia Beta side path 另走 Go `codiaserver`：
 ```text
 Figma plugin Generate Beta
 -> /api/codia-preview
+-> optional online UI detector
 -> Go Codia compiler
 -> DSL v0.2 Codia Runtime
+-> local crop asset endpoint
 -> renderCodiaRuntimeDesign
 ```
 
@@ -89,6 +91,9 @@ go test ./internal/codia/dsl02 ./internal/codia/compiler ./internal/codia/server
 
 - `codiacompile` 写出 `codia_runtime.dsl.v0_2.json`。
 - `codiaserver` 接受 PNG 上传，运行 Go Codia compiler，并从 `/api/codia-preview/{taskId}/dsl` 返回 DSL 0.2。
+- DSL 0.2 `type="image"` nodes have `image.assetId` when source bbox can be cropped.
+- `codiaserver` serves `/api/codia-preview/{taskId}/assets/{assetId}.png` for local crop assets.
+- With `CODIA_SERVER_DETECTOR_ENABLED=true`, `codiaserver` runs detector before compiler and passes candidates into assembly.
 - DSL 0.2 顶层包含 `version="0.2"` 和 `kind="codia_runtime"`。
 - Go Codia role/type/name/bbox 被机械翻译，不在 DSL 0.2 exporter 里重新做 ownership 仲裁。
 - `ImageView` 没有 fetchable crop asset 时保留 provenance，交给 renderer 占位。
@@ -108,6 +113,7 @@ pnpm --filter @image-figma/figma-plugin run build
 - Beta 上传调用 `/api/codia-preview`。
 - Beta 上传后轮询 `/api/codia-preview/{taskId}`。
 - Beta completed 后调用 `/api/codia-preview/{taskId}/dsl` 并使用 `renderCodiaRuntimeDesign`。
+- Beta Renderer receives `assetBaseUrl=/api/codia-preview/{taskId}` so Codia Runtime image assets do not fall back to `CODIA_RUNTIME_IMAGE_SOURCE_NOT_FOUND`.
 - 不再调用 `/api/tasks/{taskId}/m29-direct-dsl` 或 `/api/tasks/{taskId}/m30-materialization`。
 - renderer writes M29 plan-driven DSL to Figma。
 - UI 能显示 upload、processing、fetching DSL、rendering、success/failure 状态。

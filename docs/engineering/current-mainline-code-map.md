@@ -47,8 +47,10 @@ services/backend-go/cmd/codiacompile
 ```text
 Plugin Generate Beta
 -> Go codiaserver /api/codia-preview
+-> optional OpenAI-compatible UI detector
 -> Go Codia compiler
 -> /api/codia-preview/{taskId}/dsl
+-> /api/codia-preview/{taskId}/assets/{assetId}.png
 -> renderCodiaRuntimeDesign
 ```
 
@@ -976,7 +978,7 @@ cmd/codiaaudit            // standalone failure audit CLI
 internal/codia/compiler   // screenshot evidence -> CodiaIR orchestration
 cmd/codiacompile          // end-to-end local compiler CLI
 internal/codia/dsl02      // CodiaIR -> DSL v0.2 Codia Runtime artifact
-internal/codia/server     // Go HTTP task wrapper for plugin Beta path
+internal/codia/server     // Go HTTP task wrapper, online detector bridge, and local runtime asset serving for plugin Beta path
 cmd/codiaserver           // local Go Codia Beta server
 internal/codia/tree       // ActionBar/StatusBar/BottomNavigation/ListView/ViewGroup tree builder
 ```
@@ -1041,6 +1043,8 @@ source screenshot
 ```
 
 This is implemented only as an offline/Beta compiler surface and must not be treated as part of `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, optional `codiacompile -detector-candidates` integration, `services/backend-go/internal/codia/assembly`, and `services/backend-go/internal/codia/canvasexport`.
+
+`cmd/codiaserver` can now run this detector online for every plugin Beta upload when `CODIA_SERVER_DETECTOR_ENABLED=true`. It writes `compile/detector/ui_detector_candidates.v1.json` and passes that path to `compiler.Compile`. If `CODIA_SERVER_DETECTOR_CANDIDATES` is set, that explicit file is used instead of running the detector online.
 
 The detector adapter preserves all known-role model candidates and records whether each one was preferred by the pass in `source.preferredByPass`; pass focus is not allowed to erase evidence. `codiacompile -detector-candidates` now enters the assembly layer before control synthesis. Assembly writes:
 

@@ -93,3 +93,4 @@
 - [Go M29 VisualTree Group Permission Gate](087-go-m29-visualtree-group-permission-gate.md) — `completed`
 - [Go M29 Offline Group Evidence Audit](088-go-m29-offline-group-evidence-audit.md) — `completed`
 - [Codia DSL 0.2 Plugin Beta Runtime](091-codia-dsl-02-plugin-beta-runtime.md) — `completed`
+- [Codia Beta Assets And Online Detector](092-codia-beta-assets-and-online-detector.md) — `completed`

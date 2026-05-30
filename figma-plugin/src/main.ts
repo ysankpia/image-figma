@@ -133,7 +133,8 @@ async function renderUploadedPngCodia(fileName: string, bytes: Uint8Array): Prom
   const result = await renderCodiaRuntimeDesign(dsl, {
     figma: createFigmaAdapter(figma as never),
     validate: true,
-    createOriginalReference: false
+    createOriginalReference: false,
+    assetBaseUrl: `${API_BASE_URL}/codia-preview/${encodeURIComponent(upload.taskId)}`
   });
   reportRenderResult(result);
 }

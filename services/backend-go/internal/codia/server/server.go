@@ -17,14 +17,17 @@ import (
 	"time"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/compiler"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/dsl02"
 )
 
 type CompileFunc func(compiler.Options) (compiler.Result, error)
+type DetectorFunc func(context.Context, detector.Options) (detector.RunResult, error)
 
 type Server struct {
 	config  Config
 	compile CompileFunc
+	detect  DetectorFunc
 	mu      sync.RWMutex
 	tasks   map[string]*Task
 }
@@ -34,12 +37,20 @@ func New(config Config) *Server {
 }
 
 func NewWithCompiler(config Config, compile CompileFunc) *Server {
+	return NewWithCompilerAndDetector(config, compile, detector.Run)
+}
+
+func NewWithCompilerAndDetector(config Config, compile CompileFunc, detect DetectorFunc) *Server {
 	if compile == nil {
 		compile = compiler.Compile
+	}
+	if detect == nil {
+		detect = detector.Run
 	}
 	return &Server{
 		config:  config.normalized(),
 		compile: compile,
+		detect:  detect,
 		tasks:   map[string]*Task{},
 	}
 }
@@ -141,6 +152,10 @@ func (s *Server) handleCodiaPreviewTask(w http.ResponseWriter, r *http.Request) 
 	case "artifacts":
 		s.handleArtifacts(w, r, task)
 	default:
+		if strings.HasPrefix(suffix, "assets/") {
+			s.handleAsset(w, r, task, strings.TrimPrefix(suffix, "assets/"))
+			return
+		}
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found.", "codia_preview_lookup", taskID)
 	}
 }
@@ -181,13 +196,44 @@ func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request, task *T
 	}})
 }
 
+func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request, task *Task, name string) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.", "codia_preview_asset", task.ID)
+		return
+	}
+	fileName := safeAssetFileName(name)
+	if fileName == "" {
+		writeError(w, http.StatusNotFound, "ASSET_NOT_FOUND", "Asset not found.", "codia_preview_asset", task.ID)
+		return
+	}
+	file, err := os.Open(filepath.Join(task.OutputDir, dsl02.AssetDirName, fileName))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "ASSET_NOT_FOUND", "Asset not found.", "codia_preview_asset", task.ID)
+		return
+	}
+	defer file.Close()
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.Copy(w, file)
+}
+
 func (s *Server) runTask(taskID, inputPath, outputDir string) {
+	detectorCandidates := strings.TrimSpace(s.config.DetectorCandidates)
+	if detectorCandidates == "" && s.config.DetectorEnabled {
+		s.updateTask(taskID, "processing", "codia_detector", 20, "Running UI detector.", nil)
+		candidatePath, err := s.runDetector(inputPath, filepath.Join(outputDir, "detector"))
+		if err != nil {
+			s.updateTask(taskID, "failed", "codia_detector", 100, err.Error(), &TaskError{Code: "CODIA_DETECTOR_FAILED", Message: err.Error()})
+			return
+		}
+		detectorCandidates = candidatePath
+	}
 	s.updateTask(taskID, "processing", "codia_compile", 40, "Running Go Codia compiler.", nil)
 	result, err := s.compile(compiler.Options{
 		InputPath:          inputPath,
 		OCRProvider:        s.config.OCRProvider,
 		TaskID:             taskID,
-		DetectorCandidates: s.config.DetectorCandidates,
+		DetectorCandidates: detectorCandidates,
 		OutputDir:          outputDir,
 	})
 	if err != nil {
@@ -206,6 +252,16 @@ func (s *Server) runTask(taskID, inputPath, outputDir string) {
 		task.UpdatedAt = time.Now().UTC()
 	}
 	s.mu.Unlock()
+}
+
+func (s *Server) runDetector(inputPath, outputDir string) (string, error) {
+	options := detector.OptionsFromEnv()
+	options.InputPath = inputPath
+	options.OutputDir = outputDir
+	if _, err := s.detect(context.Background(), options); err != nil {
+		return "", err
+	}
+	return filepath.Join(outputDir, "ui_detector_candidates.v1.json"), nil
 }
 
 func (s *Server) storeTask(task *Task) {
@@ -258,6 +314,20 @@ func (task Task) toPublic() map[string]any {
 		out["error"] = task.Error
 	}
 	return out
+}
+
+func safeAssetFileName(name string) string {
+	base := filepath.Base(strings.TrimSpace(name))
+	if base == "" || base == "." || !strings.HasSuffix(strings.ToLower(base), ".png") {
+		return ""
+	}
+	for _, r := range base {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return ""
+	}
+	return base
 }
 
 func readMultipartPNG(w http.ResponseWriter, r *http.Request, maxBytes int64) (string, []byte, error) {

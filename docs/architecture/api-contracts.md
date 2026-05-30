@@ -287,6 +287,7 @@ Current stage values:
 
 ```text
 codia_queued
+codia_detector
 codia_compile
 codia_completed
 ```
@@ -299,6 +300,12 @@ Current preview DSL file:
 
 ```text
 storage/codia_server/codia_previews/{taskId}/compile/codia_runtime.dsl.v0_2.json
+```
+
+Image assets referenced by DSL v0.2 are generated from source PNG `sourceBBox` crops and saved under:
+
+```text
+storage/codia_server/codia_previews/{taskId}/compile/assets/*.png
 ```
 
 The response shape is:
@@ -316,6 +323,27 @@ The response shape is:
 ```
 
 If the task is not completed, the endpoint returns `DSL_NOT_READY`.
+
+### `GET /api/codia-preview/{taskId}/assets/{assetId}.png`
+
+Returns one local image crop generated for a Codia Runtime `type="image"` node.
+
+The DSL asset URL is relative to the task endpoint:
+
+```json
+{
+  "assetId": "asset_leaf_0007",
+  "url": "assets/asset_leaf_0007.png",
+  "format": "png",
+  "storage": "local"
+}
+```
+
+The plugin passes `assetBaseUrl=/api/codia-preview/{taskId}` to the Codia Runtime renderer so that the image can be loaded from:
+
+```text
+/api/codia-preview/{taskId}/assets/asset_leaf_0007.png
+```
 
 ### `GET /api/codia-preview/{taskId}/artifacts`
 

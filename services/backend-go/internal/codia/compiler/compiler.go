@@ -128,7 +128,12 @@ func Compile(options Options) (Result, error) {
 		return Result{}, fmt.Errorf("write canvas export: %w", err)
 	}
 
-	runtimeDSL02, err := dsl02.Export(taskID(options), emitted)
+	runtimeDSL02, err := dsl02.ExportWithAssets(dsl02.ExportAssetOptions{
+		TaskID:          taskID(options),
+		Document:        emitted,
+		SourceImagePath: options.InputPath,
+		OutputDir:       options.OutputDir,
+	})
 	if err != nil {
 		return Result{}, fmt.Errorf("codia runtime dsl 0.2 export: %w", err)
 	}
@@ -164,6 +169,7 @@ func Compile(options Options) (Result, error) {
 			CanvasLike:         canvasexport.CanvasArtifactName,
 			CanvasExportReport: canvasexport.ReportArtifactName,
 			RuntimeDSL02:       dsl02.ArtifactName,
+			RuntimeAssets:      dsl02.AssetDirName,
 		},
 	}
 	if detectorManifest != nil {

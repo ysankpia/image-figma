@@ -2,22 +2,63 @@ package dsl02
 
 import (
 	"fmt"
+	"image"
+	"image/draw"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/ir"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/imageio"
 )
 
 const (
-	Version = "0.2"
-	Kind    = "codia_runtime"
+	Version      = "0.2"
+	Kind         = "codia_runtime"
+	AssetDirName = "assets"
 )
 
 func Export(taskID string, doc emitter.Document) (Document, error) {
+	return export(taskID, doc, nil)
+}
+
+type ExportAssetOptions struct {
+	TaskID          string
+	Document        emitter.Document
+	SourceImagePath string
+	OutputDir       string
+}
+
+func ExportWithAssets(options ExportAssetOptions) (Document, error) {
+	if strings.TrimSpace(options.SourceImagePath) == "" || strings.TrimSpace(options.OutputDir) == "" {
+		return export(options.TaskID, options.Document, nil)
+	}
+	src, err := imageio.ReadPNG(options.SourceImagePath)
+	if err != nil {
+		return Document{}, fmt.Errorf("read source image for runtime assets: %w", err)
+	}
+	ctx := &assetContext{
+		taskID:    options.TaskID,
+		src:       src,
+		outputDir: filepath.Join(options.OutputDir, AssetDirName),
+		used:      map[string]int{},
+	}
+	if err := os.MkdirAll(ctx.outputDir, 0o755); err != nil {
+		return Document{}, fmt.Errorf("create runtime asset dir: %w", err)
+	}
+	return export(options.TaskID, options.Document, ctx)
+}
+
+func export(taskID string, doc emitter.Document, assets *assetContext) (Document, error) {
 	if doc.SchemaName != emitter.SchemaName {
 		return Document{}, fmt.Errorf("expected %s, got %q", emitter.SchemaName, doc.SchemaName)
 	}
-	root := convertNode(doc.Root, true)
+	root := convertNode(doc.Root, true, assets)
+	if assets != nil && assets.err != nil {
+		return Document{}, assets.err
+	}
 	if root.BBox.Width <= 0 || root.BBox.Height <= 0 {
 		return Document{}, fmt.Errorf("root bbox has invalid size: %+v", root.BBox)
 	}
@@ -34,7 +75,7 @@ func Export(taskID string, doc emitter.Document) (Document, error) {
 				Value: rootBackground(doc.Root),
 			},
 		},
-		Assets: []Asset{},
+		Assets: assetsList(assets),
 		Root:   root,
 		Meta: map[string]any{
 			"source":           "go_codiacompile",
@@ -45,7 +86,16 @@ func Export(taskID string, doc emitter.Document) (Document, error) {
 	}, nil
 }
 
-func convertNode(node emitter.Node, isRoot bool) Node {
+type assetContext struct {
+	taskID    string
+	src       image.Image
+	outputDir string
+	assets    []Asset
+	used      map[string]int
+	err       error
+}
+
+func convertNode(node emitter.Node, isRoot bool, assets *assetContext) Node {
 	role := runtimeRole(node.Role)
 	if isRoot {
 		role = "Root"
@@ -79,8 +129,11 @@ func convertNode(node emitter.Node, isRoot bool) Node {
 	if out.Type == "image" && node.Asset != nil {
 		out.Meta["asset"] = *node.Asset
 	}
+	if out.Type == "image" && assets != nil {
+		attachImageAsset(assets, &out, node)
+	}
 	for _, child := range node.Children {
-		out.Children = append(out.Children, convertNode(child, false))
+		out.Children = append(out.Children, convertNode(child, false, assets))
 	}
 	if len(out.Style) == 0 {
 		out.Style = nil
@@ -89,6 +142,101 @@ func convertNode(node emitter.Node, isRoot bool) Node {
 		out.Meta = nil
 	}
 	return out
+}
+
+func attachImageAsset(ctx *assetContext, out *Node, node emitter.Node) {
+	if ctx.err != nil || ctx.src == nil {
+		return
+	}
+	crop, bbox, ok := cropFromSource(ctx.src, node.SourceBBox)
+	if !ok {
+		out.Meta["assetSkipped"] = "invalid_source_bbox"
+		return
+	}
+	assetID := uniqueAssetID(ctx, firstNonEmpty(node.ID, node.SchemaID, fmt.Sprintf("seq_%04d", node.Seq)))
+	fileName := assetID + ".png"
+	if err := imageio.WritePNG(filepath.Join(ctx.outputDir, fileName), crop); err != nil {
+		ctx.err = fmt.Errorf("write runtime image asset %s: %w", fileName, err)
+		return
+	}
+	out.Image = &Image{
+		AssetID: assetID,
+		Mode:    "fill",
+	}
+	out.Meta["runtimeAssetId"] = assetID
+	out.Meta["runtimeAssetBBox"] = bbox
+	ctx.assets = append(ctx.assets, Asset{
+		AssetID: assetID,
+		Type:    "image",
+		Role:    out.Role,
+		URL:     filepath.ToSlash(filepath.Join(AssetDirName, fileName)),
+		Format:  "png",
+		Width:   bbox.Width,
+		Height:  bbox.Height,
+		Storage: "local",
+		Meta: map[string]any{
+			"nodeId":     out.ID,
+			"schemaId":   out.SchemaID,
+			"sourceBBox": bbox,
+		},
+	})
+}
+
+func cropFromSource(src image.Image, bbox ir.BBox) (image.Image, BBox, bool) {
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 || bbox.Width <= 0 || bbox.Height <= 0 {
+		return nil, BBox{}, false
+	}
+	x1 := clampInt(bbox.X, 0, width)
+	y1 := clampInt(bbox.Y, 0, height)
+	x2 := clampInt(bbox.X+bbox.Width, x1+1, width)
+	y2 := clampInt(bbox.Y+bbox.Height, y1+1, height)
+	if x2 <= x1 || y2 <= y1 {
+		return nil, BBox{}, false
+	}
+	rect := image.Rect(0, 0, x2-x1, y2-y1)
+	out := image.NewRGBA(rect)
+	draw.Draw(out, rect, src, image.Pt(bounds.Min.X+x1, bounds.Min.Y+y1), draw.Src)
+	return out, BBox{X: x1, Y: y1, Width: x2 - x1, Height: y2 - y1}, true
+}
+
+func uniqueAssetID(ctx *assetContext, raw string) string {
+	base := "asset_" + sanitizeID(raw)
+	if base == "asset_" {
+		base = "asset_image"
+	}
+	count := ctx.used[base]
+	ctx.used[base] = count + 1
+	if count == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s_%02d", base, count+1)
+}
+
+func sanitizeID(raw string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range strings.ToLower(strings.TrimSpace(raw)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
+}
+
+func assetsList(ctx *assetContext) []Asset {
+	if ctx == nil || len(ctx.assets) == 0 {
+		return []Asset{}
+	}
+	return ctx.assets
 }
 
 func runtimeRole(role ir.Role) string {
@@ -266,4 +414,14 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func clampInt(value, low, high int) int {
+	if value < low {
+		return low
+	}
+	if value > high {
+		return high
+	}
+	return value
 }

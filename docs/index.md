@@ -19,6 +19,7 @@
 - 当前 Go M29.0 physical evidence kernel 计划：[plans/active/082-go-m29-physical-evidence-kernel.md](plans/active/082-go-m29-physical-evidence-kernel.md)
 - 当前 OpenAI-compatible UI detector short-pass 计划：[plans/active/090-openai-compatible-ui-detector-short-pass.md](plans/active/090-openai-compatible-ui-detector-short-pass.md)
 - 已完成的 Codia DSL 0.2 Plugin Beta Runtime 计划：[plans/completed/091-codia-dsl-02-plugin-beta-runtime.md](plans/completed/091-codia-dsl-02-plugin-beta-runtime.md)
+- 已完成的 Codia Beta asset / online detector 接入：[plans/completed/092-codia-beta-assets-and-online-detector.md](plans/completed/092-codia-beta-assets-and-online-detector.md)
 - 已暂停的 Go Codia-like compiler rebuild 计划：[plans/archive/deferred/089-go-codia-like-compiler-rebuild.md](plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
 - 当前 Codia-like Beta 质量阻塞记录：[bugs/open/017-codia-like-beta-ui-role-detector-gap.md](bugs/open/017-codia-like-beta-ui-role-detector-gap.md)
 - 刚完成的 Go M29 VisualTree 决策追踪计划：[plans/completed/085-go-m29-visualtree-decision-trace.md](plans/completed/085-go-m29-visualtree-decision-trace.md)
@@ -48,6 +49,7 @@
 - [bugs/open/017-codia-like-beta-ui-role-detector-gap.md](bugs/open/017-codia-like-beta-ui-role-detector-gap.md)：Codia-like Beta 上线质量债、UI role detector 缺口、后续训练/接入/验收手册。
 - [plans/active/090-openai-compatible-ui-detector-short-pass.md](plans/active/090-openai-compatible-ui-detector-short-pass.md)：OpenAI-compatible VLM short-pass detector 的实验结果、artifact 合同和 Go 固化计划。
 - [plans/completed/091-codia-dsl-02-plugin-beta-runtime.md](plans/completed/091-codia-dsl-02-plugin-beta-runtime.md)：Go Codia compiler 输出 DSL 0.2 Codia Runtime artifact，并通过 Go `codiaserver` 接入插件 `Generate Beta`。
+- [plans/completed/092-codia-beta-assets-and-online-detector.md](plans/completed/092-codia-beta-assets-and-online-detector.md)：补齐 Codia Beta 的 ImageView crop asset serving，并让 Go `codiaserver` 可选在线运行 VLM detector。
 
 ## Architecture
 

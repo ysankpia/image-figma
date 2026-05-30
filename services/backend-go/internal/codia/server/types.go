@@ -8,6 +8,7 @@ import (
 type Config struct {
 	StorageRoot        string
 	OCRProvider        string
+	DetectorEnabled    bool
 	DetectorCandidates string
 	MaxUploadBytes     int64
 }

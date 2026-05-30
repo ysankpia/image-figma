@@ -26,6 +26,7 @@ GET  /api/health
 POST /api/codia-preview
 GET  /api/codia-preview/{taskId}
 GET  /api/codia-preview/{taskId}/dsl
+GET  /api/codia-preview/{taskId}/assets/{assetId}.png
 GET  /api/codia-preview/{taskId}/artifacts
 ```
 
@@ -84,18 +85,22 @@ receive multipart PNG
 -> validate PNG signature and dimensions
 -> save storage/codia_server/codia_previews/{taskId}/upload.png
 -> create task status=processing stage=codia_queued
+-> optional online UI detector when CODIA_SERVER_DETECTOR_ENABLED=true
 -> Go Codia compiler
    -> OCR according to OCR_PROVIDER
    -> M29 physical evidence
+   -> optional detector candidates
    -> evidence tokens
    -> Codia assembly/control/tree/emitter
    -> canvas-like export
    -> DSL v0.2 exporter
+   -> runtime image crop assets
 -> save codia_runtime.dsl.v0_2.json
+-> save assets/*.png
 -> mark task completed stage=codia_completed
 ```
 
-`CODIA_SERVER_DETECTOR_CANDIDATES` 可选传入 detector candidates 文件。未配置时，Go compiler 使用 conservative M29/OCR assembly。detector、OCR、M29、assembly 和 tree 的 ownership 仲裁仍在 Go compiler 内部完成，插件和 Renderer 只消费最终 DSL。
+`CODIA_SERVER_DETECTOR_CANDIDATES` 可选传入 detector candidates 文件。若该变量为空且 `CODIA_SERVER_DETECTOR_ENABLED=true`，Go server 会对每次上传在线运行 OpenAI-compatible UI detector，并把 `compile/detector/ui_detector_candidates.v1.json` 传入 compiler。未配置 detector 时，Go compiler 使用 conservative M29/OCR assembly。detector、OCR、M29、assembly 和 tree 的 ownership 仲裁仍在 Go compiler 内部完成，插件和 Renderer 只消费最终 DSL。
 
 当前链路不运行：
 
