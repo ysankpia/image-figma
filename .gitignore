@@ -33,6 +33,7 @@ dist/
 # local app storage
 backend/storage/
 backend/tmp/
+services/backend-go/storage/
 services/backend-go/tmp/
 *.sqlite
 *.sqlite3
