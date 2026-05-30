@@ -1,12 +1,14 @@
 package compiler
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/leaf"
@@ -27,6 +29,14 @@ func Compile(options Options) (Result, error) {
 	}
 
 	paths := outputPaths(options.OutputDir)
+	var detectorManifest *DetectorManifest
+	if options.DetectorCandidates != "" {
+		manifest, err := writeDetectorManifest(paths.detectorDir, options.DetectorCandidates)
+		if err != nil {
+			return Result{}, fmt.Errorf("detector candidates report-only manifest: %w", err)
+		}
+		detectorManifest = &manifest
+	}
 	physical, err := m29pipeline.Run(m29pipeline.Options{
 		InputPath:   options.InputPath,
 		OCRPath:     options.OCRPath,
@@ -87,6 +97,7 @@ func Compile(options Options) (Result, error) {
 		ControlIR:        controlIR,
 		TreeIR:           treeIR,
 		FigmaLikeTree:    emitted,
+		DetectorManifest: detectorManifest,
 		Artifacts: Artifacts{
 			PhysicalEvidence: filepath.ToSlash(filepath.Join("extract", "m29_physical_evidence.v1.json")),
 			EvidenceTokens:   filepath.ToSlash(filepath.Join("tokens", "evidence_tokens.v1.json")),
@@ -96,6 +107,10 @@ func Compile(options Options) (Result, error) {
 			TreeIR:           tree.ArtifactName,
 			FigmaLikeTree:    "codia_figma_like_tree.v1.json",
 		},
+	}
+	if detectorManifest != nil {
+		result.Artifacts.DetectorManifest = filepath.ToSlash(filepath.Join("detector", "detector_manifest.v1.json"))
+		result.Artifacts.DetectorCandidates = options.DetectorCandidates
 	}
 
 	if options.GoldenPath != "" {
@@ -137,6 +152,7 @@ type paths struct {
 	tokensDir   string
 	leavesDir   string
 	controlsDir string
+	detectorDir string
 	diffDir     string
 	auditDir    string
 }
@@ -147,7 +163,36 @@ func outputPaths(outputDir string) paths {
 		tokensDir:   filepath.Join(outputDir, "tokens"),
 		leavesDir:   filepath.Join(outputDir, "leaves"),
 		controlsDir: filepath.Join(outputDir, "controls"),
+		detectorDir: filepath.Join(outputDir, "detector"),
 		diffDir:     filepath.Join(outputDir, "diff"),
 		auditDir:    filepath.Join(outputDir, "audit"),
 	}
+}
+
+func writeDetectorManifest(outputDir string, candidatesPath string) (DetectorManifest, error) {
+	doc, err := detector.ReadDocument(candidatesPath)
+	if err != nil {
+		return DetectorManifest{}, err
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return DetectorManifest{}, err
+	}
+	manifest := DetectorManifest{
+		Version:        "detector_manifest.v1",
+		Mode:           "report_only",
+		CandidatesPath: candidatesPath,
+		Summary: DetectorSummary{
+			Total:      doc.Summary.Total,
+			RoleCounts: doc.Summary.RoleCounts,
+			PassCounts: doc.Summary.PassCounts,
+		},
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return DetectorManifest{}, err
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "detector_manifest.v1.json"), data, 0o644); err != nil {
+		return DetectorManifest{}, err
+	}
+	return manifest, nil
 }

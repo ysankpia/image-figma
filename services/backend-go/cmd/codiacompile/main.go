@@ -15,6 +15,7 @@ func main() {
 	ocrPath := flag.String("ocr", "", "optional OCR JSON path")
 	ocrProvider := flag.String("ocr-provider", os.Getenv("OCR_PROVIDER"), "optional OCR provider: baidu_ppocrv5")
 	goldenPath := flag.String("golden", "", "optional golden codia_ir.v1.json for structural diff")
+	detectorCandidates := flag.String("detector-candidates", "", "optional ui_detector_candidates.v1.json for report-only manifest")
 	outputDir := flag.String("out", "", "output directory")
 	failOnDiff := flag.Bool("fail-on-diff", false, "exit non-zero when golden diff has extra or missed nodes")
 	flag.Parse()
@@ -23,11 +24,12 @@ func main() {
 		os.Exit(2)
 	}
 	result, err := compiler.Compile(compiler.Options{
-		InputPath:   *inputPath,
-		OCRPath:     *ocrPath,
-		OCRProvider: *ocrProvider,
-		GoldenPath:  *goldenPath,
-		OutputDir:   *outputDir,
+		InputPath:          *inputPath,
+		OCRPath:            *ocrPath,
+		OCRProvider:        *ocrProvider,
+		GoldenPath:         *goldenPath,
+		DetectorCandidates: *detectorCandidates,
+		OutputDir:          *outputDir,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "codiacompile: %v\n", err)

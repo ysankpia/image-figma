@@ -1003,6 +1003,19 @@ Current failure audit over the same smoke:
 
 The remaining dominant gap is not owned by `m29visualtree`: Codia golden contains ImageView leaves that current M29 physical evidence / evidence tokenization / Codia leaf extraction does not expose. This is tracked as [bug 017](../bugs/open/017-codia-like-beta-ui-role-detector-gap.md). The compiler can be used as a future Beta side path, but Codia 1:1 quality requires a detector-backed role-aware candidate layer plus ownership graph integration. Do not solve this by tuning XY-cut thresholds, fabricating missing leaves in `internal/codia/tree`, or injecting Codia golden identity into generation.
 
+The active next detector plan is [090 OpenAI-compatible UI Detector Short Pass](../plans/active/090-openai-compatible-ui-detector-short-pass.md). It records the 2026-05-30 VLM probes and defines the `ui_detector_candidates.v1.json` contract:
+
+```text
+source screenshot
+-> OpenAI-compatible short-pass UI detector
+-> ui_detector_candidates.v1.json
+-> report-only eval
+-> permission-gated merge
+-> existing Codia leaf/control/tree/emitter pipeline
+```
+
+This is implemented only as an offline/Beta report-only surface and must not be treated as part of `/api/upload-preview`. The current Go implementation adds `services/backend-go/cmd/codiadetector`, `services/backend-go/internal/codia/detector`, detector-vs-golden eval artifacts, and optional `codiacompile -detector-candidates` manifest integration. That integration writes `detector/detector_manifest.v1.json` and intentionally changes no generated Codia tree. Only after eval proves coverage should an ImageView-only permission merge be enabled. `Button`, `Background`, `ViewGroup`, and `ListView` detector candidates remain report-only or hint-only until backed by M29 source/pixel evidence and ownership gates.
+
 If this paused line is resumed for product use, the next step is a separate Beta API/artifact path, not replacement of the formal DSL endpoint. The resume plan is archived in [089 Go Codia-like Compiler Rebuild](../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md).
 
 Latest evidence-kind breakdown for extra generated nodes shows where the next tree ownership work belongs:

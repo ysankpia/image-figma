@@ -5,6 +5,7 @@
 - 所属主线：Go Codia-like compiler rebuild
 - 当前上线判断：不阻塞 Beta / 内部试用上线，但阻塞 Codia 1:1 质量目标
 - 关联计划：[089 Go Codia-like Compiler Rebuild](../../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
+- 当前 detector 计划：[090 OpenAI-compatible UI Detector Short Pass](../../plans/active/090-openai-compatible-ui-detector-short-pass.md)
 - 当前 smoke gate：`services/backend-go/tools/codia_smoke_2img.sh`
 
 ## Executive Summary
@@ -274,6 +275,89 @@ internal/codia/audit
 ```
 
 The missing strong layer is a learned or externally provided UI role detector / role-aware evidence refinement layer before leaf/control/tree construction.
+
+## 2026-05-30 Detector Probe Update
+
+This bug no longer points first to RICO/YOLO training as the immediate next step. Training remains a valid future replacement path, but the practical next step is now:
+
+```text
+OpenAI-compatible VLM short-pass candidate provider
+-> ui_detector_candidates.v1.json
+-> report-only eval
+-> ImageView-only permission merge
+```
+
+The active implementation plan is:
+
+```text
+docs/plans/active/090-openai-compatible-ui-detector-short-pass.md
+```
+
+Probe summary:
+
+| provider / prompt shape | sample | measured result | conclusion |
+| --- | --- | --- | --- |
+| GPT-5.5 full-image simple prompt | Tencent 022 | `ImageView` 19/37 matched@0.5; `Button` 19 detector candidates for 4 golden buttons | useful detector signal, but Button cannot merge directly |
+| GPT-5.5 long prompt | Tencent 018 | SSL record layer failure | long single-pass prompt is operationally wrong |
+| Qwen3-VL-8B compact prompt | Tencent 018 | `ImageView` 0/39 matched@0.5; `TextView` 1/48 matched@0.5 | not suitable as primary detector |
+| GPT-5.5 short prompt multi-pass | Tencent 018 | `ImageView` 26/39 matched@0.5; `Background` 7/9 matched@0.5; `BottomNavigation` 1/1 matched@0.5 | preferred immediate route |
+
+The key result is not that GPT should replace the compiler. The key result is that a role-focused visual model can provide missing material candidates that current M29 physical evidence does not expose.
+
+The bug's owning layer remains:
+
+```text
+upstream UI role/bbox candidate provider
+```
+
+The intended fix remains evidence-gated:
+
+```text
+detector proposes candidates;
+Go compiler decides permission, ownership, tree, and emission;
+golden is eval-only.
+```
+
+First allowed merge:
+
+```text
+role == ImageView
+high confidence
+no duplicate M29 leaf
+not OCR-text-body leakage
+not background/card fragment
+candidate provenance preserved
+```
+
+Still blocked:
+
+```text
+Button must not be created from detector alone.
+Background must not be created from detector alone.
+ViewGroup/ListView must not be created from detector alone.
+```
+
+Implementation checkpoint:
+
+```text
+2026-05-30:
+  implemented report-only Go detector surface:
+    services/backend-go/internal/codia/detector
+    services/backend-go/cmd/codiadetector
+  implemented detector eval artifacts:
+    ui_detector_eval.v1.json
+    ui_detector_eval_report.md
+  implemented codiacompile report-only manifest:
+    -detector-candidates
+    detector/detector_manifest.v1.json
+
+  not implemented yet:
+    ImageView-only permission merge
+    detector coverage injection into codia_failure_audit
+    any Button/Background/ViewGroup/ListView merge
+```
+
+The bug remains open because the detector candidate layer is only report-only. It does not yet reduce `upstream_leaf_missing:ImageView` in generated CodiaIR.
 
 ## Why This Does Not Block Beta Launch
 

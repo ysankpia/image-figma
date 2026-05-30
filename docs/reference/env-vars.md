@@ -21,6 +21,16 @@
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | 百度异步 OCR 单任务超时秒数 | `120` | 否 |
 | `UPLOAD_PREVIEW_PROFILE` | M29 preview artifact profile，支持 `production`、`development` | `production` | 否 |
+| `CODIA_UI_DETECTOR_PROVIDER` | Go Codia-like offline detector provider，支持 `openai-responses`、`openai-chat-completions` | `openai-responses` | 仅运行 `codiadetector` 时需要 |
+| `CODIA_UI_DETECTOR_WIRE_API` | OpenAI-compatible wire API，支持 `responses`、`chat.completions` | `responses` | 仅运行 `codiadetector` 时需要 |
+| `CODIA_UI_DETECTOR_BASE_URL` | OpenAI-compatible detector base URL，可换供应商 | `https://api.openai.com` | 仅运行 `codiadetector` 时需要 |
+| `CODIA_UI_DETECTOR_API_KEY` | Go Codia-like offline detector API key | 无 | 仅运行 `codiadetector` 时需要 |
+| `OPENAI_API_KEY` | `codiadetector` 的临时 fallback API key；新配置优先用 `CODIA_UI_DETECTOR_API_KEY` | 无 | 否 |
+| `CODIA_UI_DETECTOR_MODEL` | Go Codia-like offline detector model id | `gpt-5.5` | 仅运行 `codiadetector` 时需要 |
+| `CODIA_UI_DETECTOR_PASSES` | detector pass 列表，逗号分隔 | `layout,imageview,background,bottom_nav` | 否 |
+| `CODIA_UI_DETECTOR_MAX_IMAGE_SIDE` | 每个 detector pass 发送给模型的最长边 | `1280` | 否 |
+| `CODIA_UI_DETECTOR_TIMEOUT_SECONDS` | 每个 detector pass 的 provider 超时秒数 | `180` | 否 |
+| `CODIA_UI_DETECTOR_TEMPERATURE` | detector 模型 temperature；`0` 表示不显式传或保持确定性配置 | `0` | 否 |
 
 ## OCR
 
@@ -41,6 +51,51 @@ BAIDU_PADDLE_OCR_TOKEN=...
 
 OCR failure fails the current M29 preview task. The backend must not mark a task completed with fake DSL after OCR required evidence fails.
 
+## Go Codia-like UI Detector
+
+`CODIA_UI_DETECTOR_*` 只用于 `services/backend-go/cmd/codiadetector` 和 `codiacompile -detector-candidates` 这一条 offline / Beta side path。它不属于当前 `/api/upload-preview` 产品主链，默认不会改变现有 DSL 输出。
+
+OpenAI-compatible Responses provider:
+
+```bash
+CODIA_UI_DETECTOR_PROVIDER=openai-responses
+CODIA_UI_DETECTOR_WIRE_API=responses
+CODIA_UI_DETECTOR_BASE_URL=https://api.openai.com
+CODIA_UI_DETECTOR_MODEL=gpt-5.5
+CODIA_UI_DETECTOR_API_KEY=...
+```
+
+OpenAI-compatible Chat Completions provider:
+
+```bash
+CODIA_UI_DETECTOR_PROVIDER=openai-chat-completions
+CODIA_UI_DETECTOR_WIRE_API=chat.completions
+CODIA_UI_DETECTOR_BASE_URL=https://example-provider.test
+CODIA_UI_DETECTOR_MODEL=provider-model-id
+CODIA_UI_DETECTOR_API_KEY=...
+```
+
+`CODIA_UI_DETECTOR_BASE_URL`、`CODIA_UI_DETECTOR_MODEL`、`CODIA_UI_DETECTOR_API_KEY` 都是供应商可替换参数，不允许写死在代码里。`codiadetector` 兼容读取 `OPENAI_API_KEY` 作为临时 fallback，但新配置应优先使用 `CODIA_UI_DETECTOR_API_KEY`，避免和历史 OpenAI vision 实验变量混在一起。
+
+Example:
+
+```bash
+cd services/backend-go
+go run ./cmd/codiadetector \
+  -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+  -out /tmp/ui-detector-018 \
+  -passes layout,imageview,background,bottom_nav
+```
+
+Generation output remains report-only until explicitly passed to later permission gates:
+
+```text
+ui_detector_candidates.v1.json
+ui_detector_report.md
+ui_detector_overlay.png
+raw_model_response/
+```
+
 ## M29 Preview Profile
 
 ```bash
@@ -58,6 +113,8 @@ UPLOAD_PREVIEW_PROFILE=development
 ## Removed Variables
 
 这些变量不再是 active runtime configuration。不要把它们加回 `.env.local` 期待恢复旧链路：
+
+旧实验变量的完整示例已移动到 [legacy-env-vars.example](legacy-env-vars.example)，仅供考古和迁移排查，不是当前启动模板。
 
 ```text
 LEGACY_PRE_M29_UPLOAD_ENABLED
@@ -77,7 +134,6 @@ ICON_VISIBLE_FALLBACK_ENABLED
 ICON_BUSINESS_CANDIDATE_ENABLED
 PERCEPTION_BENCHMARK_ENABLED
 SAM_VISUAL_CANDIDATE_ENABLED
-OPENAI_API_KEY
 OPENAI_VISION_MODEL
 OCR_TEXT_EDITABILITY_ENABLED
 OCR_GRAPHIC_TEXT_PRESERVE_ENABLED

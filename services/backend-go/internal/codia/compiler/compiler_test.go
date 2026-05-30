@@ -76,6 +76,38 @@ func TestCompileWritesDiffAndAuditWhenGoldenProvided(t *testing.T) {
 	}
 }
 
+func TestCompileAcceptsDetectorCandidatesReportOnly(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	ocrPath := filepath.Join(tmp, "ocr.json")
+	detectorPath := filepath.Join(tmp, "ui_detector_candidates.v1.json")
+	out := filepath.Join(tmp, "out")
+	writeFixturePNG(t, input)
+	if err := os.WriteFile(ocrPath, []byte(`{"image":{"width":160,"height":120},"blocks":[{"id":"ocr_1","text":"Pay","bbox":{"x":48,"y":45,"width":48,"height":20},"confidence":1}]}`), 0o644); err != nil {
+		t.Fatalf("write ocr fixture: %v", err)
+	}
+	if err := os.WriteFile(detectorPath, []byte(`{"version":"ui_detector_candidates.v1","summary":{"total":1,"roleCounts":{"ImageView":1},"passCounts":{"imageview":1}},"candidates":[{"id":"det_000001","role":"ImageView","confidence":0.9,"bbox":{"x":10,"y":10,"width":20,"height":20},"source":{"kind":"vision_model","passId":"imageview","modelOutputIndex":0},"merge":{"state":"report_only"}}]}`), 0o644); err != nil {
+		t.Fatalf("write detector fixture: %v", err)
+	}
+
+	result, err := Compile(Options{InputPath: input, OCRPath: ocrPath, DetectorCandidates: detectorPath, OutputDir: out})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if result.DetectorManifest == nil {
+		t.Fatalf("expected detector manifest in result")
+	}
+	if result.DetectorManifest.Mode != "report_only" || result.DetectorManifest.Summary.Total != 1 {
+		t.Fatalf("unexpected detector manifest: %+v", result.DetectorManifest)
+	}
+	if _, err := os.Stat(filepath.Join(out, "detector", "detector_manifest.v1.json")); err != nil {
+		t.Fatalf("expected detector manifest artifact: %v", err)
+	}
+	if result.TreeIR.Summary.NodeCount == 0 {
+		t.Fatalf("expected normal compile tree to still be produced")
+	}
+}
+
 func writeFixturePNG(t *testing.T, path string) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 160, 120))

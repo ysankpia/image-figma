@@ -13,6 +13,50 @@ Reason for pause:
 - The remaining Codia-like quality ceiling is dominated by upstream UI role detection / `ImageView` source recall, not by `xycut`, final tree ordering, or local threshold tuning.
 - The next work is either Beta productization or detector-backed role-aware evidence; both are larger than the current branch should continue absorbing opportunistically.
 
+## 2026-05-30 VLM Detector Probe Checkpoint
+
+This deferred plan remains the Go Codia-like compiler checkpoint. The resumed detector work is now tracked in the active plan:
+
+```text
+docs/plans/active/090-openai-compatible-ui-detector-short-pass.md
+```
+
+The practical conclusion from the 2026-05-30 probes:
+
+```text
+Use an OpenAI-compatible VLM short-pass detector as the immediate upstream candidate provider.
+Defer RICO/YOLO self-training as a future replacement or cost-reduction path.
+Do not return to XY-cut tuning or tree-level fabrication for missing ImageView leaves.
+```
+
+Observed provider results:
+
+| probe | sample | result | decision |
+| --- | --- | --- | --- |
+| OpenAI-compatible GPT-5.5 full-image simple prompt | Tencent 022 | `ImageView` 19/37 matched@0.5; `EditText` and `BottomNavigation` bbox quality acceptable; `Button` detector count 19 for 4 golden buttons | useful but Button extra-prone |
+| OpenAI-compatible GPT-5.5 long prompt | Tencent 018 | failed with SSL record layer error under large image + long prompt + large JSON | reject long single-pass route |
+| Qwen3-VL-8B compact prompt | Tencent 018 | 50 candidates, but `ImageView` 0/39 matched@0.5 and `TextView` 1/48 matched@0.5 | not primary detector |
+| OpenAI-compatible GPT-5.5 short prompt multi-pass | Tencent 018 | `ImageView` 26/39 matched@0.5, `Background` 7/9 matched@0.5, `BottomNavigation` 1/1 matched@0.5 | current preferred route |
+
+The successful shape is:
+
+```text
+short prompt + role-focused multi-pass
+-> ui_detector_candidates.v1.json
+-> report-only eval
+-> permission-gated merge
+-> existing Codia leaf/control/tree/emitter pipeline
+```
+
+The first merge target should remain narrow:
+
+```text
+ImageView-only permission merge after report-only coverage proves value.
+Button, Background, ViewGroup, and ListView remain report-only or hint-only until backed by M29 source/pixel evidence and ownership gates.
+```
+
+This update does not change the active product mainline. The formal runtime remains Python/FastAPI `/api/upload-preview` -> DSL v0.1 -> Renderer. The VLM detector is an offline/Beta side-path candidate provider for `services/backend-go`.
+
 ## Source Of Truth
 
 - Product spec: `docs/product/codia_compiler_buildability_audit_zh.md`

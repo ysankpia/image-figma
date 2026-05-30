@@ -11,11 +11,12 @@ import (
 )
 
 type Options struct {
-	InputPath   string
-	OCRPath     string
-	OCRProvider string
-	GoldenPath  string
-	OutputDir   string
+	InputPath          string
+	OCRPath            string
+	OCRProvider        string
+	GoldenPath         string
+	DetectorCandidates string
+	OutputDir          string
 }
 
 type Result struct {
@@ -28,19 +29,35 @@ type Result struct {
 	FigmaLikeTree    emitter.Document  `json:"-"`
 	StructureDiff    *codiadiff.Document
 	FailureAudit     *audit.Document
+	DetectorManifest *DetectorManifest
 	Artifacts        Artifacts
 }
 
 type Artifacts struct {
-	PhysicalEvidence string `json:"physicalEvidence"`
-	EvidenceTokens   string `json:"evidenceTokens"`
-	LeafIR           string `json:"leafIR"`
-	ControlStage     string `json:"controlStage"`
-	ControlIR        string `json:"controlIR"`
-	TreeIR           string `json:"treeIR"`
-	FigmaLikeTree    string `json:"figmaLikeTree"`
-	StructureDiff    string `json:"structureDiff,omitempty"`
-	StructureReport  string `json:"structureReport,omitempty"`
-	FailureAudit     string `json:"failureAudit,omitempty"`
-	FailureReport    string `json:"failureReport,omitempty"`
+	PhysicalEvidence   string `json:"physicalEvidence"`
+	EvidenceTokens     string `json:"evidenceTokens"`
+	LeafIR             string `json:"leafIR"`
+	ControlStage       string `json:"controlStage"`
+	ControlIR          string `json:"controlIR"`
+	TreeIR             string `json:"treeIR"`
+	FigmaLikeTree      string `json:"figmaLikeTree"`
+	StructureDiff      string `json:"structureDiff,omitempty"`
+	StructureReport    string `json:"structureReport,omitempty"`
+	FailureAudit       string `json:"failureAudit,omitempty"`
+	FailureReport      string `json:"failureReport,omitempty"`
+	DetectorManifest   string `json:"detectorManifest,omitempty"`
+	DetectorCandidates string `json:"detectorCandidates,omitempty"`
+}
+
+type DetectorManifest struct {
+	Version        string          `json:"version"`
+	Mode           string          `json:"mode"`
+	CandidatesPath string          `json:"candidatesPath"`
+	Summary        DetectorSummary `json:"summary"`
+}
+
+type DetectorSummary struct {
+	Total      int            `json:"total"`
+	RoleCounts map[string]int `json:"roleCounts"`
+	PassCounts map[string]int `json:"passCounts,omitempty"`
 }
