@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/canvas"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/ir"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/imageio"
 )
@@ -42,10 +43,19 @@ func TestCompileWritesEndToEndArtifacts(t *testing.T) {
 		filepath.Join("controls", "codia_control_ir.v1.json"),
 		"codia_tree_ir.v1.json",
 		"codia_figma_like_tree.v1.json",
+		"codia_canvas_like.v1.canvas.json",
+		"codia_canvas_export_report.md",
 	} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected artifact %s: %v", name, err)
 		}
+	}
+	analysis, err := canvas.AnalyzeFile(filepath.Join(out, "codia_canvas_like.v1.canvas.json"), "")
+	if err != nil {
+		t.Fatalf("generated canvas should analyze: %v", err)
+	}
+	if analysis.RootName != "Root" || analysis.SchemaCoverage.Present == 0 {
+		t.Fatalf("unexpected generated canvas analysis: %#v", analysis)
 	}
 }
 

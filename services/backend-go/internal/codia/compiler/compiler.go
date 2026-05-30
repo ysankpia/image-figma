@@ -8,6 +8,7 @@ import (
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/assembly"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/canvasexport"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/detector"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
@@ -117,6 +118,14 @@ func Compile(options Options) (Result, error) {
 		return Result{}, fmt.Errorf("write emitted tree: %w", err)
 	}
 
+	canvasLike, err := canvasexport.Export(treeIR)
+	if err != nil {
+		return Result{}, fmt.Errorf("codia canvas export: %w", err)
+	}
+	if err := canvasexport.WriteArtifacts(options.OutputDir, canvasLike); err != nil {
+		return Result{}, fmt.Errorf("write canvas export: %w", err)
+	}
+
 	result := Result{
 		PhysicalEvidence: physical,
 		EvidenceTokens:   tokens,
@@ -127,19 +136,22 @@ func Compile(options Options) (Result, error) {
 		ControlIR:        controlIR,
 		TreeIR:           treeIR,
 		FigmaLikeTree:    emitted,
+		CanvasExport:     canvasLike,
 		DetectorManifest: detectorManifest,
 		Artifacts: Artifacts{
-			PhysicalEvidence: filepath.ToSlash(filepath.Join("extract", "m29_physical_evidence.v1.json")),
-			EvidenceTokens:   filepath.ToSlash(filepath.Join("tokens", "evidence_tokens.v1.json")),
-			LeafIR:           filepath.ToSlash(filepath.Join("leaves", leaf.ArtifactName)),
-			AssemblyIR:       filepath.ToSlash(filepath.Join("assembly", "codia_ir.v1.json")),
-			SourceCandidates: filepath.ToSlash(filepath.Join("assembly", assembly.SourceCandidatesArtifactName)),
-			OwnershipGraph:   filepath.ToSlash(filepath.Join("assembly", assembly.OwnershipGraphArtifactName)),
-			AssemblyReport:   filepath.ToSlash(filepath.Join("assembly", assembly.ReportArtifactName)),
-			ControlStage:     filepath.ToSlash(filepath.Join("controls", control.StageArtifactName)),
-			ControlIR:        filepath.ToSlash(filepath.Join("controls", control.ArtifactName)),
-			TreeIR:           tree.ArtifactName,
-			FigmaLikeTree:    "codia_figma_like_tree.v1.json",
+			PhysicalEvidence:   filepath.ToSlash(filepath.Join("extract", "m29_physical_evidence.v1.json")),
+			EvidenceTokens:     filepath.ToSlash(filepath.Join("tokens", "evidence_tokens.v1.json")),
+			LeafIR:             filepath.ToSlash(filepath.Join("leaves", leaf.ArtifactName)),
+			AssemblyIR:         filepath.ToSlash(filepath.Join("assembly", "codia_ir.v1.json")),
+			SourceCandidates:   filepath.ToSlash(filepath.Join("assembly", assembly.SourceCandidatesArtifactName)),
+			OwnershipGraph:     filepath.ToSlash(filepath.Join("assembly", assembly.OwnershipGraphArtifactName)),
+			AssemblyReport:     filepath.ToSlash(filepath.Join("assembly", assembly.ReportArtifactName)),
+			ControlStage:       filepath.ToSlash(filepath.Join("controls", control.StageArtifactName)),
+			ControlIR:          filepath.ToSlash(filepath.Join("controls", control.ArtifactName)),
+			TreeIR:             tree.ArtifactName,
+			FigmaLikeTree:      "codia_figma_like_tree.v1.json",
+			CanvasLike:         canvasexport.CanvasArtifactName,
+			CanvasExportReport: canvasexport.ReportArtifactName,
 		},
 	}
 	if detectorManifest != nil {

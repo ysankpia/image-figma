@@ -3,6 +3,7 @@ package compiler
 import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/assembly"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/audit"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/canvasexport"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/control"
 	codiadiff "github.com/luqing-studio/image-figma/services/backend-go/internal/codia/diff"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
@@ -21,15 +22,16 @@ type Options struct {
 }
 
 type Result struct {
-	PhysicalEvidence contract.Document `json:"-"`
-	EvidenceTokens   evidence.Document `json:"-"`
-	LeafIR           ir.Document       `json:"-"`
-	Assembly         assembly.Result   `json:"-"`
-	AssemblyIR       ir.Document       `json:"-"`
-	ControlStage     control.Result    `json:"-"`
-	ControlIR        ir.Document       `json:"-"`
-	TreeIR           ir.Document       `json:"-"`
-	FigmaLikeTree    emitter.Document  `json:"-"`
+	PhysicalEvidence contract.Document   `json:"-"`
+	EvidenceTokens   evidence.Document   `json:"-"`
+	LeafIR           ir.Document         `json:"-"`
+	Assembly         assembly.Result     `json:"-"`
+	AssemblyIR       ir.Document         `json:"-"`
+	ControlStage     control.Result      `json:"-"`
+	ControlIR        ir.Document         `json:"-"`
+	TreeIR           ir.Document         `json:"-"`
+	FigmaLikeTree    emitter.Document    `json:"-"`
+	CanvasExport     canvasexport.Result `json:"-"`
 	StructureDiff    *codiadiff.Document
 	FailureAudit     *audit.Document
 	DetectorManifest *DetectorManifest
@@ -48,6 +50,8 @@ type Artifacts struct {
 	ControlIR          string `json:"controlIR"`
 	TreeIR             string `json:"treeIR"`
 	FigmaLikeTree      string `json:"figmaLikeTree"`
+	CanvasLike         string `json:"canvasLike"`
+	CanvasExportReport string `json:"canvasExportReport"`
 	StructureDiff      string `json:"structureDiff,omitempty"`
 	StructureReport    string `json:"structureReport,omitempty"`
 	FailureAudit       string `json:"failureAudit,omitempty"`
