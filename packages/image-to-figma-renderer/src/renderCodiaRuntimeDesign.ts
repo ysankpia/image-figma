@@ -182,10 +182,9 @@ async function renderCodiaText(context: CodiaRuntimeRenderContext, node: CodiaRu
 
   context.figma.setTextStyle(figmaNode, node.style ?? {});
   const text = node.text?.characters ?? "";
-  const fontSize = node.style?.fontSize ?? 14;
-  const isSingleLine = !text.includes("\n") && node.bbox.height < 2.0 * fontSize;
-  context.figma.setTextAutoResize(figmaNode, isSingleLine ? "WIDTH_AND_HEIGHT" : "HEIGHT");
+  context.figma.setTextAutoResize(figmaNode, "NONE");
   context.figma.setText(figmaNode, text);
+  applyLayout(context.figma, figmaNode, node.bbox);
   if (node.style?.color) {
     context.figma.setFills(figmaNode, [solidPaint(node.style.color)]);
   }

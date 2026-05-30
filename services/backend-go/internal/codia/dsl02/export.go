@@ -3,10 +3,12 @@ package dsl02
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/codia/emitter"
@@ -107,7 +109,7 @@ func convertNode(node emitter.Node, isRoot bool, assets *assetContext) Node {
 		Type:     runtimeType(node),
 		Name:     firstNonEmpty(node.Name, fallbackName(role)),
 		BBox:     runtimeBBox(node, isRoot),
-		Style:    runtimeStyle(node),
+		Style:    runtimeStyle(node, assets),
 		Meta: map[string]any{
 			"sourceRole":      string(node.Role),
 			"sourceFigmaType": string(node.Type),
@@ -304,7 +306,7 @@ func fromIRBBox(bbox ir.BBox) BBox {
 	}
 }
 
-func runtimeStyle(node emitter.Node) map[string]any {
+func runtimeStyle(node emitter.Node, assets *assetContext) map[string]any {
 	style := map[string]any{}
 	if node.Type == ir.FigmaFrame {
 		style["clipContent"] = false
@@ -337,7 +339,160 @@ func runtimeStyle(node emitter.Node) map[string]any {
 	if node.Style.LineHeight != nil && node.Style.LineHeight.Value > 0 {
 		style["lineHeight"] = node.Style.LineHeight.Value
 	}
+	if node.Type == ir.FigmaText {
+		applyRuntimeTextFallbacks(style, node, assets)
+	}
 	return style
+}
+
+func applyRuntimeTextFallbacks(style map[string]any, node emitter.Node, assets *assetContext) {
+	if _, ok := style["fontFamily"]; !ok {
+		style["fontFamily"] = "Inter"
+	}
+	if _, ok := style["fontSize"]; !ok {
+		style["fontSize"] = inferTextFontSize(node.SourceBBox.Height)
+	}
+	if _, ok := style["lineHeight"]; !ok {
+		style["lineHeight"] = maxInt(1, node.SourceBBox.Height)
+	}
+	if _, ok := style["color"]; ok {
+		return
+	}
+	if assets != nil && assets.src != nil {
+		if color, ok := inferTextForegroundColor(assets.src, node.SourceBBox); ok {
+			style["color"] = color
+			return
+		}
+	}
+	style["color"] = "#111827"
+}
+
+func inferTextFontSize(height int) int {
+	if height <= 0 {
+		return 14
+	}
+	return clampInt(int(math.Round(float64(height)*0.78)), 8, 72)
+}
+
+type colorBucket struct {
+	count     int
+	sumR      int
+	sumG      int
+	sumB      int
+	avgR      int
+	avgG      int
+	avgB      int
+	finalized bool
+}
+
+func inferTextForegroundColor(src image.Image, bbox ir.BBox) (string, bool) {
+	bounds := src.Bounds()
+	x1 := clampInt(bbox.X, 0, bounds.Dx())
+	y1 := clampInt(bbox.Y, 0, bounds.Dy())
+	x2 := clampInt(bbox.X+bbox.Width, x1, bounds.Dx())
+	y2 := clampInt(bbox.Y+bbox.Height, y1, bounds.Dy())
+	if x2 <= x1 || y2 <= y1 {
+		return "", false
+	}
+	all := map[int]*colorBucket{}
+	border := map[int]*colorBucket{}
+	borderX := maxInt(1, (x2-x1)/6)
+	borderY := maxInt(1, (y2-y1)/5)
+	total := 0
+	for y := y1; y < y2; y++ {
+		for x := x1; x < x2; x++ {
+			rgba := color.RGBAModel.Convert(src.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.RGBA)
+			if rgba.A < 32 {
+				continue
+			}
+			addColorBucket(all, rgba)
+			if x < x1+borderX || x >= x2-borderX || y < y1+borderY || y >= y2-borderY {
+				addColorBucket(border, rgba)
+			}
+			total++
+		}
+	}
+	if total == 0 {
+		return "", false
+	}
+	background := dominantColorBucket(border)
+	if background == nil {
+		background = dominantColorBucket(all)
+	}
+	if background == nil {
+		return "", false
+	}
+	finalizeColorBucket(background)
+	candidates := make([]*colorBucket, 0, len(all))
+	for _, bucket := range all {
+		finalizeColorBucket(bucket)
+		if bucket.count < maxInt(2, total/1200) {
+			continue
+		}
+		if colorDistance(bucket, background) < 36 {
+			continue
+		}
+		candidates = append(candidates, bucket)
+	}
+	if len(candidates) == 0 {
+		if relativeLuminance(background) < 0.48 {
+			return "#FFFFFF", true
+		}
+		return "#111827", true
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return foregroundScore(candidates[i], background) > foregroundScore(candidates[j], background)
+	})
+	winner := candidates[0]
+	return fmt.Sprintf("#%02X%02X%02X", clampInt(winner.avgR, 0, 255), clampInt(winner.avgG, 0, 255), clampInt(winner.avgB, 0, 255)), true
+}
+
+func addColorBucket(buckets map[int]*colorBucket, rgba color.RGBA) {
+	key := (int(rgba.R)/32)*64 + (int(rgba.G)/32)*8 + int(rgba.B)/32
+	bucket := buckets[key]
+	if bucket == nil {
+		bucket = &colorBucket{}
+		buckets[key] = bucket
+	}
+	bucket.count++
+	bucket.sumR += int(rgba.R)
+	bucket.sumG += int(rgba.G)
+	bucket.sumB += int(rgba.B)
+}
+
+func dominantColorBucket(buckets map[int]*colorBucket) *colorBucket {
+	var best *colorBucket
+	for _, bucket := range buckets {
+		if best == nil || bucket.count > best.count {
+			best = bucket
+		}
+	}
+	return best
+}
+
+func finalizeColorBucket(bucket *colorBucket) {
+	if bucket == nil || bucket.finalized || bucket.count <= 0 {
+		return
+	}
+	bucket.avgR = bucket.sumR / bucket.count
+	bucket.avgG = bucket.sumG / bucket.count
+	bucket.avgB = bucket.sumB / bucket.count
+	bucket.finalized = true
+}
+
+func foregroundScore(candidate *colorBucket, background *colorBucket) float64 {
+	return float64(colorDistance(candidate, background)) * math.Log(float64(candidate.count)+1)
+}
+
+func colorDistance(a *colorBucket, b *colorBucket) int {
+	dr := a.avgR - b.avgR
+	dg := a.avgG - b.avgG
+	db := a.avgB - b.avgB
+	return int(math.Round(math.Sqrt(float64(dr*dr + dg*dg + db*db))))
+}
+
+func relativeLuminance(bucket *colorBucket) float64 {
+	return (0.2126*float64(bucket.avgR) + 0.7152*float64(bucket.avgG) + 0.0722*float64(bucket.avgB)) / 255.0
 }
 
 func runtimeRadius(radius ir.CornerRadius) any {

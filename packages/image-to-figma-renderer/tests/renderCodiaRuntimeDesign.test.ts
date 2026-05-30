@@ -23,7 +23,8 @@ describe("renderCodiaRuntimeDesign", () => {
     ]);
     expect(adapter.findNodeByName("Button")?.children.map((child) => child.name)).toEqual(["Background", "Pay"]);
     expect(adapter.findNodeByName("首页")?.characters).toBe("首页");
-    expect(adapter.findNodeByName("首页")?.textAutoResize).toBe("WIDTH_AND_HEIGHT");
+    expect(adapter.findNodeByName("首页")?.textAutoResize).toBe("NONE");
+    expect(adapter.findNodeByName("首页")?.layout).toEqual({ x: 16, y: 24, width: 80, height: 24 });
     expect(adapter.findNodeByName("Image")?.fills?.[0]).toEqual(
       expect.objectContaining({ type: "IMAGE", scaleMode: "FIT" })
     );

@@ -471,7 +471,7 @@ func (b *builder) buildBottomNavigation(wrapTabs bool) ir.Node {
 		if b.isUsed(node) || discardPhysicalNoise(node) || node.Role != ir.RoleBackground {
 			continue
 		}
-		if node.SourceBBox.Y >= b.root.Height-35 && node.SourceBBox.Width >= b.root.Width/4 {
+		if centerInside(nav.SourceBBox, node.SourceBBox) || overlapRatio(node.SourceBBox, nav.SourceBBox) >= 0.50 {
 			tabGroups = append(tabGroups, node)
 			b.mark(node)
 		}
@@ -990,6 +990,10 @@ func (b *builder) buildMajorSections(body ir.BBox) []ir.Node {
 				continue
 			}
 			if centerInside(sectionBox, node.SourceBBox) || overlapRatio(node.SourceBBox, sectionBox) >= 0.40 {
+				if structuralBackgroundCoveredByBacking(node, body, b.root) {
+					b.mark(node)
+					continue
+				}
 				nodes = append(nodes, node)
 			}
 		}
@@ -1238,6 +1242,10 @@ func (b *builder) remainingIn(box ir.BBox) []ir.Node {
 		if b.isUsed(node) || discardPhysicalNoise(node) || !centerInside(box, node.SourceBBox) {
 			continue
 		}
+		if structuralBackgroundCoveredByBacking(node, box, b.root) {
+			b.mark(node)
+			continue
+		}
 		out = append(out, node)
 	}
 	sortNodes(out)
@@ -1248,6 +1256,10 @@ func (b *builder) remainingRootChildren() []ir.Node {
 	var out []ir.Node
 	for _, node := range b.children() {
 		if b.isUsed(node) || discardPhysicalNoise(node) {
+			continue
+		}
+		if structuralBackgroundCoveredByBacking(node, b.root, b.root) {
+			b.mark(node)
 			continue
 		}
 		out = append(out, node)
@@ -1437,13 +1449,37 @@ func smallChromeLeaf(node ir.Node) bool {
 
 func bottomNavItem(node ir.Node, root ir.BBox, navY int) bool {
 	box := node.SourceBBox
-	if centerY(box) < navY+20 || box.Y < navY-6 {
+	topTolerance := max(10, root.Height/160)
+	if centerY(box) < navY+12 || box.Y < navY-topTolerance {
 		return false
 	}
-	if box.Width > root.Width/3 || box.Height > 80 || tinySpeck(box) {
+	if box.Width > root.Width/3 || box.Height > max(96, root.Height/20) || tinySpeck(box) {
 		return false
 	}
 	return node.Role == ir.RoleTextView || node.Role == ir.RoleImageView
+}
+
+func structuralBackgroundCoveredByBacking(node ir.Node, owner ir.BBox, root ir.BBox) bool {
+	if node.Role != ir.RoleBackground || root.Width <= 0 || root.Height <= 0 || owner.Width <= 0 || owner.Height <= 0 {
+		return false
+	}
+	box := node.SourceBBox
+	if box.Width <= 0 || box.Height <= 0 || !intersects(box, owner) {
+		return false
+	}
+	if firstEvidenceKind(node) == "control_surface_background" {
+		return false
+	}
+	widthRatio := float64(box.Width) / float64(max(1, root.Width))
+	heightRatio := float64(box.Height) / float64(max(1, root.Height))
+	areaRatio := float64(area(box)) / float64(max(1, area(root)))
+	if widthRatio >= 0.72 && box.Height >= max(72, root.Height/18) {
+		return true
+	}
+	if widthRatio >= 0.50 && (heightRatio >= 0.10 || areaRatio >= 0.08) {
+		return true
+	}
+	return false
 }
 
 func homeIndicatorBBox(root ir.BBox) ir.BBox {

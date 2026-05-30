@@ -110,6 +110,40 @@ func TestExportWithAssetsCropsImageNodes(t *testing.T) {
 	}
 }
 
+func TestExportWithAssetsInfersMissingRuntimeTextStyle(t *testing.T) {
+	tmp := t.TempDir()
+	sourcePath := filepath.Join(tmp, "source.png")
+	writeTextStyleSourcePNG(t, sourcePath)
+	doc := sampleFigmaLikeTree()
+	doc.Root.Children[0].Style = ir.Style{Visible: true, Opacity: 1}
+	doc.Root.Children[0].SourceBBox = ir.BBox{X: 16, Y: 24, Width: 96, Height: 32}
+	doc.Root.Children[0].FigmaBBox = doc.Root.Children[0].SourceBBox
+	doc.Root.Children[0].RelativeBBox = doc.Root.Children[0].SourceBBox
+
+	out, err := ExportWithAssets(ExportAssetOptions{
+		TaskID:          "task_test",
+		Document:        doc,
+		SourceImagePath: sourcePath,
+		OutputDir:       tmp,
+	})
+	if err != nil {
+		t.Fatalf("ExportWithAssets() error = %v", err)
+	}
+	text := out.Root.Children[0]
+	if text.Style["fontFamily"] != "Inter" {
+		t.Fatalf("font family = %#v", text.Style["fontFamily"])
+	}
+	if text.Style["fontSize"] != 25 {
+		t.Fatalf("font size = %#v", text.Style["fontSize"])
+	}
+	if text.Style["lineHeight"] != 32 {
+		t.Fatalf("line height = %#v", text.Style["lineHeight"])
+	}
+	if text.Style["color"] != "#FFFFFF" {
+		t.Fatalf("text color = %#v", text.Style["color"])
+	}
+}
+
 func TestWriteArtifact(t *testing.T) {
 	tmp := t.TempDir()
 	out, err := Export("task_test", sampleFigmaLikeTree())
@@ -129,6 +163,29 @@ func TestWriteArtifact(t *testing.T) {
 	}
 	if decoded.Version != "0.2" || decoded.Kind != "codia_runtime" {
 		t.Fatalf("decoded artifact = %+v", decoded)
+	}
+}
+
+func writeTextStyleSourcePNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 390, 844))
+	for y := 0; y < 844; y++ {
+		for x := 0; x < 390; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 74, G: 162, B: 87, A: 255})
+		}
+	}
+	for y := 31; y < 49; y++ {
+		for x := 28; x < 98; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create source png: %v", err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("encode source png: %v", err)
 	}
 }
 

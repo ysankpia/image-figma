@@ -293,6 +293,62 @@ func TestBuildAddsBodyVisualBackingImage(t *testing.T) {
 	}
 }
 
+func TestBuildSuppressesStructuralBackgroundCoveredByBodyBacking(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		backgroundWithEvidence("header-bg", "solid_background", 0, 0, 665, 220),
+		image("logo", 36, 68, 80, 80),
+		text("title", 132, 92, 260, 32, "Title"),
+		text("subtitle", 132, 138, 180, 24, "Subtitle"),
+	})
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if containsID(out.Root, "header-bg") {
+		t.Fatalf("large structural background should be covered by body backing, not emitted:\n%s", MarkdownReport(out))
+	}
+	if !containsID(out.Root, "title") || !containsID(out.Root, "logo") {
+		t.Fatalf("foreground children must remain editable:\n%s", MarkdownReport(out))
+	}
+}
+
+func TestBuildOwnsBottomNavigationEdgeLeaks(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		image("tab1i", 45, 1314, 41, 40),
+		text("tab1t", 46, 1356, 39, 24, "A"),
+		image("tab2i", 178, 1311, 42, 41),
+		text("tab2t", 180, 1358, 37, 22, "B"),
+		image("tab3i", 303, 1310, 59, 45),
+		text("tab3t", 307, 1358, 48, 20, "C"),
+		image("tab4i", 446, 1314, 38, 37),
+		text("tab4t", 443, 1354, 42, 28, "D"),
+		image("tab5i", 576, 1312, 44, 41),
+		text("tab5t", 579, 1358, 37, 22, "E"),
+		image("floating-nav-image", 302, 1288, 72, 90),
+		background("nav-badge-bg", 592, 1322, 45, 26),
+	})
+	hintBox := ir.BBox{X: 0, Y: 1297, Width: 665, Height: 118}
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_nav", ir.RoleBottomNavigation, hintBox, 0.98)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	nav := firstRole(out.Root, ir.RoleBottomNavigation)
+	if nav == nil {
+		t.Fatalf("expected bottom navigation:\n%s", MarkdownReport(out))
+	}
+	if !containsID(*nav, "floating-nav-image") || !containsID(*nav, "nav-badge-bg") {
+		t.Fatalf("bottom nav should own edge-overlapping nav children: %#v", nav)
+	}
+	for _, child := range out.Root.Children {
+		if child.ID == "floating-nav-image" || child.ID == "nav-badge-bg" {
+			t.Fatalf("nav edge leak remained at root: %#v", child)
+		}
+	}
+}
+
 func TestBuildCreatesHintedSlotListOnlyWithRealChildren(t *testing.T) {
 	doc := fixtureDoc([]ir.Node{
 		image("slot1i", 60, 300, 80, 60),
