@@ -169,6 +169,94 @@ func TestBuildCreatesSideRailWhenRightEdgeEvidenceExists(t *testing.T) {
 	}
 }
 
+func TestBuildUsesBottomNavigationRegionHintForContainerBBox(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		image("tab1i", 45, 1314, 41, 40),
+		text("tab1t", 46, 1356, 39, 24, "A"),
+		image("tab2i", 178, 1311, 42, 41),
+		text("tab2t", 180, 1358, 37, 22, "B"),
+		image("tab3i", 303, 1310, 59, 45),
+		text("tab3t", 307, 1358, 48, 20, "C"),
+		image("tab4i", 446, 1314, 38, 37),
+		text("tab4t", 443, 1354, 42, 28, "D"),
+		image("tab5i", 576, 1312, 44, 41),
+		text("tab5t", 579, 1358, 37, 22, "E"),
+	})
+	hintBox := ir.BBox{X: 0, Y: 1297, Width: 665, Height: 118}
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_nav", ir.RoleBottomNavigation, hintBox, 0.98)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	nav := firstRole(out.Root, ir.RoleBottomNavigation)
+	if nav == nil {
+		t.Fatalf("expected bottom navigation node")
+	}
+	if nav.SourceBBox != hintBox {
+		t.Fatalf("expected bottom nav bbox from assembly hint, got %#v", nav.SourceBBox)
+	}
+	if !containsID(*nav, "tab3i") || !containsID(*nav, "tab5t") {
+		t.Fatalf("bottom nav hint must still own real tab children: %#v", nav)
+	}
+}
+
+func TestBuildCreatesHintedSlotListOnlyWithRealChildren(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		image("slot1i", 60, 300, 80, 60),
+		text("slot1t", 58, 570, 86, 22, "One"),
+		image("slot2i", 230, 302, 80, 58),
+		text("slot2t", 228, 572, 84, 22, "Two"),
+		image("slot3i", 400, 301, 82, 59),
+		text("slot3t", 398, 571, 86, 22, "Three"),
+		text("outside", 50, 900, 90, 24, "Outside"),
+	})
+	hintBox := ir.BBox{X: 40, Y: 270, Width: 500, Height: 350}
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_list", ir.RoleListView, hintBox, 0.95)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	region := firstEvidence(out.Root, string(proposalHintedSlotList))
+	if region == nil {
+		t.Fatalf("expected hinted slot list:\n%s", MarkdownReport(out))
+	}
+	if region.Role != ir.RoleListView {
+		t.Fatalf("expected hinted ListView, got %#v", region.Role)
+	}
+	if region.SourceBBox != hintBox {
+		t.Fatalf("expected hinted bbox authority, got %#v", region.SourceBBox)
+	}
+	if countEvidence(*region, string(proposalHintedSlot)) != 3 {
+		t.Fatalf("expected three hinted slots: %#v", region.Children)
+	}
+	if !containsID(*region, "slot1i") || !containsID(*region, "slot2t") || !containsID(*region, "slot3i") {
+		t.Fatalf("expected hinted slot list to own real children: %#v", region.Children)
+	}
+	if containsID(*region, "outside") {
+		t.Fatalf("hinted slot list consumed outside child: %#v", region.Children)
+	}
+}
+
+func TestBuildDoesNotCreateEmptyRegionFromHintAlone(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		text("outside", 40, 720, 90, 24, "Outside"),
+	})
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_empty", ir.RoleViewGroup, ir.BBox{X: 40, Y: 270, Width: 500, Height: 180}, 0.96)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if countEvidence(out.Root, string(proposalHintedSlotList)) != 0 || countEvidence(out.Root, string(proposalHintedSlot)) != 0 {
+		t.Fatalf("detector hint created empty region:\n%s", MarkdownReport(out))
+	}
+	if !containsID(out.Root, "outside") {
+		t.Fatalf("ordinary child should remain in the tree")
+	}
+}
+
 func TestHomeIndicatorBBoxUsesBottomInset(t *testing.T) {
 	box := homeIndicatorBBox(ir.BBox{X: 0, Y: 0, Width: 665, Height: 1440})
 	if box != (ir.BBox{X: 215, Y: 1418, Width: 235, Height: 8}) {
@@ -262,6 +350,16 @@ func control(id string, role ir.Role, x, y, w, h int) ir.Node {
 		FigmaType:   ir.FigmaFrame,
 		VisibleName: map[ir.Role]string{ir.RoleButton: "Button", ir.RoleEditText: "Text"}[role],
 		Style:       ir.Style{Visible: true, Opacity: 1},
+	}
+}
+
+func regionHintEvidence(id string, role ir.Role, box ir.BBox, confidence float64) ir.Evidence {
+	return ir.Evidence{
+		Kind:       "assembly_region_hint",
+		BBox:       box,
+		Confidence: confidence,
+		SourceID:   id,
+		Notes:      string(role) + "/pass=layout/label=test region",
 	}
 }
 

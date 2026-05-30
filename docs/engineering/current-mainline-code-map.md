@@ -1025,7 +1025,9 @@ assembly/codia_ownership_graph.v1.json
 assembly/codia_assembly_report.md
 ```
 
-Assembly is allowed to use detector-supported `ImageView` candidates as bbox-authority source candidates and to consume/suppress M29 image fragments that are owned by those detector images. This destructive ownership is deliberately gated on detector ImageView support. Without detector ImageView candidates, assembly preserves M29/OCR leaves conservatively so the existing two-image smoke baseline remains unchanged. `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, and `BottomNavigation` detector candidates remain hint-only/report-only and cannot directly create controls or structural regions.
+Assembly is allowed to use detector-supported `ImageView` candidates as bbox-authority source candidates and to consume/suppress M29 image fragments that are owned by those detector images. This destructive ownership is deliberately gated on detector ImageView support. Without detector ImageView candidates, assembly preserves M29/OCR leaves conservatively so the existing two-image smoke baseline remains unchanged. `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, and `BottomNavigation` detector candidates remain hint-only/report-only and cannot directly create controls or raw structural regions.
+
+The tree builder now consumes `assembly_region_hint` evidence conservatively. `StatusBar`, `ActionBar`, and `BottomNavigation` may use a plausible detector bbox as a region proposal while still requiring real child evidence. Body `ViewGroup`/`ListView` hints are not emitted as raw VLM boxes; they can only materialize as `ListView -> ViewGroup` slot proposals when existing children form at least three rich slots. Empty detector hints, huge body panels, text-only hints, and detector `Button`/`Background` candidates do not create final structure.
 
 `canvasexport` writes:
 
@@ -1042,9 +1044,10 @@ Validated 2026-05-30:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Tencent 018 no detector smoke | 149 | 95 | 54 | 51 | 0.429 | 0.538 | 1.000 | 1.000 |
 | Tencent 018 detector assembly | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
+| Tencent 018 detector assembly + Stage 6 hints | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
 | Tencent 022 no detector smoke | 106 | 92 | 14 | 28 | not recorded here | not recorded here | not recorded here | not recorded here |
 
-The detector assembly canvas export at `/private/tmp/codia-assembly-detector-018/codia_canvas_like.v1.canvas.json` was read back by `codiaanalyze` as 123 nodes with 3 root children. Golden raw Codia data remains validation-only; it must not be read by detector, assembly, control, tree, emitter, or canvas export generation logic.
+The detector assembly + Stage 6 canvas export at `/private/tmp/codia-assembly-detector-018-stage6/codia_canvas_like.v1.canvas.json` was read back by `codiaanalyze` as 123 nodes with 3 root children. Golden raw Codia data remains validation-only; it must not be read by detector, assembly, control, tree, emitter, or canvas export generation logic. A raw detector `ViewGroup` emission attempt on Tencent 018 created two unmatched ViewGroup extras without improving matched count, so body region hints are intentionally slot-gated rather than emitted as whole-panel containers.
 
 If this paused line is resumed for product use, the next step is a separate Beta API/artifact path, not replacement of the formal DSL endpoint. The resume plan is archived in [089 Go Codia-like Compiler Rebuild](../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md).
 

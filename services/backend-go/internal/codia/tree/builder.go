@@ -47,9 +47,10 @@ func BuildFromControl(result controlstage.Result) (ir.Document, error) {
 
 func buildFromDocument(doc ir.Document) (ir.Document, error) {
 	b := builder{
-		source: doc,
-		root:   doc.Root.SourceBBox,
-		used:   map[string]bool{},
+		source:      doc,
+		root:        doc.Root.SourceBBox,
+		regionHints: regionHintsFromEvidence(doc.Root.Evidence, doc.Root.SourceBBox),
+		used:        map[string]bool{},
 	}
 	outRoot := rootShell(doc.Root)
 	hasTopSearch := b.hasTopSearch()
@@ -98,9 +99,18 @@ func readIR(path string) (ir.Document, error) {
 }
 
 type builder struct {
-	source ir.Document
-	root   ir.BBox
-	used   map[string]bool
+	source      ir.Document
+	root        ir.BBox
+	regionHints []regionHint
+	used        map[string]bool
+}
+
+type regionHint struct {
+	Role       ir.Role
+	BBox       ir.BBox
+	Confidence float64
+	SourceID   string
+	Label      string
 }
 
 type proposalKind string
@@ -119,6 +129,8 @@ const (
 	proposalRepeatedRowList  proposalKind = "repeated_row_list"
 	proposalRepeatedRowItem  proposalKind = "repeated_row_item"
 	proposalMajorSection     proposalKind = "major_section_owner"
+	proposalHintedSlotList   proposalKind = "assembly_region_hint_slot_list"
+	proposalHintedSlot       proposalKind = "assembly_region_hint_slot"
 	proposalSideRail         proposalKind = "side_rail_candidate"
 	proposalSideRailInner    proposalKind = "side_rail_inner_list"
 	proposalSideRailStack    proposalKind = "side_rail_stack_owner"
@@ -126,6 +138,119 @@ const (
 
 func (b *builder) children() []ir.Node {
 	return b.source.Root.Children
+}
+
+func regionHintsFromEvidence(evidence []ir.Evidence, root ir.BBox) []regionHint {
+	var out []regionHint
+	for _, item := range evidence {
+		if item.Kind != "assembly_region_hint" || item.Confidence <= 0 {
+			continue
+		}
+		role := regionHintRole(item.Notes)
+		if !regionHintRoleAllowed(role) {
+			continue
+		}
+		box, ok := clippedRegionHintBox(item.BBox, root)
+		if !ok {
+			continue
+		}
+		out = append(out, regionHint{
+			Role:       role,
+			BBox:       box,
+			Confidence: item.Confidence,
+			SourceID:   item.SourceID,
+			Label:      regionHintLabel(item.Notes),
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Role != out[j].Role {
+			return string(out[i].Role) < string(out[j].Role)
+		}
+		if out[i].Confidence != out[j].Confidence {
+			return out[i].Confidence > out[j].Confidence
+		}
+		return area(out[i].BBox) < area(out[j].BBox)
+	})
+	return out
+}
+
+func regionHintRole(notes string) ir.Role {
+	roleText := strings.TrimSpace(strings.SplitN(notes, "/", 2)[0])
+	switch ir.Role(roleText) {
+	case ir.RoleStatusBar, ir.RoleActionBar, ir.RoleBottomNavigation, ir.RoleListView, ir.RoleViewGroup, ir.RoleEditText, ir.RoleBackground:
+		return ir.Role(roleText)
+	default:
+		return ""
+	}
+}
+
+func regionHintRoleAllowed(role ir.Role) bool {
+	switch role {
+	case ir.RoleStatusBar, ir.RoleActionBar, ir.RoleBottomNavigation, ir.RoleListView, ir.RoleViewGroup, ir.RoleEditText, ir.RoleBackground:
+		return true
+	default:
+		return false
+	}
+}
+
+func regionHintLabel(notes string) string {
+	for _, part := range strings.Split(notes, "/") {
+		if label, ok := strings.CutPrefix(part, "label="); ok {
+			return label
+		}
+	}
+	return ""
+}
+
+func clippedRegionHintBox(box ir.BBox, root ir.BBox) (ir.BBox, bool) {
+	if box.Width <= 0 || box.Height <= 0 || root.Width <= 0 || root.Height <= 0 {
+		return ir.BBox{}, false
+	}
+	x1 := max(0, box.X)
+	y1 := max(0, box.Y)
+	x2 := min(root.Width, bottomX(box))
+	y2 := min(root.Height, bottom(box))
+	if x2 <= x1 || y2 <= y1 {
+		return ir.BBox{}, false
+	}
+	return ir.BBox{X: x1, Y: y1, Width: x2 - x1, Height: y2 - y1}, true
+}
+
+func (b *builder) bestRegionHint(role ir.Role, minConfidence float64) (regionHint, bool) {
+	var best regionHint
+	for _, hint := range b.regionHints {
+		if hint.Role != role || hint.Confidence < minConfidence {
+			continue
+		}
+		if best.Role == "" || hint.Confidence > best.Confidence ||
+			(hint.Confidence == best.Confidence && area(hint.BBox) > area(best.BBox)) {
+			best = hint
+		}
+	}
+	return best, best.Role != ""
+}
+
+func (b *builder) orderedRegionHints(roles map[ir.Role]bool, minConfidence float64) []regionHint {
+	var out []regionHint
+	for _, hint := range b.regionHints {
+		if !roles[hint.Role] || hint.Confidence < minConfidence {
+			continue
+		}
+		out = append(out, hint)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if area(out[i].BBox) != area(out[j].BBox) {
+			return area(out[i].BBox) < area(out[j].BBox)
+		}
+		if out[i].BBox.Y != out[j].BBox.Y {
+			return out[i].BBox.Y < out[j].BBox.Y
+		}
+		if out[i].BBox.X != out[j].BBox.X {
+			return out[i].BBox.X < out[j].BBox.X
+		}
+		return out[i].SourceID < out[j].SourceID
+	})
+	return out
 }
 
 func rootShell(root ir.Node) ir.Node {
@@ -156,7 +281,16 @@ func (b *builder) hasTopSearch() bool {
 }
 
 func (b *builder) buildTopWrapper() ir.Node {
-	status := b.makeContainer("tree_status_0001", ir.RoleStatusBar, ir.BBox{X: 0, Y: 0, Width: b.root.Width, Height: topStatusHeight(b.root)}, proposalStatusBar)
+	statusBox := ir.BBox{X: 0, Y: 0, Width: b.root.Width, Height: topStatusHeight(b.root)}
+	var statusHint *regionHint
+	if hint, ok := b.bestRegionHint(ir.RoleStatusBar, 0.80); ok && plausibleTopRegionHint(hint.BBox, b.root) {
+		statusBox = hint.BBox
+		statusHint = &hint
+	}
+	status := b.makeContainer("tree_status_0001", ir.RoleStatusBar, statusBox, proposalStatusBar)
+	if statusHint != nil {
+		applyRegionHintEvidence(&status, *statusHint)
+	}
 	for _, node := range b.children() {
 		if b.isUsed(node) || discardPhysicalNoise(node) || !topChromeNode(node, status.SourceBBox) {
 			continue
@@ -259,7 +393,15 @@ func (b *builder) buildSearchRow() ir.Node {
 
 func (b *builder) buildActionBar() ir.Node {
 	box := ir.BBox{X: 0, Y: 0, Width: b.root.Width, Height: 74}
+	var actionHint *regionHint
+	if hint, ok := b.bestRegionHint(ir.RoleActionBar, 0.80); ok && plausibleTopRegionHint(hint.BBox, b.root) {
+		box = hint.BBox
+		actionHint = &hint
+	}
 	action := b.makeContainer("tree_actionbar_0001", ir.RoleActionBar, box, proposalActionBar)
+	if actionHint != nil {
+		applyRegionHintEvidence(&action, *actionHint)
+	}
 	for _, node := range b.children() {
 		if b.isUsed(node) || discardPhysicalNoise(node) || !topChromeNode(node, box) {
 			continue
@@ -277,6 +419,13 @@ func (b *builder) buildActionBar() ir.Node {
 func (b *builder) buildBottomNavigation(wrapTabs bool) ir.Node {
 	navHeight := clamp(int(float64(max(1, b.root.Height))*0.108), 96, min(156, max(96, b.root.Height)))
 	navY := max(0, b.root.Height-navHeight)
+	navBox := ir.BBox{X: 0, Y: navY, Width: b.root.Width, Height: b.root.Height - navY}
+	var navHint *regionHint
+	if hint, ok := b.bestRegionHint(ir.RoleBottomNavigation, 0.80); ok && plausibleBottomNavigationHint(hint.BBox, b.root) {
+		navY = hint.BBox.Y
+		navBox = hint.BBox
+		navHint = &hint
+	}
 	slots := map[int][]ir.Node{}
 	for _, node := range b.children() {
 		if b.isUsed(node) || discardPhysicalNoise(node) || !bottomNavItem(node, b.root, navY) {
@@ -288,7 +437,10 @@ func (b *builder) buildBottomNavigation(wrapTabs bool) ir.Node {
 	if len(slots) < 4 {
 		return ir.Node{}
 	}
-	nav := b.makeContainer("tree_bottom_nav_0001", ir.RoleBottomNavigation, ir.BBox{X: 0, Y: navY, Width: b.root.Width, Height: b.root.Height - navY}, proposalBottomNav)
+	nav := b.makeContainer("tree_bottom_nav_0001", ir.RoleBottomNavigation, navBox, proposalBottomNav)
+	if navHint != nil {
+		applyRegionHintEvidence(&nav, *navHint)
+	}
 	slotWidth := max(1, b.root.Width/5)
 	var tabGroups []ir.Node
 	for i := 0; i < 5; i++ {
@@ -495,6 +647,9 @@ func (b *builder) buildBody(hasTopSearch bool, bottomNav ir.Node) ir.Node {
 
 	for _, row := range b.buildRepeatedRows(body.SourceBBox) {
 		body.Children = append(body.Children, row)
+	}
+	for _, region := range b.buildHintedRegions(body.SourceBBox) {
+		body.Children = append(body.Children, region)
 	}
 	for _, section := range b.buildMajorSections(body.SourceBBox) {
 		body.Children = append(body.Children, section)
@@ -857,6 +1012,224 @@ func (b *builder) buildMajorSections(body ir.BBox) []ir.Node {
 	return out
 }
 
+func (b *builder) buildHintedRegions(body ir.BBox) []ir.Node {
+	roles := map[ir.Role]bool{
+		ir.RoleListView:  true,
+		ir.RoleViewGroup: true,
+	}
+	hints := b.orderedRegionHints(roles, 0.88)
+	var out []ir.Node
+	for _, hint := range hints {
+		if !acceptBodyRegionHint(hint, body, b.root) {
+			continue
+		}
+		box := intersectWith(hint.BBox, body)
+		nodes := b.regionHintChildren(box, body)
+		slots := b.hintedRegionSlots(nodes, len(out)+1)
+		if !acceptHintedRegionSlots(slots) {
+			continue
+		}
+		list := b.makeContainer(fmt.Sprintf("tree_hint_list_%04d", len(out)+1), ir.RoleListView, box, proposalHintedSlotList)
+		list.Evidence[0].Confidence = hint.Confidence
+		list.Evidence[0].SourceID = hint.SourceID
+		list.Evidence[0].Notes = "assembly_region_hint"
+		if hint.Label != "" {
+			list.Evidence[0].Notes += "/label=" + hint.Label
+		}
+		for _, slot := range slots {
+			list.Children = append(list.Children, slot)
+			for _, child := range slot.Children {
+				b.mark(child)
+			}
+		}
+		orderChildren(&list)
+		out = append(out, list)
+		if len(out) >= 6 {
+			break
+		}
+	}
+	sortNodes(out)
+	return out
+}
+
+func (b *builder) hintedRegionSlots(nodes []ir.Node, regionIndex int) []ir.Node {
+	if len(nodes) < 2 {
+		return nil
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		if centerX(nodes[i].SourceBBox) != centerX(nodes[j].SourceBBox) {
+			return centerX(nodes[i].SourceBBox) < centerX(nodes[j].SourceBBox)
+		}
+		if nodes[i].SourceBBox.Y != nodes[j].SourceBBox.Y {
+			return nodes[i].SourceBBox.Y < nodes[j].SourceBBox.Y
+		}
+		return nodes[i].ID < nodes[j].ID
+	})
+	groups := splitHintedSlotGroups(nodes)
+	var out []ir.Node
+	for _, groupNodes := range groups {
+		groupNodes = mergeAlignedBackgroundFragments(groupNodes)
+		if !acceptHintedSlotChildren(groupNodes) {
+			continue
+		}
+		groupBox := padBBox(unionNodes(groupNodes), 4, 4, b.root)
+		group := b.makeContainer(fmt.Sprintf("tree_hint_%04d_slot_%04d", regionIndex, len(out)+1), ir.RoleViewGroup, groupBox, proposalHintedSlot)
+		sortNodes(groupNodes)
+		group.Children = append(group.Children, groupNodes...)
+		orderChildren(&group)
+		out = append(out, group)
+	}
+	sortNodes(out)
+	return out
+}
+
+func splitHintedSlotGroups(nodes []ir.Node) [][]ir.Node {
+	var groups [][]ir.Node
+	for _, node := range nodes {
+		placed := false
+		cx := centerX(node.SourceBBox)
+		for i := range groups {
+			box := unionNodes(groups[i])
+			tolerance := max(44, max(box.Width, node.SourceBBox.Width)/2+28)
+			if abs(cx-centerX(box)) <= tolerance {
+				groups[i] = append(groups[i], node)
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			groups = append(groups, []ir.Node{node})
+		}
+	}
+	return groups
+}
+
+func (b *builder) regionHintChildren(box ir.BBox, body ir.BBox) []ir.Node {
+	var out []ir.Node
+	for _, node := range b.children() {
+		if b.isUsed(node) || discardPhysicalNoise(node) || tinySpeck(node.SourceBBox) || !regionHintChildRole(node.Role) {
+			continue
+		}
+		if !centerInside(body, node.SourceBBox) && overlapRatio(node.SourceBBox, body) < 0.50 {
+			continue
+		}
+		if !centerInside(box, node.SourceBBox) && overlapRatio(node.SourceBBox, box) < 0.45 {
+			continue
+		}
+		if regionHintChildTooLarge(node, box, b.root) {
+			continue
+		}
+		out = append(out, node)
+	}
+	sortNodes(out)
+	return out
+}
+
+func regionHintChildRole(role ir.Role) bool {
+	switch role {
+	case ir.RoleTextView, ir.RoleImageView, ir.RoleButton, ir.RoleEditText, ir.RoleBackground, ir.RoleBgButton, ir.RoleBgEditText:
+		return true
+	default:
+		return false
+	}
+}
+
+func regionHintChildTooLarge(node ir.Node, box ir.BBox, root ir.BBox) bool {
+	if area(node.SourceBBox) > area(box)*11/10 {
+		return true
+	}
+	if (node.Role == ir.RoleImageView || node.Role == ir.RoleBackground) && area(node.SourceBBox) > area(box)*45/100 {
+		return true
+	}
+	if node.Role == ir.RoleBackground &&
+		node.SourceBBox.Width >= int(float64(max(1, root.Width))*0.90) &&
+		node.SourceBBox.Height >= int(float64(max(1, root.Height))*0.45) {
+		return true
+	}
+	return false
+}
+
+func acceptBodyRegionHint(hint regionHint, body ir.BBox, root ir.BBox) bool {
+	if hint.BBox.Width <= 0 || hint.BBox.Height <= 0 || !intersects(hint.BBox, body) {
+		return false
+	}
+	rootArea := max(1, area(root))
+	hintArea := area(hint.BBox)
+	if hintArea < rootArea/250 {
+		return false
+	}
+	if hintArea > rootArea*35/100 {
+		return false
+	}
+	if hint.BBox.Height > max(1, body.Height)*75/100 {
+		return false
+	}
+	return true
+}
+
+func acceptHintedRegionSlots(slots []ir.Node) bool {
+	if len(slots) < 3 {
+		return false
+	}
+	rich := 0
+	for _, slot := range slots {
+		if richHintedSlot(slot) {
+			rich++
+		}
+	}
+	if rich < max(2, len(slots)-1) {
+		return false
+	}
+	return rowGroupsHaveCompatibleSize(slots, 3.4)
+}
+
+func richHintedSlot(slot ir.Node) bool {
+	return len(slot.Children) >= 2 && slotHasForeground(slot) && slotHasRichVisual(slot)
+}
+
+func slotHasForeground(slot ir.Node) bool {
+	for _, child := range slot.Children {
+		switch child.Role {
+		case ir.RoleTextView, ir.RoleImageView, ir.RoleButton, ir.RoleEditText:
+			return true
+		}
+	}
+	return false
+}
+
+func slotHasRichVisual(slot ir.Node) bool {
+	for _, child := range slot.Children {
+		switch child.Role {
+		case ir.RoleImageView, ir.RoleButton, ir.RoleEditText, ir.RoleBackground, ir.RoleBgButton, ir.RoleBgEditText:
+			return true
+		}
+	}
+	return false
+}
+
+func acceptHintedSlotChildren(nodes []ir.Node) bool {
+	if len(nodes) < 2 {
+		return false
+	}
+	rich := 0
+	foreground := 0
+	for _, node := range nodes {
+		switch node.Role {
+		case ir.RoleImageView, ir.RoleButton, ir.RoleEditText, ir.RoleBgButton, ir.RoleBgEditText:
+			rich++
+			foreground++
+		case ir.RoleTextView:
+			foreground++
+		case ir.RoleBackground:
+			rich++
+		}
+	}
+	if rich == 0 || foreground < 2 {
+		return false
+	}
+	return true
+}
+
 func (b *builder) remainingIn(box ir.BBox) []ir.Node {
 	var out []ir.Node
 	for _, node := range b.children() {
@@ -898,6 +1271,19 @@ func (b *builder) makeContainer(id string, role ir.Role, box ir.BBox, kind propo
 			SourceID:   id,
 		}},
 		Style: ir.Style{Visible: true, Opacity: 1},
+	}
+}
+
+func applyRegionHintEvidence(node *ir.Node, hint regionHint) {
+	if len(node.Evidence) == 0 {
+		return
+	}
+	node.Evidence[0].BBox = hint.BBox
+	node.Evidence[0].Confidence = hint.Confidence
+	node.Evidence[0].SourceID = hint.SourceID
+	node.Evidence[0].Notes = "assembly_region_hint"
+	if hint.Label != "" {
+		node.Evidence[0].Notes += "/label=" + hint.Label
 	}
 }
 
@@ -952,6 +1338,23 @@ func (b *builder) isUsed(node ir.Node) bool {
 
 func topStatusHeight(root ir.BBox) int {
 	return clamp(int(float64(max(1, root.Height))*0.047), 56, 74)
+}
+
+func plausibleTopRegionHint(box ir.BBox, root ir.BBox) bool {
+	if box.Width < max(1, root.Width)/2 || box.Y > max(120, root.Height/10) {
+		return false
+	}
+	return box.Height >= 24 && box.Height <= max(96, root.Height/5)
+}
+
+func plausibleBottomNavigationHint(box ir.BBox, root ir.BBox) bool {
+	if box.Width < int(float64(max(1, root.Width))*0.70) {
+		return false
+	}
+	if box.Y < int(float64(max(1, root.Height))*0.70) {
+		return false
+	}
+	return box.Height >= 64 && box.Height <= max(180, root.Height/5)
 }
 
 func topChromeNode(node ir.Node, box ir.BBox) bool {

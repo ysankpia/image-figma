@@ -613,15 +613,44 @@ Existing Codia smoke artifacts still explain all detector-origin leaves by candi
 
 ### Stage 6: Hint-only region/control use
 
-Pending after Stage 5:
+Implemented after Stage 5:
 
 ```text
 EditText: bbox hint for search/input surfaces; still needs M29 surface/OCR context.
-StatusBar/ActionBar/BottomNavigation: tree builder region proposals.
+StatusBar/ActionBar/BottomNavigation: tree builder may use detector region bbox as proposal, but still needs real children.
 Background: control/card surface hint only; not direct visible leaf unless backed by pixel source evidence.
-ViewGroup/ListView: proposal hints only; tree builder still owns structure.
+ViewGroup/ListView: body region hints are converted only when they can form a real slot-list from existing children.
 Button: detector + M29 surface + OCR/icon foreground + ownership context required.
 ```
+
+First-principles boundary:
+
+```text
+Detector region candidates are not source nodes.
+They are bbox proposals for parent assignment.
+Tree builder remains the ownership judge.
+```
+
+Implemented behavior:
+
+```text
+Root assembly evidence kind: assembly_region_hint
+-> tree parses role/bbox/confidence/source id
+-> StatusBar/ActionBar/BottomNavigation can take hint bbox when plausible
+-> ViewGroup/ListView hints enter body only as ListView -> ViewGroup slot proposals
+-> empty hints, huge body panels, and text-only hints do not emit structure
+```
+
+Important validation result:
+
+```text
+Tencent 018 initially showed that emitting a raw detector ViewGroup box creates two extra ViewGroup nodes with no matched gain.
+The implementation was tightened to slot-list gating.
+After tightening, Tencent 018 detector compile returns to the Stage 5 numbers:
+generated 123, matched 97, extra 26, missed 49.
+```
+
+This means Stage 6 is a safe wiring step, not yet a structural recall breakthrough. The next real structural lift still needs better ownership of repeated slot children and control/background consumption, not raw VLM region boxes.
 
 ## Provider Compatibility
 
@@ -710,12 +739,22 @@ Stage 5 acceptance:
 - BottomNavigation remains matched.
 - Every detector-origin emitted leaf is traceable to one candidate id.
 
+Stage 6 acceptance:
+
+- `tree` consumes `assembly_region_hint` without letting detector create Button/Background/standalone ViewGroup.
+- BottomNavigation hint can refine the container bbox but still requires real tab children.
+- Body ViewGroup/ListView hints emit only when existing children form at least three rich slots.
+- Empty detector region hints do not emit structure.
+- No-detector smoke remains unchanged.
+- Tencent 018 detector compile does not regress ImageView/Button/BottomNavigation metrics or add hinted-region extras.
+
 Validated 2026-05-30 on Tencent 018 with `/private/tmp/ui-detector-018-short-pass/ui_detector_candidates.v1.json`:
 
 | path | generated | matched | extra | missed | ImageView precision | ImageView recall | Button precision | BottomNavigation precision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | no detector smoke baseline | 149 | 95 | 54 | 51 | 0.429 | 0.538 | 1.000 | 1.000 |
 | detector assembly | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
+| detector assembly + Stage 6 hints | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
 
 The detector assembly run also passed `codiaanalyze` on `codia_canvas_like.v1.canvas.json` with 123 analyzable nodes and 3 root children. The no-detector `services/backend-go/tools/codia_smoke_2img.sh` gate remains:
 
