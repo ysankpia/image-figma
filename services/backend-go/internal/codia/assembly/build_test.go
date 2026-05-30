@@ -62,6 +62,66 @@ func TestNoDetectorPreservesM29LeavesConservatively(t *testing.T) {
 	}
 }
 
+func TestLargeHeaderRasterCropSuppressesButKeepsBackgroundAndText(t *testing.T) {
+	doc := leafDoc([]ir.Node{
+		backgroundWithEvidence("header_bg", "solid_background", 0, 0, 320, 180),
+		imageWithEvidence("header_crop", "image_crop", 0, 0, 320, 181),
+		text("title", 78, 62, 160, 28, "Title"),
+		image("icon_frag", 260, 20, 18, 18),
+	})
+	det := detectorDoc(detector.Candidate{
+		ID:         "det_icon",
+		Role:       detector.RoleImageView,
+		Confidence: 0.92,
+		BBox:       detector.BBox{X: 256, Y: 18, Width: 28, Height: 24},
+		Source:     detector.CandidateSource{Kind: "vision_model", PassID: "imageview"},
+	})
+
+	result, err := Build(Options{Leaf: doc, Detector: &det})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if findID(result.Document.Root.Children, "header_crop") != nil {
+		t.Fatalf("structural header crop must not emit as final ImageView: %#v", result.Document.Root.Children)
+	}
+	if findID(result.Document.Root.Children, "header_bg") == nil {
+		t.Fatalf("large top background should remain as editable region evidence: %#v", result.Document.Root.Children)
+	}
+	if findID(result.Document.Root.Children, "title") == nil {
+		t.Fatalf("OCR title inside structural header must remain editable text: %#v", result.Document.Root.Children)
+	}
+	if got := findRecords(result, decisionSuppress, "header_crop"); len(got) != 1 || got[0].Reason != "m29_structural_raster_region_not_final_image" {
+		t.Fatalf("expected structural raster suppress record, got %#v", got)
+	}
+}
+
+func TestDetectorRootScaleImageDoesNotEmitOwner(t *testing.T) {
+	doc := leafDoc([]ir.Node{
+		text("title", 78, 62, 160, 28, "Title"),
+	})
+	det := detectorDoc(detector.Candidate{
+		ID:         "det_header",
+		Role:       detector.RoleImageView,
+		Confidence: 0.95,
+		BBox:       detector.BBox{X: 0, Y: 0, Width: 320, Height: 190},
+		Source:     detector.CandidateSource{Kind: "vision_model", PassID: "imageview"},
+	})
+
+	result, err := Build(Options{Leaf: doc, Detector: &det})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if findRole(result.Document.Root.Children, ir.RoleImageView) != nil {
+		t.Fatalf("root-scale detector image must not become final ImageView: %#v", result.Document.Root.Children)
+	}
+	if findID(result.Document.Root.Children, "title") == nil {
+		t.Fatalf("ordinary OCR text should remain when root-scale detector image is blocked")
+	}
+	if got := findRecords(result, decisionSuppress, "det_header"); len(got) != 1 {
+		t.Fatalf("expected detector suppress record, got %#v", result.SourceCandidates.Candidates)
+	}
+}
+
 func TestDetectorImageConsumesInternalTextAndFragments(t *testing.T) {
 	doc := leafDoc([]ir.Node{
 		image("frag", 45, 56, 20, 20),
@@ -148,6 +208,30 @@ func TestDetectorButtonCannotCreateButton(t *testing.T) {
 	}
 }
 
+func TestMalformedDetectorImageCandidateDoesNotPanic(t *testing.T) {
+	doc := leafDoc([]ir.Node{
+		text("label", 25, 22, 40, 18, "Pay"),
+	})
+	det := detectorDoc(detector.Candidate{
+		ID:         "det_bad",
+		Role:       detector.RoleImageView,
+		Confidence: 0.93,
+		BBox:       detector.BBox{X: -10, Y: -10, Width: -30, Height: 24},
+		Source:     detector.CandidateSource{Kind: "vision_model", PassID: "imageview"},
+	})
+
+	result, err := Build(Options{Leaf: doc, Detector: &det})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if findID(result.Document.Root.Children, "label") == nil {
+		t.Fatalf("malformed detector candidate should not remove ordinary leaves")
+	}
+	if got := findRecords(result, decisionSuppress, "det_bad"); len(got) != 1 {
+		t.Fatalf("expected malformed detector suppress record, got %#v", result.SourceCandidates.Candidates)
+	}
+}
+
 func leafDoc(children []ir.Node) ir.Document {
 	root := ir.Node{
 		ID:          "root_0",
@@ -165,6 +249,10 @@ func leafDoc(children []ir.Node) ir.Document {
 }
 
 func image(id string, x, y, w, h int) ir.Node {
+	return imageWithEvidence(id, "image_or_icon_crop", x, y, w, h)
+}
+
+func imageWithEvidence(id string, kind string, x, y, w, h int) ir.Node {
 	box := ir.BBox{X: x, Y: y, Width: w, Height: h}
 	return ir.Node{
 		ID:          id,
@@ -174,7 +262,7 @@ func image(id string, x, y, w, h int) ir.Node {
 		FigmaType:   ir.FigmaRoundedRectangle,
 		VisibleName: "Image",
 		Asset:       &ir.Asset{Kind: "crop", Hash: id},
-		Evidence:    []ir.Evidence{{Kind: "image_or_icon_crop", BBox: box, Confidence: 0.7, SourceID: id}},
+		Evidence:    []ir.Evidence{{Kind: kind, BBox: box, Confidence: 0.7, SourceID: id}},
 		Style:       ir.Style{Visible: true, Opacity: 1},
 	}
 }

@@ -633,7 +633,7 @@ func (b *builder) buildBody(hasTopSearch bool, bottomNav ir.Node) ir.Node {
 	}
 	bodyEnd := b.root.Height
 	if bottomNav.ID != "" {
-		bodyEnd = min(b.root.Height, bottomNav.SourceBBox.Y+55)
+		bodyEnd = min(b.root.Height, max(0, bottomNav.SourceBBox.Y))
 	}
 	if bodyEnd <= bodyY {
 		return ir.Node{}

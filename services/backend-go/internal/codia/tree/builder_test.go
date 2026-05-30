@@ -201,6 +201,43 @@ func TestBuildUsesBottomNavigationRegionHintForContainerBBox(t *testing.T) {
 	}
 }
 
+func TestBuildClipsBodyToBottomNavigationHint(t *testing.T) {
+	doc := fixtureDoc([]ir.Node{
+		text("content", 52, 1180, 120, 28, "Content"),
+		image("tab1i", 45, 1314, 41, 40),
+		text("tab1t", 46, 1356, 39, 24, "A"),
+		image("tab2i", 178, 1311, 42, 41),
+		text("tab2t", 180, 1358, 37, 22, "B"),
+		image("tab3i", 303, 1310, 59, 45),
+		text("tab3t", 307, 1358, 48, 20, "C"),
+		image("tab4i", 446, 1314, 38, 37),
+		text("tab4t", 443, 1354, 42, 28, "D"),
+		image("tab5i", 576, 1312, 44, 41),
+		text("tab5t", 579, 1358, 37, 22, "E"),
+	})
+	hintBox := ir.BBox{X: 0, Y: 1297, Width: 665, Height: 118}
+	doc.Root.Evidence = []ir.Evidence{regionHintEvidence("det_nav", ir.RoleBottomNavigation, hintBox, 0.98)}
+
+	out, err := Build(doc)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	body := firstEvidence(out.Root, string(proposalBodyList))
+	nav := firstRole(out.Root, ir.RoleBottomNavigation)
+	if body == nil || nav == nil {
+		t.Fatalf("expected both body and bottom nav:\n%s", MarkdownReport(out))
+	}
+	if bottom(body.SourceBBox) > nav.SourceBBox.Y {
+		t.Fatalf("body overlaps bottom nav: body=%#v nav=%#v", body.SourceBBox, nav.SourceBBox)
+	}
+	if containsID(*body, "tab3i") || containsID(*body, "tab5t") {
+		t.Fatalf("body must not consume bottom nav children: %#v", body)
+	}
+	if !containsID(*nav, "tab3i") || !containsID(*nav, "tab5t") {
+		t.Fatalf("bottom nav should still own tab children: %#v", nav)
+	}
+}
+
 func TestBuildCreatesHintedSlotListOnlyWithRealChildren(t *testing.T) {
 	doc := fixtureDoc([]ir.Node{
 		image("slot1i", 60, 300, 80, 60),

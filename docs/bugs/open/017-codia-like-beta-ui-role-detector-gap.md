@@ -213,6 +213,8 @@ status-bar / keyboard / cursor-like tiny visuals may be absent
 some internal cover/thumb ImageViews remain part of a large raster
 some card or image crops are too large or shifted
 some backgrounds remain fragments or extras
+root/header-scale raster crops can be over-promoted as editable ImageView
+body regions can overlap BottomNavigation when region hints are not hard boundaries
 parent-child structure is usable but not Codia-like 1:1
 ```
 
@@ -351,13 +353,30 @@ Implementation checkpoint:
     -detector-candidates
     detector/detector_manifest.v1.json
 
-  not implemented yet:
-    ImageView-only permission merge
+  implemented ImageView-only permission merge through internal/codia/assembly
+  implemented hint-only region/control integration:
+    BottomNavigation/ActionBar/ListView/ViewGroup detector candidates remain hints
+    tree owns parent assignment and requires real children
+
+2026-05-31:
+  fixed an output-quality regression discovered through plugin-connected Codia Beta:
+    root/header-scale image_crop no longer emits as final ImageView
+    compact media geometry is required before an ImageView may consume OCR/internal evidence
+    top solid Background evidence is preserved for header fill
+    BottomNavigation hint is a hard body boundary; body no longer extends by +55 px
+
+  targeted evidence:
+    Lizhi 011 leaf_0002 0,0,665,452 now suppresses with reason=m29_structural_raster_region_not_final_image
+    Lizhi 011 leaf_0016/leaf_0017 OCR title texts remain TextView
+    Lizhi 011 tree_body_0001 ends at y=1300 and tree_bottom_nav_0001 starts at y=1300
+
+  still not implemented:
     detector coverage injection into codia_failure_audit
-    any Button/Background/ViewGroup/ListView merge
+    any Button merge from detector alone
+    any Background/ViewGroup/ListView final node created from detector alone
 ```
 
-The bug remains open because the detector candidate layer is only report-only. It does not yet reduce `upstream_leaf_missing:ImageView` in generated CodiaIR.
+The bug remains open because the detector-enhanced path improves ImageView material coverage but still does not reach Codia 1:1 quality across the four golden samples.
 
 ## Why This Does Not Block Beta Launch
 

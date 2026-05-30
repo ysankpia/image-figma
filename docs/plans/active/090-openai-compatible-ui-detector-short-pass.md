@@ -1,6 +1,6 @@
 # 090 OpenAI-compatible UI Detector Short Pass
 
-- 状态：active / stages 1-5 implemented; stage 6 region hints pending
+- 状态：active / detector integration implemented; 2026-05-31 output-quality repair validated
 - 创建日期：2026-05-30
 - 负责人：未指定
 - 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../archive/deferred/089-go-codia-like-compiler-rebuild.md)
@@ -660,6 +660,63 @@ generated 123, matched 97, extra 26, missed 49.
 
 This means region hint wiring is a safe closure step, not a structural recall breakthrough by itself. It is complete only because it prevents raw VLM region boxes from becoming final structure.
 
+## 2026-05-31 Output-quality Repair
+
+The first plugin-connected Codia Beta runs exposed two compiler-contract defects that are not model/provider problems:
+
+```text
+assembly over-promoted a root/header-scale raster crop as final ImageView
+tree let body overlap BottomNavigation by extending bodyEnd past bottomNav.Y
+```
+
+Concrete failing evidence from Lizhi 011 before repair:
+
+```text
+leaf_0002 ImageView emit bbox 0,0,665,452 reason=m29_independent_image_candidate
+tree_body_0001 bbox 0,0,665,1355
+tree_bottom_nav_0001 bbox 0,1300,665,140
+```
+
+Repair boundary:
+
+```text
+large root/top raster crops are structural evidence, not final ImageView
+top solid Background evidence may remain editable to preserve header fill
+only compact media owners may consume OCR/internal fragments
+BottomNavigation region hint is a hard body boundary
+```
+
+Implemented behavior:
+
+```text
+structural M29 image_crop -> suppress with reason=m29_structural_raster_region_not_final_image
+root/top-scale detector ImageView -> suppress with reason=detector_image_not_final_media_candidate
+imageOwnerCanConsumeInternals now requires compact media geometry
+topRegionBackground allows header-scale solid Background up to one third of the screen
+buildBody clips bodyEnd to bottomNav.SourceBBox.Y
+```
+
+Targeted validation on Lizhi 011:
+
+```text
+out: /tmp/codia-lizhi-011-quality-fix
+leaf_0002 decision=suppress reason=m29_structural_raster_region_not_final_image
+leaf_0001 Background remains with SOLID fill
+leaf_0016/leaf_0017 OCR title texts remain TextView
+tree_body_0001 bbox 0,0,665,1300
+tree_bottom_nav_0001 bbox 0,1300,665,140
+body/nav overlap = 0
+```
+
+Regression validation after repair:
+
+```text
+go test ./internal/codia/assembly ./internal/codia/tree ./internal/codia/compiler ./cmd/codiacompile ./cmd/codiaserver
+bash services/backend-go/tools/codia_smoke_4img.sh
+CODIA_DETECTOR_T018=/private/tmp/ui-detector-018-short-pass/ui_detector_candidates.v1.json bash services/backend-go/tools/codia_smoke_4img.sh
+temporary codiaserver HTTP flow: upload -> task completed -> DSL returned -> first asset returned 200
+```
+
 ## Provider Compatibility
 
 The implementation should support provider interfaces, not one hardcoded model call.
@@ -895,7 +952,8 @@ report-only detector CLI          [implemented]
 -> detector eval                  [implemented]
 -> codiacompile assembly hook      [implemented]
 -> ImageView-only permission merge [implemented]
--> hint-only region/control integration [pending]
+-> hint-only region/control integration [implemented]
+-> assembly material classification + hard region partition [implemented]
 ```
 
 The hard boundary remains:

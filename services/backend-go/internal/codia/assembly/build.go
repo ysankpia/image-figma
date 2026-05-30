@@ -76,7 +76,11 @@ func (b *builder) build() ir.Document {
 			b.addDetectorOnlyRecord(item, decisionHint, 0.35, "detector_background_requires_permission_gate", "detector")
 			continue
 		}
-		if item.Role != detector.RoleImageView || !detectorImageCandidateAccepted(item) {
+		if item.Role != detector.RoleImageView {
+			continue
+		}
+		if !detectorImageCandidateAccepted(item, b.leaf.Root.SourceBBox) {
+			b.addDetectorOnlyRecord(item, decisionSuppress, 0.55, "detector_image_not_final_media_candidate", "none")
 			continue
 		}
 		hasDetectorImage = true
@@ -97,6 +101,10 @@ func (b *builder) build() ir.Document {
 				}
 				if unsupportedM29ImageFragment(node, b.leaf.Root.SourceBBox) {
 					b.suppressNode(node, 0.57, "unsupported_m29_image_fragment_with_detector_present", "m29")
+					continue
+				}
+				if structuralRasterImage(node, b.leaf.Root.SourceBBox) {
+					b.suppressNode(node, 0.62, "m29_structural_raster_region_not_final_image", "m29")
 					continue
 				}
 			}
@@ -488,9 +496,12 @@ func (b *builder) recordDetector(item detector.Candidate, decision string, score
 	})
 }
 
-func detectorImageCandidateAccepted(item detector.Candidate) bool {
+func detectorImageCandidateAccepted(item detector.Candidate, root ir.BBox) bool {
 	box := bboxFromDetector(item.BBox)
-	return item.Confidence >= 0.62 && box.Width >= 4 && box.Height >= 4 && area(box) >= 24
+	if item.Confidence < 0.62 || box.Width < 4 || box.Height < 4 || area(box) < 24 {
+		return false
+	}
+	return !structuralRasterBox(box, root)
 }
 
 func isRegionHint(role detector.Role) bool {
@@ -543,24 +554,52 @@ func textOwnedByImage(text ir.Node, owners []ir.Node, root ir.BBox) (ir.Node, bo
 }
 
 func imageOwnerCanConsumeInternals(owner ir.Node, root ir.BBox) bool {
-	if firstEvidenceKind(owner) == "vision_detector_image_candidate" {
-		return true
+	if owner.Role != ir.RoleImageView {
+		return false
 	}
 	if root.Width <= 0 || root.Height <= 0 {
 		return true
 	}
 	box := owner.SourceBBox
+	if structuralRasterBox(box, root) {
+		return false
+	}
 	rootArea := max(1, area(root))
-	if float64(area(box))/float64(rootArea) > 0.24 {
+	if float64(area(box))/float64(rootArea) > 0.18 {
 		return false
 	}
-	if box.Width > int(float64(root.Width)*0.78) && box.Height > int(float64(root.Height)*0.20) {
+	if box.Width > int(float64(root.Width)*0.72) && box.Height > int(float64(root.Height)*0.20) {
 		return false
 	}
-	if box.Height > int(float64(root.Height)*0.38) {
+	if box.Height > int(float64(root.Height)*0.32) {
 		return false
 	}
 	return true
+}
+
+func structuralRasterImage(node ir.Node, root ir.BBox) bool {
+	if node.Role != ir.RoleImageView {
+		return false
+	}
+	kind := firstEvidenceKind(node)
+	if kind != "image_crop" && !strings.Contains(kind, "raster") {
+		return false
+	}
+	return structuralRasterBox(node.SourceBBox, root)
+}
+
+func structuralRasterBox(box ir.BBox, root ir.BBox) bool {
+	if root.Width <= 0 || root.Height <= 0 || area(box) <= 0 {
+		return false
+	}
+	// Top full-width raster bands are usually page chrome/background captures,
+	// not editable media objects. Interior large images remain eligible.
+	rootArea := max(1, area(root))
+	areaRatio := float64(area(box)) / float64(rootArea)
+	fullWidth := box.X <= 2 && box.Width >= int(float64(root.Width)*0.88)
+	topBand := box.Y <= max(8, int(float64(root.Height)*0.035))
+	tallHeader := box.Height >= int(float64(root.Height)*0.14)
+	return fullWidth && topBand && (tallHeader || areaRatio >= 0.16)
 }
 
 func controlEligibleBackground(node ir.Node, root ir.BBox) bool {
@@ -585,7 +624,7 @@ func controlEligibleBackground(node ir.Node, root ir.BBox) bool {
 }
 
 func topRegionBackground(box ir.BBox, root ir.BBox) bool {
-	return root.Width > 0 && box.Y <= 4 && box.Width >= int(float64(root.Width)*0.80) && box.Height >= 24 && box.Height <= max(180, root.Height/5)
+	return root.Width > 0 && box.Y <= 4 && box.Width >= int(float64(root.Width)*0.80) && box.Height >= 24 && box.Height <= max(180, root.Height/3)
 }
 
 func bottomRegionBackground(box ir.BBox, root ir.BBox) bool {
