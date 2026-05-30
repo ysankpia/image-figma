@@ -33,7 +33,7 @@ func parseCandidates(text string, pass preparedPass, startIndex int) ([]Candidat
 	out := make([]Candidate, 0, len(raw.Elements))
 	for i, item := range raw.Elements {
 		role := Role(strings.TrimSpace(item.Role))
-		if !allowedRole(role) || (len(pass.Spec.AllowedRoles) > 0 && !pass.Spec.AllowedRoles[role]) {
+		if !allowedRole(role) {
 			continue
 		}
 		norm, err := parseNormalizedBBox(item.BBox)
@@ -75,13 +75,35 @@ func parseCandidates(text string, pass preparedPass, startIndex int) ([]Candidat
 				Kind:             "vision_model",
 				PassID:           pass.Spec.ID,
 				ModelOutputIndex: i,
+				PreferredByPass:  passAllowsRole(pass.Spec, role),
 				Reason:           pass.Spec.PromptName,
 			},
-			Merge: MergeState{State: "report_only", Reason: "default before permission gate"},
+			Merge: MergeState{State: "report_only", Reason: mergeReason(role)},
 		}
 		out = append(out, candidate)
 	}
 	return out, nil
+}
+
+func passAllowsRole(spec PassSpec, role Role) bool {
+	return len(spec.AllowedRoles) == 0 || spec.AllowedRoles[role]
+}
+
+func mergeReason(role Role) string {
+	switch role {
+	case RoleImageView:
+		return "image evidence candidate; merge requires ImageView permission gate"
+	case RoleButton:
+		return "button candidate requires OCR/control surface/M29 support"
+	case RoleBackground:
+		return "background candidate requires source or pixel support"
+	case RoleViewGroup, RoleListView, RoleBottomNavigation, RoleStatusBar, RoleActionBar:
+		return "structure or region hint; tree creation requires permission gate"
+	case RoleTextView, RoleEditText:
+		return "text/input hint; OCR or source support required"
+	default:
+		return "detector evidence only before permission gate"
+	}
 }
 
 func extractJSONPayload(text string) (string, error) {
@@ -160,6 +182,9 @@ func dedupeCandidates(items []Candidate) []Candidate {
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Role != items[j].Role {
 			return items[i].Role < items[j].Role
+		}
+		if items[i].Source.PreferredByPass != items[j].Source.PreferredByPass {
+			return items[i].Source.PreferredByPass
 		}
 		if items[i].Confidence != items[j].Confidence {
 			return items[i].Confidence > items[j].Confidence

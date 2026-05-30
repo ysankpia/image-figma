@@ -73,6 +73,7 @@ type CandidateSource struct {
 	Kind             string `json:"kind"`
 	PassID           string `json:"passId"`
 	ModelOutputIndex int    `json:"modelOutputIndex"`
+	PreferredByPass  bool   `json:"preferredByPass"`
 	Reason           string `json:"reason,omitempty"`
 }
 

@@ -60,11 +60,11 @@ func MarkdownReport(doc Document, rawArtifacts []string) string {
 	writeCountTable(&b, "Pass Counts", doc.Summary.PassCounts)
 
 	fmt.Fprintf(&b, "\n## Candidates\n\n")
-	fmt.Fprintf(&b, "| id | role | pass | conf | bbox | label | merge |\n")
-	fmt.Fprintf(&b, "| --- | --- | --- | ---: | --- | --- | --- |\n")
+	fmt.Fprintf(&b, "| id | role | pass | preferred | conf | bbox | label | merge |\n")
+	fmt.Fprintf(&b, "| --- | --- | --- | --- | ---: | --- | --- | --- |\n")
 	for _, item := range doc.Candidates {
-		fmt.Fprintf(&b, "| `%s` | `%s` | `%s` | %.2f | `%.1f,%.1f,%.1f,%.1f` | `%s` | `%s` |\n",
-			item.ID, item.Role, item.Source.PassID, item.Confidence,
+		fmt.Fprintf(&b, "| `%s` | `%s` | `%s` | `%t` | %.2f | `%.1f,%.1f,%.1f,%.1f` | `%s` | `%s` |\n",
+			item.ID, item.Role, item.Source.PassID, item.Source.PreferredByPass, item.Confidence,
 			item.BBox.X, item.BBox.Y, item.BBox.Width, item.BBox.Height,
 			escapeMarkdownCell(item.RawLabel), item.Merge.State)
 	}

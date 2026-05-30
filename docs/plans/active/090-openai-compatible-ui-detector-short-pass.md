@@ -200,7 +200,7 @@ short prompt + role-focused multi-pass 是当前正确方向。
 ImageView recall 明显有价值：26/39 @ IoU 0.5。
 Background 候选也有价值：7/9 matched，但 extra 多，必须 report-only 或 permission-gated。
 BottomNavigation 可以稳定做 region hint。
-Button 第一版应故意不输出或不 merge，避免重复 full-image prompt 的 false positive 问题。
+Button 第一版应保留为 detector evidence，但不得直接 merge。否则 eval/audit 会误判成模型没识别到控件；真正的 Button 创建必须等 OCR、control surface、M29 source/pixel support 和 ownership gate 一起通过。
 ```
 
 ## Detector Contract
@@ -250,11 +250,12 @@ ui_detector_candidates.v1.json
         "kind": "vision_model",
         "passId": "imageview",
         "modelOutputIndex": 0,
+        "preferredByPass": true,
         "reason": "role-focused detector pass"
       },
       "merge": {
         "state": "report_only",
-        "reason": "default before permission gate"
+        "reason": "image evidence candidate; merge requires ImageView permission gate"
       }
     }
   ]
@@ -267,6 +268,7 @@ Hard rules:
 All bbox values in `bbox` are original screenshot pixel coordinates.
 The raw model response may be saved separately for debugging, but Go compiler must not depend on raw prose.
 Every candidate has role, confidence, bbox, passId, provider/model provenance, and merge state.
+Pass focus is recorded as `source.preferredByPass`; it is not a candidate filter.
 Default merge state is report_only.
 No API key or auth token may appear in this artifact.
 Golden Codia data may not appear in this artifact.
@@ -286,6 +288,8 @@ ViewGroup
 Button
 EditText
 ```
+
+Unknown roles are dropped. Known roles returned by a pass are preserved even when they are not that pass's preferred role. Example: a `Button` returned by the `layout` pass stays in `ui_detector_candidates.v1.json` with `source.preferredByPass=false` and `merge.state=report_only`.
 
 Initial merge-eligible roles:
 
@@ -673,7 +677,7 @@ Stage 1 acceptance:
 
 - `codiadetector` writes `ui_detector_candidates.v1.json`, report, overlay, and raw responses.
 - All candidates are `report_only`.
-- Tencent 018 can reproduce the short-pass shape: useful ImageView candidates and no direct Button merge.
+- Tencent 018 can reproduce the short-pass shape: useful ImageView candidates, preserved Button/Background/ViewGroup evidence, and no direct Button merge.
 
 Stage 2 acceptance:
 
