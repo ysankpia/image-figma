@@ -134,6 +134,95 @@ func TestRunEmitsOCRAnchoredSurfaceRegion(t *testing.T) {
 	}
 }
 
+func TestRunEmitsTightControlSurfaceRegion(t *testing.T) {
+	t.Setenv("OCR_PROVIDER", "fake")
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writeTightControlSurfacePNG(t, input)
+	ocrPath := filepath.Join(tmp, "ocr.json")
+	ocrDoc := map[string]any{
+		"image": map[string]any{"width": 220, "height": 120},
+		"blocks": []map[string]any{
+			{
+				"id":   "ocr_0001",
+				"text": "uinotes.com",
+				"bbox": map[string]any{"x": 38, "y": 43, "width": 126, "height": 34},
+			},
+		},
+	}
+	data, err := json.Marshal(ocrDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ocrPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Run(Options{InputPath: input, OCRPath: ocrPath, OutputDir: filepath.Join(tmp, "out")})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	textBox := contract.BBox{X: 38, Y: 43, Width: 126, Height: 34}
+	for _, p := range doc.Primitives {
+		if p.PrimitiveType != "surface_region" {
+			continue
+		}
+		if contains(p.BBox, textBox, 4) && hasReason(p.CompileHints.Reasons, "control_surface_component") {
+			return
+		}
+	}
+	t.Fatalf("expected tight control surface_region around %#v, got %#v", textBox, doc.Primitives)
+}
+
+func TestRunEmitsContrastControlSurfaceRegion(t *testing.T) {
+	t.Setenv("OCR_PROVIDER", "fake")
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writeContrastControlSurfacePNG(t, input)
+	ocrPath := filepath.Join(tmp, "ocr.json")
+	ocrDoc := map[string]any{
+		"image": map[string]any{"width": 220, "height": 120},
+		"blocks": []map[string]any{
+			{
+				"id":   "ocr_0001",
+				"text": "Pay now",
+				"bbox": map[string]any{"x": 74, "y": 49, "width": 72, "height": 20},
+			},
+		},
+	}
+	data, err := json.Marshal(ocrDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ocrPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Run(Options{InputPath: input, OCRPath: ocrPath, OutputDir: filepath.Join(tmp, "out")})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	textBox := contract.BBox{X: 74, Y: 49, Width: 72, Height: 20}
+	for _, p := range doc.Primitives {
+		if p.PrimitiveType != "surface_region" {
+			continue
+		}
+		if contains(p.BBox, textBox, 4) && p.BBox.Width >= textBox.Width+24 {
+			return
+		}
+	}
+	t.Fatalf("expected contrast control surface_region around %#v, got %#v", textBox, doc.Primitives)
+}
+
+func TestTightNumericGlyphSurface(t *testing.T) {
+	if !tightNumericGlyphSurface("04", contract.BBox{X: 10, Y: 10, Width: 42, Height: 40}, contract.BBox{X: 10, Y: 10, Width: 41, Height: 39}) {
+		t.Fatalf("expected tight numeric glyph surface to be rejected")
+	}
+	if tightNumericGlyphSurface("回归签到", contract.BBox{X: 10, Y: 10, Width: 96, Height: 30}, contract.BBox{X: 20, Y: 12, Width: 72, Height: 20}) {
+		t.Fatalf("non-numeric CTA text should not be rejected as numeric glyph")
+	}
+}
+
 func TestRunAllowsEdgeAnchoredSurfaceRegion(t *testing.T) {
 	t.Setenv("OCR_PROVIDER", "fake")
 	tmp := t.TempDir()
@@ -219,6 +308,37 @@ func TestRunExtractsSurfaceLocalForegroundComponents(t *testing.T) {
 	t.Fatalf("expected surface-local foreground primitive near %#v, got %#v", iconBox, doc.Primitives)
 }
 
+func TestRunEmitsInternalRasterCropCandidatesForRepeatedSlots(t *testing.T) {
+	t.Setenv("OCR_PROVIDER", "fake")
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writeRepeatedRasterSlotsPNG(t, input)
+
+	doc, err := Run(Options{InputPath: input, OutputDir: filepath.Join(tmp, "out")})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	count := 0
+	sideRail := 0
+	for _, p := range doc.Primitives {
+		if p.PrimitiveType != "image_region" || !hasReason(p.CompileHints.Reasons, "internal_raster_crop_candidate") {
+			continue
+		}
+		count++
+		if hasReason(p.CompileHints.Reasons, "side_rail_crop_candidate") {
+			sideRail++
+		}
+		assertFileExists(t, filepath.Join(tmp, "out", p.CropRef))
+	}
+	if count < 4 {
+		t.Fatalf("expected repeated internal raster crops, got %d primitives: %#v", count, doc.Primitives)
+	}
+	if sideRail < 2 {
+		t.Fatalf("expected repeated side-rail raster crops, got sideRail=%d primitives=%#v", sideRail, doc.Primitives)
+	}
+}
+
 func writeSyntheticPNG(t *testing.T, path string, withTextLikePixels bool) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 120, 80))
@@ -236,6 +356,52 @@ func writeSyntheticPNG(t *testing.T, path string, withTextLikePixels bool) {
 	defer file.Close()
 	if err := png.Encode(file, img); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func writeRepeatedRasterSlotsPNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 320, 320))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 246, G: 246, B: 246, A: 255}}, image.Point{}, draw.Src)
+	parent := image.Rect(20, 30, 300, 280)
+	for y := parent.Min.Y; y < parent.Max.Y; y++ {
+		for x := parent.Min.X; x < parent.Max.X; x++ {
+			shadeX := uint8((x - parent.Min.X) * 150 / max(1, parent.Dx()-1))
+			shadeY := uint8((y - parent.Min.Y) * 90 / max(1, parent.Dy()-1))
+			img.SetRGBA(x, y, color.RGBA{R: 56 + shadeX, G: 72 + shadeY, B: 104 + shadeX/2, A: 255})
+		}
+	}
+	rows := []int{42, 124, 206}
+	for _, y := range rows {
+		drawTexturedSlot(img, image.Rect(34, y, 112, y+48), color.RGBA{R: 194, G: 72, B: 82, A: 255})
+		drawTexturedSlot(img, image.Rect(262, y, 292, y+70), color.RGBA{R: 82, G: 112, B: 198, A: 255})
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func drawTexturedSlot(img *image.RGBA, rect image.Rectangle, base color.RGBA) {
+	draw.Draw(img, rect, &image.Uniform{C: base}, image.Point{}, draw.Src)
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		for x := rect.Min.X; x < rect.Max.X; x++ {
+			r := uint8((int(base.R) + (x-rect.Min.X)*5 + (y-rect.Min.Y)*3) % 256)
+			g := uint8((int(base.G) + (x-rect.Min.X)*2 + (y-rect.Min.Y)*7) % 256)
+			b := uint8((int(base.B) + (x-rect.Min.X)*4 + (y-rect.Min.Y)*5) % 256)
+			img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
+		}
+	}
+	for y := rect.Min.Y; y < rect.Max.Y; y += 6 {
+		shade := uint8(24 + (y-rect.Min.Y)%18)
+		draw.Draw(img, image.Rect(rect.Min.X, y, rect.Max.X, min(rect.Max.Y, y+2)), &image.Uniform{C: color.RGBA{R: base.R + shade/3, G: base.G + shade/4, B: base.B + shade/5, A: 255}}, image.Point{}, draw.Src)
+	}
+	for x := rect.Min.X; x < rect.Max.X; x += 9 {
+		draw.Draw(img, image.Rect(x, rect.Min.Y, min(rect.Max.X, x+2), rect.Max.Y), &image.Uniform{C: color.RGBA{R: base.R / 2, G: base.G / 2, B: base.B / 2, A: 255}}, image.Point{}, draw.Src)
 	}
 }
 
@@ -290,6 +456,39 @@ func writeSurfacePNG(t *testing.T, path string) {
 	}
 }
 
+func writeTightControlSurfacePNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 220, 120))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 46, G: 122, B: 230, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(30, 36, 168, 80), &image.Uniform{C: color.RGBA{R: 246, G: 246, B: 246, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(38, 50, 164, 56), &image.Uniform{C: color.RGBA{R: 128, G: 132, B: 140, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(38, 64, 154, 70), &image.Uniform{C: color.RGBA{R: 128, G: 132, B: 140, A: 255}}, image.Point{}, draw.Src)
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeContrastControlSurfacePNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 220, 120))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 255, G: 255, B: 255, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(55, 42, 165, 78), &image.Uniform{C: color.RGBA{R: 236, G: 168, B: 92, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(74, 50, 146, 68), &image.Uniform{C: color.RGBA{R: 252, G: 252, B: 252, A: 255}}, image.Point{}, draw.Src)
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func hasPrimitiveType(primitives []contract.Primitive, primitiveType string) bool {
 	for _, p := range primitives {
 		if p.PrimitiveType == primitiveType {
@@ -305,6 +504,15 @@ func primitiveTypes(primitives []contract.Primitive) []string {
 		out = append(out, p.PrimitiveType)
 	}
 	return out
+}
+
+func hasReason(reasons []string, reason string) bool {
+	for _, item := range reasons {
+		if item == reason {
+			return true
+		}
+	}
+	return false
 }
 
 func assertFileExists(t *testing.T, path string) {

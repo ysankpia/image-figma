@@ -17,6 +17,7 @@
 - M29 contract regression matrix：[engineering/m29-contract-regression-matrix.md](engineering/m29-contract-regression-matrix.md)
 - 测试策略：[engineering/testing-strategy.md](engineering/testing-strategy.md)
 - 当前 Go M29.0 physical evidence kernel 计划：[plans/active/082-go-m29-physical-evidence-kernel.md](plans/active/082-go-m29-physical-evidence-kernel.md)
+- 当前 Go Codia-like compiler rebuild 计划：[plans/active/089-go-codia-like-compiler-rebuild.md](plans/active/089-go-codia-like-compiler-rebuild.md)
 - 刚完成的 Go M29 VisualTree 决策追踪计划：[plans/completed/085-go-m29-visualtree-decision-trace.md](plans/completed/085-go-m29-visualtree-decision-trace.md)
 - 刚完成的 Go M29 normalized tree 身份合同计划：[plans/completed/086-go-m29-normalized-tree-identity-contract.md](plans/completed/086-go-m29-normalized-tree-identity-contract.md)
 - 刚完成的 Go M29 VisualTree group permission gate 计划：[plans/completed/087-go-m29-visualtree-group-permission-gate.md](plans/completed/087-go-m29-visualtree-group-permission-gate.md)
@@ -40,6 +41,7 @@
 - [product/user-flows.md](product/user-flows.md)：插件主流程和状态流转。
 - [product/non-goals.md](product/non-goals.md)：一期硬性不做事项。
 - [product/acceptance-criteria.md](product/acceptance-criteria.md)：P0/P1/P2 验收。
+- [product/codia_compiler_buildability_audit_zh.md](product/codia_compiler_buildability_audit_zh.md)：Codia-like compiler rebuild 的当前产品合同与可实施审计。
 
 ## Architecture
 

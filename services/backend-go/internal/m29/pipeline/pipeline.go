@@ -159,6 +159,30 @@ func Run(options Options) (contract.Document, error) {
 			CompileHints:  hints,
 		})
 	}
+
+	for _, crop := range detectInternalRasterCropCandidates(img, primitives) {
+		id := fmt.Sprintf("prim_%04d", nextID)
+		nextID++
+		maskRef, cropRef, cropAssets, err := writePrimitiveArtifacts(options.OutputDir, id, img, mask.BBoxMask(width, height, crop.BBox), crop.BBox)
+		if err != nil {
+			return contract.Document{}, err
+		}
+		assets = append(assets, cropAssets...)
+		primitives = append(primitives, contract.Primitive{
+			ID:            id,
+			PrimitiveType: "image_region",
+			BBox:          crop.BBox,
+			MaskRef:       maskRef,
+			CropRef:       cropRef,
+			Source:        contract.Source{Kind: "pixel"},
+			Measurements:  primitive.MeasureSurface(img, crop.BBox, bg),
+			CompileHints: contract.CompileHints{
+				CanBeImage: true,
+				Confidence: 0.78,
+				Reasons:    crop.Reasons,
+			},
+		})
+	}
 	sort.SliceStable(primitives, func(i, j int) bool {
 		a, b := primitives[i].BBox, primitives[j].BBox
 		if a.Y != b.Y {

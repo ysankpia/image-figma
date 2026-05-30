@@ -876,9 +876,143 @@ backend/app/errors.py
 
 `backend/app/png_tools/` 是标准库 PNG 支持包，只负责 metadata、decode、encode、crop/fill、background/foreground sampling 和 small geometry helpers；它不承载 source ownership 或 replay policy。
 
+## Go Codia-like Compiler Validation
+
+`services/backend-go/cmd/codiaanalyze` 是 Codia-like compiler rebuild 的第一阶段验证工具。它读取原始 Codia/Figma canvas JSON，定位 `Figma design - ... / Root`，解析 `pluginData` 中的 `schema:id`，并输出：
+
+```text
+codia_canvas_analysis.v1.json
+codia_canvas_analysis_report.md
+codia_ir.v1.json
+codia_figma_like_tree.v1.json
+```
+
+该 analyzer 是新的结构验收基础，而不是旧 `m29visualtree` 的调参工具。它检查 node/type/name/role 计数、`guid` 与 `schema:id` 覆盖、schema suffix 连续性、children suffix 降序、Button/EditText child mode、TextView name/characters、IMAGE fill/hash、background last-child、parent-child overflow、sibling overlap，以及 role 到 visible Figma type/name 的映射闭包。
+
+`codia_ir.v1.json` 是 raw canvas 到 role-aware IR 的 golden replay 输入。每个节点保留 `role`、`source_bbox`、`figma_bbox`、`schema_id`、`seq`、source guid/path、evidence、style/text/asset，以及有序 children。`source_bbox` 的 x/y 优先来自 `schema:id`，`figma_bbox` 来自实际 transform/size，用于保留目标规格要求的双 bbox 轨道。
+
+`codia_figma_like_tree.v1.json` 是 IR 发射出的受控 Figma-like 树，只覆盖 `FRAME`、`TEXT`、`ROUNDED_RECTANGLE` 三类节点和 Codia-like visible name 闭包。它不是完整 `.canvas.json` 序列化；它的职责是在引入 Figma Plugin API emitter 之前验证 role/type/name/schema/bbox/order 合同。
+
+018 golden baseline 可用以下命令做 hard check：
+
+```bash
+cd services/backend-go
+go run ./cmd/codiaanalyze \
+  -input /Users/luhui/Downloads/figma/json/腾讯动漫_018_1440.json \
+  -out /tmp/codia-analyze-018 \
+  -expect tencent-comic-018
+```
+
+`-expect tencent-comic-018` 会验证 `docs/product/codia_compiler_buildability_audit_zh.md` 中的 018 hard checks。其他 raw canvas samples 应先生成各自 baseline，再只套 cross-sample invariants；不要把 018/022 的固定节点数、root child count、具体 role 分布当全局规则。
+
+后续 Codia-like compiler work 应从 analyzer 进入 role-aware IR / emitter，而不是继续把 XY-cut 或 low-evidence synthetic groups 当主干。
+
+`services/backend-go/cmd/codialeaves` 是 Phase 3 的 M29 evidence -> Codia leaf IR 入口。它只读取 `evidence_tokens.v1.json`，把 `text_token` 转为 `TextView`，把 `raster_region_token` / `symbol_cluster_token` 转为 `ImageView`，把 `surface_region_token` / `layer_background_token` 转为 `Background`，并写出：
+
+```text
+codia_leaf_ir.v1.json
+codia_leaf_ir_report.md
+codia_figma_like_tree.v1.json
+```
+
+`codia_leaf_ir.v1.json` 仍是标准 `CodiaIR` 文档，只是文件名标明来源是 M29 evidence tokens。该阶段不合成 `Button`、`EditText`、`ListView`、`ActionBar`、`StatusBar`、`BottomNavigation` 或 residual `ViewGroup`；这些必须在后续 control synthesis / region classifier 中基于明确证据完成，不能退回 XY-cut 猜结构。
+
+`services/backend-go/cmd/codiacontrols` 是 Phase 4 的 control synthesis 入口。它读取 `codia_leaf_ir.v1.json`，只在已有 `Background` / control-surface candidate 且内部存在 foreground text/image/icon evidence 时合成 `Button` 或 `EditText`，并把 `bg_Button` / `bg_EditText` 放为 owner-local last child。输出：
+
+```text
+codia_control_stage.v1.json
+codia_control_ir.v1.json
+codia_control_ir_report.md
+codia_figma_like_tree.v1.json
+```
+
+`codia_control_stage.v1.json` 是该阶段的真实合同，包含 `controls`、`remaining`、`rejections` 和 `diagnostics`。`codia_control_ir.v1.json` 是由 stage result 组装出的兼容调试快照，便于继续用 emitter 和旧 CLI 检查 visible tree；最终 root/body/list/card ownership 仍属于 `internal/codia/tree`，不属于 control synthesis。
+
+该阶段仍禁止从 text bbox 单独创造结构背景。真实样本验证显示，若某个 Codia 控件在 M29 evidence 中缺少背景 surface token，`codiacontrols` 会保持漏检；修复点应回到 physical evidence / control-surface detection，而不是在 control synthesis 里按文案、样本坐标或固定尺寸硬造控件。
+
+Go M29 physical evidence now emits control-surface candidates for OCR-local low-texture controls、compact foreground anchored horizontal controls, and local-contrast colored/gradient pill controls. `codialeaves` preserves those as `control_surface_background` evidence. `codiacontrols` then applies permission gates over that evidence: wide `EditText` beats local glyph buttons, wide action-button surfaces beat inner text-only surfaces, owner-local duplicate backgrounds are consumed, obvious numeric/price text-only controls are rejected, tall non-wide-action content panels with vertically biased or multi-line foreground are kept as leaves instead of being upgraded to `Button`, and text-only near-fill surfaces without meaningful backplate padding are rejected while URL-like chrome pills remain valid controls.
+
+Current Phase 4 validation against raw Codia golden IR is:
+
+| sample | golden controls | synthesized controls | matched @ IoU >= 0.6 | known gap |
+| --- | ---: | ---: | ---: | --- |
+| Tencent 022 | 5 | 5 | 5 | no remaining generated `Button` extra in the current 022 smoke |
+| Tencent 018 | 9 | 7 | 7 | two bottom benefit buttons still missing; rejected panel backgrounds still need background/card ownership cleanup |
+
+These remaining misses/extras are owned by physical evidence, background/card ownership, and the next region/list/card permission layer. Do not push them back into `xycut`, and do not reintroduce text-bbox-only background synthesis.
+
+The current Go Codia-like compiler path is:
+
+```text
+internal/codia/diff       // generated CodiaIR vs golden CodiaIR structural diff
+cmd/codiadiff             // standalone diff CLI
+internal/codia/audit      // read-only failure audit over structural diff
+cmd/codiaaudit            // standalone failure audit CLI
+internal/codia/compiler   // screenshot evidence -> CodiaIR orchestration
+cmd/codiacompile          // end-to-end local compiler CLI
+internal/codia/tree       // ActionBar/StatusBar/BottomNavigation/ListView/ViewGroup tree builder
+```
+
+The intended compiler path is:
+
+```text
+input PNG + OCR
+-> Go M29 physical evidence
+-> M29 evidence tokens
+-> Codia leaves
+-> Codia control stage result
+-> Codia tree builder
+-> Codia Figma-like tree
+-> optional golden structural diff
+```
+
+`codiacompile` must write a `CodiaIR` tree, a Figma-like tree, and when a golden IR is provided:
+
+```text
+codia_structure_diff.v1.json
+codia_structure_diff_report.md
+codia_failure_audit.v1.json
+codia_failure_audit_report.md
+```
+
+The structural diff is the release gate for role vocabulary, role precision/recall, control/background ownership, parent edges, bbox IoU by role, foreground-first/background-late ordering, and extra/missed nodes by role. Golden raw Codia data is validation-only; it must not be read by generation logic.
+
+`services/backend-go/cmd/codiaaudit` is a read-only diagnostic CLI over `codia_structure_diff.v1.json`. It aggregates existing diff failures by owning layer, diagnosis, role, evidence kind, and IoU bucket, then emits ranked action items. It does not read raw Codia canvas JSON and is not part of generation decisions. Its current purpose is to route the next fixes away from blind tree/threshold edits and toward the layer that lost information.
+
+`internal/codia/tree` is the first role-aware tree builder. It consumes the control stage result rather than treating control synthesis as a final root tree, creates top chrome (`ActionBar` or `StatusBar` wrapper depending on evidence), `BottomNavigation`, main `ListView`, row/list `ViewGroup` containers, applies foreground-first/background-late ordering, assigns deterministic reverse-children DFS schema sequence, and filters obvious final-tree physical noise while preserving the source evidence in leaf/control artifacts. Tree-created containers carry proposal evidence such as `body_list_owner`, `bottom_navigation_candidate`, `repeated_row_list`, `repeated_row_item`, and `major_section_owner`; `codia_tree_ir_report.md` summarizes these counts under `Tree Evidence`, and `codia_structure_diff` preserves `evidenceKind` on generated/golden node matches. It is intentionally not an XY-cut wrapper and it is not allowed to read golden canvas data during generation.
+
+Within repeated-row item containers, the tree builder also merges vertically adjacent and horizontally aligned `control_surface_background` fragments into a single card `Background`. This fixes the common split-background case where physical evidence sees upper/lower surface pieces but Codia emits one card backplate. The merge is constrained to same-item `control_surface_background` leaves and does not affect `Button` / `bg_Button` ownership.
+
+For right-side floating rails, the tree builder can emit a root-level side `ListView`, an inner `ListView`, and a stack `ViewGroup` when a search-top page exposes right-edge marker evidence plus rail-local image/control/text evidence. The inner rail uses the IR dual-bbox contract: source coordinates preserve detector-like rail coordinates, while figma coordinates fit the emitted Codia-like structural match. Current validation matches Tencent 022's side rail outer `ListView`, inner `ListView`, and stack `ViewGroup`; remaining rail item misses are owned by upstream leaf evidence because the current M29 artifacts do not expose the individual vertical cover crops.
+
+Current screenshot-derived compiler smoke against raw golden IR:
+
+| sample | generated nodes | golden nodes | matched | extra | missed | parent edge precision | parent edge recall | structural roles now matched |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Tencent 018 | 150 | 146 | 90 | 60 | 56 | 0.409 | 0.421 | `ActionBar`, `BottomNavigation`, `ListView`, `ViewGroup`; generated `Button` precision is now 1.00 |
+| Tencent 022 | 102 | 120 | 82 | 20 | 38 | 0.554 | 0.471 | `StatusBar`, `BottomNavigation`, `ListView`, side rail `ListView`, `ViewGroup`; generated `Button` precision is now 1.00 |
+
+Current failure audit over the same smoke:
+
+| sample | top owning layer | dominant diagnosis | count | implication |
+| --- | --- | --- | ---: | --- |
+| Tencent 018 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 14 | Source primitive / leaf crop extraction lacks Codia-like ImageView crops. |
+| Tencent 018 | `background_detection_or_permission` | `background_fragment_extra` | 16 | Background fragments need merge/consume/suppress policy before final tree output. |
+| Tencent 022 | `m29_physical_evidence_or_codia_leaf` | `upstream_leaf_missing ImageView` | 20 | Right rail and body internal cover crops are missing upstream evidence. |
+| Tencent 022 | `codia_tree_builder` | `tree_container_bbox_mismatch ViewGroup` | 8 | Tree bbox fitting remains, but should follow leaf crop recall improvement. |
+
+The remaining dominant gaps are not owned by `m29visualtree`: physical leaf bbox mismatch, missing large Background surfaces, rejected control-surface backgrounds that still need card/background ownership cleanup, over-broad card/row grouping, and missing rail/list item crops from upstream leaf evidence. Next work should refine `internal/codia/tree` ownership and upstream physical evidence; do not solve these by tuning XY-cut thresholds or by injecting Codia golden identity into generation.
+
+Latest evidence-kind breakdown for extra generated nodes shows where the next tree ownership work belongs:
+
+| sample | dominant structural extra evidence | dominant leaf/control extra evidence |
+| --- | --- | --- |
+| Tencent 018 | `repeated_row_item 1`, `major_section_owner 1` | `image_or_icon_crop 24`, `ocr_text 9`, `control_surface_background 9`, `solid_background 5` |
+| Tencent 022 | none from repeated row/list or side rail containers | `ocr_text 10`, `control_surface_background 4`, `image_or_icon_crop 3`, `solid_background 1` |
+
 ## Go M29 VisualTree Diagnostics
 
-`services/backend-go/cmd/m29visualtree` 是 Go M29/Codia-like 结构编译器的本地 CLI。它消费 `evidence_tokens.v1.json` 和 `relation_graph.v1.json`，输出 `visual_tree.v1.json`、`visual_element.v1.json`、overlay/report artifacts，并额外写 report-only 决策追踪：
+`services/backend-go/cmd/m29visualtree` 是 Go M29 VisualTree 的 legacy diagnostic CLI，不是新的 Codia-like compiler 主线。它消费 `evidence_tokens.v1.json` 和 `relation_graph.v1.json`，输出 `visual_tree.v1.json`、`visual_element.v1.json`、overlay/report artifacts，并额外写 report-only 决策追踪：
 
 ```text
 visual_tree_trace.v1.jsonl

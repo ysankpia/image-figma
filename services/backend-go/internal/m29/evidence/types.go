@@ -39,7 +39,10 @@ type TokenMeasurements struct {
 	Area                  int     `json:"area"`
 	PrimitiveCount        int     `json:"primitiveCount"`
 	MeanColor             string  `json:"meanColor,omitempty"`
+	ColorCount            int     `json:"colorCount,omitempty"`
+	EdgeDensity           float64 `json:"edgeDensity,omitempty"`
 	TextureScore          float64 `json:"textureScore,omitempty"`
+	CornerRadiusEstimate  float64 `json:"cornerRadiusEstimate,omitempty"`
 	MaxChildAreaRatio     float64 `json:"maxChildAreaRatio,omitempty"`
 	ContainedByRasterID   string  `json:"containedByRasterId,omitempty"`
 	OriginalPrimitiveType string  `json:"originalPrimitiveType,omitempty"`

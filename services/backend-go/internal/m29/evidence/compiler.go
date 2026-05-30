@@ -86,6 +86,7 @@ func compileTokens(source contract.Document) []Token {
 	})
 
 	rasterParents := rasterParentPrimitives(primitives, source.Image.Width*source.Image.Height)
+	rasterParentsCoveredByInternalCrops := rasterParentsCoveredByInternalRasterCrops(primitives, rasterParents)
 	consumed := map[string]bool{}
 	var tokens []Token
 	nextID := 1
@@ -115,6 +116,14 @@ func compileTokens(source contract.Document) []Token {
 			continue
 		}
 		if isRasterParent(primitive, rasterParents) {
+			if rasterParentsCoveredByInternalCrops[primitive.ID] {
+				token := tokenFromPrimitive(nextID, "raster_region_token", primitive, "suppressed", []string{"raster_region", "covered_by_internal_raster_crops"})
+				token.CompileHints.Reasons = appendReason(token.CompileHints.Reasons, "covered_by_internal_raster_crops")
+				tokens = append(tokens, token)
+				nextID++
+				consumed[primitive.ID] = true
+				continue
+			}
 			tokens = append(tokens, tokenFromPrimitive(nextID, "raster_region_token", primitive, "main", []string{"raster_region"}))
 			nextID++
 			consumed[primitive.ID] = true
@@ -138,6 +147,22 @@ func compileTokens(source contract.Document) []Token {
 			nextID++
 			consumed[primitive.ID] = true
 		}
+	}
+
+	for _, primitive := range primitives {
+		if consumed[primitive.ID] || !largeTexturedSymbolAsRaster(primitive) {
+			continue
+		}
+		if containedByPromotedTexturedRaster(primitive, primitives, consumed) {
+			continue
+		}
+		token := tokenFromPrimitive(nextID, "raster_region_token", primitive, "main", []string{"large_textured_symbol_as_raster"})
+		token.CompileHints.CanBeImage = true
+		token.CompileHints.Confidence = maxFloat(token.CompileHints.Confidence, 0.72)
+		token.CompileHints.Reasons = appendReason(token.CompileHints.Reasons, "large_textured_symbol_as_raster")
+		tokens = append(tokens, token)
+		nextID++
+		consumed[primitive.ID] = true
 	}
 
 	clusters := clusterSymbols(primitives, consumed)
@@ -228,6 +253,85 @@ func containingRasterParentID(p contract.Primitive, parents []contract.Primitive
 	return ""
 }
 
+func rasterParentsCoveredByInternalRasterCrops(primitives []contract.Primitive, parents []contract.Primitive) map[string]bool {
+	out := map[string]bool{}
+	for _, parent := range parents {
+		if internalRasterCrop(parent) {
+			continue
+		}
+		children := internalRasterCropChildren(parent, primitives)
+		if len(children) < 4 {
+			continue
+		}
+		if distinctRasterCropRows(children) < 3 {
+			continue
+		}
+		repeated := 0
+		for _, child := range children {
+			if hasCompileReason(child, "repeated_internal_raster_slot") {
+				repeated++
+			}
+		}
+		if repeated < 3 {
+			continue
+		}
+		out[parent.ID] = true
+	}
+	return out
+}
+
+func internalRasterCropChildren(parent contract.Primitive, primitives []contract.Primitive) []contract.Primitive {
+	var out []contract.Primitive
+	parentArea := max(1, area(parent.BBox))
+	for _, candidate := range primitives {
+		if candidate.ID == parent.ID || candidate.PrimitiveType != "image_region" || !internalRasterCrop(candidate) {
+			continue
+		}
+		if !contains(parent.BBox, candidate.BBox, 3) {
+			continue
+		}
+		if area(candidate.BBox)*100 >= parentArea*80 {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func distinctRasterCropRows(crops []contract.Primitive) int {
+	if len(crops) == 0 {
+		return 0
+	}
+	items := append([]contract.Primitive(nil), crops...)
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].BBox.Y < items[j].BBox.Y
+	})
+	rows := 0
+	lastY := 0
+	lastHeight := 0
+	for _, item := range items {
+		if rows == 0 || abs(item.BBox.Y-lastY) >= min(item.BBox.Height, max(1, lastHeight))/2 {
+			rows++
+			lastY = item.BBox.Y
+			lastHeight = item.BBox.Height
+		}
+	}
+	return rows
+}
+
+func internalRasterCrop(p contract.Primitive) bool {
+	return hasCompileReason(p, "internal_raster_crop_candidate")
+}
+
+func hasCompileReason(p contract.Primitive, reason string) bool {
+	for _, item := range p.CompileHints.Reasons {
+		if item == reason {
+			return true
+		}
+	}
+	return false
+}
+
 func containingSurfaceParentID(p contract.Primitive, parents []contract.Primitive) string {
 	if p.PrimitiveType == "surface_region" {
 		return ""
@@ -250,6 +354,63 @@ func preserveForegroundInsideRaster(p contract.Primitive) bool {
 	default:
 		return false
 	}
+}
+
+func largeTexturedSymbolAsRaster(p contract.Primitive) bool {
+	if p.PrimitiveType != "symbol_region" {
+		return false
+	}
+	boxArea := area(p.BBox)
+	if boxArea < 1800 || p.BBox.Width < 32 || p.BBox.Height < 24 {
+		return false
+	}
+	if p.Measurements.TextureScore < 0.70 || p.Measurements.ColorCount < 48 || p.Measurements.EdgeDensity < 0.20 {
+		return false
+	}
+	fill := p.Measurements.FillRatio
+	return fill >= 0.35 && fill <= 0.90
+}
+
+func containedByPromotedTexturedRaster(p contract.Primitive, primitives []contract.Primitive, consumed map[string]bool) bool {
+	for _, other := range primitives {
+		if other.ID == p.ID || !largeTexturedSymbolAsRaster(other) {
+			continue
+		}
+		if area(other.BBox) <= area(p.BBox) {
+			continue
+		}
+		if contains(other.BBox, p.BBox, 2) && area(p.BBox)*100 <= area(other.BBox)*72 {
+			return true
+		}
+		if sameImageColumnFragment(other.BBox, p.BBox) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameImageColumnFragment(parent, child contract.BBox) bool {
+	if area(parent) <= area(child) {
+		return false
+	}
+	centerDelta := abs((parent.X + parent.Width/2) - (child.X + child.Width/2))
+	if centerDelta > max(8, min(parent.Width, child.Width)/5) {
+		return false
+	}
+	widthRatio := float64(abs(parent.Width-child.Width)) / float64(max(1, parent.Width))
+	if widthRatio > 0.18 {
+		return false
+	}
+	return child.Y >= parent.Y && child.Y < parent.Y+parent.Height && child.Height*100 <= parent.Height*70
+}
+
+func appendReason(reasons []string, reason string) []string {
+	for _, item := range reasons {
+		if item == reason {
+			return reasons
+		}
+	}
+	return append(reasons, reason)
 }
 
 func clusterSymbols(primitives []contract.Primitive, consumed map[string]bool) [][]contract.Primitive {
@@ -327,7 +488,10 @@ func tokenFromPrimitive(index int, tokenType string, p contract.Primitive, dispo
 			Area:                  area(p.BBox),
 			PrimitiveCount:        1,
 			MeanColor:             p.Measurements.MeanColor,
+			ColorCount:            p.Measurements.ColorCount,
+			EdgeDensity:           p.Measurements.EdgeDensity,
 			TextureScore:          p.Measurements.TextureScore,
+			CornerRadiusEstimate:  p.Measurements.CornerRadiusEstimate,
 			OriginalPrimitiveType: p.PrimitiveType,
 		},
 		Disposition:  disposition,
@@ -510,6 +674,20 @@ func bboxDistance(a, b contract.BBox) int {
 
 func area(b contract.BBox) int {
 	return max(0, b.Width) * max(0, b.Height)
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func round4(value float64) float64 {

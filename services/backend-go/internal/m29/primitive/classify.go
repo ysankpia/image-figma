@@ -32,6 +32,10 @@ func Classify(component components.Component, measurements contract.Measurements
 		}
 	}
 
+	if measurements.ColorCount <= 12 && measurements.EdgeDensity <= 0.22 && areaRatio >= 0.0008 && minDim >= 18 && maxDim <= 220 {
+		return "surface_region", SurfaceHint([]string{"control_surface_component", "low_texture_control_surface"})
+	}
+
 	if areaRatio >= 0.004 && (measurements.ColorCount >= 24 || measurements.EdgeDensity >= 0.22 || measurements.TextureScore >= 0.45) {
 		return "image_region", contract.CompileHints{
 			CanBeImage: true,
