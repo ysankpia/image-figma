@@ -16,6 +16,10 @@ export interface FigmaPluginApiLike {
   createImage(data: Uint8Array): { hash: string };
   currentPage: {
     appendChild(child: FigmaNodeLike): void;
+    selection?: readonly FigmaNodeLike[];
+  };
+  viewport?: {
+    scrollAndZoomIntoView(nodes: readonly FigmaNodeLike[]): void;
   };
   subtract(nodes: readonly FigmaNodeLike[], parent: FigmaNodeLike): FigmaNodeLike;
 }
@@ -70,7 +74,10 @@ export function createFigmaAdapter(figmaApi: FigmaPluginApiLike): FigmaAdapter {
       toFigmaNode(parent).appendChild?.(toFigmaNode(child));
     },
     appendToCurrentPage(node) {
-      figmaApi.currentPage.appendChild(toFigmaNode(node));
+      const figmaNode = toFigmaNode(node);
+      figmaApi.currentPage.appendChild(figmaNode);
+      figmaApi.currentPage.selection = [figmaNode];
+      figmaApi.viewport?.scrollAndZoomIntoView([figmaNode]);
     },
     setName(node, name) {
       toFigmaNode(node).name = name;
@@ -183,7 +190,27 @@ function toTextNode(node: FigmaNode): FigmaTextNodeLike {
 }
 
 async function fetchBytes(source: ResolvedImageSource): Promise<Uint8Array> {
-  const response = await fetch(source.url);
+  if (typeof AbortController === "undefined") {
+    const response = await fetch(source.url);
+    if (!response.ok) {
+      throw new Error(`Failed to load image: ${response.status} ${response.statusText}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  try {
+    response = await fetch(source.url, { signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Image request timed out after 10000ms: ${source.url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     throw new Error(`Failed to load image: ${response.status} ${response.statusText}`);
   }
