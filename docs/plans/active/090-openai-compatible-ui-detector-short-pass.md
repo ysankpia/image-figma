@@ -611,9 +611,17 @@ Button precision stays protected because Button remains blocked.
 Existing Codia smoke artifacts still explain all detector-origin leaves by candidate id.
 ```
 
-### Stage 6: Hint-only region/control use
+### Region hint ownership wiring
 
-Implemented after Stage 5:
+This is not a new plan stage. It is the implementation of the original plan item:
+
+```text
+BottomNavigation/ActionBar/ListView/ViewGroup:
+detector only provides region hints;
+tree builder owns parent assignment and structure.
+```
+
+Implemented in the Stage 0-5 backend closure:
 
 ```text
 EditText: bbox hint for search/input surfaces; still needs M29 surface/OCR context.
@@ -650,7 +658,7 @@ After tightening, Tencent 018 detector compile returns to the Stage 5 numbers:
 generated 123, matched 97, extra 26, missed 49.
 ```
 
-This means Stage 6 is a safe wiring step, not yet a structural recall breakthrough. The next real structural lift still needs better ownership of repeated slot children and control/background consumption, not raw VLM region boxes.
+This means region hint wiring is a safe closure step, not a structural recall breakthrough by itself. It is complete only because it prevents raw VLM region boxes from becoming final structure.
 
 ## Provider Compatibility
 
@@ -739,7 +747,7 @@ Stage 5 acceptance:
 - BottomNavigation remains matched.
 - Every detector-origin emitted leaf is traceable to one candidate id.
 
-Stage 6 acceptance:
+Region hint ownership acceptance:
 
 - `tree` consumes `assembly_region_hint` without letting detector create Button/Background/standalone ViewGroup.
 - BottomNavigation hint can refine the container bbox but still requires real tab children.
@@ -747,6 +755,13 @@ Stage 6 acceptance:
 - Empty detector region hints do not emit structure.
 - No-detector smoke remains unchanged.
 - Tencent 018 detector compile does not regress ImageView/Button/BottomNavigation metrics or add hinted-region extras.
+
+Backend closure acceptance:
+
+- `services/backend-go/tools/codia_smoke_4img.sh` runs the four Codia golden samples end to end.
+- Each sample goes through `codiaanalyze` golden import, `codiacompile`, structure diff/audit, canvas export, and `codiaanalyze` read-back of the generated `.canvas.json`.
+- Detector candidates are optional per sample through `CODIA_DETECTOR_T018`, `CODIA_DETECTOR_T022`, `CODIA_DETECTOR_LIZHI`, and `CODIA_DETECTOR_XIANYU`.
+- The default no-detector run locks the current deterministic four-image floor. Detector-enhanced runs may improve it, but must still pass the same closure gate.
 
 Validated 2026-05-30 on Tencent 018 with `/private/tmp/ui-detector-018-short-pass/ui_detector_candidates.v1.json`:
 
@@ -763,6 +778,36 @@ The detector assembly run also passed `codiaanalyze` on `codia_canvas_like.v1.ca
 | Tencent 018 | 149 | 95 | 54 | 51 |
 | Tencent 022 | 106 | 92 | 14 | 28 |
 
+The four-image backend closure gate is now:
+
+```bash
+bash services/backend-go/tools/codia_smoke_4img.sh
+```
+
+Validated 2026-05-30 default no-detector closure:
+
+| sample | generated | golden | matched | extra | missed | edgeP | edgeR | canvas nodes | root children |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tencent 018 | 149 | 146 | 95 | 54 | 51 | 0.419 | 0.428 | 149 | 3 |
+| Tencent 022 | 106 | 120 | 92 | 14 | 28 | 0.619 | 0.546 | 106 | 4 |
+| Lizhi 011 | 89 | 93 | 61 | 28 | 32 | 0.193 | 0.185 | 89 | 2 |
+| Xianyu | 116 | 132 | 64 | 52 | 68 | 0.339 | 0.298 | 116 | 1 |
+
+Validated 2026-05-30 with available Tencent 018 detector candidates:
+
+```bash
+CODIA_SMOKE_4IMG_WORK=/tmp/codia_smoke_4img_detector018 \
+CODIA_DETECTOR_T018=/private/tmp/ui-detector-018-short-pass/ui_detector_candidates.v1.json \
+bash services/backend-go/tools/codia_smoke_4img.sh
+```
+
+| sample | generated | golden | matched | extra | missed | edgeP | edgeR | canvas nodes | root children |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tencent 018 + detector | 123 | 146 | 97 | 26 | 49 | 0.574 | 0.483 | 123 | 3 |
+| Tencent 022 | 106 | 120 | 92 | 14 | 28 | 0.619 | 0.546 | 106 | 4 |
+| Lizhi 011 | 89 | 93 | 61 | 28 | 32 | 0.193 | 0.185 | 89 | 2 |
+| Xianyu | 116 | 132 | 64 | 52 | 68 | 0.339 | 0.298 | 116 | 1 |
+
 ## Validation
 
 Documentation validation for this checkpoint:
@@ -778,6 +823,7 @@ Future implementation validation:
 ```bash
 cd services/backend-go
 go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiadetector ./cmd/codiaanalyze
+bash tools/codia_smoke_4img.sh
 
 go run ./cmd/codiadetector \
   -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \

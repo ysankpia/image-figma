@@ -1047,6 +1047,25 @@ Validated 2026-05-30:
 | Tencent 018 detector assembly + Stage 6 hints | 123 | 97 | 26 | 49 | 0.769 | 0.769 | 1.000 | 1.000 |
 | Tencent 022 no detector smoke | 106 | 92 | 14 | 28 | not recorded here | not recorded here | not recorded here | not recorded here |
 
+The backend closure gate is:
+
+```bash
+bash services/backend-go/tools/codia_smoke_4img.sh
+```
+
+It runs all four golden samples through Codia golden analysis, `codiacompile`, structure diff/audit, `.canvas.json` export, and generated canvas read-back with `codiaanalyze`. Detector candidates are optional per sample through `CODIA_DETECTOR_T018`, `CODIA_DETECTOR_T022`, `CODIA_DETECTOR_LIZHI`, and `CODIA_DETECTOR_XIANYU`.
+
+Validated 2026-05-30 default four-image closure:
+
+| sample | generated | golden | matched | extra | missed | edgeP | edgeR | canvas nodes | root children |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tencent 018 | 149 | 146 | 95 | 54 | 51 | 0.419 | 0.428 | 149 | 3 |
+| Tencent 022 | 106 | 120 | 92 | 14 | 28 | 0.619 | 0.546 | 106 | 4 |
+| Lizhi 011 | 89 | 93 | 61 | 28 | 32 | 0.193 | 0.185 | 89 | 2 |
+| Xianyu | 116 | 132 | 64 | 52 | 68 | 0.339 | 0.298 | 116 | 1 |
+
+With the available Tencent 018 detector candidates, the same gate reports Tencent 018 as `123 generated / 97 matched / 26 extra / 49 missed`, with generated canvas read-back as 123 nodes and 3 root children.
+
 The detector assembly + Stage 6 canvas export at `/private/tmp/codia-assembly-detector-018-stage6/codia_canvas_like.v1.canvas.json` was read back by `codiaanalyze` as 123 nodes with 3 root children. Golden raw Codia data remains validation-only; it must not be read by detector, assembly, control, tree, emitter, or canvas export generation logic. A raw detector `ViewGroup` emission attempt on Tencent 018 created two unmatched ViewGroup extras without improving matched count, so body region hints are intentionally slot-gated rather than emitted as whole-panel containers.
 
 If this paused line is resumed for product use, the next step is a separate Beta API/artifact path, not replacement of the formal DSL endpoint. The resume plan is archived in [089 Go Codia-like Compiler Rebuild](../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md).
