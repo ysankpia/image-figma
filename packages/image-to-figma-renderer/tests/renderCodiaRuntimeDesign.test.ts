@@ -11,14 +11,15 @@ describe("renderCodiaRuntimeDesign", () => {
 
     expect(result.success).toBe(true);
     expect(result.rootNodeId).toBe("fake_1");
-    expect(result.renderedElementCount).toBe(6);
+    expect(result.renderedElementCount).toBe(7);
     expect(result.warnings).toEqual([]);
     expect(adapter.findNodeByName("Root")).toBeDefined();
     expect(adapter.findNodeByName("Groups")?.children.map((child) => child.name)).toEqual([
-      "首页",
       "Image",
-      "Button"
+      "Button",
+      "首页"
     ]);
+    expect(adapter.findNodeByName("Button")?.children.map((child) => child.name)).toEqual(["Background", "Pay"]);
     expect(adapter.findNodeByName("首页")?.characters).toBe("首页");
     expect(adapter.findNodeByName("首页")?.textAutoResize).toBe("WIDTH_AND_HEIGHT");
     expect(adapter.findNodeByName("Image")?.fills?.[0]).toEqual(
@@ -130,6 +131,15 @@ function makeCodiaRuntimeDsl(): CodiaRuntimeDSL {
               name: "Button",
               bbox: { x: 16, y: 160, width: 120, height: 44 },
               children: [
+                {
+                  id: "button_label",
+                  role: "TextView",
+                  type: "text",
+                  name: "Pay",
+                  bbox: { x: 28, y: 172, width: 72, height: 20 },
+                  text: { characters: "Pay" },
+                  style: { fontSize: 14, color: "#FFFFFF", fontWeight: 600 }
+                },
                 {
                   id: "button_bg",
                   role: "bg_Button",

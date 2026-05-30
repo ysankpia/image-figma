@@ -215,6 +215,7 @@ some card or image crops are too large or shifted
 some backgrounds remain fragments or extras
 root/header-scale raster crops can be over-promoted as editable ImageView
 body regions can overlap BottomNavigation when region hints are not hard boundaries
+runtime rendering can place TextView below image/background siblings if Codia logical child order is used as Figma append order
 parent-child structure is usable but not Codia-like 1:1
 ```
 
@@ -364,6 +365,7 @@ Implementation checkpoint:
     compact media geometry is required before an ImageView may consume OCR/internal evidence
     top solid Background evidence is preserved for header fill
     BottomNavigation hint is a hard body boundary; body no longer extends by +55 px
+    Codia Runtime renderer appends siblings by paint order so TextView renders above images/backgrounds
 
   targeted evidence:
     Lizhi 011 leaf_0002 0,0,665,452 now suppresses with reason=m29_structural_raster_region_not_final_image

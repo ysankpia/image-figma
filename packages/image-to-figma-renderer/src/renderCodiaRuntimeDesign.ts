@@ -135,10 +135,34 @@ async function renderCodiaChildren(
   if (!node.children) {
     return;
   }
-  for (let index = 0; index < node.children.length; index += 1) {
-    const child = node.children[index]!;
+  const children = node.children
+    .map((child, index) => ({ child, index }))
+    .sort((left, right) => {
+      const bucketDelta = paintOrderBucket(left.child) - paintOrderBucket(right.child);
+      if (bucketDelta !== 0) {
+        return bucketDelta;
+      }
+      return left.index - right.index;
+    });
+  for (const { child, index } of children) {
     const childNode = await renderCodiaNode(context, child, `${path}.children[${index}]`);
     context.figma.appendChild(parent, childNode);
+  }
+}
+
+function paintOrderBucket(node: CodiaRuntimeNode): number {
+  switch (node.type) {
+    case "shape":
+      return node.role.startsWith("bg_") || node.role === "Background" ? 0 : 2;
+    case "image":
+      return 1;
+    case "frame":
+    case "group":
+      return 2;
+    case "text":
+      return 3;
+    default:
+      return 2;
   }
 }
 

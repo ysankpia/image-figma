@@ -717,6 +717,16 @@ CODIA_DETECTOR_T018=/private/tmp/ui-detector-018-short-pass/ui_detector_candidat
 temporary codiaserver HTTP flow: upload -> task completed -> DSL returned -> first asset returned 200
 ```
 
+### Runtime paint-order repair
+
+Plugin-connected testing also exposed a renderer-side mapping issue: Codia IR/analyzer checks keep `bg_Button` / `bg_EditText` as last logical children, but Figma paints later-appended siblings above earlier siblings. The Codia Runtime renderer now preserves DSL paths and logical order in the data contract while appending siblings to Figma by paint order:
+
+```text
+Background/bg_* shapes -> ImageView -> containers -> TextView
+```
+
+This keeps text visually above images/backgrounds without changing the Codia tree or weakening the `button background last child` analyzer contract.
+
 ## Provider Compatibility
 
 The implementation should support provider interfaces, not one hardcoded model call.
