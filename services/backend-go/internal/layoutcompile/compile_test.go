@@ -38,7 +38,14 @@ func TestRunWritesStageOneArtifacts(t *testing.T) {
 	if result.Validation.ErrorCount != 0 {
 		t.Fatalf("validation errors = %+v", result.Validation.Findings)
 	}
-	for _, path := range []string{result.Artifacts.LayoutIR, result.Artifacts.ValidationReport, result.Artifacts.CompileReport} {
+	for _, path := range []string{
+		result.Artifacts.LayoutIR,
+		result.Artifacts.ValidationReport,
+		result.Artifacts.CompileReport,
+		result.Artifacts.PreviewHTML,
+		result.Artifacts.DebugHTML,
+		result.Artifacts.PreviewReport,
+	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected artifact %s: %v", path, err)
 		}

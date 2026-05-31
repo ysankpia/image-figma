@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	htmlrender "github.com/luqing-studio/image-figma/services/backend-go/internal/htmlpreview/render"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/cluster"
 	layoutevidence "github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/evidence"
@@ -49,6 +50,9 @@ type Artifacts struct {
 	EvidenceTokens      string
 	VisionCandidates    string
 	VisionFallback      string
+	PreviewHTML         string
+	DebugHTML           string
+	PreviewReport       string
 }
 
 type Result struct {
@@ -125,6 +129,21 @@ func Run(options Options) (Result, error) {
 	}
 	if err := writeJSON(artifacts.ValidationReport, validation); err != nil {
 		return Result{}, err
+	}
+	htmlArtifacts, err := htmlrender.Write(doc, htmlrender.Options{OutputDir: options.OutputDir})
+	if err != nil {
+		return Result{}, fmt.Errorf("html preview: %w", err)
+	}
+	artifacts.PreviewHTML = htmlArtifacts.PreviewHTML
+	artifacts.DebugHTML = htmlArtifacts.DebugHTML
+	artifacts.PreviewReport = htmlArtifacts.PreviewReport
+	for _, warning := range htmlArtifacts.Warnings {
+		warnings = append(warnings, Warning{
+			Code:     warning.Code,
+			Message:  warning.Message,
+			Stage:    "html_preview",
+			Artifact: htmlArtifacts.PreviewReport,
+		})
 	}
 	if err := os.WriteFile(artifacts.CompileReport, []byte(markdownReport(doc, validation)), 0o644); err != nil {
 		return Result{}, err
@@ -330,7 +349,13 @@ func markdownReport(doc contract.Document, report validate.Report) string {
 
 ## Stage
 
-Stage 4 section row clustering is active. Child materialization, HTML preview, and Figma gateway are intentionally not active yet.
+Stage 5 HTML preview is active. Child materialization and Figma gateway are intentionally not active yet.
+
+## HTML Preview
+
+- preview: %s
+- debug preview: %s
+- report: %s
 `,
 		doc.Version,
 		doc.SourceImage.Path,
@@ -342,6 +367,9 @@ Stage 4 section row clustering is active. Child materialization, HTML preview, a
 		doc.Summary.DecisionCount,
 		report.ErrorCount,
 		report.WarningCount,
+		htmlrender.PreviewHTMLFile,
+		htmlrender.DebugHTMLFile,
+		htmlrender.PreviewReportFile,
 	)
 	writeCountTable(&b, "Evidence By Kind", countEvidenceByKind(doc.Evidence))
 	writeCountTable(&b, "Evidence By Role Hint", countEvidenceByRoleHint(doc.Evidence))

@@ -811,3 +811,51 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
     section_0004: 6
   ```
 - 修正说明：第一版 row expansion 会把跨 section 的大块 image/shape substrate 吸收到局部 row，导致 row bbox 逃出父 section。Stage 4 加入通用 section containment gate：substrate 必须中心落在 section 内，或自身至少 50% 面积落在 section 内；row 扩展后的 union 也必须完全留在父 section bounds 内。这不是样本特化，而是 layout IR 的父子 bbox 合同。
+
+## Stage 5 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/htmlpreview/render
+  services/backend-go/internal/layoutcompile
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/htmlpreview/... ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile
+  rm -rf /tmp/layout-018-stage5
+  cd services/backend-go && go run ./cmd/layoutcompile \
+    -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -out /tmp/layout-018-stage5
+  git diff --check
+  ```
+- 真实样图输出：
+  ```text
+  /tmp/layout-018-stage5/ui_layout_ir.v1.json
+  /tmp/layout-018-stage5/ui_layout_ir_validation.v1.json
+  /tmp/layout-018-stage5/layout_compile_report.md
+  /tmp/layout-018-stage5/preview.html
+  /tmp/layout-018-stage5/preview_debug.html
+  /tmp/layout-018-stage5/html_preview_report.md
+  /tmp/layout-018-stage5/preview_assets/
+  ```
+- 018 Stage 5 artifact summary：
+  ```text
+  version: ui_layout_ir.v1
+  source size: 665x1440
+  nodes: 38
+  root children: 4 sections
+  rows: 33
+  evidence: 203
+  decisions: 38
+  validation errors: 0
+  validation warnings: 0
+  html preview warnings: 0
+  preview assets: 90
+  preview.html size: 64464 bytes
+  debug preview: generated
+  text evidence z-index: 40
+  image evidence z-index: 20
+  ```
+- 修正说明：Stage 5 新增 HTML preview 作为第一可视验收面。Renderer 只消费 `ui_layout_ir.v1`，不读取 M29/OCR/vision 原始 artifacts；source PNG 仅用于按 IR bbox 写本地 preview crop asset。文本 evidence 固定绘制在 image/shape evidence 上方，避免“文字被底图压住”的基础层级错误。当前 Stage 5 仍未做 child materialization 和 Figma gateway，因此 HTML 是结构草稿和调试面，不是最终设计稿。
