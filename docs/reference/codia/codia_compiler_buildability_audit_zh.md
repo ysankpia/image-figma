@@ -1,5 +1,7 @@
 # Codia/Figma JSON 编译器逆向规格审计与可实施方案
 
+> Reference-only Codia reverse-engineering audit. It is not the current product specification on this branch. Current product work targets Editable Draft Layer Pipeline: `/api/draft-preview` -> Editable Layer Graph -> Draft Runtime DSL -> Renderer. This document may inform `internal/eval/codia` metrics and historical comparison only.
+
 **审计对象**
 
 - `腾讯动漫_018_1440(1).json`：Figma/canvas JSON，作为本次审计的一手事实源。

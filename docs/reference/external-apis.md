@@ -1,6 +1,6 @@
 # 外部 API
 
-当前仓库默认不调用外部 API。M8 增加了可选 OpenAI primitive provider，只有显式设置 `VISUAL_PRIMITIVE_PROVIDER=openai` 时才会调用。M10 增加了可选百度 PP-OCRv5 异步 OCR provider，只有显式设置 `OCR_PROVIDER=baidu_ppocrv5` 且提供 token 时才会调用。
+当前 Draft runtime 默认只依赖本地文件系统和本地 Go backend。外部服务都是显式配置后才会调用。
 
 ## Figma Plugin API
 
@@ -15,65 +15,78 @@
 
 - 只在 Plugin Main 或 Renderer 运行环境使用。
 - 后端不得依赖 Figma Plugin API。
+- Plugin UI 不直接调用 Figma API。
 
 ## OCR Provider
 
-当前：
+默认：
 
-- `OCR_PROVIDER=fake`。
-- `OCR_PROVIDER=baidu_ppocrv5`。
+```text
+OCR_PROVIDER=fake
+```
 
 百度 PP-OCRv5：
 
-- Endpoint 默认：`https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`。
-- Model 默认：`PP-OCRv5`。
-- 鉴权：`Authorization: bearer <BAIDU_PADDLE_OCR_TOKEN>`。
-- 只使用异步 jobs API，不接同步接口。
-- 返回的 `rec_texts`、`rec_scores`、`rec_boxes`、`rec_polys` 会被标准化为 `OCRDocument v0.1`。
-
-输出必须标准化为 text、bbox、confidence、lineId、blockId。
-
-后续候选：
-
-- PaddleOCR-VL-1.5 作为结构解析 provider。
-- PP-StructureV3 作为文档结构 provider。
-- 等价商业 OCR 服务。
-
-## AI Provider
-
-当前可选：
-
-- OpenAI Responses API。
-
-默认关闭：
-
 ```text
-VISUAL_PRIMITIVE_PROVIDER=fake
+OCR_PROVIDER=baidu_ppocrv5
+BAIDU_PADDLE_OCR_TOKEN=...
 ```
 
-启用 OpenAI smoke：
+百度配置：
 
 ```text
-VISUAL_PRIMITIVE_PROVIDER=openai
-OPENAI_API_KEY=...
-OPENAI_VISION_MODEL=gpt-5.5
+BAIDU_PADDLE_OCR_JOB_URL=https://paddleocr.aistudio-app.com/api/v2/ocr/jobs
+BAIDU_PADDLE_OCR_MODEL=PP-OCRv5
+BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS=5
+BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
+```
+
+输出必须标准化为 text、bbox、confidence、lineId、blockId，并作为 M29/Draft 的文本证据。
+
+## Vision Provider
+
+当前 vision provider 是 OpenAI-compatible，可替换供应商。
+
+Responses wire：
+
+```text
+VISION_PROVIDER=openai-compatible
+VISION_WIRE_API=responses
+VISION_BASE_URL=https://api.openai.com
+VISION_MODEL=...
+VISION_API_KEY=...
+VISION_STREAM=false
+```
+
+Chat Completions wire：
+
+```text
+VISION_PROVIDER=openai-compatible
+VISION_WIRE_API=chat.completions
+VISION_BASE_URL=https://example-provider.test
+VISION_MODEL=provider-model-id
+VISION_API_KEY=...
 ```
 
 要求：
 
-- 支持结构化输出。
-- 有超时。
-- 有错误码。
-- 输出不能直接作为 DSL。
-- 输出 bbox 必须经过统一 validator。
-- 失败不得影响 deterministic DSL 主链路。
+- base URL、model、API key、wire API 必须可配置。
+- 支持超时。
+- 支持 bounded detector pass concurrency。
+- 支持 streaming 作为 transport option。
+- 输出必须标准化为 `ui_detector_candidates.v1.json` 或 `ui_candidate_review.v1.json`。
+- 输出不能直接作为 Draft Runtime DSL。
+- bbox 必须经过归一化和越界处理。
+- 默认 vision 失败不得影响 OCR/M29 Draft fallback。
 
 ## Storage Provider
 
-v0.1 使用本地文件系统。
+当前使用本地文件系统。
 
 后续可接：
 
 - OSS。
 - S3 兼容对象存储。
 - 签名 URL。
+
+接远程存储前必须先更新 active plan、API contract、asset contract 和验证策略。

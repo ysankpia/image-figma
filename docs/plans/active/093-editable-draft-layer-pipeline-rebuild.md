@@ -474,6 +474,8 @@ cd services/backend-go && go test ./...
 
 ### Stage 10: Documentation Prune
 
+Status: completed in this stage.
+
 Actions:
 
 - Prune current docs that still describe Python upload-preview, old M29 multi-stage experiments, or Codia Beta as active runtime truth.
@@ -506,6 +508,25 @@ Acceptance:
 
 - Future agents can read `AGENTS.md` and `docs/index.md` without being routed back to Python upload-preview or Codia Beta.
 - Old plans and ADRs no longer override Draft runtime architecture.
+
+Implemented:
+
+- Rewrote `README.md`, `docs/runbooks/local-setup.md`, `docs/roadmap.md`, and `docs/reference/agent-guidelines.zh-CN.md` around Draft runtime.
+- Updated product docs so acceptance and requirements refer to Editable Layer Graph and Draft Runtime DSL, not legacy DSL v0.1.
+- Replaced stale data/debug/reference docs with current Draft task/artifact, external API, glossary, release, and incident-debugging facts.
+- Moved the Codia compiler buildability audit from `docs/product/` to `docs/reference/codia/` and marked it reference-only.
+- Replaced long stale prompt/audit references with tombstone summaries pointing to current Draft architecture docs and git history for archaeology.
+- Updated legacy Codia links to the new reference location.
+
+Validation evidence:
+
+```text
+rg -n "docs/product/codia_compiler_buildability_audit|product/codia_compiler_buildability_audit" README.md docs/index.md docs/product docs/architecture docs/engineering docs/runbooks docs/reference docs/plans/archive -g'*.md'
+-> no matches
+
+rg -n "codiaserver|codiacompile|codiadetector|codiaanalyze|codiadiff|codiaaudit|codialeaves|codiacontrols|/api/codia-preview|codia_runtime|Generate Beta|DSL v0\\.1" README.md docs/product docs/runbooks docs/reference/codex_prompt.md docs/reference/code_review_first_principles_technical_plan.md docs/reference/full-chain-first-principles-local-audit.md -g'*.md'
+-> no matches
+```
 
 ## Acceptance
 

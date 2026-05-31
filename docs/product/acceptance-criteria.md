@@ -1,6 +1,6 @@
 # 验收标准
 
-验收只看 v0.1 是否证明主链路可行，不看商业化完整度。
+验收只看当前 Draft MVP 是否证明主链路可行，不看商业化完整度。
 
 ## P0 Must Pass
 
@@ -10,7 +10,7 @@ P0 全部通过，才算一期主链路成立：
 - 非 PNG 会被拒绝。
 - 上传成功后能获得 `taskId`。
 - 任务状态可查询。
-- 完成后能获取 DSL v0.1。
+- 完成后能获取 Draft Runtime DSL。
 - DSL 能通过基础校验。
 - Renderer 能创建 root Frame。
 - Renderer 能渲染 Text、Shape、Image。

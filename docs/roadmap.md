@@ -1,192 +1,188 @@
 # Image-to-Figma Roadmap
 
 - 状态：active
-- 日期：2026-05-24
+- 更新日期：2026-05-31
 
 ## Purpose
 
-本文档固定当前路线，避免后续工作在黑色主题、搜索框、轮播图、历史 M30、M29 Direct compare、组件化和代码生成之间来回跳。
+本文档固定当前路线，避免后续工作继续在旧 Python preview、Codia-like tree、官方 Codia JSON、组件化、Auto Layout 和代码生成之间来回跳。
 
-当前路线不是“先组件化”，也不是“继续给每张样图打补丁”。正确主线是：
+当前产品目标只有一个：
 
 ```text
-像素拓扑与归属
--> replay plan
--> plan-driven visible layers
--> 通用关系图
--> 稳定设计簇
--> layout semantics
--> component/instance
+PNG -> editable Figma draft
+```
+
+当前主线是 Editable Draft Layer Pipeline：
+
+```text
+PNG
+-> OCR + M29 physical evidence + optional vision detector/review
+-> Editable Layer Graph
+-> Draft Runtime DSL
+-> Renderer
+-> Figma editable draft
 ```
 
 第一性原理边界：
 
 ```text
 PNG 像素是输入真相源。
-M29 的第一职责是把扁平 PNG 拆成像素集合、集合关系和 owner。
-M29.5 replay plan 是可见 materialization 的订单。
-模型、Figma MCP、UIC/Codia schema 都只能提供候选或参考，不能直接成为内部真值源。
+M29/OCR 提供物理证据。
+Vision provider 提供语义候选和 review，不生成最终树。
+Draft assembly 是 layer ownership authority。
+Renderer 只机械渲染 DSL，不修 ownership。
+Codia golden 只做 eval/reference，不进入 generation。
 ```
 
 硬不变量：
 
 ```text
-同一块 source foreground evidence pixel / replay foreground pixel 只能有一个 replay owner。
+one visible foreground pixel -> one visible owner
 ```
 
-这条不变量优先级高于所有下游 grouping、unit promotion、layout semantics 和 componentization。它不禁止 Figma layer bbox 重叠；背景 shape 可以和 child text/image/icon 在空间上重叠，因为它们拥有不同 source evidence。
+这条不变量优先级高于下游 grouping、视觉相似度和节点数量。它不禁止 Figma layer bbox 重叠；背景 shape 可以和 child text/image/icon 在空间上重叠，因为它们拥有不同 source evidence。
 
 ## Current Runtime Surfaces
 
-当前 Codia Beta 主链已经是 Go：
+当前 Go Draft 主链：
 
 ```text
-Figma Plugin Generate Beta
--> POST /api/codia-preview
--> Go codiaserver
+Figma Plugin Generate Draft
+-> POST /api/draft-preview
+-> Go draftserver
 -> OCR
 -> Go M29 physical evidence
--> optional OpenAI-compatible UI detector
--> Codia assembly/control/tree/emitter
--> DSL v0.2 Codia Runtime
--> GET /api/codia-preview/{taskId}/dsl
--> renderCodiaRuntimeDesign
+-> optional OpenAI-compatible vision detector/review
+-> Editable Layer Graph
+-> Draft Runtime DSL
+-> GET /api/draft-preview/{taskId}/dsl
+-> GET /api/draft-preview/{taskId}/assets/{assetId}.png
+-> renderDraftRuntimeDesign
 -> Figma Canvas
 ```
 
-Codia Beta 输出质量、detector、assembly、tree、DSL v0.2、asset 和插件 Beta wiring 问题都先归到 `services/backend-go` / `packages/image-to-figma-renderer` / `figma-plugin`，不要回到 Python M29 旧计划里调。
-
-保留的 Python/FastAPI preview 链路：
+当前 Draft 输出质量、vision、M29、layer ownership、asset、DSL、renderer 和插件 wiring 问题都先归到：
 
 ```text
-Figma Plugin
--> POST /api/upload-preview
--> OCR
--> raw M29 primitive graph
--> M29.2 source ownership
--> M29.3 region relation
--> M29.4 weak structural evidence
--> M29.5 replay plan
--> M29 plan-driven materializer
--> GET /api/tasks/{taskId}/dsl
--> Renderer
--> Figma Canvas
+services/backend-go/internal/m29
+services/backend-go/internal/vision
+services/backend-go/internal/draft
+services/backend-go/internal/app
+packages/image-to-figma-renderer
+figma-plugin
 ```
 
-`/api/upload-preview` 是 DSL v0.1 preview 入口，不是 Codia Beta 后端。`/api/codia-preview` 是 Codia Beta 上传入口。
+旧运行面状态：
 
-当前已经下线：
-
-```text
-M29 Direct compare product endpoint
-legacy M30 materializer product path
-M31-M39 downstream runtime
-ONNX proposer runtime
-pre-M29 upload/debug chain
-```
-
-## Current M29 Contracts
-
-M29 当前已经形成这些合同：
-
-```text
-raw M29:
-  source PNG + OCR -> primitive graph, support backgrounds, shape geometry fit
-
-M29.2:
-  primitive graph -> sourceObjects with visualKind / pixelOwner / replayDecision
-
-M29.3:
-  pure bbox kernel and relation graph
-
-M29.4:
-  weak structural evidence only
-
-M29.5:
-  finalReplayAction, targetRole, cleanupTargets, z-order, dedupe, node budget
-
-M29 materializer:
-  consume M29.5 plan, create DSL, copy/crop raster assets, execute authorized cleanup
-```
-
-M29.4 weak clusters do not create components, groups, Auto Layout, Figma Component/Instance, or materialization permission.
+- Python/FastAPI `/api/upload-preview`：历史 preview/reference path，不是 Draft runtime。
+- Codia generation path：已从产品代码移除。
+- Official Codia JSON：eval/reference material only。
 
 ## What To Improve Next
 
-### 1. Stabilize Current M29 MVP
+### 1. Stabilize Draft Layer Ownership
 
-Highest leverage work:
+最高优先级是让真实样图稳定生成可编辑草稿，而不是继续追一个 Codia-like semantic tree。
 
-- keep adding contract regression cases for real failures.
-- test dark, light, and mixed screenshots with fallback off.
-- verify raster/media preservation covers charts, photos, avatars, textured cards, and complex foreground.
-- verify simple low-texture supports still stay as editable shapes.
-- keep cleanup authorization tied to M29.5 plan.
+重点：
 
-Do not patch output by text content, language, color name, theme, image filename, bbox, or business category.
+- TextLayer 必须在同区域 Shape/Raster 上方。
+- 原图不能作为 visible full-page backing。
+- RasterLayer 必须有可解析 asset。
+- ShapeLayer 不应携带前景文字像素。
+- 普通 OCR 文本默认保留为可编辑文本。
+- 只有局部媒体、图标、头像、封面、缩略图等 compact evidence 才成为 RasterLayer。
+- 所有 emit/consume/suppress/refine 决策必须有 source refs 和 reason。
 
-### 2. Code Slimming
+### 2. Vision + M29 Reconciliation
 
-Long files are now a real maintenance risk. Refactor only with behavior-preserving tests:
+Vision 不是最终 authority。它补语义、补漏、做二次 review；M29/OCR 提供更硬的 bbox 和像素证据。
+
+需要继续收敛：
+
+- detector pass 并发和 deterministic merge。
+- VLM review 对 M29 缺失/碎片/误报的二次校验。
+- 越界、空响应、TLS/provider 失败时的 fallback artifact。
+- provider/baseUrl/model/apiKey/stream/concurrency 全部保持可配置。
+
+### 3. Real Sample Validation
+
+每次改 Draft pipeline 都要跑真实样例，而不是只看单元测试。
+
+当前最小样例集：
 
 ```text
-visual_primitive_graph.py
-source_ui_physical_graph.py
-plan_materializer/
-upload_preview_pipeline.py
+Tencent 018
+Tencent 022
+Lizhi 011
+Xianyu
 ```
 
-Suggested split order:
+验收信号：
 
-1. raw M29 bbox/mask/support/geometry/artifact helpers.
-2. M29.2 media/text/icon/shape ownership classifiers.
-3. pipeline orchestration, asset publishing, and task state handling.
+- asset missing = 0。
+- plugin image load failed = 0。
+- visible full-page backing = 0。
+- TextLayer covered by RasterLayer = 0。
+- unauthorized large sibling overlap = 0。
+- ordinary OCR text remains editable。
+- major regions can be moved as groups。
 
-Do not mix naming cleanup with algorithm changes. Product surface cleanup should stay mechanical and separately tested.
+### 4. Code Slimming
 
-### 3. Historical Code Pruning
+重构方向是删掉错误抽象，不是给旧 Codia-like pipeline 打补丁。
 
-Current runtime no longer depends on M29.0.x or M30 product materialization. Remaining historical modules and tests should be handled by a separate pruning plan:
+优先整理：
 
 ```text
-classify as still-useful test utility, offline diagnostic, or removable historical code
-remove only after reachability scan and focused tests
-do not delete png_tools, OCR, storage, database, route, DSL, or renderer primitives
+internal/draft/assemble
+internal/draft/group
+internal/vision/detector
+internal/m29/pipeline
+internal/app/server
 ```
 
-### 4. Layout And Component Work
+原则：
 
-Do not start componentization until owner/relation/replay/materialization are stable on diverse images.
+- 行为变更和命名/拆文件分开提交。
+- 不创建 `utils`、`common`、`misc` 垃圾桶。
+- 不恢复 `codia`、`tree`、`control`、`leaf`、`emitter`、`compiler` 作为产品生成命名。
 
-Future layout/component work needs explicit contracts:
+### 5. Eval, Not Generation
+
+Codia 仍有用，但只在 eval/reference 层有用。
+
+允许：
 
 ```text
-Pixel Ownership Conservation:
-  every replayed bbox and cleanup action must explain pixel ownership.
+docs/reference/codia-samples/
+services/backend-go/internal/eval/codia
+cmd/drafteval
+```
 
-Graph Isomorphism:
-  repeated unit matching must compare node labels, edge labels, normalized geometry, and slot differences.
+禁止：
 
-Layout Energy:
-  row/column/grid/masonry should be chosen by measurable error, not visual impression.
-
-Materialization Permission:
-  define which graph/layout evidence may create group/container, and which evidence stays report-only.
+```text
+generation imports internal/eval/codia
+generation reads Codia golden JSON
+new product endpoint named codia
+official Codia JSON as output target
 ```
 
 ## Non-Goals For The Next Phase
 
-Do not use the next phase for:
+下一阶段不要做：
 
 ```text
 Auto Layout
 Figma Component/Instance
 frontend code generation
-global optimization
-Codia adapter
+official Codia JSON clone
+semantic UI control tree as product contract
 batch upload
 quality dashboard
 account/payment/quota
 ```
 
-Those are not blocked forever. They are blocked until M29 source truth is stable enough that higher-level optimization is not just arranging wrong objects more neatly.
+这些不是永远不做。它们被阻塞到 Draft layer ownership、asset、z-order、grouping 和真实样图验证稳定之后。

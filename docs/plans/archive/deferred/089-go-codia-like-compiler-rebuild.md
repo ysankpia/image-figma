@@ -59,7 +59,7 @@ This update does not change the active product mainline. The formal runtime rema
 
 ## Source Of Truth
 
-- Product spec: `docs/product/codia_compiler_buildability_audit_zh.md`
+- Reference spec: `docs/reference/codia/codia_compiler_buildability_audit_zh.md`
 - Runtime target: `services/backend-go`
 - Golden source data: raw Codia/Figma canvas JSON files only.
 

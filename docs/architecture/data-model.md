@@ -1,221 +1,119 @@
 # 数据模型
 
-v0.1 使用 SQLite 保存当前运行时索引，较大的证据和 DSL payload 写入本地 JSON 文件。
+当前 Draft runtime 不依赖数据库作为产品主状态源。Go `draftserver` 使用进程内 task map 保存运行中状态，并把每个任务的输入、证据、Draft graph、DSL、asset 和报告写到本地文件系统。
 
-## Current Tables
+这是开发期合理约束：没有真实用户、没有跨进程恢复要求，优先保持链路简单、可审计、容易删除重建。
 
-Active source currently creates:
+## Runtime State
 
-```text
-tasks
-assets
-dsl_results
-ocr_results
-error_logs
-```
+Go task 状态由 `services/backend-go/internal/app/task` 定义。
 
-M30.2.2 intentionally removed the old pre-M29 result tables from active schema creation. It does not migrate or delete old local SQLite files.
-
-## tasks
-
-Purpose: record upload and processing state.
-
-Fields:
+状态：
 
 ```text
-id
-status
-stage
-progress
-message
-original_filename
-mime_type
-file_size
-upload_path
-created_at
-updated_at
-completed_at
-failed_at
-```
-
-Current status values:
-
-```text
-processing
+queued
+running
 completed
 failed
 ```
 
-Current preview stages include:
+阶段：
 
 ```text
-m29_queued
+draft_queued
 ocr
-m29
-m29_2_source_ui_physical_graph
-m29_3_relation_graph_report
-m29_4_stable_design_cluster
-m29_5_replay_plan
-m29_materialization
-m29_asset_publish
-m29_completed
+m29_physical_evidence
+vision_detector
+vision_review
+draft_assemble
+draft_assets
+draft_validate
+draft_export
+draft_completed
+draft_failed
+draft_panic
 ```
 
-## assets
-
-Purpose: record fetchable image assets.
-
-Fields:
+Task 对外暴露：
 
 ```text
-id
-asset_id
-task_id
-role
-path
-url
-mime_type
-width
-height
-created_at
-```
-
-Current roles are intentionally generic and DSL-driven:
-
-```text
-original
-fallback_region
-m29_image
-m29_symbol
-m29_asset
-```
-
-Other M29 materializer roles may be stored if a DSL asset provides a more specific role. They must still resolve to files under `/files/assets/*`.
-
-M29 preview publishes image assets used by DSL to:
-
-```text
-storage/assets/{taskId}/m29/
-/files/assets/{taskId}/m29/...
-```
-
-## dsl_results
-
-Purpose: point a task at its generated DSL file.
-
-Fields:
-
-```text
-id
-task_id
-dsl_path
-version
-validation_status
-validation_errors
-created_at
-```
-
-For current preview tasks, `dsl_path` points to:
-
-```text
-storage/upload_previews/{taskId}/materialized_design/design.dsl.json
-```
-
-`validation_status` is currently `valid` when the pipeline completes.
-
-## ocr_results
-
-Purpose: record OCR provider status and payload path.
-
-Fields:
-
-```text
-id
-task_id
-provider
-model
+taskId
 status
-ocr_path
-block_count
-error_code
-error_message
-created_at
-```
-
-OCR payload path:
-
-```text
-storage/upload_previews/{taskId}/ocr/ocr.json
-```
-
-In M29 preview, OCR failure fails the task because OCR text ownership is a source fact for M29 materialization.
-
-## error_logs
-
-Purpose: record pipeline failures and lookup/debug errors.
-
-Fields:
-
-```text
-id
-task_id
 stage
-error_code
+progress
 message
-detail
-severity
-created_at
+artifacts
+error
+warnings
 ```
+
+内部字段如 `DSLPath`、`OutputDir` 只用于服务端文件定位，不进入公共合同。
 
 ## File Payloads
 
-SQLite does not store M29 evidence payloads. They live under:
+每个 Draft task 的事实 payload 存在 task 目录中。默认根目录由 `DRAFT_SERVER_STORAGE_ROOT` 控制；未配置时使用 Go backend 本地 storage。
+
+典型布局：
 
 ```text
-storage/upload_previews/{taskId}/
+source.png
+compile/
+  ocr.json
+  m29/
+    m29_physical_evidence.v1.json
+  vision/
+    ui_detector_candidates.v1.json
+    ui_candidate_review.v1.json
+  draft/
+    editable_layer_graph.v1.json
+    draft_runtime.dsl.v1.json
+    draft_validation_report.md
+  assets/
+    asset_manifest.json
+    *.png
+  logs/
+    task_report.md
 ```
 
-Important files:
+Vision artifacts 是可选证据。Completed task 必须有 Draft graph、Draft Runtime DSL、validation report 和可解析 assets。
+
+## Product Contracts
+
+当前跨模块合同是文件/JSON 合同，不是数据库表：
 
 ```text
-ocr/ocr.json
-m29/nodes.json
-m29_2/source_ui_physical_graph.json
-m29_3/region_relation_graph_report.json
-m29_4/stable_design_cluster_report.json
-m29_5/replay_plan.json
-materialized_design/design.dsl.json
-materialized_design/materialization_report.json
-stage_timings.json
+m29_physical_evidence.v1.json
+ui_detector_candidates.v1.json
+ui_candidate_review.v1.json
+editable_layer_graph.v1.json
+draft_runtime.dsl.v1.json
+asset_manifest.json
+draft_validation_report.md
 ```
 
-The directory prefix `upload_previews` is historical storage naming. It is not a statement that the runtime still uses M30 materialization.
+版本化 artifact 名称是合同的一部分。行为或字段不兼容变更必须更新对应 architecture docs、active plan 和测试。
 
-## Removed Tables And Payloads
+## In-Memory Task Limitation
 
-The following old result tables or payload families are no longer active source contracts:
+开发期 `draftserver` 重启后不会恢复历史 task。插件如果正在 poll 一个已丢失 task，应收到 `TASK_NOT_FOUND`，用户重新上传即可。
+
+如果后续需要跨重启恢复，先做单独计划。最低实现应是写入一个 task index JSON，而不是直接引入复杂队列或数据库。
+
+## Historical Python Preview Data
+
+`backend/` 里的 SQLite schema、`tasks/assets/dsl_results/ocr_results/error_logs`、`storage/upload_previews/{taskId}` 等属于历史 Python `/api/upload-preview` preview path。
+
+它们不是当前 Draft runtime 的数据模型。除非任务明确针对 Python preview，否则不要以这些表、路径或 stage 名称作为新功能依据。
+
+## Non-Goals
+
+当前阶段不做：
 
 ```text
-primitive_results
-dsl_patch_results
-text_replacement_results
-text_binding_results
-component_structure_results
-component_annotation_results
-layer_separation_results
-asset_slice_results
-icon_candidate_results
-icon_coverage_audit_results
-icon_gap_candidate_results
-icon_placement_plan_results
-icon_visible_fallback_results
-icon_business_candidate_results
-perception_benchmark_results
-sam_visual_candidate_results
-m29_direct/*
-m29_0_x/*
-m30/*
-M31-M39 downstream reports
+持久任务队列
+多租户数据库
+任务恢复
+远程对象存储
+历史任务列表
+质量看板数据库
 ```
-
-They may still exist in old local databases or storage directories. Current code does not delete historical developer data.

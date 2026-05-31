@@ -5,7 +5,7 @@
 当前 source truth：
 
 ```text
-docs/product/codia_compiler_buildability_audit_zh.md
+docs/reference/codia/codia_compiler_buildability_audit_zh.md
 docs/plans/archive/deferred/089-go-codia-like-compiler-rebuild.md
 docs/bugs/open/017-codia-like-beta-ui-role-detector-gap.md
 docs/reference/codia-samples/*.canvas.json

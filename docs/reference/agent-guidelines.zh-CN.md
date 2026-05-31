@@ -1,116 +1,176 @@
 # Agent Guidelines 中文参考快照
 
-本文件是根目录 `AGENTS.md` 的中文参考快照。根目录 `AGENTS.md` 是 agent 执行时的权威版本；如果两者冲突，以根目录 `AGENTS.md` 为准。
+本文件只是根目录 `AGENTS.md` 的中文参考快照。根目录 `AGENTS.md` 是 agent 执行时的权威版本；如果两者冲突，以根目录 `AGENTS.md` 为准。
 
-# Repository Guidelines
+## 仓库事实源
 
-本仓库采用 agent-first 工作流。仓库文件是事实来源，不依赖聊天记录；旧计划、ADR 和 legacy 草稿只能作为背景，不能覆盖当前代码和当前 docs。
+本仓库采用 agent-first 工作流。仓库文件是事实来源，不依赖聊天记录。旧计划、ADR、legacy 草稿和旧 Codia Beta 产物只能作为背景，不能覆盖当前代码和当前 docs。
 
-## Project Structure & Module Organization
+当前文档入口是 [../index.md](../index.md)。先读根目录 `AGENTS.md`，再读 `docs/index.md`，然后只读任务相关文档。
 
-本仓库是 pnpm workspace 加两条后端运行面。`services/backend-go/` 是当前 Codia Beta / `Generate Beta` 的 Go 后端，负责 `codiaserver`、Go M29 physical evidence、UI detector 接入、Codia assembly/control/tree/emitter、DSL v0.2 export、本地 crop assets 和 Go tests。`backend/` 是保留的 Python/FastAPI M29 DSL v0.1 upload-preview 路径和历史算法/参考面；除非任务明确针对 `/api/upload-preview`，否则不要把它作为 Codia Beta 输出质量调试起点。`packages/dsl-schema/` 维护 DSL 合同；`packages/image-to-figma-renderer/` 负责把已校验 DSL 写入 Figma adapter；`figma-plugin/` 包含插件 UI、main thread、manifest 和 bundle 检查。
+## 当前产品主线
 
-当前文档入口是 [../index.md](../index.md)。正式规格在 `docs/product/`、`docs/architecture/`、`docs/engineering/`、`docs/runbooks/`、`docs/reference/`、`docs/decisions/`、`docs/plans/` 和 `docs/bugs/`；历史草稿只保留在 `docs/reference/legacy/`。
-
-## Current Runtime Surfaces
-
-当前 Codia Beta 开发和调试主链是 Go：
-
-```text
-Figma Plugin Generate Beta
--> POST /api/codia-preview
--> Go codiaserver
--> OCR
--> Go M29 physical evidence
--> optional OpenAI-compatible UI detector
--> Codia assembly/control/tree/emitter
--> DSL v0.2 Codia Runtime
--> GET /api/codia-preview/{taskId}/dsl
--> GET /api/codia-preview/{taskId}/assets/{assetId}.png
--> renderCodiaRuntimeDesign
--> Figma
-```
-
-Codia Beta 缺陷先查：
-
-```text
-services/backend-go/
-services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
-packages/image-to-figma-renderer/src/renderCodiaRuntimeDesign.ts
-figma-plugin/src/
-```
-
-保留的 Python/FastAPI preview 运行面是：
+当前分支的产品主线是 Editable Draft Layer Pipeline：
 
 ```text
 Figma Plugin
--> POST /api/upload-preview
+-> POST /api/draft-preview
+-> Go backend services/backend-go
 -> OCR
--> raw M29 primitive graph
--> M29.2 source ownership
--> M29.3 relation graph
--> M29.4 weak structural evidence
--> M29.5 replay plan
--> M29 ownership conservation report
--> M29.6 media internal decomposition report
--> M29 transparent asset report
--> M29 internal source promotion
--> M29.3/M29.4/M29.5 final reports from promoted M29.2
--> M29 hierarchy candidate report
--> M29 sibling group candidate report
--> M29 layout energy report
--> M29 Auto Layout permission report
--> M29 plan-driven materializer
--> M29 design token report
--> M29 B-stage quality report
--> GET /api/tasks/{taskId}/dsl
+-> M29 physical evidence
+-> optional OpenAI-compatible vision detector
+-> optional vision review/reconciliation
+-> Editable Layer Graph
+-> Draft Runtime DSL
 -> Renderer
--> Figma
+-> Figma editable draft
 ```
 
-`/api/codia-preview` 是 Codia Beta 正式上传入口。`/api/codia-preview/{taskId}/dsl` 是 Codia Beta DSL v0.2 输出端点。`/api/upload-preview` 和 `/api/tasks/{taskId}/dsl` 仍是 Python DSL v0.1 preview 路径，不得当成 Codia Beta 后端。当前运行面详情以 [../engineering/current-mainline-code-map.md](../engineering/current-mainline-code-map.md) 为准。
+核心目标：
 
-## Documentation Routing
-
-先读本文件，再读 [../index.md](../index.md)，然后按任务只读相关文档。
-
-- 产品范围和验收：`docs/product/`。
-- DSL、API、Renderer、后端、插件边界：`docs/architecture/`。
-- 当前代码地图、测试、文档维护和 M29 regression matrix：`docs/engineering/`。
-- 运行、发布、调试、迁移：`docs/runbooks/`。
-- 环境变量、外部接口、术语和 legacy 草稿：`docs/reference/`。
-- 计划：`docs/plans/active/`、`docs/plans/completed/`、`docs/plans/archive/`。
-- bug 复盘和回归保护：`docs/bugs/`。
-
-ADR 是历史决策记录，不等于 active runtime。涉及被删除链路时，以当前代码地图、测试策略和最新 completed plan 为准。
-
-## Build, Test, and Development Commands
-
-安装和 workspace 检查：
-
-```bash
-pnpm install
-pnpm run check
-pnpm -r run test
-pnpm -r run typecheck
-pnpm --filter @image-figma/figma-plugin run build
+```text
+PNG -> editable Figma draft
 ```
 
-当前 Codia Beta 后端是 Go：
+非目标：
+
+```text
+PNG -> Codia-like tree
+PNG -> official Codia JSON byte-for-byte clone
+PNG -> semantic UI control tree
+PNG -> Auto Layout/component reconstruction
+```
+
+## 目录职责
+
+- `services/backend-go/`：当前 Go Draft backend。负责 M29 physical evidence、vision detector/review、Editable Layer Graph、assets、Draft Runtime DSL、task storage 和 Go tests。
+- `figma-plugin/`：插件 UI、main thread、manifest 和 bundle 检查。
+- `packages/image-to-figma-renderer/`：把 validated Draft Runtime DSL 写入 Figma。
+- `packages/dsl-schema/`：共享 DSL 合同。
+- `backend/`：保留 Python/FastAPI historical preview/reference code。除非任务明确针对 Python `/api/upload-preview`，否则不要从这里修 Draft runtime。
+
+## 当前运行面
+
+Draft runtime API：
+
+```text
+POST /api/draft-preview
+GET /api/draft-preview/{taskId}
+GET /api/draft-preview/{taskId}/dsl
+GET /api/draft-preview/{taskId}/assets/{assetId}.png
+GET /api/draft-preview/{taskId}/artifacts
+```
+
+本地启动：
 
 ```bash
 cd services/backend-go
-go test ./internal/codia/... ./cmd/codiacompile ./cmd/codiaserver
-CODIA_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/codiaserver
+DRAFT_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/draftserver
 ```
 
-保留的 Python/FastAPI preview 路径使用 `.tool-versions` 中的 Python 3.12.7；只有任务明确针对 `/api/upload-preview`、Python M29 v0.1 或历史 M29 参考行为时才使用：
+真实 OCR / vision 配置示例：
 
 ```bash
-cd backend
-uv sync
-UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-uv run pytest -q
+OCR_PROVIDER=baidu_ppocrv5
+BAIDU_PADDLE_OCR_TOKEN=...
+DRAFT_SERVER_VISION_ENABLED=true
+VISION_BASE_URL=...
+VISION_MODEL=...
+VISION_API_KEY=...
+VISION_WIRE_API=responses
+VISION_DETECTOR_CONCURRENCY=3
+```
+
+## 旧路径状态
+
+下列名字是历史/评测材料，不是当前产品生成路径：
+
+```text
+/api/codia-preview
+Generate Beta
+codia_runtime.dsl.v0_2.json
+codia assembly/control/tree/emitter
+Python /api/upload-preview as Draft runtime
+M29 Direct compare
+legacy M30
+M31-M39/M39.1
+ONNX proposer
+```
+
+不要恢复 Codia HTTP route，也不要给 Codia packages 增加新的 generation 行为。如果 Codia 里的概念有用，必须翻译成 Draft 术语：layer ownership、asset crop、z-order、grouping 或 eval metric。
+
+Official Codia JSON 只能用于：
+
+```text
+docs/reference/codia-samples/
+services/backend-go/internal/eval/codia
+cmd/drafteval
+```
+
+Generation code 不能读取 golden JSON，不能 import `internal/eval/codia`。
+
+## 核心合同
+
+Draft pipeline 的主合同是：
+
+```text
+editable_layer_graph.v1.json
+```
+
+第一版 visible layer kinds：
+
+```text
+Page
+ReferenceImage
+TextLayer
+RasterLayer
+ShapeLayer
+GroupLayer
+```
+
+硬不变量：
+
+- 一个 visible foreground pixel 应该只有一个 visible owner。
+- 原图不能作为 visible full-page backing。
+- `ReferenceImage` 只能是 hidden/locked diagnostic context。
+- TextLayer 必须在同区域 RasterLayer/ShapeLayer 上方。
+- RasterLayer 必须有可解析 asset。
+- ShapeLayer 不应携带前景文字像素。
+- 每个 emit/consume/suppress/refine 决策必须有 source refs 和 reason。
+
+语义概念如 Button、ListView、BottomNavigation、ActionBar、EditText、Component、Instance、Auto Layout，第一版只能作为 `semanticTags` 或 eval labels，不能直接成为结构 authority。
+
+## 代码边界
+
+- Renderer 不导入 backend。
+- Go/Python backend 不导入 plugin。
+- Plugin UI 不直接调用 Figma API。
+- Draft generation packages 不 import Codia eval packages。
+- Shared contracts 通过明确 package contract 或 `packages/dsl-schema/` 流动，不做 ad hoc JSON mutation。
+
+优先简单、当前可验证的实现。不要创建 `utils`、`common`、`misc` 垃圾桶模块。大型中心文件是设计压力；新行为应进入职责清楚的小包。
+
+## 验证命令
+
+Go backend：
+
+```bash
+cd services/backend-go
+go test ./...
+```
+
+Renderer：
+
+```bash
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+```
+
+Plugin：
+
+```bash
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
 ```
 
 交付前至少检查：
@@ -120,67 +180,28 @@ git diff --check
 git status --short --branch
 ```
 
-## Coding Style & Boundary Rules
-
-TypeScript 使用 ESM、两空格缩进、`camelCase` 值/函数和 `PascalCase` 类型。Go 代码使用 `gofmt`，在合适时使用 table-driven tests，包要小而职责清楚，默认优先标准库。Python 使用四空格缩进，模块和函数用 `snake_case`，在有助于边界表达时添加类型提示。
-
-保持边界清楚：Renderer 不导入 backend；Go/Python 后端不导入插件；插件 UI 不直接调用 Figma API；共享合同只通过 `packages/dsl-schema/`。不要提交 `dist/`、`backend/storage/`、`services/backend-go/storage/`、数据库、日志、cache、密钥或临时产物。
-
-优先简单、当前可验证的实现。不要为假想未来加抽象，不创建 `utils`、`common`、`misc` 垃圾桶模块。大型中心文件是设计压力；继续增加行为前优先按真实职责拆模块。
-
-## Planning & Documentation Rules
-
-以下工作必须先创建或更新 `docs/plans/active/` 中的计划：
-
-- 影响多个模块或目录。
-- 修改 DSL、API、数据模型、环境变量或运行方式。
-- 增加依赖、工程脚本或 CI 行为。
-- 修改插件、Renderer、后端、M29 evidence chain、replay plan 或 materializer 主链能力。
-- 修复会影响主链路的缺陷。
-
-计划状态必须和目录一致：未完成计划放 `active/`，已完成计划放 `completed/`，被替代或暂缓的计划放 `archive/` 对应子目录。行为、API、数据模型、环境变量、构建命令、运行步骤、架构边界或验收标准变化，必须同步更新相关 docs。
-
-## Testing & Validation Rules
-
-测试策略以 [../engineering/testing-strategy.md](../engineering/testing-strategy.md) 为准。DSL 改动必须有 schema 或等价合同校验；Renderer 改动必须能用测试 DSL 验证；后端 API 改动必须有接口级验证；插件或 Figma 可见行为改动必须按本项目验证文档记录可观察结果。
-
-M29 owner、relation、replay、materializer、cleanup 授权或 fallback 行为改动，必须先映射到 [../engineering/m29-contract-regression-matrix.md](../engineering/m29-contract-regression-matrix.md)。没有覆盖就先补测试或明确记录无法自动化的替代 guard。
-
-## Bugfix & Regression Rules
-
-Bug 工作从 `docs/bugs/index.md` 和相关 bug 记录开始。修复前先复现，修复后记录根因、修复摘要、回归保护和验证证据。无法添加自动化回归时，必须在 bug 记录中写明替代 guard 和剩余风险。
-
-## Runtime Debugging
-
-Codia Beta / `Generate Beta` 回归先查最新 Go task：
+真实样图或插件可见行为改动时，还要检查：
 
 ```text
-services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
+editable_layer_graph.v1.json
+draft_runtime.dsl.v1.json
+draft_validation_report.md
+asset_manifest.json
+renderer/plugin warnings
 ```
 
-优先看：
+## 修复归属层
+
+先判断失败归属层，再改代码：
 
 ```text
-codia_runtime.dsl.v0_2.json
-codia_tree_ir.v1.json
-assembly/codia_source_candidates.v1.json
-assembly/codia_ownership_graph.v1.json
-detector/ui_detector_candidates.v1.json
-assets/
+source image/OCR
+M29 physical evidence
+vision candidate/review
+Draft assembly ownership
+Draft asset/export
+Renderer
+Plugin route/render wiring
 ```
 
-修复归属层必须在 Go 的 detector、assembly、control、tree、DSL v0.2 export、`codiaserver`、runtime renderer 或插件 Beta wiring 中判断。除非 Go artifact 证明 Python 是输入来源，否则不要在 Python `backend/app` 修 Codia Beta 问题。
-
-## Commit & Pull Request Guidelines
-
-提交使用 Conventional Commit 风格，例如 `docs:`、`refactor:`、`test:`、`feat:`、`fix:`。阶段工作必须形成独立提交，提交范围只包含本阶段代码、测试、文档、ADR 和计划更新；不要混入下一阶段探索、临时调试、storage、dist、密钥或无关本地改动。
-
-PR 或交付说明应包含 changed surface、关联 plan/bug/ADR、验证命令和可见 UI/Figma/产物证据。新增 env var 时同步 `.env.example` 和 `docs/reference/env-vars.md`。
-
-## Agent-Specific Guardrails
-
-不要恢复已删除的 M29 Direct compare、legacy M30 materialization product path、M31-M39/M39.1 runtime、routes、env 或 ONNX proposer。旧 ADR、completed plans 和 legacy 草稿提到这些路径时，只能作为历史背景。
-
-M29.4 weak cluster、M29 ownership conservation、M29.6 media internal decomposition、M29 transparent asset report、M29 hierarchy candidates、M29 sibling group candidates、M29 layout energy、M29 Auto Layout permission、M29 design token 和 M29 B-stage quality reports 都是 evidence/permission/diagnostic surfaces。C-stage materialization 只能消费高置信 structural evidence，在已 replay 的节点外创建透明 controlled structure group；不能创建 Auto Layout、Figma Component/Instance、variables、variants、vectors 或新的 visible owner nodes。M29.6 不能自己提升内部 media candidates 或授权 cleanup。M29 transparent asset report 只能生成诊断 RGBA artifact；不能自己替换 materialized assets 或授权 cleanup。M29 internal source promotion 是当前唯一能把 M29.6/transparent evidence 回灌到 M29.2 source ownership 的桥；promoted objects 必须重新经过 M29.3/M29.4/M29.5 才能 materialize。M29.5 replay plan 是唯一 materialization order、node budget、dedupe、visible internal icon replay 和 cleanup 授权来源。M29 plan-driven materializer 只执行 plan，不重新判断 owner，不新增 cleanup 授权。
-
-Source ownership 问题必须从 raw M29 或 M29.2 修起；不要在 materializer、Renderer 或 plugin 里按颜色、文案、主题、行业、文件名或固定 bbox 写特化补丁。root/page 背景必须来自 source PNG 采样，不恢复固定浅色默认背景来掩盖 fallback-off 问题。
+不要在 Renderer 或 Plugin 里掩盖 backend ownership bug。不要按文件名、品牌、文案、固定 bbox、固定坐标、固定屏幕尺寸、主题色或业务类别写特化。
