@@ -675,3 +675,53 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   validation warnings: 0
   ```
 - 说明：Stage 1 只建立空 page 合同、校验和 CLI；evidence normalization、segmentation、clustering、HTML preview、Figma gateway 仍未激活。
+
+## Stage 2 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/evidence
+  services/backend-go/internal/layoutcompile
+  services/backend-go/internal/layoutir/validate
+  services/backend-go/cmd/layoutcompile
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile
+  rm -rf /tmp/layout-018-stage2
+  cd services/backend-go && go run ./cmd/layoutcompile \
+    -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -out /tmp/layout-018-stage2
+  git diff --check
+  ```
+- 真实样图输出：
+  ```text
+  /tmp/layout-018-stage2/ui_layout_ir.v1.json
+  /tmp/layout-018-stage2/ui_layout_ir_validation.v1.json
+  /tmp/layout-018-stage2/layout_compile_report.md
+  /tmp/layout-018-stage2/m29/m29_physical_evidence.v1.json
+  /tmp/layout-018-stage2/tokens/evidence_tokens.v1.json
+  ```
+- 018 Stage 2 artifact summary：
+  ```text
+  version: ui_layout_ir.v1
+  source size: 665x1440
+  nodes: 1
+  evidence: 203
+  decisions: 1
+  validation errors: 0
+  validation warnings: 0
+  evidence kind counts:
+    m29_token: 203
+  role hint counts:
+    icon: 70
+    shape: 53
+    text: 47
+    line: 13
+    image: 10
+    unknown: 9
+    texture_fragment: 1
+  ```
+- 说明：Stage 2 只做 evidence normalization；layout tree 仍只有 page root。M29/OCR/vision 原始证据不会直接变成 Figma 或 HTML 节点，后续 Stage 3/4 才消费这些 normalized evidence 做 section 和 row/column。

@@ -63,6 +63,23 @@ func Document(doc contract.Document) Report {
 			report.addError(decision.NodeID, "LAYOUT_IR_DECISION_REASON_MISSING", "decision reason is required")
 		}
 	}
+	for _, evidence := range doc.Evidence {
+		if evidence.ID == "" {
+			report.addError("", "LAYOUT_IR_EVIDENCE_ID_MISSING", "evidence id is required")
+		}
+		if evidence.Kind == "" {
+			report.addError("", "LAYOUT_IR_EVIDENCE_KIND_MISSING", "evidence kind is required")
+		}
+		if evidence.Source == "" {
+			report.addError("", "LAYOUT_IR_EVIDENCE_SOURCE_MISSING", "evidence source is required")
+		}
+		if evidence.BBox.Area() <= 0 {
+			report.addError("", "LAYOUT_IR_EVIDENCE_BBOX_INVALID", "evidence bbox must have positive area")
+		}
+		if len(evidence.SourceRefs) == 0 {
+			report.addError("", "LAYOUT_IR_EVIDENCE_SOURCE_REFS_MISSING", "evidence sourceRefs are required")
+		}
+	}
 
 	return report
 }

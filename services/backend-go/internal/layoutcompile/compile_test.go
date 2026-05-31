@@ -18,9 +18,10 @@ func TestRunWritesStageOneArtifacts(t *testing.T) {
 
 	out := filepath.Join(dir, "out")
 	result, err := Run(Options{
-		InputPath: input,
-		OutputDir: out,
-		TaskID:    "task_test",
+		InputPath:                 input,
+		OutputDir:                 out,
+		TaskID:                    "task_test",
+		SkipEvidenceNormalization: true,
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -44,6 +45,34 @@ func TestRunWritesStageOneArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunNormalizesM29Evidence(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "source.png")
+	writeEvidenceTestPNG(t, input)
+
+	out := filepath.Join(dir, "out")
+	result, err := Run(Options{
+		InputPath: input,
+		OutputDir: out,
+		TaskID:    "task_test",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Validation.ErrorCount != 0 {
+		t.Fatalf("validation errors = %+v", result.Validation.Findings)
+	}
+	if result.Document.Summary.EvidenceCount == 0 {
+		t.Fatalf("expected normalized evidence, summary=%+v", result.Document.Summary)
+	}
+	if _, err := os.Stat(filepath.Join(out, "m29", "m29_physical_evidence.v1.json")); err != nil {
+		t.Fatalf("expected m29 artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "tokens", "evidence_tokens.v1.json")); err != nil {
+		t.Fatalf("expected token artifact: %v", err)
+	}
+}
+
 func writeTestPNG(t *testing.T, path string, width int, height int) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -59,5 +88,28 @@ func writeTestPNG(t *testing.T, path string, width int, height int) {
 	defer file.Close()
 	if err := png.Encode(file, img); err != nil {
 		t.Fatalf("encode test png: %v", err)
+	}
+}
+
+func writeEvidenceTestPNG(t *testing.T, path string) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 120, 90))
+	for y := 0; y < 90; y++ {
+		for x := 0; x < 120; x++ {
+			img.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	for y := 20; y < 60; y++ {
+		for x := 25; x < 95; x++ {
+			img.Set(x, y, color.RGBA{R: 25, G: 25, B: 25, A: 255})
+		}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create evidence test png: %v", err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("encode evidence test png: %v", err)
 	}
 }
