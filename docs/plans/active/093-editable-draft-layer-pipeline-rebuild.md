@@ -265,6 +265,8 @@ Acceptance:
 
 ### Stage 6: Draft Server And Plugin Route
 
+Status: completed in `feat: render draft runtime from plugin`.
+
 Actions:
 
 - Add `cmd/draftserver`.
@@ -284,6 +286,27 @@ Acceptance:
 
 - Plugin can upload a PNG, poll task, fetch DSL/assets, and render Draft.
 - Plugin image asset warnings are zero for successful tasks.
+
+Validation evidence:
+
+```text
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
+cd services/backend-go && go test ./...
+```
+
+HTTP smoke:
+
+```text
+DRAFT_SERVER_STORAGE_ROOT=/tmp/draft-server-smoke DRAFT_SERVER_ADDR=127.0.0.1:8765 go run ./cmd/draftserver
+POST /api/draft-preview with 腾讯动漫_018_1440.png -> task completed
+GET /api/draft-preview/{taskId}/dsl -> kind=draft_runtime version=1.0 childCount=65 assetCount=49
+GET /api/draft-preview/{taskId}/assets/asset_raster_0001.png -> HTTP 200 PNG 167x42
+```
 
 ### Stage 7: Real Sample Validation
 

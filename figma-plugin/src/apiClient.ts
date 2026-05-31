@@ -1,4 +1,4 @@
-import type { CodiaRuntimeDSL, DesignDSL } from "@image-figma/dsl-schema";
+import type { CodiaRuntimeDSL, DesignDSL, DraftRuntimeDSL } from "@image-figma/dsl-schema";
 
 export const API_BASE_URL = "http://localhost:8000/api";
 
@@ -54,6 +54,10 @@ export async function uploadPngCodiaPreview(fileName: string, bytes: Uint8Array)
   return uploadPngTo("/codia-preview", fileName, bytes);
 }
 
+export async function uploadPngDraftPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
+  return uploadPngTo("/draft-preview", fileName, bytes);
+}
+
 async function uploadPngTo(endpoint: string, fileName: string, bytes: Uint8Array): Promise<UploadResult> {
   const boundary = `image-figma-${Date.now().toString(16)}`;
   const body = createMultipartBody(boundary, fileName, bytes);
@@ -77,6 +81,11 @@ export async function getCodiaPreviewTask(taskId: string): Promise<TaskResult> {
   return response.data as TaskResult;
 }
 
+export async function getDraftPreviewTask(taskId: string): Promise<TaskResult> {
+  const response = await apiFetch(`${API_BASE_URL}/draft-preview/${encodeURIComponent(taskId)}`);
+  return response.data as TaskResult;
+}
+
 export async function getTaskDsl(taskId: string): Promise<DesignDSL> {
   const response = await apiFetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/dsl`);
   const data = response.data as { dsl?: unknown };
@@ -93,6 +102,15 @@ export async function getCodiaPreviewDsl(taskId: string): Promise<CodiaRuntimeDS
     throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid Codia Runtime DSL response.");
   }
   return data.dsl as CodiaRuntimeDSL;
+}
+
+export async function getDraftPreviewDsl(taskId: string): Promise<DraftRuntimeDSL> {
+  const response = await apiFetch(`${API_BASE_URL}/draft-preview/${encodeURIComponent(taskId)}/dsl`);
+  const data = response.data as { dsl?: unknown };
+  if (!data || typeof data !== "object" || !data.dsl) {
+    throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid Draft Runtime DSL response.");
+  }
+  return data.dsl as DraftRuntimeDSL;
 }
 
 async function apiFetch(url: string, init?: ApiRequestInit): Promise<ApiSuccessResponse> {

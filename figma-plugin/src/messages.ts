@@ -1,13 +1,7 @@
 export type PluginToMainMessage =
   | { type: "request-plugin-state" }
   | {
-      type: "render-uploaded-png";
-      fileName: string;
-      mimeType: "image/png";
-      bytes: ArrayBuffer | Uint8Array | number[];
-    }
-  | {
-      type: "render-uploaded-png-codia";
+      type: "render-uploaded-png-draft";
       fileName: string;
       mimeType: "image/png";
       bytes: ArrayBuffer | Uint8Array | number[];
@@ -17,7 +11,7 @@ export type PluginToMainMessage =
 
 export type MainToPluginMessage =
   | { type: "plugin-state"; state: PluginState }
-  | { type: "render-started"; source: "upload" | "codia" | "sample" }
+  | { type: "render-started"; source: "draft" | "sample" }
   | {
       type: "render-succeeded";
       renderedElementCount: number;

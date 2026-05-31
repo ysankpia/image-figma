@@ -2,7 +2,7 @@ import type { DesignDSL } from "@image-figma/dsl-schema";
 import {
   createFigmaAdapter,
   type RenderResult,
-  renderCodiaRuntimeDesign,
+  renderDraftRuntimeDesign,
   renderDesign,
   type RenderError,
   type RenderWarning
@@ -11,14 +11,12 @@ import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json"
 import {
   API_BASE_URL,
   BackendApiError,
-  getCodiaPreviewDsl,
-  getCodiaPreviewTask,
-  getTask,
-  getTaskDsl,
-  uploadPngCodiaPreview,
-  uploadPngPreview
+  getDraftPreviewDsl,
+  getDraftPreviewTask,
+  uploadPngDraftPreview
 } from "./apiClient";
 import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
+import type { TaskResult } from "./apiClient";
 
 declare const __html__: string;
 
@@ -48,13 +46,8 @@ figma.ui.onmessage = async (message: PluginToMainMessage) => {
       return;
     }
 
-    if (message.type === "render-uploaded-png") {
-      await renderUploadedPng(message.fileName, toUint8Array(message.bytes));
-      return;
-    }
-
-    if (message.type === "render-uploaded-png-codia") {
-      await renderUploadedPngCodia(message.fileName, toUint8Array(message.bytes));
+    if (message.type === "render-uploaded-png-draft") {
+      await renderUploadedPngDraft(message.fileName, toUint8Array(message.bytes));
       return;
     }
 
@@ -90,60 +83,36 @@ async function renderSampleDesign(): Promise<void> {
   reportRenderResult(result);
 }
 
-async function renderUploadedPng(fileName: string, bytes: Uint8Array): Promise<void> {
-  postToUI({ type: "render-started", source: "upload" });
+async function renderUploadedPngDraft(fileName: string, bytes: Uint8Array): Promise<void> {
+  postToUI({ type: "render-started", source: "draft" });
   postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
 
-  const upload = await uploadPngPreview(fileName, bytes);
-  postToUI({ type: "status", message: "Running OCR + M29 evidence pipeline.", tone: "normal" });
+  const upload = await uploadPngDraftPreview(fileName, bytes);
+  postToUI({ type: "status", message: "Running Draft layer pipeline.", tone: "normal" });
 
-  const task = await waitForCompletedTask(upload.taskId);
+  const task = await waitForCompletedTaskWith(upload.taskId, getDraftPreviewTask, "draft_preview_poll");
   if (task.status === "failed") {
     throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
   }
 
-  postToUI({ type: "status", message: "Fetching M29 plan-driven design.", tone: "normal" });
-  const dsl = await getTaskDsl(upload.taskId);
+  postToUI({ type: "status", message: "Fetching Draft Runtime design.", tone: "normal" });
+  const dsl = await getDraftPreviewDsl(upload.taskId);
 
   postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });
-  const result = await renderDesign(dsl, {
-    figma: createFigmaAdapter(figma as never),
-    validate: true,
-    createOriginalReference: true
-  });
-  reportRenderResult(result);
-}
-
-async function renderUploadedPngCodia(fileName: string, bytes: Uint8Array): Promise<void> {
-  postToUI({ type: "render-started", source: "codia" });
-  postToUI({ type: "status", message: "Uploading PNG.", tone: "normal" });
-
-  const upload = await uploadPngCodiaPreview(fileName, bytes);
-  postToUI({ type: "status", message: "Running Go Codia compiler.", tone: "normal" });
-
-  const task = await waitForCompletedTaskWith(upload.taskId, getCodiaPreviewTask, "codia_preview_poll");
-  if (task.status === "failed") {
-    throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
-  }
-
-  postToUI({ type: "status", message: "Fetching Codia Runtime design.", tone: "normal" });
-  const dsl = await getCodiaPreviewDsl(upload.taskId);
-
-  postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });
-  const result = await renderCodiaRuntimeDesign(dsl, {
+  const result = await renderDraftRuntimeDesign(dsl, {
     figma: createFigmaAdapter(figma as never),
     validate: true,
     createOriginalReference: false,
-    assetBaseUrl: `${API_BASE_URL}/codia-preview/${encodeURIComponent(upload.taskId)}`
+    assetBaseUrl: `${API_BASE_URL}/draft-preview/${encodeURIComponent(upload.taskId)}`
   });
   reportRenderResult(result);
 }
 
-async function waitForCompletedTask(taskId: string) {
-  return waitForCompletedTaskWith(taskId, getTask, "task_poll");
-}
-
-async function waitForCompletedTaskWith(taskId: string, getTaskFn: (taskId: string) => ReturnType<typeof getTask>, stage: string) {
+async function waitForCompletedTaskWith(
+  taskId: string,
+  getTaskFn: (taskId: string) => Promise<TaskResult>,
+  stage: string
+): Promise<TaskResult> {
   for (let index = 0; index < 180; index += 1) {
     const task = await getTaskFn(taskId);
     if (task.status === "completed" || task.status === "failed") {

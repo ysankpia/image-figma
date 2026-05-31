@@ -271,6 +271,10 @@
         background: var(--panel);
         color: var(--body);
       }
+
+      .button-wide {
+        grid-column: 1 / -1;
+      }
     </style>
   </head>
   <body>
@@ -311,8 +315,7 @@
       </section>
 
       <footer class="actions">
-        <button id="renderButton" class="button button-primary" type="button" disabled>Generate from PNG</button>
-        <button id="betaButton" class="button button-secondary" type="button" disabled>Generate Beta</button>
+        <button id="renderButton" class="button button-primary button-wide" type="button" disabled>Generate Draft</button>
         <button id="sampleButton" class="button button-secondary button-dev" type="button">Sample</button>
         <button id="closeButton" class="button button-secondary" type="button">Close</button>
       </footer>
@@ -320,7 +323,6 @@
 
     <script>
       const renderButton = document.getElementById("renderButton");
-      const betaButton = document.getElementById("betaButton");
       const sampleButton = document.getElementById("sampleButton");
       const closeButton = document.getElementById("closeButton");
       const fileInput = document.getElementById("fileInput");
@@ -369,29 +371,7 @@
         try {
           const bytes = await selectedFile.arrayBuffer();
           postPluginMessage({
-            type: "render-uploaded-png",
-            fileName: selectedFile.name,
-            mimeType: "image/png",
-            bytes
-          });
-        } catch (error) {
-          updateButtons(false);
-          setStatus("Failed", error instanceof Error ? error.message : "Could not read PNG file.", "error");
-        }
-      });
-
-      betaButton.addEventListener("click", async () => {
-        if (!selectedFile) {
-          setStatus("Failed", "Choose a PNG file first.", "error");
-          return;
-        }
-        updateButtons(true);
-        setStatus("Uploading", "Uploading PNG.", "normal");
-        setWarnings([]);
-        try {
-          const bytes = await selectedFile.arrayBuffer();
-          postPluginMessage({
-            type: "render-uploaded-png-codia",
+            type: "render-uploaded-png-draft",
             fileName: selectedFile.name,
             mimeType: "image/png",
             bytes
@@ -425,9 +405,7 @@
 
         if (message.type === "render-started") {
           updateButtons(true);
-          if (message.source === "upload") {
-            setStatus("Uploading", "Uploading PNG.", "normal");
-          } else if (message.source === "codia") {
+          if (message.source === "draft") {
             setStatus("Uploading", "Uploading PNG.", "normal");
           } else {
             setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
@@ -501,7 +479,6 @@
 
       function updateButtons(isBusy) {
         renderButton.disabled = isBusy || !selectedFile;
-        betaButton.disabled = isBusy || !selectedFile;
         sampleButton.disabled = isBusy;
         chooseFileButton.disabled = isBusy;
       }
@@ -527,8 +504,8 @@
           message.message === "Processing uploaded PNG." ||
           message.message === "Fetching generated design." ||
           message.message === "Fetching M29 plan-driven design." ||
-          message.message === "Running Go Codia compiler." ||
-          message.message === "Fetching Codia Runtime design."
+          message.message === "Running Draft layer pipeline." ||
+          message.message === "Fetching Draft Runtime design."
         ) {
           return "Processing";
         }
