@@ -6,6 +6,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/contract"
 	m29contract "github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
+	visiondetector "github.com/luqing-studio/image-figma/services/backend-go/internal/vision/detector"
 )
 
 func TestBuildEmitsEditableTextAboveRasterAndShape(t *testing.T) {
@@ -190,6 +191,128 @@ func TestBuildCreatesMajorGroups(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsCompactVisionImageCandidate(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{Tokens: []evidence.Token{{
+			ID:          "text",
+			TokenType:   "text_token",
+			BBox:        m29contract.BBox{X: 20, Y: 20, Width: 80, Height: 20},
+			Disposition: "main",
+			Content:     evidence.TokenContent{Text: "Title"},
+		}}},
+		Detector: detectorDoc(visiondetector.Candidate{
+			ID:         "cand_img",
+			Role:       visiondetector.RoleImageView,
+			Confidence: 0.91,
+			BBox:       visiondetector.BBox{X: 120, Y: 48, Width: 96, Height: 72},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	vision := findLayerByID(graph, "vision_image_0002")
+	if vision == nil || vision.Kind != contract.LayerRaster || !vision.Visible {
+		t.Fatalf("expected visible vision raster layer, got %+v", graph.Layers)
+	}
+	if vision.Decision.BBoxAuthority != contract.BBoxAuthorityVision {
+		t.Fatalf("vision bbox authority = %q", vision.Decision.BBoxAuthority)
+	}
+	if vision.Raster == nil || vision.Raster.AssetID == "" {
+		t.Fatalf("vision raster missing asset: %+v", vision)
+	}
+	if len(graph.Evidence) != 1 || graph.Evidence[0].State != contract.DecisionEmit || graph.Evidence[0].LayerID != vision.ID {
+		t.Fatalf("expected emit evidence for vision candidate, got %+v", graph.Evidence)
+	}
+	text := findLayer(graph, contract.LayerText)
+	if text == nil || text.Z <= vision.Z {
+		t.Fatalf("text must remain above vision raster, text=%+v vision=%+v", text, vision)
+	}
+}
+
+func TestBuildKeepsNonImageVisionRolesHintOnly(t *testing.T) {
+	graph, err := Build(Input{
+		Image:  contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{},
+		Detector: detectorDoc(
+			visiondetector.Candidate{ID: "button", Role: visiondetector.RoleButton, Confidence: 0.92, BBox: visiondetector.BBox{X: 20, Y: 20, Width: 100, Height: 40}},
+			visiondetector.Candidate{ID: "bg", Role: visiondetector.RoleBackground, Confidence: 0.88, BBox: visiondetector.BBox{X: 0, Y: 0, Width: 400, Height: 80}},
+			visiondetector.Candidate{ID: "list", Role: visiondetector.RoleListView, Confidence: 0.80, BBox: visiondetector.BBox{X: 0, Y: 80, Width: 400, Height: 180}},
+		),
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if layer := findLayer(graph, contract.LayerRaster); layer != nil {
+		t.Fatalf("non-image detector roles must not emit raster layers: %+v", layer)
+	}
+	if len(graph.Evidence) != 3 {
+		t.Fatalf("expected three hint evidence items, got %+v", graph.Evidence)
+	}
+	for _, item := range graph.Evidence {
+		if item.State != contract.DecisionHint {
+			t.Fatalf("expected hint-only evidence, got %+v", graph.Evidence)
+		}
+	}
+}
+
+func TestBuildSuppressesLargeVisionImageCandidate(t *testing.T) {
+	graph, err := Build(Input{
+		Image:  contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{},
+		Detector: detectorDoc(visiondetector.Candidate{
+			ID:         "hero",
+			Role:       visiondetector.RoleImageView,
+			Confidence: 0.95,
+			BBox:       visiondetector.BBox{X: 0, Y: 0, Width: 400, Height: 160},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if layer := findLayer(graph, contract.LayerRaster); layer != nil {
+		t.Fatalf("large detector image should not emit visible raster: %+v", layer)
+	}
+	if len(graph.Evidence) != 1 || graph.Evidence[0].State != contract.DecisionSuppress {
+		t.Fatalf("expected suppress evidence, got %+v", graph.Evidence)
+	}
+}
+
+func TestBuildSuppressesDuplicateVisionImageCandidate(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{Tokens: []evidence.Token{{
+			ID:           "raster",
+			TokenType:    "raster_region_token",
+			BBox:         m29contract.BBox{X: 80, Y: 60, Width: 100, Height: 80},
+			Disposition:  "main",
+			Reasons:      []string{"raster_region"},
+			CompileHints: m29contract.CompileHints{CanBeImage: true},
+		}}},
+		Detector: detectorDoc(visiondetector.Candidate{
+			ID:         "duplicate",
+			Role:       visiondetector.RoleImageView,
+			Confidence: 0.93,
+			BBox:       visiondetector.BBox{X: 82, Y: 62, Width: 96, Height: 76},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	visibleRasters := 0
+	for _, layer := range graph.Layers {
+		if layer.Kind == contract.LayerRaster && layer.Visible {
+			visibleRasters++
+		}
+	}
+	if visibleRasters != 1 {
+		t.Fatalf("expected only the M29 raster to remain visible, visible rasters=%d layers=%+v", visibleRasters, graph.Layers)
+	}
+	if len(graph.Evidence) != 1 || graph.Evidence[0].State != contract.DecisionSuppress {
+		t.Fatalf("expected suppressed duplicate vision evidence, got %+v", graph.Evidence)
+	}
+}
+
 func findLayer(graph contract.Document, kind contract.LayerKind) *contract.Layer {
 	for i := range graph.Layers {
 		if graph.Layers[i].Kind == kind {
@@ -206,4 +329,20 @@ func findLayerByID(graph contract.Document, id string) *contract.Layer {
 		}
 	}
 	return nil
+}
+
+func detectorDoc(candidates ...visiondetector.Candidate) *visiondetector.Document {
+	out := &visiondetector.Document{
+		Version:    visiondetector.CandidatesVersion,
+		Candidates: append([]visiondetector.Candidate(nil), candidates...),
+	}
+	for i := range out.Candidates {
+		if out.Candidates[i].Source.Kind == "" {
+			out.Candidates[i].Source.Kind = "vision_detector"
+		}
+		if out.Candidates[i].Source.PassID == "" {
+			out.Candidates[i].Source.PassID = "imageview"
+		}
+	}
+	return out
 }

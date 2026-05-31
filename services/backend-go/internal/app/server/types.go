@@ -1,11 +1,17 @@
 package server
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/vision/detector"
+)
 
 type Config struct {
 	StorageRoot    string
 	OCRProvider    string
 	MaxUploadBytes int64
+	VisionEnabled  bool
+	VisionOptions  detector.Options
 }
 
 type apiSuccess struct {

@@ -219,10 +219,12 @@ func (s *Server) runTask(taskID, inputPath, outputDir string) {
 
 	s.updateTask(taskID, apptask.StatusRunning, apptask.StageDraftAssemble, 20, "Running Draft compiler.", nil)
 	result, err := s.compile(compile.Options{
-		InputPath:   inputPath,
-		OCRProvider: s.config.OCRProvider,
-		TaskID:      taskID,
-		OutputDir:   outputDir,
+		InputPath:     inputPath,
+		OCRProvider:   s.config.OCRProvider,
+		TaskID:        taskID,
+		OutputDir:     outputDir,
+		VisionEnabled: s.config.VisionEnabled,
+		VisionOptions: s.config.VisionOptions,
 	})
 	if err != nil {
 		s.updateTask(taskID, apptask.StatusFailed, apptask.StageDraftFailed, 100, err.Error(), &apptask.Error{
@@ -240,6 +242,7 @@ func (s *Server) runTask(taskID, inputPath, outputDir string) {
 		task.Message = "Draft Runtime DSL is ready."
 		task.DSLPath = dslPath
 		task.Artifacts = artifactsToMap(result.Artifacts)
+		task.Warnings = warningsToTaskWarnings(result.Warnings)
 		task.UpdatedAt = time.Now().UTC()
 	}
 	s.mu.Unlock()
@@ -399,6 +402,22 @@ func artifactsToMap(artifacts compile.Artifacts) map[string]string {
 	}
 	out := map[string]string{}
 	_ = json.Unmarshal(data, &out)
+	return out
+}
+
+func warningsToTaskWarnings(warnings []compile.Warning) []apptask.Warning {
+	if len(warnings) == 0 {
+		return nil
+	}
+	out := make([]apptask.Warning, 0, len(warnings))
+	for _, warning := range warnings {
+		out = append(out, apptask.Warning{
+			Code:     warning.Code,
+			Message:  warning.Message,
+			Stage:    apptask.Stage(warning.Stage),
+			Artifact: warning.Artifact,
+		})
+	}
 	return out
 }
 

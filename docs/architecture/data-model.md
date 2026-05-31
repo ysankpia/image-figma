@@ -64,6 +64,10 @@ compile/
   vision/
     ui_detector_candidates.v1.json
     ui_candidate_review.v1.json
+    ui_detector_report.md
+    ui_detector_overlay.png
+    vision_detector_fallback.v1.json
+    raw_model_response/
   draft/
     editable_layer_graph.v1.json
     draft_runtime.dsl.v1.json
@@ -75,7 +79,7 @@ compile/
     task_report.md
 ```
 
-Vision artifacts 是可选证据。Completed task 必须有 Draft graph、Draft Runtime DSL、validation report 和可解析 assets。
+Vision artifacts 是可选证据。Vision 成功时写入 candidates/report/overlay/raw responses；Vision 失败时写入 `vision_detector_fallback.v1.json` 并把 warning 暴露到 task status。Completed task 必须有 Draft graph、Draft Runtime DSL、validation report 和可解析 assets。
 
 ## Product Contracts
 

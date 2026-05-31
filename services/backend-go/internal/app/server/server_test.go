@@ -20,6 +20,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/compile"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/exportdsl"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/vision/detector"
 )
 
 func TestHealth(t *testing.T) {
@@ -183,6 +184,82 @@ func TestDraftPreviewReportsCompileFailure(t *testing.T) {
 	}
 	if task.Error == nil || task.Error.Code != "DRAFT_COMPILE_FAILED" {
 		t.Fatalf("task error = %+v", task.Error)
+	}
+}
+
+func TestDraftPreviewPassesVisionOptionsAndReportsWarnings(t *testing.T) {
+	tmp := t.TempDir()
+	var got compile.Options
+	srv := NewWithCompiler(Config{
+		StorageRoot:   tmp,
+		VisionEnabled: true,
+		VisionOptions: detector.Options{
+			Provider:    "openai-compatible",
+			WireAPI:     "responses",
+			BaseURL:     "https://vision.example",
+			APIKey:      "test-key",
+			Model:       "test-model",
+			Concurrency: 4,
+		},
+	}, func(options compile.Options) (compile.Result, error) {
+		got = options
+		result, err := writeMinimalDraftRuntime(options)
+		if err != nil {
+			return compile.Result{}, err
+		}
+		result.Artifacts.VisionFallback = "vision/vision_detector_fallback.v1.json"
+		result.Warnings = []compile.Warning{{
+			Code:     "DRAFT_VISION_FALLBACK",
+			Message:  "vision failed",
+			Stage:    "vision_detector",
+			Artifact: "vision/vision_detector_fallback.v1.json",
+		}}
+		return result, nil
+	})
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	uploadResp := postPNG(t, httpServer.URL+"/api/draft-preview", "input.png", makePNG(t))
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("upload status = %d body=%s", uploadResp.StatusCode, readBody(t, uploadResp))
+	}
+	var upload struct {
+		Data struct {
+			TaskID string `json:"taskId"`
+		} `json:"data"`
+	}
+	decodeResponse(t, uploadResp, &upload)
+	task := waitForTerminalTask(t, httpServer.URL, upload.Data.TaskID)
+	if task.Status != string(apptask.StatusCompleted) {
+		t.Fatalf("task = %+v", task)
+	}
+	if !got.VisionEnabled || got.VisionOptions.APIKey != "test-key" || got.VisionOptions.Model != "test-model" || got.VisionOptions.Concurrency != 4 {
+		t.Fatalf("vision options were not passed to compile: %+v", got)
+	}
+	if len(task.Warnings) != 1 || task.Warnings[0].Code != "DRAFT_VISION_FALLBACK" || task.Warnings[0].Artifact == "" {
+		t.Fatalf("warnings not surfaced: %+v", task.Warnings)
+	}
+
+	artifactsResp, err := http.Get(httpServer.URL + "/api/draft-preview/" + upload.Data.TaskID + "/artifacts")
+	if err != nil {
+		t.Fatalf("get artifacts: %v", err)
+	}
+	defer artifactsResp.Body.Close()
+	if artifactsResp.StatusCode != http.StatusOK {
+		t.Fatalf("artifacts status = %d body=%s", artifactsResp.StatusCode, readBody(t, artifactsResp))
+	}
+	var artifactsBody struct {
+		Data struct {
+			Artifacts map[string]string `json:"artifacts"`
+			Warnings  []apptask.Warning `json:"warnings"`
+		} `json:"data"`
+	}
+	decodeResponse(t, artifactsResp, &artifactsBody)
+	if artifactsBody.Data.Artifacts["visionFallback"] != "vision/vision_detector_fallback.v1.json" {
+		t.Fatalf("vision fallback artifact not surfaced: %+v", artifactsBody.Data.Artifacts)
+	}
+	if len(artifactsBody.Data.Warnings) != 1 || artifactsBody.Data.Warnings[0].Artifact == "" {
+		t.Fatalf("artifact warnings not surfaced: %+v", artifactsBody.Data.Warnings)
 	}
 }
 

@@ -101,7 +101,15 @@ Returns task status:
     "status": "running",
     "stage": "draft_assemble",
     "progress": 60,
-    "message": "Assembling editable layers."
+    "message": "Assembling editable layers.",
+    "warnings": [
+      {
+        "code": "DRAFT_VISION_FALLBACK",
+        "message": "missing detector API key: set VISION_API_KEY",
+        "stage": "vision_detector",
+        "artifact": "vision/vision_detector_fallback.v1.json"
+      }
+    ]
   }
 }
 ```
@@ -148,6 +156,24 @@ Completed tasks must not expose visible raster layers with unresolved asset IDs.
 ### `GET /api/draft-preview/{taskId}/artifacts`
 
 Optional development endpoint returning artifact paths and summary metadata. It is not required by the renderer.
+
+Typical artifact keys:
+
+```text
+m29PhysicalEvidence
+evidenceTokens
+visionCandidates
+visionReport
+visionOverlay
+visionRawResponses
+visionFallback
+editableLayerGraph
+validationReport
+assetManifest
+runtimeDsl
+```
+
+Vision artifact keys are optional. If optional vision fails, `visionFallback` and a task warning must be returned; the completed Draft task should still expose `editableLayerGraph`, `runtimeDsl`, `assetManifest`, and `validationReport`.
 
 ## Removed Product Endpoints
 

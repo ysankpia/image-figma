@@ -57,6 +57,20 @@ Do not add `Button`, `ListView`, `BottomNavigation`, `ActionBar`, `EditText`, `C
       }
     }
   ],
+  "evidence": [
+    {
+      "id": "vision_candidate_001",
+      "state": "hint",
+      "kind": "vision_detector_candidate",
+      "bbox": {"x": 40, "y": 120, "width": 180, "height": 32},
+      "bboxAuthority": "vision",
+      "sourceRefs": [
+        {"kind": "vision_detector_candidate", "id": "cand_001"}
+      ],
+      "reason": "vision_hint_only:Button",
+      "score": 0.82
+    }
+  ],
   "groups": [
     {
       "id": "group_0001",
@@ -109,6 +123,12 @@ reference_only
 ```
 
 Every emitted layer needs `sourceRefs` and `decision.reason`. Suppressed and consumed candidates must be preserved in reports when they affect output.
+
+`evidence` records candidate-level decisions that do not necessarily become visible layers. Current Draft assembly records optional vision detector candidates here:
+
+- compact detector `ImageView` may emit a `RasterLayer` when not already covered by M29 raster evidence;
+- detector `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, `BottomNavigation`, `EditText`, and `TextView` remain hint/suppress evidence only;
+- large root/header/card-scale detector rasters are suppress evidence, not visible page backings.
 
 ## Z-Order
 

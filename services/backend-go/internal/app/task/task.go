@@ -49,7 +49,8 @@ type Error struct {
 }
 
 type Warning struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Stage   Stage  `json:"stage,omitempty"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	Stage    Stage  `json:"stage,omitempty"`
+	Artifact string `json:"artifact,omitempty"`
 }

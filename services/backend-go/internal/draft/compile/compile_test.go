@@ -59,6 +59,48 @@ func TestRunWritesDraftArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunVisionFailureWritesFallbackWarning(t *testing.T) {
+	tmp := t.TempDir()
+	input := filepath.Join(tmp, "input.png")
+	writePNG(t, input)
+
+	result, err := Run(Options{
+		InputPath:     input,
+		OutputDir:     filepath.Join(tmp, "out"),
+		TaskID:        "task_vision_fallback",
+		VisionEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.Warnings) != 1 {
+		t.Fatalf("expected one warning, got %+v", result.Warnings)
+	}
+	if result.Warnings[0].Code != "DRAFT_VISION_FALLBACK" || result.Warnings[0].Stage != "vision_detector" {
+		t.Fatalf("unexpected warning: %+v", result.Warnings[0])
+	}
+	if result.Artifacts.VisionFallback != "vision/vision_detector_fallback.v1.json" {
+		t.Fatalf("fallback artifact = %q", result.Artifacts.VisionFallback)
+	}
+	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.VisionFallback))
+	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.RuntimeDSL))
+
+	data, err := os.ReadFile(filepath.Join(tmp, "out", result.Artifacts.VisionFallback))
+	if err != nil {
+		t.Fatalf("read fallback: %v", err)
+	}
+	var payload struct {
+		Version string `json:"version"`
+		Policy  string `json:"policy"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("parse fallback: %v", err)
+	}
+	if payload.Version != "vision_detector_fallback.v1" || payload.Policy != "continue_with_m29_ocr_draft" {
+		t.Fatalf("unexpected fallback payload: %+v", payload)
+	}
+}
+
 func writePNG(t *testing.T, path string) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 64, 96))

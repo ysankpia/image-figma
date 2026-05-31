@@ -528,6 +528,51 @@ rg -n "codiaserver|codiacompile|codiadetector|codiaanalyze|codiadiff|codiaaudit|
 -> no matches
 ```
 
+### Stage 11: Draft Vision Runtime Wiring
+
+Status: completed in commit pending.
+
+Actions:
+
+- Add real `DRAFT_SERVER_VISION_ENABLED` wiring from `cmd/draftserver` / `internal/app/server` into `internal/draft/compile`.
+- Run optional `internal/vision/detector` inside Draft compile and write `vision/ui_detector_candidates.v1.json`, report, overlay, raw responses, or fallback artifact.
+- Extend `editable_layer_graph.v1.json` to record vision artifacts and consume only conservative compact `ImageView` candidates.
+- Keep detector `Button`, `Background`, `ViewGroup`, `ListView`, `ActionBar`, `StatusBar`, `BottomNavigation`, `EditText`, and `TextView` as evidence/hints only; they must not create controls or structure.
+- Vision provider failure must not fail Draft by default. It should add a warning/fallback artifact and continue with OCR/M29.
+- Update `.env.example` so the current local config advertises Draft `VISION_*`, not removed Codia detector variables.
+- Update API/data-model/Draft graph docs for task warnings, optional vision artifacts, and graph-level evidence decisions.
+
+Validation:
+
+```bash
+cd services/backend-go
+go test ./internal/draft/... ./internal/app/... ./cmd/draftserver ./internal/vision/...
+go test ./...
+git diff --check
+```
+
+Acceptance:
+
+- `DRAFT_SERVER_VISION_ENABLED=true` causes Draft compile to attempt detector execution.
+- Missing API key, TLS, timeout, 5xx, empty response, or invalid model JSON produces a fallback artifact and a warning, not task failure.
+- `editable_layer_graph.v1.json` includes detector-supported compact image/icon/avatar/cover RasterLayer candidates when not already covered by M29 raster evidence.
+- Large/root/header/card-scale detector boxes are not emitted as RasterLayer.
+- TextLayer z-order remains above RasterLayer/ShapeLayer.
+
+Evidence:
+
+- `cmd/draftserver` reads `DRAFT_SERVER_VISION_ENABLED` and passes `detector.OptionsFromEnv()` into `internal/app/server`.
+- `cmd/draftcompile -vision` can run the same optional detector path with provider/base URL/model/API key/pass/concurrency/stream flags.
+- `internal/draft/compile` writes `vision/vision_detector_fallback.v1.json` and warning `DRAFT_VISION_FALLBACK` when detector execution fails.
+- `internal/draft/assemble` records detector candidates in graph `evidence` and only emits compact, non-duplicate detector `ImageView` as `RasterLayer`.
+- Regression guards:
+  - `TestRunVisionFailureWritesFallbackWarning`
+  - `TestDraftPreviewPassesVisionOptionsAndReportsWarnings`
+  - `TestBuildEmitsCompactVisionImageCandidate`
+  - `TestBuildKeepsNonImageVisionRolesHintOnly`
+  - `TestBuildSuppressesLargeVisionImageCandidate`
+  - `TestBuildSuppressesDuplicateVisionImageCandidate`
+
 ## Acceptance
 
 This plan is complete only when:

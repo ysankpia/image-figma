@@ -2,6 +2,7 @@ package assemble
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -9,11 +10,13 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
 	m29contract "github.com/luqing-studio/image-figma/services/backend-go/internal/m29/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
+	visiondetector "github.com/luqing-studio/image-figma/services/backend-go/internal/vision/detector"
 )
 
 type Input struct {
-	Image  contract.ImageMeta
-	Tokens evidence.Document
+	Image    contract.ImageMeta
+	Tokens   evidence.Document
+	Detector *visiondetector.Document
 }
 
 func Build(input Input) (contract.Document, error) {
@@ -35,6 +38,7 @@ func Build(input Input) (contract.Document, error) {
 		},
 	}}
 	assets := []contract.Asset{}
+	decisionEvidence := []contract.Evidence{}
 
 	tokens := append([]evidence.Token(nil), input.Tokens.Tokens...)
 	sort.SliceStable(tokens, func(i, j int) bool {
@@ -107,17 +111,19 @@ func Build(input Input) (contract.Document, error) {
 		}
 	}
 
+	layers, assets, decisionEvidence, nextLayer, nextAsset = appendVisionImageCandidates(input.Image, input.Detector, layers, assets, decisionEvidence, nextLayer, nextAsset)
 	layers, assets = suppressDuplicateVisibleOwners(input.Image, layers, assets)
 	groups := buildMajorGroups(input.Image, layers)
 	layers = applyLayerGroups(layers, groups)
 
 	return contract.Document{
-		Version: contract.Version,
-		Image:   input.Image,
-		Layers:  layers,
-		Groups:  groups,
-		Assets:  assets,
-		Summary: summarize(layers, groups, assets),
+		Version:  contract.Version,
+		Image:    input.Image,
+		Layers:   layers,
+		Groups:   groups,
+		Assets:   assets,
+		Evidence: decisionEvidence,
+		Summary:  summarize(layers, groups, assets),
 	}, nil
 }
 
@@ -153,6 +159,127 @@ func baseLayer(index int, kind contract.LayerKind, box geometry.Rect, z int, tok
 			SourceIDs:     append([]string(nil), token.SourcePrimitiveIDs...),
 		},
 	}
+}
+
+func appendVisionImageCandidates(image contract.ImageMeta, doc *visiondetector.Document, layers []contract.Layer, assets []contract.Asset, evidenceItems []contract.Evidence, nextLayer, nextAsset int) ([]contract.Layer, []contract.Asset, []contract.Evidence, int, int) {
+	if doc == nil {
+		return layers, assets, evidenceItems, nextLayer, nextAsset
+	}
+	candidates := append([]visiondetector.Candidate(nil), doc.Candidates...)
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Confidence != candidates[j].Confidence {
+			return candidates[i].Confidence > candidates[j].Confidence
+		}
+		if candidates[i].BBox.Y != candidates[j].BBox.Y {
+			return candidates[i].BBox.Y < candidates[j].BBox.Y
+		}
+		if candidates[i].BBox.X != candidates[j].BBox.X {
+			return candidates[i].BBox.X < candidates[j].BBox.X
+		}
+		return candidates[i].ID < candidates[j].ID
+	})
+	for _, candidate := range candidates {
+		box := geometry.Clamp(visionBBoxToRect(candidate.BBox), imageBBox(image))
+		item := contract.Evidence{
+			ID:            "vision_" + candidate.ID,
+			Kind:          "vision_detector_candidate",
+			BBox:          box,
+			BBoxAuthority: contract.BBoxAuthorityVision,
+			SourceRefs:    []contract.SourceRef{{Kind: "vision_detector_candidate", ID: candidate.ID}},
+			Reason:        "vision_hint_only:" + string(candidate.Role),
+			Score:         candidate.Confidence,
+			Meta: map[string]any{
+				"role":   candidate.Role,
+				"passId": candidate.Source.PassID,
+				"label":  candidate.RawLabel,
+				"merge":  candidate.Merge,
+				"source": candidate.Source,
+			},
+		}
+		if candidate.Role != visiondetector.RoleImageView {
+			item.State = contract.DecisionHint
+			evidenceItems = append(evidenceItems, item)
+			continue
+		}
+		if !canEmitVisionImage(image, candidate, box, layers) {
+			item.State = contract.DecisionSuppress
+			item.Reason = "vision_image_rejected_by_compact_or_duplicate_gate"
+			evidenceItems = append(evidenceItems, item)
+			continue
+		}
+		assetID := fmt.Sprintf("asset_vision_%04d", nextAsset)
+		nextAsset++
+		layer := contract.Layer{
+			ID:           fmt.Sprintf("vision_image_%04d", nextLayer),
+			Kind:         contract.LayerRaster,
+			BBox:         box,
+			Z:            20_000 + nextLayer,
+			Visible:      true,
+			Name:         fmt.Sprintf("Raster Vision %04d", nextLayer),
+			SemanticTags: []string{"vision_image_candidate"},
+			Raster:       &contract.Raster{AssetID: assetID, Mode: "fill"},
+			SourceRefs:   []contract.SourceRef{{Kind: "vision_detector_candidate", ID: candidate.ID}},
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityVision,
+				Reason:        "vision_compact_image_candidate",
+				SourceIDs:     []string{candidate.ID},
+			},
+		}
+		layers = append(layers, layer)
+		assets = append(assets, contract.Asset{
+			ID:         assetID,
+			Type:       "image",
+			Path:       fmt.Sprintf("assets/%s.png", assetID),
+			URL:        fmt.Sprintf("assets/%s.png", assetID),
+			Format:     "png",
+			BBox:       box,
+			Width:      box.Width,
+			Height:     box.Height,
+			SourceRefs: layer.SourceRefs,
+		})
+		item.State = contract.DecisionEmit
+		item.Reason = "vision_compact_image_candidate"
+		item.LayerID = layer.ID
+		evidenceItems = append(evidenceItems, item)
+		nextLayer++
+	}
+	return layers, assets, evidenceItems, nextLayer, nextAsset
+}
+
+func visionBBoxToRect(box visiondetector.BBox) geometry.Rect {
+	return geometry.Rect{
+		X:      int(math.Round(box.X)),
+		Y:      int(math.Round(box.Y)),
+		Width:  int(math.Round(box.Width)),
+		Height: int(math.Round(box.Height)),
+	}
+}
+
+func canEmitVisionImage(image contract.ImageMeta, candidate visiondetector.Candidate, box geometry.Rect, layers []contract.Layer) bool {
+	if box.Empty() || candidate.Confidence < 0.50 {
+		return false
+	}
+	imageArea := max(1, image.Width*image.Height)
+	boxArea := box.Area()
+	if boxArea < 12 {
+		return false
+	}
+	if boxArea*100 >= imageArea*18 {
+		return false
+	}
+	if box.Width*100 >= image.Width*72 || box.Height*100 >= image.Height*28 {
+		return false
+	}
+	for _, layer := range layers {
+		if !layer.Visible || layer.Kind != contract.LayerRaster {
+			continue
+		}
+		if geometry.IoU(layer.BBox, box) >= 0.55 || geometry.IoA(box, layer.BBox) >= 0.82 {
+			return false
+		}
+	}
+	return true
 }
 
 func nameForLayer(kind contract.LayerKind, index int) string {

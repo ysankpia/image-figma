@@ -39,12 +39,13 @@ const (
 )
 
 type Document struct {
-	Version string    `json:"version"`
-	Image   ImageMeta `json:"image"`
-	Layers  []Layer   `json:"layers"`
-	Groups  []Group   `json:"groups,omitempty"`
-	Assets  []Asset   `json:"assets,omitempty"`
-	Summary Summary   `json:"summary"`
+	Version  string     `json:"version"`
+	Image    ImageMeta  `json:"image"`
+	Layers   []Layer    `json:"layers"`
+	Groups   []Group    `json:"groups,omitempty"`
+	Assets   []Asset    `json:"assets,omitempty"`
+	Evidence []Evidence `json:"evidence,omitempty"`
+	Summary  Summary    `json:"summary"`
 }
 
 type ImageMeta struct {
@@ -112,6 +113,19 @@ type Group struct {
 type SourceRef struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
+}
+
+type Evidence struct {
+	ID            string         `json:"id"`
+	State         DecisionState  `json:"state"`
+	Kind          string         `json:"kind"`
+	BBox          geometry.Rect  `json:"bbox,omitempty"`
+	BBoxAuthority BBoxAuthority  `json:"bboxAuthority,omitempty"`
+	SourceRefs    []SourceRef    `json:"sourceRefs,omitempty"`
+	Reason        string         `json:"reason"`
+	Score         float64        `json:"score,omitempty"`
+	LayerID       string         `json:"layerId,omitempty"`
+	Meta          map[string]any `json:"meta,omitempty"`
 }
 
 type Decision struct {
