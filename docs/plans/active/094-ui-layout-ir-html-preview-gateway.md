@@ -767,3 +767,47 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
     section_0004 bbox 0,1087,665,353 evidence 34
   ```
 - 修正说明：第一版 section split 被大块 image/shape substrate bbox 吞掉纵向 gap，只得到 1 个 section。Stage 3 改为先用 text/icon/line anchor evidence 找 top-level vertical gaps，再把重叠的大块 image/shape/unknown evidence 吸收到对应 section bbox。这是通用责任分离：anchor evidence 负责切分，substrate/background evidence 负责 section 覆盖扩展。
+
+## Stage 4 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/cluster
+  services/backend-go/internal/layoutcompile
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile
+  rm -rf /tmp/layout-018-stage4
+  cd services/backend-go && go run ./cmd/layoutcompile \
+    -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -out /tmp/layout-018-stage4
+  git diff --check
+  ```
+- 真实样图输出：
+  ```text
+  /tmp/layout-018-stage4/ui_layout_ir.v1.json
+  /tmp/layout-018-stage4/ui_layout_ir_validation.v1.json
+  /tmp/layout-018-stage4/layout_compile_report.md
+  ```
+- 018 Stage 4 artifact summary：
+  ```text
+  version: ui_layout_ir.v1
+  source size: 665x1440
+  nodes: 38
+  root children: 4 sections
+  rows: 33
+  evidence: 203
+  decisions: 38
+  validation errors: 0
+  validation warnings: 0
+  rows outside parent section: 0
+  section row counts:
+    section_0001: 20
+    section_0002: 2
+    section_0003: 5
+    section_0004: 6
+  ```
+- 修正说明：第一版 row expansion 会把跨 section 的大块 image/shape substrate 吸收到局部 row，导致 row bbox 逃出父 section。Stage 4 加入通用 section containment gate：substrate 必须中心落在 section 内，或自身至少 50% 面积落在 section 内；row 扩展后的 union 也必须完全留在父 section bounds 内。这不是样本特化，而是 layout IR 的父子 bbox 合同。

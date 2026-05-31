@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/cluster"
 	layoutevidence "github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/evidence"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/segment"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/contract"
@@ -107,7 +108,13 @@ func Run(options Options) (Result, error) {
 	doc.Evidence = normalized
 	if len(normalized) > 0 {
 		segmentation := segment.Build(geometry.Rect{Width: imageMeta.Width, Height: imageMeta.Height}, normalized, segment.Options{})
-		doc.Root.Children = segmentation.Sections
+		sections := make([]contract.Node, 0, len(segmentation.Sections))
+		for _, section := range segmentation.Sections {
+			withRows, rowDecisions := cluster.BuildRows(section, normalized, cluster.Options{})
+			sections = append(sections, withRows)
+			doc.Decisions = append(doc.Decisions, rowDecisions...)
+		}
+		doc.Root.Children = sections
 		doc.Decisions = append(doc.Decisions, segmentation.Decisions...)
 	}
 	doc.Summary = summarize(doc)
@@ -323,7 +330,7 @@ func markdownReport(doc contract.Document, report validate.Report) string {
 
 ## Stage
 
-Stage 3 top-level section segmentation is active. Row/column clustering, HTML preview, and Figma gateway are intentionally not active yet.
+Stage 4 section row clustering is active. Child materialization, HTML preview, and Figma gateway are intentionally not active yet.
 `,
 		doc.Version,
 		doc.SourceImage.Path,
