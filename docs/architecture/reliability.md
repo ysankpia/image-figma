@@ -1,33 +1,31 @@
-# 可靠性
+# Reliability
 
-v0.1 的可靠性目标是让当前 M29 plan-driven preview path 稳定、可审计、失败可解释。
+Draft runtime reliability means task state is correct, failure is explicit, and completed output satisfies the Draft contract.
 
-## Current Task States
-
-当前运行时使用：
+## Task States
 
 ```text
-processing
+queued
+running
 completed
 failed
 ```
 
-当前典型 stage：
+Draft stages:
 
 ```text
-m29_queued
+draft_queued
 ocr
-m29
-m29_2_source_ui_physical_graph
-m29_3_relation_graph_report
-m29_4_stable_design_cluster
-m29_5_replay_plan
-m29_materialization
-m29_asset_publish
-m29_completed
+m29_physical_evidence
+vision_detector
+vision_review
+draft_assemble
+draft_assets
+draft_validate
+draft_export
+draft_completed
+draft_failed
 ```
-
-M29 Direct、M29.0.x、M30、M31/M37/M38/M39/M39.1 stage names are historical and should not appear in new upload tasks.
 
 ## Failure Strategy
 
@@ -48,92 +46,24 @@ stage = failing stage
 message = concrete error
 ```
 
-The backend also writes `error_logs`.
+The server must recover from panics inside task goroutines and mark the task failed. A task must not remain permanently `running`.
 
-There is no longer a non-blocking compare materializer in the product path. If M29.2, M29.3, M29.4, M29.5, materialization, or asset publish fails, `/api/tasks/{taskId}/dsl` must not pretend to be ready.
+## Required Evidence
 
-## OCR As Required Evidence
+M29 physical evidence and Draft assembly/export are required. If they fail, the task fails.
 
-In the current M29 preview path, OCR is not a decorative diagnostic. It provides text evidence for M29 ownership and materialization.
+OCR may be required depending on configured provider and product mode. If OCR is required and fails, the task fails.
 
-Therefore:
+Vision detector/review is best-effort by default. Provider TLS, timeout, 5xx, empty response, or JSON parse failure should write a fallback artifact and continue with M29/OCR unless the request explicitly requires vision.
 
-- unsupported OCR provider fails the task.
-- missing Baidu token fails the task when `OCR_PROVIDER=baidu_ppocrv5`.
-- remote OCR timeout/failure fails the task after provider-local transient HTTP retry is exhausted.
-- the backend must not mark a task completed with fake DSL after OCR failure.
+## Completion Requirements
 
-This is different from the removed pre-M29 fallback-first chain, where OCR failure could still return a deterministic fallback DSL.
+A task may be marked completed only when:
 
-## M29 Safety
+- `editable_layer_graph.v1.json` exists;
+- `draft_runtime.dsl.v1.json` exists;
+- visible RasterLayer assets resolve;
+- Draft validation has no blocking violations;
+- task state points to the completed artifact paths.
 
-M29 required stages should fail fast when required evidence is invalid or missing. They must not fabricate visible DSL nodes from:
-
-```text
-mixed evidence
-future candidates
-audit-only references
-missing source assets
-newly invented bboxes
-weak cluster hints
-```
-
-M29 materializer may preserve fallback and skip unsafe text/shape/image materialization. Skips must be recorded in `materialization_report.json`.
-
-Cleanup must be plan-authorized:
-
-```text
-fallback erasure -> only if M29.5 cleanupTargets includes target=fallback
-copied raster/media cleanup -> only if M29.5 cleanupTargets includes target=copied_image_asset
-```
-
-Materializer must not independently recompute cleanup ownership from contains/overlap.
-
-## Artifact Timing
-
-Every preview task writes:
-
-```text
-storage/upload_previews/{taskId}/stage_timings.json
-```
-
-`GET /api/tasks/{taskId}/materialization` returns the same timings so slow stages can be traced without scanning logs.
-
-## Timeouts
-
-Suggested local preview targets:
-
-- simple page: 15 to 30 seconds.
-- medium page: 30 to 60 seconds.
-- complex page: 60 to 90 seconds.
-- over 120 seconds should be treated as a performance bug or provider timeout, not normal UI behavior.
-
-## Retry Strategy
-
-v0.1 does not implement task-level automatic retry.
-
-Allowed:
-
-- user manually uploads again.
-- provider-specific timeout tuning through environment variables.
-- provider-local bounded retry for transient HTTP transport failures and transient HTTP status codes from required external services.
-- future explicit retry endpoint.
-
-Not allowed:
-
-- silent background reruns without task status updates.
-- fabricating completed output after required evidence failure.
-
-Current provider-local retry:
-
-```text
-Baidu PP-OCRv5 HTTP submit / poll / result download:
-  max attempts = 3
-  transient transport errors from requests are retried
-  HTTP 408 / 425 / 429 / 5xx are retried
-  remote job state=failed, token errors, parse errors, and exhausted retries still fail OCR
-```
-
-## Removed Reliability Rules
-
-The old pre-M29 upload chain and M8-M28 diagnostic endpoints were removed in M30.2.2. M31-M39/M39.1 downstream experiments were later removed from backend runtime by M29 backend downstream pruning. M29 Direct compare and legacy M30 materialization product paths have also been removed from current runtime. Their fallback, optional diagnostics, ONNX proposer, hierarchy, grouping, and M30-specific behavior is historical only and must not be used to reason about the current product path.
+Do not return fake DSL after a required evidence stage fails.

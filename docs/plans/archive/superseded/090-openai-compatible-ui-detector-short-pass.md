@@ -1,10 +1,15 @@
 # 090 OpenAI-compatible UI Detector Short Pass
 
-- 状态：active / Go Codia Beta runtime path; detector integration implemented; 2026-05-31 output-quality repair ongoing
+- 状态：superseded
 - 创建日期：2026-05-30
 - 负责人：未指定
-- 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../archive/deferred/089-go-codia-like-compiler-rebuild.md)
-- 关联质量债：[017 Codia-like Beta UI Role Detector Gap](../../bugs/open/017-codia-like-beta-ui-role-detector-gap.md)
+- 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../deferred/089-go-codia-like-compiler-rebuild.md)
+- 历史质量债：[017 Codia-like Beta UI Role Detector Gap](../../../bugs/archive/superseded/017-codia-like-beta-ui-role-detector-gap.md)
+- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](../../active/093-editable-draft-layer-pipeline-rebuild.md)
+
+## Superseded Note
+
+本计划描述旧 Go Codia Beta detector short-pass。当前分支将 detector 能力迁移到 provider-neutral `internal/vision`，作为 Draft layer candidate/review evidence，不再接入 Codia assembly/control/tree/emitter。
 
 ## Goal
 

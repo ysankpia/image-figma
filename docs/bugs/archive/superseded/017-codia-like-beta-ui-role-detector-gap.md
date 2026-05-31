@@ -1,12 +1,18 @@
 # 017 Codia-like Beta UI Role Detector Gap
 
-- 状态：open
+- 状态：superseded
 - 创建日期：2026-05-30
 - 所属主线：Go Codia-like compiler rebuild
+- Superseded 日期：2026-05-31
+- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](../../../plans/active/093-editable-draft-layer-pipeline-rebuild.md)
 - 当前上线判断：不阻塞 Beta / 内部试用上线，但阻塞 Codia 1:1 质量目标
-- 关联计划：[089 Go Codia-like Compiler Rebuild](../../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
-- 当前 detector 计划：[090 OpenAI-compatible UI Detector Short Pass](../../plans/active/090-openai-compatible-ui-detector-short-pass.md)
+- 关联计划：[089 Go Codia-like Compiler Rebuild](../../../plans/archive/deferred/089-go-codia-like-compiler-rebuild.md)
+- 旧 detector 计划：[090 OpenAI-compatible UI Detector Short Pass](../../../plans/archive/superseded/090-openai-compatible-ui-detector-short-pass.md)
 - 当前 smoke gate：`services/backend-go/tools/codia_smoke_2img.sh`
+
+## Superseded Note
+
+本记录描述的是旧 Go Codia Beta / Codia-like tree 路径的质量债。当前分支已把产品目标切到 Editable Draft Layer Pipeline。Codia Beta 质量债不再作为 open product bug 跟踪；其中有价值的事实应转化为 Draft layer ownership、vision candidate、asset、z-order 或 eval 指标。
 
 ## Executive Summary
 
@@ -299,7 +305,7 @@ OpenAI-compatible VLM short-pass candidate provider
 The active implementation plan is:
 
 ```text
-docs/plans/active/090-openai-compatible-ui-detector-short-pass.md
+docs/plans/archive/superseded/090-openai-compatible-ui-detector-short-pass.md
 ```
 
 Probe summary:

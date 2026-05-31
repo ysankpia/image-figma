@@ -1,99 +1,69 @@
-# 外部集成
+# Integrations
 
-集成必须少而直接。当前 Codia Beta 路径依赖 Figma Plugin API、本地 Go `codiaserver`、可选 OCR provider、可选 OpenAI-compatible UI detector、本地文件存储和 DSL v0.2 Renderer。Python/FastAPI `/api/upload-preview` 是保留的 DSL v0.1 preview 路径，不是 Codia Beta 输出质量调试入口。
+Current integrations support the Editable Draft pipeline.
 
 ## Figma
 
-Figma Plugin API 用于：
+The plugin writes Draft Runtime DSL into Figma through `packages/image-to-figma-renderer`.
 
-- 接收插件 UI 消息。
-- 上传 PNG 到 Go Codia Beta 后端或保留的 Python preview 后端。
-- 获取 task 状态和正式 DSL。
-- 创建 root Frame。
-- 创建文本、形状、图片和线条。
-- 设置节点位置和样式。
-- 将生成结果放到当前页面。
+Figma integration boundaries:
 
-Renderer 只通过 Figma Plugin API 写图层，不调用后端。
+- Plugin Main calls Figma Plugin API.
+- Renderer receives DSL and adapter methods.
+- Backend never calls Figma API.
+- Plugin UI iframe never calls Figma API directly.
 
 ## OCR
 
-OCR is a source-evidence provider for M29:
+OCR is an evidence source for Draft. It provides text, bbox, and confidence.
+
+OCR evidence is used by:
+
+- M29 text mask exclusion.
+- Draft TextLayer creation.
+- Vision review context.
+
+OCR does not own final grouping, z-order, or raster suppression decisions.
+
+## Vision Models
+
+Vision models are provider-neutral. OpenAI-compatible Responses, Chat Completions, and local HTTP adapters are valid as long as they produce the configured candidate/review contracts.
+
+Provider configuration:
 
 ```text
-PNG -> text boxes -> M29 ownership evidence -> M29 plan-driven text nodes
+VISION_PROVIDER
+VISION_WIRE_API
+VISION_BASE_URL
+VISION_MODEL
+VISION_API_KEY
+VISION_DETECTOR_CONCURRENCY
+VISION_TIMEOUT_SECONDS
+VISION_STREAM
+VISION_REVIEW_ENABLED
 ```
 
-Current providers:
+Vision models provide candidates and review decisions. They do not generate final Figma trees.
+
+## Local Assets
+
+The Go backend writes local crop assets for `RasterLayer` nodes.
+
+Renderer fetches them from:
 
 ```text
-fake
-baidu_ppocrv5
+/api/draft-preview/{taskId}/assets/{assetId}.png
 ```
 
-OCR output must include:
+Completed tasks must not expose unresolved visible raster assets.
+
+## Codia Reference
+
+Official Codia JSON samples are reference/eval inputs only:
 
 ```text
-text
-bbox
-confidence
-lineId
-blockId
+docs/reference/codia-samples/
+internal/eval/codia
 ```
 
-When `OCR_PROVIDER=baidu_ppocrv5`, the token is supplied through `BAIDU_PADDLE_OCR_TOKEN`. Real tokens must never be committed.
-
-In the M29 preview path, OCR failure fails the task. This preserves the evidence contract instead of falling back to a misleading completed DSL.
-
-## Go Codia Beta
-
-Go Codia Beta 是当前 `Generate Beta` 后端：
-
-```text
-services/backend-go/cmd/codiaserver
-POST /api/codia-preview
-GET /api/codia-preview/{taskId}/dsl
-GET /api/codia-preview/{taskId}/assets/{assetId}.png
-```
-
-它负责 OCR、Go M29 physical evidence、可选 UI detector、assembly/control/tree/emitter、DSL v0.2 export 和 crop assets。调试 Codia Beta 输出质量时，先看：
-
-```text
-services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/
-```
-
-## Python M29 Preview
-
-Python M29 preview is a retained local app-layer module chain, not an external service.
-
-It produces structured JSON evidence under:
-
-```text
-storage/upload_previews/{taskId}/
-```
-
-Python M29 plan-driven materializer emits DSL v0.1 for `/api/upload-preview`. It does not emit Codia Beta DSL v0.2 and should not be patched for Codia Beta assembly/tree defects.
-
-## Storage
-
-Development uses local filesystem storage.
-
-Python M29 image assets are published under:
-
-```text
-storage/assets/{taskId}/m29/
-/files/assets/{taskId}/m29/...
-```
-
-Go Codia Beta image assets are published under:
-
-```text
-services/backend-go/storage/codia_server/codia_previews/{taskId}/compile/assets/
-/api/codia-preview/{taskId}/assets/{assetId}.png
-```
-
-Future object storage or signed URLs are out of scope for v0.1.
-
-## Removed Integrations
-
-The removed pre-M29 backend chain used old visual primitive, patch, text replacement, component, slice, icon, perception, and SAM harnesses. M29 Direct compare, legacy M30 product materializer, and M31-M39 downstream experiments are also no longer active upload integrations. Historical details remain in ADRs and `docs/reference/legacy/`.
+Generation packages must not read Codia samples or import eval packages.

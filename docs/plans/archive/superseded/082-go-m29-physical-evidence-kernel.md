@@ -1,9 +1,10 @@
 # 082 Go M29 Physical Evidence Kernel
 
-- 状态：active
+- 状态：superseded
 - 创建日期：2026-05-28
 - 分支：`feat/final-m29-visual-compiler`
 - 负责人：Codex
+- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](../../active/093-editable-draft-layer-pipeline-rebuild.md)
 
 ## Goal
 

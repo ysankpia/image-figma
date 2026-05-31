@@ -2,31 +2,37 @@
 
 本目录记录 shipped bug、根因、修复和回归保护。
 
-当前 open bug：
+当前分支的主线是 Editable Draft Layer Pipeline。Codia Beta 质量债已经归档为 superseded，不再作为 open product bug 跟踪。
 
-- [017-codia-like-beta-ui-role-detector-gap.md](open/017-codia-like-beta-ui-role-detector-gap.md)：Go Codia-like compiler 可先作为 Beta 上线，但当前质量天花板受限于缺少 UI role detector / role-aware evidence refinement，主要表现为 `upstream_leaf_missing ImageView`。
+## 当前 Open Bugs
+
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
-- [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别 of UI 文本仍判为 `complex_background`。
+- [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别的 UI 文本仍判为 `complex_background`。
 
-最近 resolved bug：
+## Superseded Bugs
 
-- [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)：media 内长 UI 控件 label 不再仅因 OCR bbox 较高/较宽被归为 `preserve_raster_text`，Google/Snapchat 这类已 OCR 的登录方式文本现在能进入 `editable_ui_text / text_replay`，真正大 display text 仍保留在 raster。
-- [015-bottom-tab-selected-icon-stays-non-ocr-foreground.md](resolved/015-bottom-tab-selected-icon-stays-non-ocr-foreground.md)：selected bottom tab icon 现在通过 near-media OCR anchor、evidence-aware soft-edge alpha、evidence contract、promotion、M29.5 去重和 ownership conservation 成为独立 `icon_replay`，selected indicator 仍保持 diagnostic。
-- [014-fragmented-internal-icon-fails-transparent-asset-gate.md](resolved/014-fragmented-internal-icon-fails-transparent-asset-gate.md)：图内 action row icon 被切成相邻碎片时，现在由 M29.6 生成同 OCR anchor 的 union candidate，再通过 transparent/evidence/promotion/M29.5 主链成为可选 icon。
-- [011-finite-control-backgrounds-can-be-preserved-as-media.md](resolved/011-finite-control-backgrounds-can-be-preserved-as-media.md)：有限按钮/控件背景现在在 source evidence 支持时进入 `control_background / shape_geometry / shape_replay`，并由 M29.5 裁剪无效 copied cleanup target。
-- [012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md](resolved/012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md)：底部 tab 图标在 low-confidence composite media 内被 raw M29 blocked evidence 捕获后，现在通过 M29.2 label-anchor recovery 恢复为 `raster_icon / icon_replay`，并由 M29.5 授权 copied media cleanup。
-- [013-dsl-visual-comparison-text-noise-dominates-gate.md](resolved/013-dsl-visual-comparison-text-noise-dominates-gate.md)：DSL visual comparison 的近似文字渲染误差主导全图 diff，导致 061 真实样本质量 gate 容易被诊断字体噪声带偏。
-- [010-dsl-visual-comparison-text-renders-as-solid-bars.md](resolved/010-dsl-visual-comparison-text-renders-as-solid-bars.md)：DSL visual comparison 的 report-only 近似渲染把 text 节点画成实心条，容易误导 525 artifact inspection。
-- [008-fallback-off-dark-ui-white-collapse.md](resolved/008-fallback-off-dark-ui-white-collapse.md)：M29 fallback-off 深色 UI 暴露固定浅色背景，根因是 raster/media preservation 没有回归 M29.2/M29.5 主链。
-- [007-composite-media-outer-shell-duplicates-top-tab-text.md](resolved/007-composite-media-outer-shell-duplicates-top-tab-text.md)：M30.7 同时物化紧轮播图和外层 chrome shell，导致顶部 tab 文本被底层 raster 与上层 text 重复绘制。
-- [006-missing-text-nodes-not-added-to-fallback-single-nodes.md](resolved/006-missing-text-nodes-not-added-to-fallback-single-nodes.md)：M29.0.4 未配对/未聚类成功的孤立文本节点未被 fallback 兜底添加，导致 DSL 丢失文本。
-- [005-m2902-preview-hides-accepted-image-evidence.md](resolved/005-m2902-preview-hides-accepted-image-evidence.md)：M29.0.2 只在 JSON/overlay 记录 accepted image 和 M29.1 group，没有导出 preview crop，导致轮播图等证据在底部证据区不可见。
-- [004-icon-gap-multiple-blocked-hints-fail-validation.md](resolved/004-icon-gap-multiple-blocked-hints-fail-validation.md)：M22 多个 blocked hints 共用候选计数生成重复 id，导致真实图 `icon-gap-candidates` 文档校验失败。
+- [017-codia-like-beta-ui-role-detector-gap.md](archive/superseded/017-codia-like-beta-ui-role-detector-gap.md)：旧 Go Codia Beta / Codia-like tree 路径质量债。已被 [093 Editable Draft Layer Pipeline Rebuild](../plans/active/093-editable-draft-layer-pipeline-rebuild.md) 取代。
+
+## 最近 Resolved Bugs
+
+- [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)
+- [015-bottom-tab-selected-icon-stays-non-ocr-foreground.md](resolved/015-bottom-tab-selected-icon-stays-non-ocr-foreground.md)
+- [014-fragmented-internal-icon-fails-transparent-asset-gate.md](resolved/014-fragmented-internal-icon-fails-transparent-asset-gate.md)
+- [011-finite-control-backgrounds-can-be-preserved-as-media.md](resolved/011-finite-control-backgrounds-can-be-preserved-as-media.md)
+- [012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md](resolved/012-bottom-tab-icons-stay-diagnostic-inside-composite-media.md)
+- [013-dsl-visual-comparison-text-noise-dominates-gate.md](resolved/013-dsl-visual-comparison-text-noise-dominates-gate.md)
+- [010-dsl-visual-comparison-text-renders-as-solid-bars.md](resolved/010-dsl-visual-comparison-text-renders-as-solid-bars.md)
+- [008-fallback-off-dark-ui-white-collapse.md](resolved/008-fallback-off-dark-ui-white-collapse.md)
+- [007-composite-media-outer-shell-duplicates-top-tab-text.md](resolved/007-composite-media-outer-shell-duplicates-top-tab-text.md)
+- [006-missing-text-nodes-not-added-to-fallback-single-nodes.md](resolved/006-missing-text-nodes-not-added-to-fallback-single-nodes.md)
+- [005-m2902-preview-hides-accepted-image-evidence.md](resolved/005-m2902-preview-hides-accepted-image-evidence.md)
+- [004-icon-gap-multiple-blocked-hints-fail-validation.md](resolved/004-icon-gap-multiple-blocked-hints-fail-validation.md)
 
 ## Structure
 
 - `open/`：未解决 bug。
 - `resolved/`：已解决 bug。
+- `archive/superseded/`：被架构方向取代、不再作为 open bug 跟踪的历史问题。
 - `template.md`：bug 记录模板。
 
 ## Rules
