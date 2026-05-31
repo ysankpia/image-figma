@@ -14,6 +14,7 @@ import (
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
 	layoutevidence "github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/evidence"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/segment"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/validate"
 	m29evidence "github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
@@ -104,6 +105,11 @@ func Run(options Options) (Result, error) {
 	}
 	doc := newEmptyDocument(imageMeta)
 	doc.Evidence = normalized
+	if len(normalized) > 0 {
+		segmentation := segment.Build(geometry.Rect{Width: imageMeta.Width, Height: imageMeta.Height}, normalized, segment.Options{})
+		doc.Root.Children = segmentation.Sections
+		doc.Decisions = append(doc.Decisions, segmentation.Decisions...)
+	}
 	doc.Summary = summarize(doc)
 	validation := validate.Document(doc)
 
@@ -317,7 +323,7 @@ func markdownReport(doc contract.Document, report validate.Report) string {
 
 ## Stage
 
-Stage 2 evidence normalization is active. Segmentation, clustering, HTML preview, and Figma gateway are intentionally not active yet.
+Stage 3 top-level section segmentation is active. Row/column clustering, HTML preview, and Figma gateway are intentionally not active yet.
 `,
 		doc.Version,
 		doc.SourceImage.Path,

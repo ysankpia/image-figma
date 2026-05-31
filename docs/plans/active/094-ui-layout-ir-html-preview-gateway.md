@@ -725,3 +725,45 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
     texture_fragment: 1
   ```
 - 说明：Stage 2 只做 evidence normalization；layout tree 仍只有 page root。M29/OCR/vision 原始证据不会直接变成 Figma 或 HTML 节点，后续 Stage 3/4 才消费这些 normalized evidence 做 section 和 row/column。
+
+## Stage 3 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/segment
+  services/backend-go/internal/layoutcompile
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile
+  rm -rf /tmp/layout-018-stage3
+  cd services/backend-go && go run ./cmd/layoutcompile \
+    -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -out /tmp/layout-018-stage3
+  git diff --check
+  ```
+- 真实样图输出：
+  ```text
+  /tmp/layout-018-stage3/ui_layout_ir.v1.json
+  /tmp/layout-018-stage3/ui_layout_ir_validation.v1.json
+  /tmp/layout-018-stage3/layout_compile_report.md
+  ```
+- 018 Stage 3 artifact summary：
+  ```text
+  version: ui_layout_ir.v1
+  source size: 665x1440
+  nodes: 5
+  root children: 4 sections
+  evidence: 203
+  decisions: 5
+  validation errors: 0
+  validation warnings: 0
+  sections:
+    section_0001 bbox 27,14,611,817 evidence 141
+    section_0002 bbox 55,695,495,107 evidence 8
+    section_0003 bbox 41,860,577,198 evidence 15
+    section_0004 bbox 0,1087,665,353 evidence 34
+  ```
+- 修正说明：第一版 section split 被大块 image/shape substrate bbox 吞掉纵向 gap，只得到 1 个 section。Stage 3 改为先用 text/icon/line anchor evidence 找 top-level vertical gaps，再把重叠的大块 image/shape/unknown evidence 吸收到对应 section bbox。这是通用责任分离：anchor evidence 负责切分，substrate/background evidence 负责 section 覆盖扩展。
