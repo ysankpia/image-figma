@@ -1143,3 +1143,84 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   mean diff 从 Stage 8A 的 10.48 上升到 27.08 是预期取舍：移除覆盖式大 crop 后，像素相似度下降，但可编辑性提高。
   这不是最终视觉质量完成。剩余主要缺口是 shape/style 重建、局部背景补洞、字体样式和布局细节，不应再用整块 crop 兜回去。
   ```
+
+## Stage 8C: Row Layout Contract And Structural Health Gate
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/cluster/
+  services/backend-go/internal/htmlpreview/render/
+  services/backend-go/tools/layout_smoke_4img.sh
+  docs/plans/active/094-ui-layout-ir-html-preview-gateway.md
+  ```
+- 第一性原理结论：
+  ```text
+  HTML preview 不能只优化 source PNG pixel diff。
+  source[bbox] -> crop -> paste at original bbox 是恒等变换，像素上容易变好，但不能证明 Figma Auto Layout 可编辑性。
+  HTML preview 的主职责必须改成结构验收：row/column/gap/padding/align 是否能被机械翻译。
+  ```
+- 已证实的问题：
+  ```text
+  contract.Layout 已有 row/column/gap/padding/align 字段。
+  cluster/rows.go 过去只把 evidence 聚成 row bbox，row.Layout.Mode 仍是 absolute。
+  htmlpreview/render 过去 flatten 全树后绝对定位输出，layout.mode 只出现在 debug label。
+  report 过去没有 auto_layout_coverage、absolute_fallback_ratio、gap variance、text eraser count。
+  ```
+- 修复：
+  ```text
+  cluster row 输出 LayoutRow，并推导 gap/padding/align。
+  row gap 基于 text/icon 前景 anchor 推导；shape/background 不参与主轴 gap，避免把背景当 flex item。
+  HTML renderer 改为 tree-aware render：row 节点输出 display:flex；text/icon/image 作为 flow item；shape/unknown/text_eraser 继续作为 absolute overlay/fallback。
+  HTML report 新增 Structural Health。
+  四图 smoke 输出 auto layout coverage、absolute fallback ratio、mean gap variance。
+  ```
+- 当前 Structural Health 不是通过门，而是暴露门：
+  ```text
+  coverage 高不等于结构完成；gap variance 高说明 row 聚类仍粗糙。
+  pixel diff 仍记录，但不作为进入 Figma gateway 的主验收。
+  ```
+- 已执行：
+  ```bash
+  git diff --check
+  cd services/backend-go && go test ./internal/htmlpreview/... ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile ./cmd/previewdiff
+  cd services/backend-go && bash tools/layout_smoke_4img.sh
+  cd services/backend-go && go run ./cmd/layoutcompile -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png -out /tmp/layout-018-flex-health
+  ```
+- Chrome DevTools MCP artifact：
+  ```text
+  /tmp/layout-018-flex-health/preview_screenshot.png
+  /tmp/layout-018-flex-health/preview_screenshot_normalized.png
+  /tmp/layout-018-flex-health/source_vs_html_diff.png
+  /tmp/layout-018-flex-health/source_html_flex_diff_sheet.png
+  ```
+- 018 artifact summary：
+  ```text
+  row layout nodes: 33
+  row modes: row
+  preview layout-row html count: 35
+  preview flow-node count: 125
+  missing assets: 0
+  browser mean channel diff: 35.03
+  auto layout coverage: 0.7949
+  absolute fallback ratio: 0.2051
+  single-child row count: 11
+  mean gap variance: 946.79
+  text eraser nodes: 0
+  ```
+- 四图 summary：
+  ```text
+  | case | nodes | sections | rows | evidence | html assets | auto layout coverage | absolute fallback | mean gap variance | warnings |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | t018 | 194 | 4 | 34 | 203 | 78 | 0.7949 | 0.2051 | 946.79 | 0 |
+  | t022 | 124 | 10 | 30 | 121 | 31 | 0.8046 | 0.1954 | 3613.20 | 0 |
+  | lizhi | 98 | 8 | 23 | 76 | 30 | 0.8636 | 0.1364 | 1015.48 | 0 |
+  | xianyu | 157 | 4 | 30 | 143 | 38 | 0.6311 | 0.3689 | 498.60 | 0 |
+  ```
+- 取舍说明：
+  ```text
+  mean diff 从 27.08 上升到 35.03 是预期代价：row flex 渲染开始暴露聚类和 gap 推导问题。
+  这次修复不是让 HTML 更像源图，而是让 HTML 不再掩盖结构错误。
+  下一步应修 cluster：降低单子 row、分离背景 overlay 与前景 flow、按局部行/卡片层级重新聚类，而不是退回 flat absolute/crop overlay。
+  ```

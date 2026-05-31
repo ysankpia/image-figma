@@ -116,6 +116,96 @@ func TestWriteUsesNodeFillAndTextEraserLayer(t *testing.T) {
 	}
 }
 
+func TestWriteRendersRowLayoutAndReportsStructuralHealth(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.png")
+	writePreviewTestPNG(t, source, 160, 80)
+
+	doc := previewDoc(source)
+	row := contract.Node{
+		ID:   "row_1",
+		Type: contract.NodeRow,
+		BBox: geometry.Rect{X: 8, Y: 10, Width: 120, Height: 36},
+		Layout: contract.Layout{
+			Mode: contract.LayoutRow,
+			Gap:  8,
+			Padding: contract.Insets{
+				Top:  4,
+				Left: 6,
+			},
+			Align: "center",
+		},
+		Meta: map[string]string{"gapVariance": "0"},
+		Children: []contract.Node{
+			{
+				ID:             "row_text_1",
+				Type:           contract.NodeText,
+				BBox:           geometry.Rect{X: 14, Y: 14, Width: 36, Height: 16},
+				Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+				FallbackPolicy: "editable_text",
+				Text:           &contract.Text{Characters: "A"},
+			},
+			{
+				ID:             "row_icon_1",
+				Type:           contract.NodeIcon,
+				BBox:           geometry.Rect{X: 58, Y: 14, Width: 16, Height: 16},
+				Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+				FallbackPolicy: "crop_asset",
+				AssetRef:       &contract.AssetRef{AssetID: "asset_row_icon_1"},
+			},
+			{
+				ID:             "row_bg_1",
+				Type:           contract.NodeShape,
+				BBox:           geometry.Rect{X: 8, Y: 10, Width: 120, Height: 36},
+				Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+				Style:          contract.Style{Fill: "#eeeeee"},
+				FallbackPolicy: "vector_shape",
+			},
+		},
+	}
+	doc.Root.Children = []contract.Node{row}
+	doc.Assets = append(doc.Assets, contract.Asset{
+		ID:     "asset_row_icon_1",
+		Type:   "image",
+		Format: "png",
+		BBox:   geometry.Rect{X: 58, Y: 14, Width: 16, Height: 16},
+		Width:  16,
+		Height: 16,
+	})
+
+	artifacts, err := Write(doc, Options{OutputDir: filepath.Join(dir, "out")})
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	html := readString(t, artifacts.PreviewHTML)
+	for _, want := range []string{
+		`class="node node-row layout-row"`,
+		`data-layout-mode="row"`,
+		`--gap:8px`,
+		`--pt:4px`,
+		`class="flow-node node-text"`,
+		`class="flow-node node-icon"`,
+		`data-node-id="row_bg_1"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("preview html missing %q:\n%s", want, html)
+		}
+	}
+	report := readString(t, artifacts.PreviewReport)
+	for _, want := range []string{
+		"- row layout nodes: `1`",
+		"- visible leaf nodes: `3`",
+		"- flex-covered leaf nodes: `2`",
+		"- auto layout coverage: `0.6667`",
+		"- absolute fallback ratio: `0.3333`",
+		"- mean gap variance: `0.00`",
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("preview report missing %q:\n%s", want, report)
+		}
+	}
+}
+
 func previewDoc(source string) contract.Document {
 	return contract.Document{
 		Version: contract.Version,

@@ -24,6 +24,17 @@ func TestBuildRowsGroupsAlignedAnchors(t *testing.T) {
 	if withRows.Children[0].BBox.Y != 20 || withRows.Children[1].BBox.Y != 90 {
 		t.Fatalf("unexpected row bboxes: %+v", withRows.Children)
 	}
+	for _, row := range withRows.Children {
+		if row.Layout.Mode != contract.LayoutRow {
+			t.Fatalf("row layout mode = %s, want row", row.Layout.Mode)
+		}
+		if row.Layout.Gap != 20 {
+			t.Fatalf("row gap = %d, want 20 for row %+v", row.Layout.Gap, row)
+		}
+		if row.Layout.Align != "center" {
+			t.Fatalf("row align = %q, want center", row.Layout.Align)
+		}
+	}
 }
 
 func TestBuildRowsAbsorbsOverlappingSubstrate(t *testing.T) {
@@ -42,6 +53,15 @@ func TestBuildRowsAbsorbsOverlappingSubstrate(t *testing.T) {
 	}
 	if row.Meta["evidenceCount"] != "3" {
 		t.Fatalf("row evidence count = %q", row.Meta["evidenceCount"])
+	}
+	if row.Layout.Mode != contract.LayoutRow {
+		t.Fatalf("row layout mode = %s, want row", row.Layout.Mode)
+	}
+	if row.Layout.Gap != 20 {
+		t.Fatalf("row gap = %d, want 20", row.Layout.Gap)
+	}
+	if row.Layout.Padding.Left != 20 || row.Layout.Padding.Top != 10 {
+		t.Fatalf("row padding should be inferred from layout children, got %+v", row.Layout.Padding)
 	}
 }
 

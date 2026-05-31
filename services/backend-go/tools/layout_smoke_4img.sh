@@ -58,14 +58,23 @@ summary = doc.get("summary") or {}
 report = (out / "html_preview_report.md").read_text()
 warning_match = re.search(r"- warnings: `([0-9]+)`", report)
 warnings = int(warning_match.group(1)) if warning_match else -1
+coverage_match = re.search(r"- auto layout coverage: `([0-9.]+)`", report)
+fallback_match = re.search(r"- absolute fallback ratio: `([0-9.]+)`", report)
+gap_match = re.search(r"- mean gap variance: `([0-9.]+)`", report)
+coverage = coverage_match.group(1) if coverage_match else "n/a"
+fallback = fallback_match.group(1) if fallback_match else "n/a"
+gap = gap_match.group(1) if gap_match else "n/a"
 print(
-    "| {key} | {nodes} | {sections} | {rows} | {evidence} | {assets} | {warnings} |".format(
+    "| {key} | {nodes} | {sections} | {rows} | {evidence} | {assets} | {coverage} | {fallback} | {gap} | {warnings} |".format(
         key=key,
         nodes=summary.get("nodeCount", 0),
         sections=root_children,
         rows=rows,
         evidence=summary.get("evidenceCount", 0),
         assets=len(refs),
+        coverage=coverage,
+        fallback=fallback,
+        gap=gap,
         warnings=warnings,
     )
 )
@@ -77,8 +86,8 @@ PY
   echo
   echo "- workdir: \`$WORK\`"
   echo
-  echo "| case | nodes | sections | rows | evidence | html assets | warnings |"
-  echo "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+  echo "| case | nodes | sections | rows | evidence | html assets | auto layout coverage | absolute fallback | mean gap variance | warnings |"
+  echo "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
   run_one t018 "腾讯动漫_018_1440.png"
   run_one t022 "腾讯动漫_022_1440.png"
   run_one lizhi "荔枝_011_1440.png"

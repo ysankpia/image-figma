@@ -53,11 +53,25 @@ type renderContext struct {
 	evidenceAssetURL map[string]string
 	warnings         []Warning
 	assetCount       int
+	health           structuralHealth
 }
 
 type flatNode struct {
 	Node  contract.Node
 	Depth int
+}
+
+type structuralHealth struct {
+	LeafCount             int
+	FlexLeafCount         int
+	AbsoluteLeafCount     int
+	RowCount              int
+	ColumnCount           int
+	SingleChildRowCount   int
+	TextEraserCount       int
+	MeanGapVariance       float64
+	AutoLayoutCoverage    float64
+	AbsoluteFallbackRatio float64
 }
 
 func Write(doc contract.Document, options Options) (Artifacts, error) {
@@ -119,7 +133,97 @@ func newRenderContext(doc contract.Document, outputDir string) (renderContext, e
 	if err := ctx.prepareAssets(outputDir); err != nil {
 		return renderContext{}, err
 	}
+	ctx.health = computeStructuralHealth(doc.Root)
 	return ctx, nil
+}
+
+func computeStructuralHealth(root contract.Node) structuralHealth {
+	var health structuralHealth
+	gapVarianceTotal := 0
+	gapVarianceRows := 0
+	var walk func(contract.Node, bool)
+	walk = func(node contract.Node, inFlex bool) {
+		flexNode := renderedFlexContainer(node)
+		nextInFlex := inFlex || flexNode
+		if node.Layout.Mode == contract.LayoutRow {
+			health.RowCount++
+			if len(node.Children) <= 1 {
+				health.SingleChildRowCount++
+			}
+			if value, ok := intMeta(node, "gapVariance"); ok {
+				gapVarianceTotal += value
+				gapVarianceRows++
+			}
+		}
+		if node.Layout.Mode == contract.LayoutColumn {
+			health.ColumnCount++
+		}
+		if leafNode(node) {
+			health.LeafCount++
+			if inFlex && flowLeaf(node) {
+				health.FlexLeafCount++
+			}
+			if node.Meta["zLayer"] == "text_eraser" {
+				health.TextEraserCount++
+			}
+		}
+		for _, child := range node.Children {
+			walk(child, nextInFlex)
+		}
+	}
+	walk(root, false)
+	health.AbsoluteLeafCount = health.LeafCount - health.FlexLeafCount
+	if health.LeafCount > 0 {
+		health.AutoLayoutCoverage = float64(health.FlexLeafCount) / float64(health.LeafCount)
+		health.AbsoluteFallbackRatio = float64(health.AbsoluteLeafCount) / float64(health.LeafCount)
+	}
+	if gapVarianceRows > 0 {
+		health.MeanGapVariance = float64(gapVarianceTotal) / float64(gapVarianceRows)
+	}
+	return health
+}
+
+func renderedFlexContainer(node contract.Node) bool {
+	return node.Type == contract.NodeRow && node.Layout.Mode == contract.LayoutRow
+}
+
+func leafNode(node contract.Node) bool {
+	switch node.Type {
+	case contract.NodePage, contract.NodeSection, contract.NodeRow, contract.NodeColumn, contract.NodeGroup, contract.NodeOverlay:
+		return false
+	default:
+		return true
+	}
+}
+
+func flowLeaf(node contract.Node) bool {
+	if node.Meta["zLayer"] == "text_eraser" {
+		return false
+	}
+	switch node.Type {
+	case contract.NodeText, contract.NodeIcon, contract.NodeImage:
+		return true
+	default:
+		return false
+	}
+}
+
+func intMeta(node contract.Node, key string) (int, bool) {
+	if node.Meta == nil {
+		return 0, false
+	}
+	value := strings.TrimSpace(node.Meta[key])
+	if value == "" {
+		return 0, false
+	}
+	out := 0
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		out = out*10 + int(r-'0')
+	}
+	return out, true
 }
 
 func flattenNodes(root contract.Node) []flatNode {
@@ -263,29 +367,104 @@ func (ctx *renderContext) html(debug bool) string {
 		}
 		b.WriteString(ctx.renderEvidence(item, debug))
 	}
-	for _, item := range ctx.nodes {
-		b.WriteString(ctx.renderNode(item, debug))
+	for _, child := range ctx.doc.Root.Children {
+		b.WriteString(ctx.renderTree(child, debug, 1, ctx.doc.Root.BBox))
 	}
 	fmt.Fprintf(&b, "</main>\n</body>\n</html>\n")
 	return b.String()
 }
 
-func (ctx *renderContext) renderNode(item flatNode, debug bool) string {
-	node := item.Node
+func (ctx *renderContext) renderTree(node contract.Node, debug bool, depth int, parentBox geometry.Rect) string {
+	if renderedFlexContainer(node) {
+		return ctx.renderRow(node, debug, depth, parentBox)
+	}
+	return ctx.renderAbsoluteNode(node, debug, depth, parentBox, true)
+}
+
+func (ctx *renderContext) renderRow(node contract.Node, debug bool, depth int, parentBox geometry.Rect) string {
+	var b strings.Builder
+	classes := []string{"node", "node-" + string(node.Type), "layout-row"}
+	if debug {
+		classes = append(classes, "debug-outline")
+	}
+	style := nodeBoxStyleRelative(node, zIndexForNode(node), parentBox)
+	fmt.Fprintf(&b, "<div class=\"%s\" style=\"%s\" data-node-id=\"%s\" data-node-type=\"%s\" data-layout-mode=\"%s\" data-depth=\"%d\" title=\"%s\">\n",
+		strings.Join(classes, " "),
+		style,
+		html.EscapeString(node.ID),
+		html.EscapeString(string(node.Type)),
+		html.EscapeString(string(node.Layout.Mode)),
+		depth,
+		html.EscapeString(nodeTitle(node)),
+	)
+	flow, overlays := splitRowChildren(node.Children)
+	for _, child := range overlays {
+		b.WriteString(ctx.renderAbsoluteNode(child, debug, depth+1, node.BBox, false))
+	}
+	for _, child := range flow {
+		b.WriteString(ctx.renderFlowNode(child, debug, depth+1))
+	}
+	if debug {
+		fmt.Fprintf(&b, "<span class=\"label\">%s %s</span>\n", html.EscapeString(node.ID), html.EscapeString(string(node.Layout.Mode)))
+	}
+	fmt.Fprintf(&b, "</div>\n")
+	return b.String()
+}
+
+func (ctx *renderContext) renderAbsoluteNode(node contract.Node, debug bool, depth int, parentBox geometry.Rect, includeChildren bool) string {
 	var b strings.Builder
 	classes := []string{"node", "node-" + string(node.Type)}
 	if debug {
 		classes = append(classes, "debug-outline")
 	}
-	style := nodeBoxStyle(node, zIndexForNode(node))
-	fmt.Fprintf(&b, "<div class=\"%s\" style=\"%s\" data-node-id=\"%s\" data-node-type=\"%s\" data-depth=\"%d\" title=\"%s\">\n",
+	style := nodeBoxStyleRelative(node, zIndexForNode(node), parentBox)
+	fmt.Fprintf(&b, "<div class=\"%s\" style=\"%s\" data-node-id=\"%s\" data-node-type=\"%s\" data-layout-mode=\"%s\" data-depth=\"%d\" title=\"%s\">\n",
 		strings.Join(classes, " "),
 		style,
 		html.EscapeString(node.ID),
 		html.EscapeString(string(node.Type)),
-		item.Depth,
+		html.EscapeString(string(node.Layout.Mode)),
+		depth,
 		html.EscapeString(nodeTitle(node)),
 	)
+	b.WriteString(ctx.nodeContent(node))
+	if includeChildren {
+		for _, child := range node.Children {
+			b.WriteString(ctx.renderTree(child, debug, depth+1, node.BBox))
+		}
+	}
+	if debug {
+		fmt.Fprintf(&b, "<span class=\"label\">%s %s</span>\n", html.EscapeString(node.ID), html.EscapeString(string(node.Layout.Mode)))
+	}
+	fmt.Fprintf(&b, "</div>\n")
+	return b.String()
+}
+
+func (ctx *renderContext) renderFlowNode(node contract.Node, debug bool, depth int) string {
+	var b strings.Builder
+	classes := []string{"flow-node", "node-" + string(node.Type)}
+	if debug {
+		classes = append(classes, "debug-outline")
+	}
+	fmt.Fprintf(&b, "<div class=\"%s\" style=\"%s\" data-node-id=\"%s\" data-node-type=\"%s\" data-layout-mode=\"%s\" data-depth=\"%d\" title=\"%s\">\n",
+		strings.Join(classes, " "),
+		flowNodeStyle(node),
+		html.EscapeString(node.ID),
+		html.EscapeString(string(node.Type)),
+		html.EscapeString(string(node.Layout.Mode)),
+		depth,
+		html.EscapeString(nodeTitle(node)),
+	)
+	b.WriteString(ctx.nodeContent(node))
+	if debug {
+		fmt.Fprintf(&b, "<span class=\"label\">%s %s</span>\n", html.EscapeString(node.ID), html.EscapeString(string(node.Layout.Mode)))
+	}
+	fmt.Fprintf(&b, "</div>\n")
+	return b.String()
+}
+
+func (ctx *renderContext) nodeContent(node contract.Node) string {
+	var b strings.Builder
 	switch {
 	case node.Type == contract.NodeText && node.Text != nil:
 		fmt.Fprintf(&b, "<span class=\"node-text-content\">%s</span>\n", html.EscapeString(node.Text.Characters))
@@ -294,11 +473,43 @@ func (ctx *renderContext) renderNode(item flatNode, debug bool) string {
 			fmt.Fprintf(&b, "<img class=\"node-image-content\" src=\"%s\" alt=\"%s\">\n", html.EscapeString(url), html.EscapeString(node.ID))
 		}
 	}
-	if debug {
-		fmt.Fprintf(&b, "<span class=\"label\">%s %s</span>\n", html.EscapeString(node.ID), html.EscapeString(string(node.Layout.Mode)))
-	}
-	fmt.Fprintf(&b, "</div>\n")
 	return b.String()
+}
+
+func splitRowChildren(children []contract.Node) ([]contract.Node, []contract.Node) {
+	flow := make([]contract.Node, 0, len(children))
+	overlays := make([]contract.Node, 0, len(children))
+	for _, child := range children {
+		if flowLeaf(child) {
+			flow = append(flow, child)
+			continue
+		}
+		overlays = append(overlays, child)
+	}
+	sort.SliceStable(flow, func(i, j int) bool {
+		a, b := flow[i].BBox, flow[j].BBox
+		if a.X != b.X {
+			return a.X < b.X
+		}
+		if a.Y != b.Y {
+			return a.Y < b.Y
+		}
+		return flow[i].ID < flow[j].ID
+	})
+	sort.SliceStable(overlays, func(i, j int) bool {
+		if zIndexForNode(overlays[i]) != zIndexForNode(overlays[j]) {
+			return zIndexForNode(overlays[i]) < zIndexForNode(overlays[j])
+		}
+		a, b := overlays[i].BBox, overlays[j].BBox
+		if a.Y != b.Y {
+			return a.Y < b.Y
+		}
+		if a.X != b.X {
+			return a.X < b.X
+		}
+		return overlays[i].ID < overlays[j].ID
+	})
+	return flow, overlays
 }
 
 func (ctx *renderContext) renderEvidence(item contract.Evidence, debug bool) string {
@@ -337,6 +548,8 @@ body{padding:24px}
 .capture-mode body{padding:0;background:#fff}
 .capture-mode .page{box-shadow:none}
 .node,.evidence{position:absolute;box-sizing:border-box;left:var(--x);top:var(--y);width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
+.layout-row{display:flex;flex-direction:row;align-items:center;gap:var(--gap);padding:var(--pt) var(--pr) var(--pb) var(--pl);overflow:visible}
+.layout-row>.flow-node{position:relative;flex:0 0 auto;box-sizing:border-box;width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
 .node-section,.node-row,.node-column,.node-group,.node-overlay{pointer-events:none}
 .node-shape{background:var(--fill)}
 .evidence-shape{background:rgba(238,238,238,.72)}
@@ -366,11 +579,23 @@ func (ctx *renderContext) report() string {
 	fmt.Fprintf(&b, "- evidence rendered: `%d`\n", len(ctx.evidence))
 	fmt.Fprintf(&b, "- preview assets: `%d`\n", ctx.assetCount)
 	fmt.Fprintf(&b, "- warnings: `%d`\n", len(ctx.warnings))
+	fmt.Fprintf(&b, "\n## Structural Health\n\n")
+	fmt.Fprintf(&b, "- row layout nodes: `%d`\n", ctx.health.RowCount)
+	fmt.Fprintf(&b, "- column layout nodes: `%d`\n", ctx.health.ColumnCount)
+	fmt.Fprintf(&b, "- visible leaf nodes: `%d`\n", ctx.health.LeafCount)
+	fmt.Fprintf(&b, "- flex-covered leaf nodes: `%d`\n", ctx.health.FlexLeafCount)
+	fmt.Fprintf(&b, "- absolute leaf nodes: `%d`\n", ctx.health.AbsoluteLeafCount)
+	fmt.Fprintf(&b, "- auto layout coverage: `%.4f`\n", ctx.health.AutoLayoutCoverage)
+	fmt.Fprintf(&b, "- absolute fallback ratio: `%.4f`\n", ctx.health.AbsoluteFallbackRatio)
+	fmt.Fprintf(&b, "- single-child row count: `%d`\n", ctx.health.SingleChildRowCount)
+	fmt.Fprintf(&b, "- mean gap variance: `%.2f`\n", ctx.health.MeanGapVariance)
+	fmt.Fprintf(&b, "- text eraser nodes: `%d`\n", ctx.health.TextEraserCount)
 	fmt.Fprintf(&b, "\n## Policy\n\n")
 	fmt.Fprintf(&b, "- renderer input is `ui_layout_ir.v1` only; it does not read M29/OCR/vision raw artifacts.\n")
 	fmt.Fprintf(&b, "- source PNG is used only for local crop assets referenced by IR bboxes.\n")
 	fmt.Fprintf(&b, "- normal preview renders materialized visible leaf nodes only; raw evidence is rendered only by `preview_debug.html`.\n")
 	fmt.Fprintf(&b, "- text leaf nodes are painted above image/shape leaf nodes.\n")
+	fmt.Fprintf(&b, "- structural health metrics, not pixel diff alone, are the gate for Figma Auto Layout readiness.\n")
 	fmt.Fprintf(&b, "- full-page backing crops are skipped.\n")
 	if len(ctx.warnings) > 0 {
 		fmt.Fprintf(&b, "\n## Warnings\n\n")
@@ -389,6 +614,35 @@ func boxStyle(box geometry.Rect, z int) string {
 
 func nodeBoxStyle(node contract.Node, z int) string {
 	return fmt.Sprintf("%s;--fill:%s", boxStyle(node.BBox, z), cssColor(node.Style.Fill, defaultFillForNode(node.Type)))
+}
+
+func nodeBoxStyleRelative(node contract.Node, z int, parentBox geometry.Rect) string {
+	box := node.BBox
+	relative := geometry.Rect{
+		X:      box.X - parentBox.X,
+		Y:      box.Y - parentBox.Y,
+		Width:  box.Width,
+		Height: box.Height,
+	}
+	return fmt.Sprintf("%s;--fill:%s;--gap:%dpx;--pt:%dpx;--pr:%dpx;--pb:%dpx;--pl:%dpx",
+		boxStyle(relative, z),
+		cssColor(node.Style.Fill, defaultFillForNode(node.Type)),
+		node.Layout.Gap,
+		node.Layout.Padding.Top,
+		node.Layout.Padding.Right,
+		node.Layout.Padding.Bottom,
+		node.Layout.Padding.Left,
+	)
+}
+
+func flowNodeStyle(node contract.Node) string {
+	return fmt.Sprintf("--w:%dpx;--h:%dpx;--z:%d;--font:%dpx;--fill:%s",
+		node.BBox.Width,
+		node.BBox.Height,
+		zIndexForNode(node),
+		fontSizeForBox(node.BBox),
+		cssColor(node.Style.Fill, defaultFillForNode(node.Type)),
+	)
 }
 
 func cssColor(value string, fallback string) string {

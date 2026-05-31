@@ -38,18 +38,17 @@ func BuildRows(section contract.Node, evidence []contract.Evidence, options Opti
 		id := fmt.Sprintf("%s_row_%04d", section.ID, i+1)
 		refs := rowSourceRefs(row)
 		out.Children = append(out.Children, contract.Node{
-			ID:   id,
-			Type: contract.NodeRow,
-			Name: fmt.Sprintf("%s Row %04d", section.Name, i+1),
-			BBox: box,
-			Layout: contract.Layout{
-				Mode: contract.LayoutAbsolute,
-			},
+			ID:             id,
+			Type:           contract.NodeRow,
+			Name:           fmt.Sprintf("%s Row %04d", section.Name, i+1),
+			BBox:           box,
+			Layout:         rowLayout(box, row),
 			SourceRefs:     refs,
 			Confidence:     averageConfidence(row),
-			FallbackPolicy: "absolute_row_until_child_materialization",
+			FallbackPolicy: "row_layout_with_absolute_overlay_fallback",
 			Meta: map[string]string{
 				"evidenceCount": fmt.Sprintf("%d", len(row)),
+				"gapVariance":   fmt.Sprintf("%d", gapVariance(row)),
 			},
 		})
 		decisions = append(decisions, contract.Decision{
@@ -62,6 +61,134 @@ func BuildRows(section contract.Node, evidence []contract.Evidence, options Opti
 		})
 	}
 	return out, decisions
+}
+
+func rowLayout(rowBox geometry.Rect, items []contract.Evidence) contract.Layout {
+	layoutItems := rowLayoutItems(items)
+	return contract.Layout{
+		Mode: contract.LayoutRow,
+		Gap:  medianPositiveGaps(layoutItems),
+		Padding: contract.Insets{
+			Top:    max(0, minTop(layoutItems)-rowBox.Y),
+			Right:  max(0, rowBox.Right()-maxRight(layoutItems)),
+			Bottom: max(0, rowBox.Bottom()-maxBottom(layoutItems)),
+			Left:   max(0, minLeft(layoutItems)-rowBox.X),
+		},
+		Align: "center",
+	}
+}
+
+func rowLayoutItems(items []contract.Evidence) []contract.Evidence {
+	out := make([]contract.Evidence, 0, len(items))
+	for _, item := range items {
+		if item.RoleHint == "text" || item.RoleHint == "icon" {
+			out = append(out, item)
+		}
+	}
+	if len(out) == 0 {
+		for _, item := range items {
+			if item.RoleHint == "image" {
+				out = append(out, item)
+			}
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, items...)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].BBox, out[j].BBox
+		if a.X != b.X {
+			return a.X < b.X
+		}
+		if a.Y != b.Y {
+			return a.Y < b.Y
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func medianPositiveGaps(items []contract.Evidence) int {
+	gaps := positiveGaps(items)
+	if len(gaps) == 0 {
+		return 0
+	}
+	return median(gaps)
+}
+
+func gapVariance(items []contract.Evidence) int {
+	gaps := positiveGaps(rowLayoutItems(items))
+	if len(gaps) <= 1 {
+		return 0
+	}
+	mean := 0
+	for _, gap := range gaps {
+		mean += gap
+	}
+	mean /= len(gaps)
+	total := 0
+	for _, gap := range gaps {
+		delta := gap - mean
+		total += delta * delta
+	}
+	return total / len(gaps)
+}
+
+func positiveGaps(items []contract.Evidence) []int {
+	gaps := make([]int, 0, len(items)-1)
+	for i := 1; i < len(items); i++ {
+		gap := items[i].BBox.X - items[i-1].BBox.Right()
+		if gap > 0 {
+			gaps = append(gaps, gap)
+		}
+	}
+	return gaps
+}
+
+func minLeft(items []contract.Evidence) int {
+	if len(items) == 0 {
+		return 0
+	}
+	out := items[0].BBox.X
+	for _, item := range items[1:] {
+		if item.BBox.X < out {
+			out = item.BBox.X
+		}
+	}
+	return out
+}
+
+func minTop(items []contract.Evidence) int {
+	if len(items) == 0 {
+		return 0
+	}
+	out := items[0].BBox.Y
+	for _, item := range items[1:] {
+		if item.BBox.Y < out {
+			out = item.BBox.Y
+		}
+	}
+	return out
+}
+
+func maxRight(items []contract.Evidence) int {
+	out := 0
+	for _, item := range items {
+		if item.BBox.Right() > out {
+			out = item.BBox.Right()
+		}
+	}
+	return out
+}
+
+func maxBottom(items []contract.Evidence) int {
+	out := 0
+	for _, item := range items {
+		if item.BBox.Bottom() > out {
+			out = item.BBox.Bottom()
+		}
+	}
+	return out
 }
 
 func sectionEvidence(section contract.Node, evidence []contract.Evidence) []contract.Evidence {
