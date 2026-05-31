@@ -76,6 +76,35 @@ func TestWritePaintsTextAboveRasterNodes(t *testing.T) {
 	}
 }
 
+func TestWriteRendersUnifiedVisionTextStyleMeta(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.png")
+	writePreviewTestPNG(t, source, 80, 60)
+
+	doc := previewDoc(source)
+	doc.Root.Children[1].Style.Fill = "#123456"
+	doc.Root.Children[1].Meta = map[string]string{
+		"fontSize":    "18",
+		"fontWeight":  "700",
+		"styleSource": "unified_vision",
+	}
+	artifacts, err := Write(doc, Options{OutputDir: filepath.Join(dir, "out")})
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	html := readString(t, artifacts.PreviewHTML)
+	textIndex := strings.Index(html, `data-node-id="node_text_1"`)
+	if textIndex < 0 {
+		t.Fatalf("expected text node in html")
+	}
+	tag := tagAround(html, textIndex)
+	for _, want := range []string{"--fill:#123456", "--font:18px", "--weight:700"} {
+		if !strings.Contains(tag, want) {
+			t.Fatalf("text style tag missing %q: %s", want, tag)
+		}
+	}
+}
+
 func TestWriteUsesNodeFillAndTextEraserLayer(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.png")
@@ -204,6 +233,54 @@ func TestWriteRendersRowLayoutAndReportsStructuralHealth(t *testing.T) {
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("preview report missing %q:\n%s", want, report)
+		}
+	}
+}
+
+func TestWriteRendersColumnLayout(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.png")
+	writePreviewTestPNG(t, source, 120, 120)
+
+	doc := previewDoc(source)
+	column := contract.Node{
+		ID:     "column_1",
+		Type:   contract.NodeColumn,
+		BBox:   geometry.Rect{X: 10, Y: 10, Width: 80, Height: 70},
+		Layout: contract.Layout{Mode: contract.LayoutColumn, Gap: 6},
+		Children: []contract.Node{
+			{
+				ID:     "column_text_1",
+				Type:   contract.NodeText,
+				BBox:   geometry.Rect{X: 12, Y: 12, Width: 50, Height: 16},
+				Layout: contract.Layout{Mode: contract.LayoutAbsolute},
+				Text:   &contract.Text{Characters: "Top"},
+			},
+			{
+				ID:     "column_text_2",
+				Type:   contract.NodeText,
+				BBox:   geometry.Rect{X: 12, Y: 34, Width: 50, Height: 16},
+				Layout: contract.Layout{Mode: contract.LayoutAbsolute},
+				Text:   &contract.Text{Characters: "Bottom"},
+			},
+		},
+	}
+	doc.Root.Children = []contract.Node{column}
+
+	artifacts, err := Write(doc, Options{OutputDir: filepath.Join(dir, "out")})
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	html := readString(t, artifacts.PreviewHTML)
+	for _, want := range []string{
+		`class="node node-column layout-column"`,
+		`data-layout-mode="column"`,
+		`--gap:6px`,
+		`data-node-id="column_text_1"`,
+		`data-node-id="column_text_2"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("preview html missing %q:\n%s", want, html)
 		}
 	}
 }

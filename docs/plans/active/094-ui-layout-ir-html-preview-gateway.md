@@ -1283,3 +1283,59 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   auto layout coverage 在 t018/t022/xianyu 低于 Stage 8C，因为重复/重叠 section 的空结构不再被错误计入可用 row。
   high-gap rows 仍存在，尤其 t022 和 xianyu；这说明下一步仍应修 region/card-aware 局部 grouping，而不是在 renderer 里隐藏或恢复 crop overlay。
   ```
+
+## Stage 8E: LLM Layout Advisor A/B Experiment Harness
+
+- 日期：2026-06-01
+- 状态：in progress
+- 边界：
+  ```text
+  这是离线 A/B 实验，不是产品 runtime。
+  Python 只作为模型调用和实验调度器，不恢复 Python /api/upload-preview。
+  LLM 只输出 evidence 分组建议，不能生成 HTML/Figma，不能改 OCR text、bbox、asset。
+  实验有效后，provider 调用、validator、IR 应用逻辑回迁 Go。
+  ```
+- 新增 artifacts：
+  ```text
+  layout_advisor_input.v1.json
+  layout_advisor_result.v1.json
+  layout_advisor_validation.v1.json
+  ui_layout_ir.advisor_experiment.v1.json
+  preview.advisor.html
+  preview_debug.advisor.html
+  html_preview_report.advisor.md
+  ```
+- 合同：
+  ```text
+  cmd/layoutcompile -advisor-input-out <path>
+    只导出 layout_advisor_input.v1.json，不调用模型。
+
+  tools/layout_advisor_experiment.py
+    读取 advisor input + source PNG，调用 OpenAI-compatible provider，输出 layout_advisor_result.v1.json。
+
+  cmd/layoutcompile -advisor-result <path>
+    读取 advisor result，运行确定性 validator，写 advisor validation、实验 IR 和 advisor HTML preview。
+  ```
+- 独立配置：
+  ```text
+  LAYOUT_ADVISOR_WIRE_API
+  LAYOUT_ADVISOR_BASE_URL
+  LAYOUT_ADVISOR_API_KEY
+  LAYOUT_ADVISOR_MODEL
+  LAYOUT_ADVISOR_TIMEOUT_SECONDS
+  LAYOUT_ADVISOR_TEMPERATURE
+  ```
+- 验收门：
+  ```text
+  四图都必须改善。
+  018 flex overflow rows 从当前约 15/27 降到 <20%。
+  OCR mismatch 必须为 0。
+  zero-flow rows 必须保持 0。
+  不允许重复 ownership、bbox 漂移或静默 fallback。
+  ```
+- 初始验证命令：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutir/... ./internal/layoutcompile/... ./internal/htmlpreview/... ./cmd/layoutcompile
+  cd services/backend-go/tools && python3 -m unittest layout_advisor_experiment_test.py
+  cd services/backend-go && bash tools/layout_advisor_smoke_4img.sh
+  ```

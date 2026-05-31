@@ -442,7 +442,13 @@ func suppressDuplicateVisibleOwners(image contract.ImageMeta, layers []contract.
 func structuralRasterOwner(image contract.ImageMeta, layer contract.Layer, layers []contract.Layer) bool {
 	imageArea := max(1, image.Width*image.Height)
 	box := layer.BBox
-	large := box.Area()*100 >= imageArea*18 || box.Width*100 >= image.Width*72 || box.Height*100 >= image.Height*28
+	if geometry.IoA(imageBBox(image), box) >= 0.98 {
+		return true
+	}
+	nearFullPage := box.Area()*100 >= imageArea*72 || (box.Width*100 >= image.Width*92 && box.Height*100 >= image.Height*50)
+	if !nearFullPage {
+		return false
+	}
 	contained := 0
 	containedRaster := 0
 	containedText := 0
@@ -469,7 +475,7 @@ func structuralRasterOwner(image contract.ImageMeta, layer contract.Layer, layer
 			containedText++
 		}
 	}
-	if large && (contained >= 3 || containedRaster >= 2 || (containedText >= 2 && contained >= 2)) {
+	if contained >= 3 || containedRaster >= 2 || (containedText >= 2 && contained >= 2) {
 		return true
 	}
 	return containedRaster >= 2 && containedRasterArea*100 >= box.Area()*24

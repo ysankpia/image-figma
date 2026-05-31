@@ -35,6 +35,32 @@
 | `VISION_TEMPERATURE` | 模型 temperature；`0` 表示确定性/不显式传 | `0` | 否 |
 | `VISION_STREAM` | 是否请求 streaming/SSE 响应 | `false` | 否 |
 | `VISION_REVIEW_ENABLED` | 是否运行二次 review/reconciliation | `false` | 否 |
+| `LAYOUT_ADVISOR_WIRE_API` | Layout advisor 实验使用的 OpenAI-compatible wire API，支持 `responses`、`chat.completions` | `responses` | 仅运行 advisor 实验时需要 |
+| `LAYOUT_ADVISOR_BASE_URL` | Layout advisor 实验 provider base URL | `https://api.openai.com` | 仅运行 advisor 实验时需要 |
+| `LAYOUT_ADVISOR_API_KEY` | Layout advisor 实验 API key | 无 | 仅运行 advisor 实验时需要 |
+| `LAYOUT_ADVISOR_MODEL` | Layout advisor 实验模型 id | 无 | 仅运行 advisor 实验时需要 |
+| `LAYOUT_ADVISOR_TIMEOUT_SECONDS` | Layout advisor provider 请求超时秒数 | `120` | 否 |
+| `LAYOUT_ADVISOR_TEMPERATURE` | Layout advisor temperature；默认固定确定性 | `0` | 否 |
+| `UNIFIED_VISION_ENABLED` | 是否运行 Unified Vision layout 实验；只输出并列 artifact，不覆盖 baseline | `false` | 否 |
+| `UNIFIED_VISION_PROVIDER` | Unified Vision provider 类型 | `openai-compatible` | 仅运行 unified 实验时需要 |
+| `UNIFIED_VISION_WIRE_API` | OpenAI-compatible wire API，支持 `responses`、`chat.completions` | `responses` | 仅运行 unified 实验时需要 |
+| `UNIFIED_VISION_BASE_URL` | Unified Vision provider base URL | `https://api.openai.com` | 仅运行 unified 实验时需要 |
+| `UNIFIED_VISION_API_KEY` | Unified Vision provider API key | 无 | 仅运行 unified 实验时需要 |
+| `UNIFIED_VISION_MODEL` | Unified Vision 模型 id | 无 | 仅运行 unified 实验时需要 |
+| `UNIFIED_VISION_CONCURRENCY` | Unified Vision batch 并发请求数 | `3` | 否 |
+| `UNIFIED_VISION_TIMEOUT_SECONDS` | Unified Vision 单 batch provider 超时秒数 | `180` | 否 |
+| `UNIFIED_VISION_TEMPERATURE` | Unified Vision temperature；默认确定性 | `0` | 否 |
+| `UNIFIED_VISION_TRANSPORT_RETRIES` | HTTP/断连/限流等 transport retry 次数 | `3` | 否 |
+| `UNIFIED_VISION_REPAIR_ATTEMPTS` | validator 拒绝后的 semantic repair 次数 | `1` | 否 |
+| `UNIFIED_VISION_MAX_ITEMS_PER_BATCH` | 复杂度分批后的 soft item cap | `30` | 否 |
+| `UNIFIED_VISION_HARD_MAX_ITEMS_PER_BATCH` | provider 保护 hard item cap | `45` | 否 |
+| `UNIFIED_VISION_MAX_COMPLEXITY` | batch 复杂度上限，超过会继续拆分 | `110` | 否 |
+| `UNIFIED_VISION_MIN_CONFIDENCE` | accepted group 最低 confidence | `0.70` | 否 |
+| `UNIFIED_VISION_MAX_FIT_RATIO` | accepted group 最大 required-size/union-size ratio | `1.01` | 否 |
+| `UNIFIED_VISION_MAX_Y_SPREAD_FACTOR` | cross-axis spread 相对 median cross size 的上限 | `1.60` | 否 |
+| `UNIFIED_VISION_MAX_GAP` | accepted group 最大 expected/actual gap | `96` | 否 |
+| `UNIFIED_VISION_MAX_GAP_VARIANCE` | accepted group 最大 gap variance | `4096` | 否 |
+| `UNIFIED_VISION_CROP_PADDING` | section/batch crop padding 像素 | `10` | 否 |
 
 ## Draft Server
 
@@ -87,6 +113,42 @@ VISION_API_KEY=...
 ```
 
 `VISION_BASE_URL`、`VISION_MODEL`、`VISION_API_KEY`、`VISION_WIRE_API` 都是供应商可替换参数，不允许写死在代码里。
+
+## Layout Advisor Experiment
+
+Layout advisor 是 `cmd/layoutcompile` 的离线 A/B 实验，不是 Draft runtime，也不替代 Python 历史 `/api/upload-preview`。它只请求模型给出 evidence 分组建议，不能生成 HTML、Figma、文字、bbox 或 asset。
+
+```bash
+LAYOUT_ADVISOR_WIRE_API=responses
+LAYOUT_ADVISOR_BASE_URL=https://api.openai.com
+LAYOUT_ADVISOR_MODEL=...
+LAYOUT_ADVISOR_API_KEY=...
+LAYOUT_ADVISOR_TIMEOUT_SECONDS=120
+LAYOUT_ADVISOR_TEMPERATURE=0
+```
+
+`LAYOUT_ADVISOR_*` 必须和 `VISION_*` 分开配置：`VISION_*` 是单元素候选/语义标签，`LAYOUT_ADVISOR_*` 是关系分组建议。两者都不得成为 OCR text、M29 bbox 或 asset 的最终权威。
+
+## Unified Vision Experiment
+
+Unified Vision 是 `cmd/layoutcompile -unified-vision` 的离线结构实验，不是 Draft runtime 默认路径。它按 section/batch 发送裁切图和 flow evidence，请模型提出 flat grouping + text style 建议，然后由 Go validator 决定 accepted/rejected/fallback。baseline `ui_layout_ir.v1.json` 不会被覆盖。
+
+```bash
+UNIFIED_VISION_ENABLED=false
+UNIFIED_VISION_WIRE_API=responses
+UNIFIED_VISION_BASE_URL=https://api.openai.com
+UNIFIED_VISION_MODEL=...
+UNIFIED_VISION_API_KEY=...
+UNIFIED_VISION_CONCURRENCY=3
+UNIFIED_VISION_TRANSPORT_RETRIES=3
+UNIFIED_VISION_REPAIR_ATTEMPTS=1
+UNIFIED_VISION_MAX_ITEMS_PER_BATCH=30
+UNIFIED_VISION_HARD_MAX_ITEMS_PER_BATCH=45
+UNIFIED_VISION_MAX_COMPLEXITY=110
+UNIFIED_VISION_MAX_FIT_RATIO=1.01
+```
+
+`UNIFIED_VISION_*` 不复用 `VISION_*`：`VISION_*` 是单元素候选检测，`UNIFIED_VISION_*` 是关系分组实验。模型不能成为 OCR text、M29 bbox、asset crop、materialize 分类或最终 Figma tree 的权威。
 
 Vision 是可选证据源。默认情况下，provider TLS、超时、5xx、空响应或 JSON 解析失败不应阻塞 M29/OCR Draft fallback，除非请求显式要求 vision。
 

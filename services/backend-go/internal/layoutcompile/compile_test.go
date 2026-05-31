@@ -52,6 +52,42 @@ func TestRunWritesStageOneArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunUnifiedVisionExperimentFallsBackWithoutProvider(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "source.png")
+	writeEvidenceTestPNG(t, input)
+
+	out := filepath.Join(dir, "out")
+	result, err := Run(Options{
+		InputPath:            input,
+		OutputDir:            out,
+		TaskID:               "task_test",
+		UnifiedVisionEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Validation.ErrorCount != 0 {
+		t.Fatalf("validation errors = %+v", result.Validation.Findings)
+	}
+	for _, path := range []string{
+		result.Artifacts.LayoutIR,
+		result.Artifacts.UnifiedVisionInput,
+		result.Artifacts.UnifiedVisionResult,
+		result.Artifacts.UnifiedVisionValidation,
+		result.Artifacts.UnifiedVisionLayoutIR,
+		result.Artifacts.UnifiedVisionPreviewHTML,
+		result.Artifacts.UnifiedVisionPreviewReport,
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected artifact %s: %v", path, err)
+		}
+	}
+	if result.Artifacts.LayoutIR == result.Artifacts.UnifiedVisionLayoutIR {
+		t.Fatalf("unified experiment must not overwrite baseline IR")
+	}
+}
+
 func TestRunNormalizesM29Evidence(t *testing.T) {
 	dir := t.TempDir()
 	input := filepath.Join(dir, "source.png")

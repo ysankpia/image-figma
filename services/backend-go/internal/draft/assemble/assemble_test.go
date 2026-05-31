@@ -313,6 +313,86 @@ func TestBuildSuppressesDuplicateVisionImageCandidate(t *testing.T) {
 	}
 }
 
+func TestBuildKeepsLocalRasterSubstrateWithEditableChildren(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 800},
+		Tokens: evidence.Document{Tokens: []evidence.Token{
+			{
+				ID:           "local_backdrop",
+				TokenType:    "raster_region_token",
+				BBox:         m29contract.BBox{X: 20, Y: 100, Width: 360, Height: 260},
+				Disposition:  "main",
+				Reasons:      []string{"raster_region"},
+				CompileHints: m29contract.CompileHints{CanBeImage: true},
+			},
+			{
+				ID:           "cover",
+				TokenType:    "raster_region_token",
+				BBox:         m29contract.BBox{X: 50, Y: 150, Width: 90, Height: 90},
+				Disposition:  "main",
+				Reasons:      []string{"raster_region"},
+				CompileHints: m29contract.CompileHints{CanBeImage: true},
+			},
+			{
+				ID:          "title",
+				TokenType:   "text_token",
+				BBox:        m29contract.BBox{X: 160, Y: 160, Width: 120, Height: 24},
+				Disposition: "main",
+				Content:     evidence.TokenContent{Text: "Local title"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	backdrop := findLayerByBBox(graph, contract.LayerRaster, 20, 100, 360, 260)
+	if backdrop == nil || !backdrop.Visible {
+		t.Fatalf("local raster substrate should stay visible, got %+v", backdrop)
+	}
+	text := findLayer(graph, contract.LayerText)
+	if text == nil || text.Z <= backdrop.Z {
+		t.Fatalf("text must remain above local substrate, text=%+v backdrop=%+v", text, backdrop)
+	}
+}
+
+func TestBuildSuppressesNearFullPageRasterBacking(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 800},
+		Tokens: evidence.Document{Tokens: []evidence.Token{
+			{
+				ID:           "page_backing",
+				TokenType:    "raster_region_token",
+				BBox:         m29contract.BBox{X: 0, Y: 0, Width: 400, Height: 700},
+				Disposition:  "main",
+				Reasons:      []string{"raster_region"},
+				CompileHints: m29contract.CompileHints{CanBeImage: true},
+			},
+			{
+				ID:           "cover",
+				TokenType:    "raster_region_token",
+				BBox:         m29contract.BBox{X: 40, Y: 120, Width: 100, Height: 80},
+				Disposition:  "main",
+				Reasons:      []string{"raster_region"},
+				CompileHints: m29contract.CompileHints{CanBeImage: true},
+			},
+			{
+				ID:          "title",
+				TokenType:   "text_token",
+				BBox:        m29contract.BBox{X: 170, Y: 140, Width: 100, Height: 20},
+				Disposition: "main",
+				Content:     evidence.TokenContent{Text: "Title"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	backing := findLayerByBBox(graph, contract.LayerRaster, 0, 0, 400, 700)
+	if backing != nil && backing.Visible {
+		t.Fatalf("near-full page backing should not be visible, got %+v", backing)
+	}
+}
+
 func findLayer(graph contract.Document, kind contract.LayerKind) *contract.Layer {
 	for i := range graph.Layers {
 		if graph.Layers[i].Kind == kind {
@@ -326,6 +406,16 @@ func findLayerByID(graph contract.Document, id string) *contract.Layer {
 	for i := range graph.Layers {
 		if graph.Layers[i].ID == id {
 			return &graph.Layers[i]
+		}
+	}
+	return nil
+}
+
+func findLayerByBBox(graph contract.Document, kind contract.LayerKind, x, y, width, height int) *contract.Layer {
+	for i := range graph.Layers {
+		layer := &graph.Layers[i]
+		if layer.Kind == kind && layer.BBox.X == x && layer.BBox.Y == y && layer.BBox.Width == width && layer.BBox.Height == height {
+			return layer
 		}
 	}
 	return nil

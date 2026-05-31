@@ -25,7 +25,9 @@ const (
 )
 
 type Options struct {
-	OutputDir string
+	OutputDir  string
+	FilePrefix string
+	AssetsDir  string
 }
 
 type Artifacts struct {
@@ -96,13 +98,14 @@ func Write(doc contract.Document, options Options) (Artifacts, error) {
 	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
 		return Artifacts{}, err
 	}
-	ctx, err := newRenderContext(doc, options.OutputDir)
+	assetsDir := assetsDirName(options.AssetsDir)
+	ctx, err := newRenderContext(doc, options.OutputDir, assetsDir)
 	if err != nil {
 		return Artifacts{}, err
 	}
-	previewPath := filepath.Join(options.OutputDir, PreviewHTMLFile)
-	debugPath := filepath.Join(options.OutputDir, DebugHTMLFile)
-	reportPath := filepath.Join(options.OutputDir, PreviewReportFile)
+	previewPath := filepath.Join(options.OutputDir, artifactName(options.FilePrefix, PreviewHTMLFile))
+	debugPath := filepath.Join(options.OutputDir, artifactName(options.FilePrefix, DebugHTMLFile))
+	reportPath := filepath.Join(options.OutputDir, artifactName(options.FilePrefix, PreviewReportFile))
 	if err := os.WriteFile(previewPath, []byte(ctx.html(false)), 0o644); err != nil {
 		return Artifacts{}, err
 	}
@@ -116,7 +119,7 @@ func Write(doc contract.Document, options Options) (Artifacts, error) {
 		PreviewHTML:      previewPath,
 		DebugHTML:        debugPath,
 		PreviewReport:    reportPath,
-		PreviewAssetsDir: filepath.Join(options.OutputDir, PreviewAssetsDir),
+		PreviewAssetsDir: filepath.Join(options.OutputDir, assetsDir),
 		AssetCount:       ctx.assetCount,
 		NodeCount:        len(ctx.nodes) + 1,
 		EvidenceCount:    len(ctx.evidence),
@@ -124,7 +127,25 @@ func Write(doc contract.Document, options Options) (Artifacts, error) {
 	}, nil
 }
 
-func newRenderContext(doc contract.Document, outputDir string) (renderContext, error) {
+func artifactName(prefix string, name string) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return name
+	}
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	return base + "." + prefix + ext
+}
+
+func assetsDirName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return PreviewAssetsDir
+	}
+	return value
+}
+
+func newRenderContext(doc contract.Document, outputDir string, assetsDir string) (renderContext, error) {
 	ctx := renderContext{
 		doc:              doc,
 		nodes:            flattenNodes(doc.Root),
@@ -145,7 +166,7 @@ func newRenderContext(doc contract.Document, outputDir string) (renderContext, e
 		}
 		return ctx.evidence[i].ID < ctx.evidence[j].ID
 	})
-	if err := ctx.prepareAssets(outputDir); err != nil {
+	if err := ctx.prepareAssets(outputDir, assetsDir); err != nil {
 		return renderContext{}, err
 	}
 	ctx.health = computeStructuralHealth(doc.Root)
@@ -276,7 +297,8 @@ func highGapVarianceThreshold(gap int) int {
 }
 
 func renderedFlexContainer(node contract.Node) bool {
-	return node.Type == contract.NodeRow && node.Layout.Mode == contract.LayoutRow
+	return (node.Type == contract.NodeRow && node.Layout.Mode == contract.LayoutRow) ||
+		(node.Type == contract.NodeColumn && node.Layout.Mode == contract.LayoutColumn)
 }
 
 func leafNode(node contract.Node) bool {
@@ -344,9 +366,9 @@ func flattenNodes(root contract.Node) []flatNode {
 	return out
 }
 
-func (ctx *renderContext) prepareAssets(outputDir string) error {
+func (ctx *renderContext) prepareAssets(outputDir string, assetsDirName string) error {
 	source, sourceErr := decodeSource(ctx.doc.SourceImage.Path)
-	assetsDir := filepath.Join(outputDir, PreviewAssetsDir)
+	assetsDir := filepath.Join(outputDir, assetsDirName)
 	needAssets := len(ctx.doc.Assets) > 0 || hasCropEvidence(ctx.evidence)
 	if needAssets {
 		if err := os.MkdirAll(assetsDir, 0o755); err != nil {
@@ -374,7 +396,7 @@ func (ctx *renderContext) prepareAssets(outputDir string) error {
 			ctx.warn("HTML_PREVIEW_ASSET_CROP_FAILED", err.Error(), asset.ID)
 			continue
 		}
-		ctx.assetURLs[asset.ID] = filepath.ToSlash(filepath.Join(PreviewAssetsDir, filepath.Base(path)))
+		ctx.assetURLs[asset.ID] = filepath.ToSlash(filepath.Join(assetsDirName, filepath.Base(path)))
 		ctx.assetCount++
 	}
 	for _, item := range ctx.evidence {
@@ -394,7 +416,7 @@ func (ctx *renderContext) prepareAssets(outputDir string) error {
 			ctx.warn("HTML_PREVIEW_EVIDENCE_CROP_FAILED", err.Error(), item.ID)
 			continue
 		}
-		ctx.evidenceAssetURL[item.ID] = filepath.ToSlash(filepath.Join(PreviewAssetsDir, filepath.Base(path)))
+		ctx.evidenceAssetURL[item.ID] = filepath.ToSlash(filepath.Join(assetsDirName, filepath.Base(path)))
 		ctx.assetCount++
 	}
 	return nil
@@ -468,14 +490,18 @@ func (ctx *renderContext) html(debug bool) string {
 
 func (ctx *renderContext) renderTree(node contract.Node, debug bool, depth int, parentBox geometry.Rect) string {
 	if renderedFlexContainer(node) {
-		return ctx.renderRow(node, debug, depth, parentBox)
+		return ctx.renderFlexContainer(node, debug, depth, parentBox)
 	}
 	return ctx.renderAbsoluteNode(node, debug, depth, parentBox, true)
 }
 
-func (ctx *renderContext) renderRow(node contract.Node, debug bool, depth int, parentBox geometry.Rect) string {
+func (ctx *renderContext) renderFlexContainer(node contract.Node, debug bool, depth int, parentBox geometry.Rect) string {
 	var b strings.Builder
-	classes := []string{"node", "node-" + string(node.Type), "layout-row"}
+	layoutClass := "layout-row"
+	if node.Layout.Mode == contract.LayoutColumn {
+		layoutClass = "layout-column"
+	}
+	classes := []string{"node", "node-" + string(node.Type), layoutClass}
 	if debug {
 		classes = append(classes, "debug-outline")
 	}
@@ -489,7 +515,7 @@ func (ctx *renderContext) renderRow(node contract.Node, debug bool, depth int, p
 		depth,
 		html.EscapeString(nodeTitle(node)),
 	)
-	flow, overlays := splitRowChildren(node.Children)
+	flow, overlays := splitFlexChildren(node.Children, node.Layout.Mode)
 	for _, child := range overlays {
 		b.WriteString(ctx.renderAbsoluteNode(child, debug, depth+1, node.BBox, false))
 	}
@@ -569,6 +595,10 @@ func (ctx *renderContext) nodeContent(node contract.Node) string {
 }
 
 func splitRowChildren(children []contract.Node) ([]contract.Node, []contract.Node) {
+	return splitFlexChildren(children, contract.LayoutRow)
+}
+
+func splitFlexChildren(children []contract.Node, mode contract.LayoutMode) ([]contract.Node, []contract.Node) {
 	flow := make([]contract.Node, 0, len(children))
 	overlays := make([]contract.Node, 0, len(children))
 	for _, child := range children {
@@ -580,6 +610,15 @@ func splitRowChildren(children []contract.Node) ([]contract.Node, []contract.Nod
 	}
 	sort.SliceStable(flow, func(i, j int) bool {
 		a, b := flow[i].BBox, flow[j].BBox
+		if mode == contract.LayoutColumn {
+			if a.Y != b.Y {
+				return a.Y < b.Y
+			}
+			if a.X != b.X {
+				return a.X < b.X
+			}
+			return flow[i].ID < flow[j].ID
+		}
 		if a.X != b.X {
 			return a.X < b.X
 		}
@@ -641,11 +680,12 @@ body{padding:24px}
 .capture-mode .page{box-shadow:none}
 .node,.evidence{position:absolute;box-sizing:border-box;left:var(--x);top:var(--y);width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
 .layout-row{display:flex;flex-direction:row;align-items:center;gap:var(--gap);padding:var(--pt) var(--pr) var(--pb) var(--pl);overflow:visible}
-.layout-row>.flow-node{position:relative;flex:0 0 auto;box-sizing:border-box;width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
+.layout-column{display:flex;flex-direction:column;align-items:flex-start;gap:var(--gap);padding:var(--pt) var(--pr) var(--pb) var(--pl);overflow:visible}
+.layout-row>.flow-node,.layout-column>.flow-node{position:relative;flex:0 0 auto;box-sizing:border-box;width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
 .node-section,.node-row,.node-column,.node-group,.node-overlay{pointer-events:none}
 .node-shape{background:var(--fill)}
 .evidence-shape{background:rgba(238,238,238,.72)}
-.node-text,.evidence-text{display:flex;align-items:center;color:var(--fill);font-weight:500;line-height:1.05;white-space:nowrap;font-size:var(--font)}
+.node-text,.evidence-text{display:flex;align-items:center;color:var(--fill);font-weight:var(--weight);line-height:1.05;white-space:nowrap;font-size:var(--font)}
 .evidence-line{background:#222;min-height:1px}
 .node-image-content,.evidence-image-content{display:block;width:100%;height:100%;object-fit:fill}
 .node-icon .node-image-content,.evidence-icon .evidence-image-content{object-fit:contain}
@@ -724,11 +764,11 @@ func (ctx *renderContext) report() string {
 }
 
 func boxStyle(box geometry.Rect, z int) string {
-	return fmt.Sprintf("--x:%dpx;--y:%dpx;--w:%dpx;--h:%dpx;--z:%d;--font:%dpx", box.X, box.Y, box.Width, box.Height, z, fontSizeForBox(box))
+	return fmt.Sprintf("--x:%dpx;--y:%dpx;--w:%dpx;--h:%dpx;--z:%d;--font:%dpx;--weight:500", box.X, box.Y, box.Width, box.Height, z, fontSizeForBox(box))
 }
 
 func nodeBoxStyle(node contract.Node, z int) string {
-	return fmt.Sprintf("%s;--fill:%s", boxStyle(node.BBox, z), cssColor(node.Style.Fill, defaultFillForNode(node.Type)))
+	return fmt.Sprintf("%s;--fill:%s;%s", boxStyle(node.BBox, z), cssColor(node.Style.Fill, defaultFillForNode(node.Type)), textStyleVars(node))
 }
 
 func nodeBoxStyleRelative(node contract.Node, z int, parentBox geometry.Rect) string {
@@ -739,9 +779,10 @@ func nodeBoxStyleRelative(node contract.Node, z int, parentBox geometry.Rect) st
 		Width:  box.Width,
 		Height: box.Height,
 	}
-	return fmt.Sprintf("%s;--fill:%s;--gap:%dpx;--pt:%dpx;--pr:%dpx;--pb:%dpx;--pl:%dpx",
+	return fmt.Sprintf("%s;--fill:%s;%s;--gap:%dpx;--pt:%dpx;--pr:%dpx;--pb:%dpx;--pl:%dpx",
 		boxStyle(relative, z),
 		cssColor(node.Style.Fill, defaultFillForNode(node.Type)),
+		textStyleVars(node),
 		node.Layout.Gap,
 		node.Layout.Padding.Top,
 		node.Layout.Padding.Right,
@@ -751,13 +792,69 @@ func nodeBoxStyleRelative(node contract.Node, z int, parentBox geometry.Rect) st
 }
 
 func flowNodeStyle(node contract.Node) string {
-	return fmt.Sprintf("--w:%dpx;--h:%dpx;--z:%d;--font:%dpx;--fill:%s",
+	return fmt.Sprintf("--w:%dpx;--h:%dpx;--z:%d;--font:%dpx;--weight:500;--fill:%s;%s",
 		node.BBox.Width,
 		node.BBox.Height,
 		zIndexForNode(node),
 		fontSizeForBox(node.BBox),
 		cssColor(node.Style.Fill, defaultFillForNode(node.Type)),
+		textStyleVars(node),
 	)
+}
+
+func textStyleVars(node contract.Node) string {
+	if node.Type != contract.NodeText || node.Meta == nil {
+		return ""
+	}
+	parts := []string{}
+	if value, ok := positiveIntMeta(node, "fontSize"); ok {
+		parts = append(parts, fmt.Sprintf("--font:%dpx", value))
+	}
+	if value := cssFontWeight(node.Meta["fontWeight"]); value != "" {
+		parts = append(parts, "--weight:"+value)
+	}
+	return strings.Join(parts, ";")
+}
+
+func positiveIntMeta(node contract.Node, key string) (int, bool) {
+	value, ok := intMeta(node, key)
+	if !ok || value <= 0 {
+		return 0, false
+	}
+	return value, true
+}
+
+func cssFontWeight(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	switch strings.ToLower(value) {
+	case "thin":
+		return "100"
+	case "extralight", "ultralight":
+		return "200"
+	case "light":
+		return "300"
+	case "regular", "normal":
+		return "400"
+	case "medium":
+		return "500"
+	case "semibold", "demibold":
+		return "600"
+	case "bold":
+		return "700"
+	case "extrabold", "ultrabold":
+		return "800"
+	case "black", "heavy":
+		return "900"
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return value
 }
 
 func cssColor(value string, fallback string) string {

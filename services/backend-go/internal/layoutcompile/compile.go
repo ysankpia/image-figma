@@ -14,10 +14,12 @@ import (
 
 	htmlrender "github.com/luqing-studio/image-figma/services/backend-go/internal/htmlpreview/render"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/advisor"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/cluster"
 	layoutevidence "github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/evidence"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/materialize"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/segment"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/unifiedvision"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/validate"
 	m29evidence "github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
@@ -41,19 +43,37 @@ type Options struct {
 	VisionCandidatesPath      string
 	VisionOptions             detector.Options
 	SkipEvidenceNormalization bool
+	AdvisorInputPath          string
+	AdvisorResultPath         string
+	UnifiedVisionEnabled      bool
+	UnifiedVisionOptions      unifiedvision.Options
 }
 
 type Artifacts struct {
-	LayoutIR            string
-	ValidationReport    string
-	CompileReport       string
-	M29PhysicalEvidence string
-	EvidenceTokens      string
-	VisionCandidates    string
-	VisionFallback      string
-	PreviewHTML         string
-	DebugHTML           string
-	PreviewReport       string
+	LayoutIR                   string
+	ValidationReport           string
+	CompileReport              string
+	M29PhysicalEvidence        string
+	EvidenceTokens             string
+	VisionCandidates           string
+	VisionFallback             string
+	PreviewHTML                string
+	DebugHTML                  string
+	PreviewReport              string
+	AdvisorInput               string
+	AdvisorResult              string
+	AdvisorValidation          string
+	AdvisorLayoutIR            string
+	AdvisorPreviewHTML         string
+	AdvisorDebugHTML           string
+	AdvisorPreviewReport       string
+	UnifiedVisionInput         string
+	UnifiedVisionResult        string
+	UnifiedVisionValidation    string
+	UnifiedVisionLayoutIR      string
+	UnifiedVisionPreviewHTML   string
+	UnifiedVisionDebugHTML     string
+	UnifiedVisionPreviewReport string
 }
 
 type Result struct {
@@ -150,8 +170,154 @@ func Run(options Options) (Result, error) {
 	if err := os.WriteFile(artifacts.CompileReport, []byte(markdownReport(doc, validation)), 0o644); err != nil {
 		return Result{}, err
 	}
+	if err := writeAdvisorArtifacts(doc, options, &artifacts, &warnings); err != nil {
+		return Result{}, err
+	}
+	if err := writeUnifiedVisionArtifacts(doc, options, &artifacts, &warnings); err != nil {
+		return Result{}, err
+	}
 
 	return Result{Document: doc, Validation: validation, Artifacts: artifacts, Warnings: warnings}, nil
+}
+
+func writeUnifiedVisionArtifacts(doc contract.Document, options Options, artifacts *Artifacts, warnings *[]Warning) error {
+	if !options.UnifiedVisionEnabled {
+		return nil
+	}
+	uvOptions := options.UnifiedVisionOptions
+	uvOptions.Enabled = true
+	uvOptions.OutputDir = options.OutputDir
+	output, err := unifiedvision.Run(context.Background(), doc, uvOptions)
+	if err != nil {
+		return fmt.Errorf("unified vision experiment: %w", err)
+	}
+	baseDir := filepath.Join(options.OutputDir, "unified_vision")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return err
+	}
+	inputPath := filepath.Join(baseDir, "unified_vision_input.v1.json")
+	if err := writeJSON(inputPath, output.Input); err != nil {
+		return fmt.Errorf("unified vision input: %w", err)
+	}
+	artifacts.UnifiedVisionInput = inputPath
+	resultPath := filepath.Join(baseDir, "unified_vision_result.v1.json")
+	if err := writeJSON(resultPath, output.Result); err != nil {
+		return fmt.Errorf("unified vision result: %w", err)
+	}
+	artifacts.UnifiedVisionResult = resultPath
+	validationPath := filepath.Join(baseDir, "unified_vision_validation.v1.json")
+	if err := writeJSON(validationPath, output.Validation); err != nil {
+		return fmt.Errorf("unified vision validation: %w", err)
+	}
+	artifacts.UnifiedVisionValidation = validationPath
+	experiment := output.Experiment
+	experiment.Summary = summarize(experiment)
+	experimentPath := filepath.Join(options.OutputDir, "ui_layout_ir.unified_experiment.v1.json")
+	if err := writeJSON(experimentPath, experiment); err != nil {
+		return fmt.Errorf("unified vision experiment IR: %w", err)
+	}
+	artifacts.UnifiedVisionLayoutIR = experimentPath
+	htmlArtifacts, err := htmlrender.Write(experiment, htmlrender.Options{
+		OutputDir:  options.OutputDir,
+		FilePrefix: "unified",
+		AssetsDir:  "preview_assets_unified",
+	})
+	if err != nil {
+		return fmt.Errorf("unified vision html preview: %w", err)
+	}
+	artifacts.UnifiedVisionPreviewHTML = htmlArtifacts.PreviewHTML
+	artifacts.UnifiedVisionDebugHTML = htmlArtifacts.DebugHTML
+	artifacts.UnifiedVisionPreviewReport = htmlArtifacts.PreviewReport
+	for _, warning := range htmlArtifacts.Warnings {
+		*warnings = append(*warnings, Warning{
+			Code:     warning.Code,
+			Message:  warning.Message,
+			Stage:    "unified_vision_html_preview",
+			Artifact: htmlArtifacts.PreviewReport,
+		})
+	}
+	for _, warning := range output.Warnings {
+		*warnings = append(*warnings, Warning{
+			Code:     "UNIFIED_VISION_FALLBACK",
+			Message:  warning,
+			Stage:    "unified_vision",
+			Artifact: validationPath,
+		})
+	}
+	return nil
+}
+
+func writeAdvisorArtifacts(doc contract.Document, options Options, artifacts *Artifacts, warnings *[]Warning) error {
+	inputRequested := strings.TrimSpace(options.AdvisorInputPath) != ""
+	resultRequested := strings.TrimSpace(options.AdvisorResultPath) != ""
+	if !inputRequested && !resultRequested {
+		return nil
+	}
+	input := advisor.BuildInput(doc)
+	inputPath := strings.TrimSpace(options.AdvisorInputPath)
+	if inputPath == "" {
+		inputPath = filepath.Join(options.OutputDir, "layout_advisor_input.v1.json")
+	}
+	if err := writeJSON(inputPath, input); err != nil {
+		return fmt.Errorf("layout advisor input: %w", err)
+	}
+	artifacts.AdvisorInput = inputPath
+	if !resultRequested {
+		return nil
+	}
+	result, err := readAdvisorResult(options.AdvisorResultPath)
+	if err != nil {
+		return err
+	}
+	artifacts.AdvisorResult = options.AdvisorResultPath
+	validation := advisor.Validate(input, result, advisor.ValidateOptions{})
+	validationPath := filepath.Join(options.OutputDir, "layout_advisor_validation.v1.json")
+	if err := writeJSON(validationPath, validation); err != nil {
+		return fmt.Errorf("layout advisor validation: %w", err)
+	}
+	artifacts.AdvisorValidation = validationPath
+	experiment := advisor.Apply(doc, validation)
+	experiment.Summary = summarize(experiment)
+	experimentPath := filepath.Join(options.OutputDir, "ui_layout_ir.advisor_experiment.v1.json")
+	if err := writeJSON(experimentPath, experiment); err != nil {
+		return fmt.Errorf("layout advisor experiment IR: %w", err)
+	}
+	artifacts.AdvisorLayoutIR = experimentPath
+	htmlArtifacts, err := htmlrender.Write(experiment, htmlrender.Options{
+		OutputDir:  options.OutputDir,
+		FilePrefix: "advisor",
+		AssetsDir:  "preview_assets_advisor",
+	})
+	if err != nil {
+		return fmt.Errorf("layout advisor html preview: %w", err)
+	}
+	artifacts.AdvisorPreviewHTML = htmlArtifacts.PreviewHTML
+	artifacts.AdvisorDebugHTML = htmlArtifacts.DebugHTML
+	artifacts.AdvisorPreviewReport = htmlArtifacts.PreviewReport
+	for _, warning := range htmlArtifacts.Warnings {
+		*warnings = append(*warnings, Warning{
+			Code:     warning.Code,
+			Message:  warning.Message,
+			Stage:    "layout_advisor_html_preview",
+			Artifact: htmlArtifacts.PreviewReport,
+		})
+	}
+	return nil
+}
+
+func readAdvisorResult(path string) (advisor.Result, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return advisor.Result{}, err
+	}
+	var result advisor.Result
+	if err := json.Unmarshal(data, &result); err != nil {
+		return advisor.Result{}, fmt.Errorf("parse layout advisor result: %w", err)
+	}
+	if result.Version != advisor.ResultVersion {
+		return advisor.Result{}, fmt.Errorf("expected %s, got %q", advisor.ResultVersion, result.Version)
+	}
+	return result, nil
 }
 
 func runM29(options Options) (m29evidence.Document, error) {
