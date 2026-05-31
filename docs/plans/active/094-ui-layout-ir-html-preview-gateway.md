@@ -922,3 +922,42 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   missing assets: 0
   ```
 - 修正说明：浏览器截图由 Chrome DevTools MCP 负责，Go 后端不再启动或管理 Chrome。`preview.html?capture=1` 只提供截图友好的零边距模式；`cmd/previewdiff` 是纯离线 PNG diff/report 工具，会把 Retina/高 DPR 截图按源图高度归一化到源图尺寸后再比较。Stage 6 只记录指标，不把 mean diff 设为硬阻断，因为当前 HTML 仍是 evidence/row 调试草稿。
+
+## Stage 7 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/tools/layout_smoke_4img.sh
+  ```
+- 已执行：
+  ```bash
+  bash services/backend-go/tools/layout_smoke_4img.sh
+  git diff --check
+  ```
+- 真实样图输出根目录：
+  ```text
+  /tmp/layout_smoke_4img/
+  ```
+- 每张样图都检查：
+  ```text
+  ui_layout_ir.v1.json exists
+  ui_layout_ir_validation.v1.json exists
+  layout_compile_report.md exists
+  preview.html exists
+  preview_debug.html exists
+  html_preview_report.md exists
+  validation errorCount == 0
+  preview.html referenced local assets exist
+  ```
+- 四图 summary：
+  ```text
+  | case | nodes | sections | rows | evidence | html assets | warnings |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | t018 | 38 | 4 | 33 | 203 | 80 | 0 |
+  | t022 | 37 | 6 | 30 | 121 | 33 | 0 |
+  | lizhi | 32 | 8 | 23 | 76 | 31 | 0 |
+  | xianyu | 35 | 4 | 30 | 143 | 40 | 0 |
+  ```
+- 修正说明：Stage 7 建立四图批量 HTML gate。它不评价 Figma，也不把视觉相似度作为硬阻断；它只证明 `layoutcompile -> ui_layout_ir.v1 -> preview.html/preview_debug.html -> asset references` 可以对四张真实样图稳定复跑，并且失败时能归因到 validation、artifact 缺失或 asset 引用缺失。
