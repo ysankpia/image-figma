@@ -19,6 +19,7 @@ type builder struct {
 	doc        contract.Document
 	bounds     geometry.Rect
 	source     image.Image
+	evidence   []contract.Evidence
 	textItems  []contract.Evidence
 	substrates []geometry.Rect
 	assets     []contract.Asset
@@ -32,6 +33,7 @@ func Build(doc contract.Document, _ Options) contract.Document {
 		bounds: geometry.Rect{Width: doc.SourceImage.Width, Height: doc.SourceImage.Height},
 	}
 	b.source = decodeSource(doc.SourceImage.Path)
+	b.evidence = append([]contract.Evidence(nil), doc.Evidence...)
 	b.doc.Root.Style.Fill = b.samplePageFill()
 	b.textItems = textEvidence(doc.Evidence)
 	for _, item := range sortedEvidence(doc.Evidence) {
@@ -101,6 +103,10 @@ func (b *builder) emitImageIfUseful(item contract.Evidence) {
 	}
 	areaRatio := ratio(item.BBox.Area(), b.bounds.Area())
 	textCount := b.textsInside(item.BBox, 0.78)
+	if b.decomposableRaster(item) {
+		b.suppress(item, "materialize_decomposable_raster_suppressed", item.Confidence*0.80)
+		return
+	}
 	if textCount >= 2 && areaRatio > 0.08 {
 		b.emitRaster(item, contract.NodeUnknownCrop, "materialize_text_bearing_raster_as_substrate")
 		return
@@ -262,6 +268,87 @@ func (b *builder) textsInside(box geometry.Rect, threshold float64) int {
 		}
 	}
 	return count
+}
+
+func (b *builder) decomposableRaster(item contract.Evidence) bool {
+	if compactMedia(item.BBox, b.bounds) {
+		return false
+	}
+	areaRatio := ratio(item.BBox.Area(), b.bounds.Area())
+	if areaRatio < 0.08 && !structuralBand(item.BBox, b.bounds) {
+		return false
+	}
+	summary := b.internalEvidenceSummary(item)
+	if summary.total < 7 || summary.text < 3 || summary.diversity < 3 {
+		return false
+	}
+	if summary.spreadX < 0.45 || summary.spreadY < 0.30 {
+		return false
+	}
+	return true
+}
+
+type evidenceSummary struct {
+	total     int
+	text      int
+	icon      int
+	shape     int
+	image     int
+	diversity int
+	spreadX   float64
+	spreadY   float64
+}
+
+func (b *builder) internalEvidenceSummary(owner contract.Evidence) evidenceSummary {
+	var summary evidenceSummary
+	var union geometry.Rect
+	for _, item := range b.evidence {
+		if item.ID == owner.ID {
+			continue
+		}
+		role := canonicalRole(item.RoleHint)
+		if role == "line" {
+			role = "shape"
+		}
+		if role != "text" && role != "icon" && role != "shape" && role != "image" {
+			continue
+		}
+		if geometry.IoA(item.BBox, owner.BBox) < 0.80 {
+			continue
+		}
+		if ratio(item.BBox.Area(), owner.BBox.Area()) >= 0.85 {
+			continue
+		}
+		summary.total++
+		union = union.Union(item.BBox)
+		switch role {
+		case "text":
+			summary.text++
+		case "icon":
+			summary.icon++
+		case "shape":
+			summary.shape++
+		case "image":
+			summary.image++
+		}
+	}
+	if summary.text > 0 {
+		summary.diversity++
+	}
+	if summary.icon > 0 {
+		summary.diversity++
+	}
+	if summary.shape > 0 {
+		summary.diversity++
+	}
+	if summary.image > 0 {
+		summary.diversity++
+	}
+	if !union.Empty() {
+		summary.spreadX = ratio(union.Width, owner.BBox.Width)
+		summary.spreadY = ratio(union.Height, owner.BBox.Height)
+	}
+	return summary
 }
 
 func (b *builder) insideSubstrate(box geometry.Rect) bool {

@@ -77,6 +77,61 @@ func TestBuildAddsTextEraserAboveSubstrateBelowText(t *testing.T) {
 	}
 }
 
+func TestBuildSuppressesDecomposableLargeRaster(t *testing.T) {
+	doc := Build(materializeTestDoc([]contract.Evidence{
+		evidence("raster_1", "image", geometry.Rect{X: 0, Y: 0, Width: 200, Height: 130}, nil),
+		evidence("text_1", "text", geometry.Rect{X: 10, Y: 10, Width: 40, Height: 12}, map[string]string{"text": "Title"}),
+		evidence("text_2", "text", geometry.Rect{X: 85, Y: 35, Width: 32, Height: 12}, map[string]string{"text": "2"}),
+		evidence("text_3", "text", geometry.Rect{X: 150, Y: 100, Width: 34, Height: 12}, map[string]string{"text": "Tab"}),
+		evidence("shape_1", "shape", geometry.Rect{X: 4, Y: 70, Width: 192, Height: 34}, nil),
+		evidence("shape_2", "shape", geometry.Rect{X: 150, Y: 28, Width: 34, Height: 26}, nil),
+		evidence("icon_1", "icon", geometry.Rect{X: 12, Y: 98, Width: 20, Height: 20}, nil),
+		evidence("icon_2", "icon", geometry.Rect{X: 168, Y: 32, Width: 12, Height: 12}, nil),
+		evidence("image_1", "image", geometry.Rect{X: 64, Y: 76, Width: 36, Height: 28}, nil),
+	}), Options{})
+
+	if crop := findNode(doc.Root, contract.NodeUnknownCrop); crop != nil {
+		t.Fatalf("decomposable raster should not become visible crop: %+v", crop)
+	}
+	if !hasDecision(doc.Decisions, contract.DecisionSuppress, "materialize_decomposable_raster_suppressed") {
+		t.Fatalf("expected decomposable raster suppression, got %+v", doc.Decisions)
+	}
+	if countNodes(doc.Root, contract.NodeText) != 3 {
+		t.Fatalf("internal text leaves should remain editable")
+	}
+}
+
+func TestBuildKeepsSparseLargeRasterAsSubstrate(t *testing.T) {
+	doc := Build(materializeTestDoc([]contract.Evidence{
+		evidence("raster_1", "image", geometry.Rect{X: 0, Y: 0, Width: 180, Height: 120}, nil),
+		evidence("text_1", "text", geometry.Rect{X: 20, Y: 20, Width: 40, Height: 12}, map[string]string{"text": "Title"}),
+		evidence("text_2", "text", geometry.Rect{X: 20, Y: 50, Width: 70, Height: 12}, map[string]string{"text": "Subtitle"}),
+	}), Options{})
+
+	if crop := findNode(doc.Root, contract.NodeUnknownCrop); crop == nil {
+		t.Fatalf("sparse text-bearing raster should remain fallback substrate")
+	}
+	if hasDecision(doc.Decisions, contract.DecisionSuppress, "materialize_decomposable_raster_suppressed") {
+		t.Fatalf("sparse raster should not hit decomposable suppression: %+v", doc.Decisions)
+	}
+}
+
+func TestBuildKeepsCompactMediaEvenWithInternalHints(t *testing.T) {
+	doc := Build(materializeTestDoc([]contract.Evidence{
+		evidence("image_1", "image", geometry.Rect{X: 20, Y: 20, Width: 55, Height: 45}, nil),
+		evidence("text_1", "text", geometry.Rect{X: 28, Y: 28, Width: 18, Height: 10}, map[string]string{"text": "A"}),
+		evidence("shape_1", "shape", geometry.Rect{X: 25, Y: 48, Width: 24, Height: 8}, nil),
+		evidence("icon_1", "icon", geometry.Rect{X: 54, Y: 30, Width: 10, Height: 10}, nil),
+	}), Options{})
+
+	if image := findNode(doc.Root, contract.NodeImage); image == nil {
+		t.Fatalf("compact media should remain image leaf")
+	}
+	if hasDecision(doc.Decisions, contract.DecisionSuppress, "materialize_decomposable_raster_suppressed") {
+		t.Fatalf("compact media should not hit decomposable suppression: %+v", doc.Decisions)
+	}
+}
+
 func TestBuildTreatsDetectorControlsAsHintsOnly(t *testing.T) {
 	doc := Build(materializeTestDoc([]contract.Evidence{
 		{

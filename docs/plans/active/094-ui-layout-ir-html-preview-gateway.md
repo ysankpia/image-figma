@@ -521,7 +521,7 @@ Actions:
 - `preview_debug.html` 继续渲染 evidence、node bbox、node id、layout mode。
 - OCR/text evidence 提升为 `text` leaf。
 - compact image/icon evidence 提升为 `image/icon` leaf 并声明 asset。
-- 大块含文本 raster 不作为 foreground `image`，降级为底层 `unknown_crop` substrate。
+- 大块含文本 raster 不作为 foreground `image`；稀疏不可拆区域可降级为底层 `unknown_crop` substrate，富内部证据区域必须 suppress，由内部 text/icon/shape/image leaf 承担可编辑层。
 - 位于 substrate 内的 OCR text 额外生成 text eraser shape，放在 crop 上、text 下，减少原图文字和可编辑文字重影。
 - page/root 和 shape/text leaf 使用从 source PNG 采样出的 fill；renderer 只消费 IR fill，不自行推断。
 - 微型 shape/icon 碎片 suppress，防止 normal preview 被物理噪点淹没。
@@ -1060,3 +1060,86 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   | xianyu | 192 | 4 | 30 | 143 | 40 | 0 |
   ```
 - 修正说明：Stage 8A 把 normal HTML preview 从 raw evidence debug view 改成 visible leaf view。raw evidence 只在 `preview_debug.html` 出现。大块含文本 raster 被降级为底层 `unknown_crop` substrate，OCR 文本保持可编辑并绘制在上层，必要时插入 text eraser 降低原图文字重影。当前仍不是 Figma gateway，也不是 Codia clone；剩余主要缺口是 text eraser 的视觉粗糙度、字体样式恢复和 row/column 语义布局覆盖率。
+
+## Stage 8A Follow-up: Decomposable Raster Suppression
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/materialize/
+  docs/plans/active/094-ui-layout-ir-html-preview-gateway.md
+  ```
+- 根因：
+  ```text
+  Stage 8A 把“大块含文本 raster”统一降级为 visible unknown_crop substrate。
+  这保住了像素相似度，但对已经有足够内部 text/icon/shape/image evidence 的区域，会重新生成一个覆盖式大图层。
+  结果是 normal preview 看起来接近，但 Figma/editable 目标上仍然留下不可编辑大块。
+  ```
+- 通用规则：
+  ```text
+  non-compact raster candidate
+  + 覆盖面积达到结构区块量级
+  + 内部存在足够多、足够分散、至少三类的 editable evidence
+  -> suppress as decomposable raster evidence
+  ```
+- 反向保护：
+  ```text
+  compact media/image card/avatar/cover 继续可 emit 为 image。
+  sparse large raster 继续可作为 fallback unknown_crop substrate。
+  判断不读取样本名、文件名、leaf id、token id、固定 bbox、固定坐标、品牌或文案。
+  ```
+- 单测覆盖：
+  ```text
+  TestBuildSuppressesDecomposableLargeRaster
+  TestBuildKeepsSparseLargeRasterAsSubstrate
+  TestBuildKeepsCompactMediaEvenWithInternalHints
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutcompile/materialize ./internal/layoutcompile ./internal/htmlpreview/render ./cmd/layoutcompile
+  cd services/backend-go && go run ./cmd/layoutcompile -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png -out /tmp/layout-018-decomposable
+  cd services/backend-go && bash tools/layout_smoke_4img.sh
+  ```
+- Chrome DevTools MCP artifact：
+  ```text
+  /tmp/layout-018-decomposable/preview_screenshot.png
+  /tmp/layout-018-decomposable/preview_debug_screenshot.png
+  /tmp/layout-018-decomposable/preview_screenshot_normalized.png
+  /tmp/layout-018-decomposable/source_vs_html_diff.png
+  /tmp/layout-018-decomposable/source_html_diff_sheet_normalized.png
+  ```
+- 018 artifact summary：
+  ```text
+  nodes: 194
+  assets: 78
+  evidence: 203
+  decisions: 241
+  validation errors: 0
+  unknown_crop: 1
+  missing assets: 0
+  browser mean channel diff: 27.08
+  white hole ratio: 0.0000
+  large white hole: false
+  ```
+- 大块 crop 验证：
+  ```text
+  evidence_token_0085 -> decision_materialize_0085 suppress materialize_decomposable_raster_suppressed
+  evidence_token_0077 -> decision_materialize_0077 suppress materialize_decomposable_raster_suppressed
+  asset_leaf_0040.png still exists only because leaf ids are sequence numbers; current asset_leaf_0040 is 17x40 icon, not the old 665x346 region.
+  Judge by sourceRefs/reason/bbox/asset dimensions, not by filename.
+  ```
+- 四图 summary：
+  ```text
+  | case | nodes | sections | rows | evidence | html assets | warnings |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | t018 | 194 | 4 | 34 | 203 | 78 | 0 |
+  | t022 | 124 | 10 | 30 | 121 | 31 | 0 |
+  | lizhi | 98 | 8 | 23 | 76 | 30 | 0 |
+  | xianyu | 157 | 4 | 30 | 143 | 38 | 0 |
+  ```
+- 取舍说明：
+  ```text
+  mean diff 从 Stage 8A 的 10.48 上升到 27.08 是预期取舍：移除覆盖式大 crop 后，像素相似度下降，但可编辑性提高。
+  这不是最终视觉质量完成。剩余主要缺口是 shape/style 重建、局部背景补洞、字体样式和布局细节，不应再用整块 crop 兜回去。
+  ```
