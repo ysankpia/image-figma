@@ -512,11 +512,40 @@ Acceptance:
 - CLI 不 panic。
 - 单图失败必须归因到 evidence、segmentation、cluster、asset、html renderer 中某一层。
 
-### Stage 8: Figma Gateway Plan And Minimal Prototype
+### Stage 8A: Visible Leaf Materialization
 
 Actions:
 
-- 在 HTML gate 稳定后，再新增 Figma gateway 计划或子阶段。
+- 在 `segment/cluster` 后新增 visible leaf materialization。
+- `preview.html` 只渲染 materialized leaf nodes，不再直接渲染 raw evidence。
+- `preview_debug.html` 继续渲染 evidence、node bbox、node id、layout mode。
+- OCR/text evidence 提升为 `text` leaf。
+- compact image/icon evidence 提升为 `image/icon` leaf 并声明 asset。
+- 大块含文本 raster 不作为 foreground `image`，降级为底层 `unknown_crop` substrate。
+- 位于 substrate 内的 OCR text 额外生成 text eraser shape，放在 crop 上、text 下，减少原图文字和可编辑文字重影。
+- page/root 和 shape/text leaf 使用从 source PNG 采样出的 fill；renderer 只消费 IR fill，不自行推断。
+- 微型 shape/icon 碎片 suppress，防止 normal preview 被物理噪点淹没。
+
+Validation:
+
+```bash
+cd services/backend-go
+go test ./internal/htmlpreview/... ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile ./cmd/previewdiff
+bash tools/layout_smoke_4img.sh
+```
+
+Acceptance:
+
+- `preview.html` 中 `data-evidence-id` 数量为 0。
+- `preview_debug.html` 保留 evidence debug overlay。
+- 四图 validation errorCount = 0，asset missing = 0。
+- 018 browser diff 相比 Stage 6 evidence preview 不退化，并记录 artifact。
+
+### Stage 8B: Figma Gateway Plan And Minimal Prototype
+
+Actions:
+
+- 在 HTML leaf gate 稳定后，再新增 Figma gateway 计划或子阶段。
 - 第一版可只做 CLI/renderer proof，不接插件 UI。
 - `ui_layout_ir.v1` 到 Figma 的映射必须机械，不读 source evidence。
 
@@ -961,3 +990,73 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   | xianyu | 35 | 4 | 30 | 143 | 40 | 0 |
   ```
 - 修正说明：Stage 7 建立四图批量 HTML gate。它不评价 Figma，也不把视觉相似度作为硬阻断；它只证明 `layoutcompile -> ui_layout_ir.v1 -> preview.html/preview_debug.html -> asset references` 可以对四张真实样图稳定复跑，并且失败时能归因到 validation、artifact 缺失或 asset 引用缺失。
+
+## Stage 8A Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/materialize/
+  services/backend-go/internal/layoutcompile/compile.go
+  services/backend-go/internal/htmlpreview/render/
+  docs/plans/active/094-ui-layout-ir-html-preview-gateway.md
+  ```
+- 已执行：
+  ```bash
+  git diff --check
+  cd services/backend-go && go test ./internal/htmlpreview/... ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile ./cmd/previewdiff
+  cd services/backend-go && bash tools/layout_smoke_4img.sh
+  cd services/backend-go && go run ./cmd/layoutcompile -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png -out /tmp/layout-018-stage8a
+  cd services/backend-go && go run ./cmd/previewdiff -source ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png -screenshot /tmp/layout-018-stage8a/preview_screenshot.png -preview-html /tmp/layout-018-stage8a/preview.html -out /tmp/layout-018-stage8a
+  ```
+- Chrome DevTools MCP artifact：
+  ```text
+  /tmp/layout-018-stage8a/preview_screenshot.png
+  ```
+- 018 artifact summary：
+  ```text
+  nodes: 230
+  assets: 80
+  evidence: 203
+  decisions: 275
+  validation errors: 0
+  preview evidence tags: 0
+  debug evidence tags: 203
+  preview img refs: 80
+  missing assets: 0
+  browser mean channel diff: 10.48
+  white hole ratio: 0.0004
+  large white hole: false
+  ```
+- 018 visible leaf counts：
+  ```text
+  text: 47
+  image: 7
+  icon: 70
+  shape: 65
+  unknown_crop: 3
+  ```
+- 018 materialization decisions：
+  ```text
+  materialize_text_evidence: 47
+  materialize_image_crop: 7
+  materialize_compact_icon: 70
+  materialize_shape_evidence: 31
+  materialize_text_bearing_raster_as_substrate: 2
+  materialize_structural_band_raster_as_substrate: 1
+  materialize_text_eraser_for_substrate: 34
+  materialize_micro_fragment_suppressed: 31
+  materialize_micro_shape_suppressed: 4
+  materialize_unresolved_non_structural_evidence: 10
+  ```
+- 四图 summary：
+  ```text
+  | case | nodes | sections | rows | evidence | html assets | warnings |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | t018 | 230 | 4 | 34 | 203 | 80 | 0 |
+  | t022 | 148 | 10 | 30 | 121 | 33 | 0 |
+  | lizhi | 103 | 8 | 23 | 76 | 31 | 0 |
+  | xianyu | 192 | 4 | 30 | 143 | 40 | 0 |
+  ```
+- 修正说明：Stage 8A 把 normal HTML preview 从 raw evidence debug view 改成 visible leaf view。raw evidence 只在 `preview_debug.html` 出现。大块含文本 raster 被降级为底层 `unknown_crop` substrate，OCR 文本保持可编辑并绘制在上层，必要时插入 text eraser 降低原图文字重影。当前仍不是 Figma gateway，也不是 Codia clone；剩余主要缺口是 text eraser 的视觉粗糙度、字体样式恢复和 row/column 语义布局覆盖率。

@@ -16,6 +16,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/image/geometry"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/cluster"
 	layoutevidence "github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/evidence"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/materialize"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutcompile/segment"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/contract"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/layoutir/validate"
@@ -120,6 +121,7 @@ func Run(options Options) (Result, error) {
 		}
 		doc.Root.Children = sections
 		doc.Decisions = append(doc.Decisions, segmentation.Decisions...)
+		doc = materialize.Build(doc, materialize.Options{})
 	}
 	doc.Summary = summarize(doc)
 	validation := validate.Document(doc)
@@ -349,7 +351,7 @@ func markdownReport(doc contract.Document, report validate.Report) string {
 
 ## Stage
 
-Stage 5 HTML preview is active. Child materialization and Figma gateway are intentionally not active yet.
+Stage 8A visible leaf materialization is active. Figma gateway is intentionally not active yet.
 
 ## HTML Preview
 

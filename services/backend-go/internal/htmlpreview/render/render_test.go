@@ -28,22 +28,29 @@ func TestWriteCreatesPreviewArtifacts(t *testing.T) {
 			t.Fatalf("expected artifact %s: %v", path, err)
 		}
 	}
-	if artifacts.AssetCount != 1 {
-		t.Fatalf("asset count = %d, want 1", artifacts.AssetCount)
+	if artifacts.AssetCount != 2 {
+		t.Fatalf("asset count = %d, want 2", artifacts.AssetCount)
 	}
-	if _, err := os.Stat(filepath.Join(out, PreviewAssetsDir, "evidence_image_1.png")); err != nil {
-		t.Fatalf("expected image evidence crop: %v", err)
+	if _, err := os.Stat(filepath.Join(out, PreviewAssetsDir, "asset_node_image_1.png")); err != nil {
+		t.Fatalf("expected node image crop: %v", err)
 	}
 	html := readString(t, artifacts.PreviewHTML)
-	if !strings.Contains(html, "preview_assets/evidence_image_1.png") {
-		t.Fatalf("preview html should reference local crop asset")
+	if !strings.Contains(html, "preview_assets/asset_node_image_1.png") {
+		t.Fatalf("preview html should reference local node crop asset")
 	}
 	if !strings.Contains(html, "Hello") {
-		t.Fatalf("preview html should render text evidence")
+		t.Fatalf("preview html should render text node")
+	}
+	if strings.Contains(html, `data-evidence-id=`) {
+		t.Fatalf("normal preview must not render raw evidence")
+	}
+	debugHTML := readString(t, artifacts.DebugHTML)
+	if !strings.Contains(debugHTML, `data-evidence-id="evidence_image_1"`) {
+		t.Fatalf("debug preview should render raw evidence")
 	}
 }
 
-func TestWritePaintsTextAboveRasterEvidence(t *testing.T) {
+func TestWritePaintsTextAboveRasterNodes(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.png")
 	writePreviewTestPNG(t, source, 80, 60)
@@ -53,19 +60,59 @@ func TestWritePaintsTextAboveRasterEvidence(t *testing.T) {
 		t.Fatalf("Write() error = %v", err)
 	}
 	html := readString(t, artifacts.PreviewHTML)
-	imageIndex := strings.Index(html, `data-evidence-id="evidence_image_1"`)
-	textIndex := strings.Index(html, `data-evidence-id="evidence_text_1"`)
+	imageIndex := strings.Index(html, `data-node-id="node_image_1"`)
+	textIndex := strings.Index(html, `data-node-id="node_text_1"`)
 	if imageIndex < 0 || textIndex < 0 {
-		t.Fatalf("expected image and text evidence in html: image=%d text=%d", imageIndex, textIndex)
+		t.Fatalf("expected image and text nodes in html: image=%d text=%d", imageIndex, textIndex)
 	}
 	if imageIndex > textIndex {
-		t.Fatalf("image evidence should be emitted before text evidence so text paints above it when z-index ties are absent")
+		t.Fatalf("image node should be emitted before text node so text paints above it when z-index ties are absent")
 	}
-	if !strings.Contains(tagAround(html, imageIndex), "--z:20") {
-		t.Fatalf("image evidence should use raster z-index 20")
+	if !strings.Contains(tagAround(html, imageIndex), "--z:22") {
+		t.Fatalf("image node should use raster z-index 22")
 	}
-	if !strings.Contains(tagAround(html, textIndex), "--z:40") {
-		t.Fatalf("text evidence should use text z-index 40")
+	if !strings.Contains(tagAround(html, textIndex), "--z:44") {
+		t.Fatalf("text node should use text z-index 44")
+	}
+}
+
+func TestWriteUsesNodeFillAndTextEraserLayer(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.png")
+	writePreviewTestPNG(t, source, 80, 60)
+
+	doc := previewDoc(source)
+	doc.Root.Style.Fill = "#202020"
+	doc.Root.Children = append(doc.Root.Children, contract.Node{
+		ID:             "node_eraser_1",
+		Type:           contract.NodeShape,
+		BBox:           geometry.Rect{X: 10, Y: 12, Width: 30, Height: 10},
+		Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+		Style:          contract.Style{Fill: "#333333"},
+		SourceRefs:     []contract.SourceRef{{Kind: "layout_evidence", ID: "evidence_text_1"}},
+		Confidence:     0.8,
+		FallbackPolicy: "substrate_text_eraser",
+		Meta:           map[string]string{"zLayer": "text_eraser"},
+	})
+
+	artifacts, err := Write(doc, Options{OutputDir: filepath.Join(dir, "out")})
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	html := readString(t, artifacts.PreviewHTML)
+	if !strings.Contains(html, `<main class="page" style="width:80px;height:60px;background:#202020"`) {
+		t.Fatalf("page should use root fill: %s", html)
+	}
+	eraserIndex := strings.Index(html, `data-node-id="node_eraser_1"`)
+	if eraserIndex < 0 {
+		t.Fatalf("expected eraser node in html")
+	}
+	eraserTag := tagAround(html, eraserIndex)
+	if !strings.Contains(eraserTag, "--fill:#333333") {
+		t.Fatalf("eraser should carry fill style: %s", eraserTag)
+	}
+	if !strings.Contains(eraserTag, "--z:36") {
+		t.Fatalf("eraser should render above crops and below text: %s", eraserTag)
 	}
 }
 
@@ -85,6 +132,39 @@ func previewDoc(source string) contract.Document {
 				Mode: contract.LayoutColumn,
 			},
 			SourceRefs: []contract.SourceRef{{Kind: "source_image", ID: "source_image"}},
+			Children: []contract.Node{
+				{
+					ID:             "node_image_1",
+					Type:           contract.NodeImage,
+					BBox:           geometry.Rect{X: 8, Y: 10, Width: 50, Height: 30},
+					Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+					SourceRefs:     []contract.SourceRef{{Kind: "layout_evidence", ID: "evidence_image_1"}},
+					Confidence:     0.9,
+					FallbackPolicy: "crop_asset",
+					AssetRef:       &contract.AssetRef{AssetID: "asset_node_image_1"},
+				},
+				{
+					ID:             "node_text_1",
+					Type:           contract.NodeText,
+					BBox:           geometry.Rect{X: 12, Y: 16, Width: 34, Height: 14},
+					Layout:         contract.Layout{Mode: contract.LayoutAbsolute},
+					SourceRefs:     []contract.SourceRef{{Kind: "layout_evidence", ID: "evidence_text_1"}},
+					Confidence:     1,
+					FallbackPolicy: "editable_text",
+					Text:           &contract.Text{Characters: "Hello"},
+				},
+			},
+		},
+		Assets: []contract.Asset{
+			{
+				ID:         "asset_node_image_1",
+				Type:       "image",
+				Format:     "png",
+				BBox:       geometry.Rect{X: 8, Y: 10, Width: 50, Height: 30},
+				Width:      50,
+				Height:     30,
+				SourceRefs: []contract.SourceRef{{Kind: "layout_evidence", ID: "evidence_image_1"}},
+			},
 		},
 		Evidence: []contract.Evidence{
 			{

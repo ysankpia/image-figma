@@ -251,13 +251,14 @@ func (ctx *renderContext) html(debug bool) string {
 	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<script>if(new URLSearchParams(location.search).has('capture'))document.documentElement.classList.add('capture-mode')</script>\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n<style>\n%s\n</style>\n</head>\n<body class=\"%s\">\n", title, css(), modeClass(debug))
-	fmt.Fprintf(&b, "<main class=\"page\" style=\"width:%dpx;height:%dpx\" data-version=\"%s\">\n",
+	fmt.Fprintf(&b, "<main class=\"page\" style=\"width:%dpx;height:%dpx;background:%s\" data-version=\"%s\">\n",
 		ctx.doc.SourceImage.Width,
 		ctx.doc.SourceImage.Height,
+		cssColor(ctx.doc.Root.Style.Fill, "#f7f7f7"),
 		html.EscapeString(ctx.doc.Version),
 	)
 	for _, item := range ctx.evidence {
-		if !debug && !visibleEvidence(item) {
+		if !debug {
 			continue
 		}
 		b.WriteString(ctx.renderEvidence(item, debug))
@@ -276,7 +277,7 @@ func (ctx *renderContext) renderNode(item flatNode, debug bool) string {
 	if debug {
 		classes = append(classes, "debug-outline")
 	}
-	style := boxStyle(node.BBox, zIndexForNode(node))
+	style := nodeBoxStyle(node, zIndexForNode(node))
 	fmt.Fprintf(&b, "<div class=\"%s\" style=\"%s\" data-node-id=\"%s\" data-node-type=\"%s\" data-depth=\"%d\" title=\"%s\">\n",
 		strings.Join(classes, " "),
 		style,
@@ -336,10 +337,10 @@ body{padding:24px}
 .capture-mode body{padding:0;background:#fff}
 .capture-mode .page{box-shadow:none}
 .node,.evidence{position:absolute;box-sizing:border-box;left:var(--x);top:var(--y);width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
-.node-section{background:rgba(255,255,255,.02)}
-.node-row{background:rgba(47,129,247,.035)}
-.node-shape,.evidence-shape{background:rgba(238,238,238,.72)}
-.node-text,.evidence-text{display:flex;align-items:center;color:#111;font-weight:500;line-height:1.05;white-space:nowrap;font-size:var(--font)}
+.node-section,.node-row,.node-column,.node-group,.node-overlay{pointer-events:none}
+.node-shape{background:var(--fill)}
+.evidence-shape{background:rgba(238,238,238,.72)}
+.node-text,.evidence-text{display:flex;align-items:center;color:var(--fill);font-weight:500;line-height:1.05;white-space:nowrap;font-size:var(--font)}
 .evidence-line{background:#222;min-height:1px}
 .node-image-content,.evidence-image-content{display:block;width:100%;height:100%;object-fit:fill}
 .node-icon .node-image-content,.evidence-icon .evidence-image-content{object-fit:contain}
@@ -368,7 +369,8 @@ func (ctx *renderContext) report() string {
 	fmt.Fprintf(&b, "\n## Policy\n\n")
 	fmt.Fprintf(&b, "- renderer input is `ui_layout_ir.v1` only; it does not read M29/OCR/vision raw artifacts.\n")
 	fmt.Fprintf(&b, "- source PNG is used only for local crop assets referenced by IR bboxes.\n")
-	fmt.Fprintf(&b, "- text evidence is painted above image/shape evidence.\n")
+	fmt.Fprintf(&b, "- normal preview renders materialized visible leaf nodes only; raw evidence is rendered only by `preview_debug.html`.\n")
+	fmt.Fprintf(&b, "- text leaf nodes are painted above image/shape leaf nodes.\n")
 	fmt.Fprintf(&b, "- full-page backing crops are skipped.\n")
 	if len(ctx.warnings) > 0 {
 		fmt.Fprintf(&b, "\n## Warnings\n\n")
@@ -385,6 +387,32 @@ func boxStyle(box geometry.Rect, z int) string {
 	return fmt.Sprintf("--x:%dpx;--y:%dpx;--w:%dpx;--h:%dpx;--z:%d;--font:%dpx", box.X, box.Y, box.Width, box.Height, z, fontSizeForBox(box))
 }
 
+func nodeBoxStyle(node contract.Node, z int) string {
+	return fmt.Sprintf("%s;--fill:%s", boxStyle(node.BBox, z), cssColor(node.Style.Fill, defaultFillForNode(node.Type)))
+}
+
+func cssColor(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	if strings.HasPrefix(value, "#") {
+		return value
+	}
+	return fallback
+}
+
+func defaultFillForNode(value contract.NodeType) string {
+	switch value {
+	case contract.NodeText:
+		return "#111111"
+	case contract.NodeShape:
+		return "#eeeeee"
+	default:
+		return "transparent"
+	}
+}
+
 func nodeTitle(node contract.Node) string {
 	return fmt.Sprintf("%s %s %s %d,%d,%d,%d", node.ID, node.Type, node.Layout.Mode, node.BBox.X, node.BBox.Y, node.BBox.Width, node.BBox.Height)
 }
@@ -394,6 +422,9 @@ func evidenceTitle(item contract.Evidence) string {
 }
 
 func zIndexForNode(node contract.Node) int {
+	if node.Meta["zLayer"] == "text_eraser" {
+		return 36
+	}
 	switch node.Type {
 	case contract.NodeSection:
 		return 2
@@ -401,7 +432,9 @@ func zIndexForNode(node contract.Node) int {
 		return 4
 	case contract.NodeShape:
 		return 12
-	case contract.NodeImage, contract.NodeUnknownCrop:
+	case contract.NodeUnknownCrop:
+		return 18
+	case contract.NodeImage:
 		return 22
 	case contract.NodeIcon:
 		return 32
@@ -432,15 +465,6 @@ func fontSizeForBox(box geometry.Rect) int {
 		return 12
 	}
 	return min(28, max(10, box.Height*72/100))
-}
-
-func visibleEvidence(item contract.Evidence) bool {
-	switch item.RoleHint {
-	case "text", "shape", "line", "image", "icon":
-		return true
-	default:
-		return false
-	}
 }
 
 func cropEvidence(item contract.Evidence) bool {
