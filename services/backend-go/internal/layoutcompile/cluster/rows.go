@@ -12,6 +12,8 @@ type Options struct {
 	MinRowEvidence int
 }
 
+const rowOverlayExpansionLimit = 4
+
 func BuildRows(section contract.Node, evidence []contract.Evidence, options Options) (contract.Node, []contract.Decision) {
 	if options.MinRowEvidence <= 0 {
 		options.MinRowEvidence = 2
@@ -65,9 +67,10 @@ func BuildRows(section contract.Node, evidence []contract.Evidence, options Opti
 
 func rowLayout(rowBox geometry.Rect, items []contract.Evidence) contract.Layout {
 	layoutItems := rowLayoutItems(items)
+	gap := medianPositiveGaps(layoutItems)
 	return contract.Layout{
 		Mode: contract.LayoutRow,
-		Gap:  medianPositiveGaps(layoutItems),
+		Gap:  gap,
 		Padding: contract.Insets{
 			Top:    max(0, minTop(layoutItems)-rowBox.Y),
 			Right:  max(0, rowBox.Right()-maxRight(layoutItems)),
@@ -117,7 +120,11 @@ func medianPositiveGaps(items []contract.Evidence) int {
 }
 
 func gapVariance(items []contract.Evidence) int {
-	gaps := positiveGaps(rowLayoutItems(items))
+	return gapVarianceForLayoutItems(rowLayoutItems(items))
+}
+
+func gapVarianceForLayoutItems(items []contract.Evidence) int {
+	gaps := positiveGaps(items)
 	if len(gaps) <= 1 {
 		return 0
 	}
@@ -192,6 +199,26 @@ func maxBottom(items []contract.Evidence) int {
 }
 
 func sectionEvidence(section contract.Node, evidence []contract.Evidence) []contract.Evidence {
+	if len(section.SourceRefs) > 0 {
+		allowed := map[string]bool{}
+		for _, ref := range section.SourceRefs {
+			if ref.Kind == "layout_evidence" {
+				allowed[ref.ID] = true
+			}
+		}
+		if len(allowed) > 0 {
+			out := make([]contract.Evidence, 0, len(allowed))
+			for _, item := range evidence {
+				if allowed[item.ID] {
+					out = append(out, item)
+				}
+			}
+			if len(out) > 0 {
+				sortEvidence(out)
+				return out
+			}
+		}
+	}
 	out := make([]contract.Evidence, 0)
 	for _, item := range evidence {
 		if centerInside(section.BBox, item.BBox) || geometry.IoA(item.BBox, section.BBox) >= 0.50 {
@@ -203,11 +230,21 @@ func sectionEvidence(section contract.Node, evidence []contract.Evidence) []cont
 }
 
 func rowAnchors(items []contract.Evidence) []contract.Evidence {
-	out := make([]contract.Evidence, 0, len(items))
+	candidates := make([]contract.Evidence, 0, len(items))
 	for _, item := range items {
-		if item.RoleHint == "text" || item.RoleHint == "icon" || item.RoleHint == "line" {
-			out = append(out, item)
+		if item.RoleHint == "text" || item.RoleHint == "icon" {
+			candidates = append(candidates, item)
 		}
+	}
+	unit := medianEvidenceHeight(candidates)
+	minSide := max(3, unit/4)
+	minArea := max(12, unit*unit/6)
+	out := make([]contract.Evidence, 0, len(candidates))
+	for _, item := range candidates {
+		if item.RoleHint == "icon" && !layoutAnchorSized(item.BBox, minSide, minArea) {
+			continue
+		}
+		out = append(out, item)
 	}
 	sortEvidence(out)
 	return out
@@ -271,7 +308,7 @@ func mergeSparseRows(rows [][]contract.Evidence, minRowEvidence int, tolerance i
 			continue
 		}
 		last := out[len(out)-1]
-		if evidenceUnion(row).Y-evidenceUnion(last).Bottom() <= max(tolerance, 12) {
+		if shouldMergeSparseRow(last, row, tolerance) {
 			last = append(last, row...)
 			out[len(out)-1] = last
 			continue
@@ -279,6 +316,22 @@ func mergeSparseRows(rows [][]contract.Evidence, minRowEvidence int, tolerance i
 		out = append(out, row)
 	}
 	return out
+}
+
+func shouldMergeSparseRow(previous []contract.Evidence, current []contract.Evidence, tolerance int) bool {
+	prevBox := evidenceUnion(previous)
+	currBox := evidenceUnion(current)
+	if prevBox.Empty() || currBox.Empty() {
+		return false
+	}
+	if currBox.Y-prevBox.Bottom() > max(tolerance, 12) {
+		return false
+	}
+	overlap := prevBox.Intersect(currBox)
+	if overlap.Empty() {
+		return false
+	}
+	return overlap.Height >= max(1, minInt(prevBox.Height, currBox.Height)/3)
 }
 
 func expandRowsWithCoveredEvidence(sectionBox geometry.Rect, rows [][]contract.Evidence, items []contract.Evidence) [][]contract.Evidence {
@@ -315,6 +368,9 @@ func expandRowsWithCoveredEvidence(sectionBox geometry.Rect, rows [][]contract.E
 		if best < 0 || bestOverlap == 0 || seen[best][item.ID] {
 			continue
 		}
+		if !localRowOverlay(boxes[best], item.BBox) {
+			continue
+		}
 		nextBox := boxes[best].Union(item.BBox)
 		if geometry.IoA(nextBox, sectionBox) < 1 {
 			continue
@@ -327,6 +383,50 @@ func expandRowsWithCoveredEvidence(sectionBox geometry.Rect, rows [][]contract.E
 		sortEvidence(row)
 	}
 	return out
+}
+
+func localRowOverlay(row geometry.Rect, item geometry.Rect) bool {
+	if row.Empty() || item.Empty() {
+		return false
+	}
+	if row.Intersect(item).Empty() {
+		return false
+	}
+	rowArea := row.Area()
+	itemArea := item.Area()
+	if rowArea <= 0 || itemArea <= 0 {
+		return false
+	}
+	if itemArea > rowArea*rowOverlayExpansionLimit {
+		return false
+	}
+	if item.Width > max(row.Width, 1)*rowOverlayExpansionLimit {
+		return false
+	}
+	if item.Height > max(row.Height, 1)*rowOverlayExpansionLimit {
+		return false
+	}
+	return true
+}
+
+func layoutAnchorSized(box geometry.Rect, minSide int, minArea int) bool {
+	if box.Width < minSide || box.Height < minSide {
+		return false
+	}
+	return box.Area() >= minArea
+}
+
+func medianEvidenceHeight(items []contract.Evidence) int {
+	if len(items) == 0 {
+		return 0
+	}
+	heights := make([]int, 0, len(items))
+	for _, item := range items {
+		if item.BBox.Height > 0 {
+			heights = append(heights, item.BBox.Height)
+		}
+	}
+	return median(heights)
 }
 
 func centerInside(container geometry.Rect, child geometry.Rect) bool {
@@ -409,6 +509,13 @@ func median(values []int) int {
 
 func max(a int, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+func minInt(a int, b int) int {
+	if a < b {
 		return a
 	}
 	return b

@@ -61,11 +61,15 @@ warnings = int(warning_match.group(1)) if warning_match else -1
 coverage_match = re.search(r"- auto layout coverage: `([0-9.]+)`", report)
 fallback_match = re.search(r"- absolute fallback ratio: `([0-9.]+)`", report)
 gap_match = re.search(r"- mean gap variance: `([0-9.]+)`", report)
+zero_flow_match = re.search(r"- zero-flow row count: `([0-9]+)`", report)
+high_gap_match = re.search(r"- high-gap row count: `([0-9]+)`", report)
 coverage = coverage_match.group(1) if coverage_match else "n/a"
 fallback = fallback_match.group(1) if fallback_match else "n/a"
 gap = gap_match.group(1) if gap_match else "n/a"
+zero_flow = zero_flow_match.group(1) if zero_flow_match else "n/a"
+high_gap = high_gap_match.group(1) if high_gap_match else "n/a"
 print(
-    "| {key} | {nodes} | {sections} | {rows} | {evidence} | {assets} | {coverage} | {fallback} | {gap} | {warnings} |".format(
+    "| {key} | {nodes} | {sections} | {rows} | {evidence} | {assets} | {coverage} | {fallback} | {zero_flow} | {high_gap} | {gap} | {warnings} |".format(
         key=key,
         nodes=summary.get("nodeCount", 0),
         sections=root_children,
@@ -74,6 +78,8 @@ print(
         assets=len(refs),
         coverage=coverage,
         fallback=fallback,
+        zero_flow=zero_flow,
+        high_gap=high_gap,
         gap=gap,
         warnings=warnings,
     )
@@ -86,8 +92,8 @@ PY
   echo
   echo "- workdir: \`$WORK\`"
   echo
-  echo "| case | nodes | sections | rows | evidence | html assets | auto layout coverage | absolute fallback | mean gap variance | warnings |"
-  echo "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+  echo "| case | nodes | sections | rows | evidence | html assets | auto layout coverage | absolute fallback | zero-flow rows | high-gap rows | mean gap variance | warnings |"
+  echo "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
   run_one t018 "腾讯动漫_018_1440.png"
   run_one t022 "腾讯动漫_022_1440.png"
   run_one lizhi "荔枝_011_1440.png"

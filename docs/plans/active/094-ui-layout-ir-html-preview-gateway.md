@@ -1224,3 +1224,62 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   这次修复不是让 HTML 更像源图，而是让 HTML 不再掩盖结构错误。
   下一步应修 cluster：降低单子 row、分离背景 overlay 与前景 flow、按局部行/卡片层级重新聚类，而不是退回 flat absolute/crop overlay。
   ```
+
+## Stage 8D: Row Ownership Diagnostics And Empty Row Repair
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/layoutcompile/cluster/
+  services/backend-go/internal/htmlpreview/render/
+  services/backend-go/tools/layout_smoke_4img.sh
+  docs/plans/active/094-ui-layout-ir-html-preview-gateway.md
+  ```
+- 第一性原理结论：
+  ```text
+  row 聚类的源真相必须来自 section 的 sourceRefs。
+  如果 cluster 在每个 section 内重新按 bbox 从全量 evidence 捞成员，重叠 section 会重复拥有同一 evidence。
+  materialize 之后 leaf 只能落到一个最佳容器，重复 row 就会变成 zero-flow 空 flex row。
+  这不是 renderer 问题，也不是 pixel diff 问题，是 section ownership 在 cluster 阶段被绕过。
+  ```
+- 修复：
+  ```text
+  cluster.BuildRows 优先使用 section.SourceRefs 中声明的 layout_evidence 作为 section 成员。
+  只有旧节点没有可匹配 sourceRefs 时，才回退到 bbox containment。
+  row anchors 不再使用 line evidence；明显小于同组字号尺度的 icon fragment 不再作为 row anchor。
+  sparse row merge 增加垂直重叠条件，避免把上下两个孤立元素合成假横向 row。
+  row overlay 吸附增加局部尺寸限制，避免大背景/整块区域把 row bbox 撑爆。
+  ```
+- HTML report 增强：
+  ```text
+  新增 absolute row fallback nodes。
+  新增 zero-flow row count。
+  新增 high-gap row count。
+  新增 Top Bad Rows 表，输出 row id、reason、bbox、children、flow、overlay、gap、gap variance。
+  ```
+- smoke 增强：
+  ```text
+  tools/layout_smoke_4img.sh 输出 zero-flow rows 和 high-gap rows。
+  warnings=0 不再被当作结构健康的充分信号。
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/layoutcompile/cluster ./internal/htmlpreview/render
+  cd services/backend-go && bash tools/layout_smoke_4img.sh
+  ```
+- 四图 summary：
+  ```text
+  | case | nodes | sections | rows | evidence | html assets | auto layout coverage | absolute fallback | zero-flow rows | high-gap rows | mean gap variance | warnings |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | t018 | 188 | 4 | 40 | 203 | 78 | 0.7308 | 0.2692 | 0 | 1 | 221.44 | 0 |
+  | t022 | 116 | 10 | 33 | 121 | 31 | 0.6782 | 0.3218 | 0 | 2 | 3838.68 | 0 |
+  | lizhi | 94 | 8 | 20 | 76 | 30 | 0.8636 | 0.1364 | 0 | 2 | 1229.26 | 0 |
+  | xianyu | 147 | 4 | 28 | 143 | 38 | 0.5902 | 0.4098 | 0 | 3 | 602.10 | 0 |
+  ```
+- 取舍说明：
+  ```text
+  zero-flow row 已归零，这是本阶段修复的硬信号。
+  auto layout coverage 在 t018/t022/xianyu 低于 Stage 8C，因为重复/重叠 section 的空结构不再被错误计入可用 row。
+  high-gap rows 仍存在，尤其 t022 和 xianyu；这说明下一步仍应修 region/card-aware 局部 grouping，而不是在 renderer 里隐藏或恢复 crop overlay。
+  ```

@@ -65,6 +65,98 @@ func TestBuildRowsAbsorbsOverlappingSubstrate(t *testing.T) {
 	}
 }
 
+func TestBuildRowsKeepsSingleChildRowsAsDiagnosableStructure(t *testing.T) {
+	section := sectionNode(0, 0, 300, 180)
+	withRows, decisions := BuildRows(section, []contract.Evidence{
+		item("label", "text", 40, 40, 90, 20),
+	}, Options{})
+	if len(withRows.Children) != 1 {
+		t.Fatalf("rows = %d, want 1 diagnosable row", len(withRows.Children))
+	}
+	if withRows.Children[0].Layout.Mode != contract.LayoutRow {
+		t.Fatalf("single evidence row mode = %s, want row for structural diagnostics", withRows.Children[0].Layout.Mode)
+	}
+	if len(decisions) != 1 {
+		t.Fatalf("decisions = %d, want 1", len(decisions))
+	}
+}
+
+func TestBuildRowsDoesNotMergeSparseRowsIntoFakeFlexRow(t *testing.T) {
+	section := sectionNode(0, 0, 300, 180)
+	withRows, decisions := BuildRows(section, []contract.Evidence{
+		item("first", "text", 40, 40, 90, 20),
+		item("second", "text", 44, 70, 100, 20),
+	}, Options{})
+	if len(withRows.Children) != 2 {
+		t.Fatalf("rows = %d, want 2 separate rows: %+v", len(withRows.Children), withRows.Children)
+	}
+	for _, row := range withRows.Children {
+		if row.Meta["evidenceCount"] != "1" {
+			t.Fatalf("unaligned singleton rows should stay separate, got %+v", row)
+		}
+	}
+	if len(decisions) != 2 {
+		t.Fatalf("decisions = %d, want 2", len(decisions))
+	}
+}
+
+func TestBuildRowsIgnoresTinyIconAnchors(t *testing.T) {
+	section := sectionNode(0, 0, 300, 180)
+	withRows, decisions := BuildRows(section, []contract.Evidence{
+		item("speck_1", "icon", 40, 40, 2, 2),
+		item("speck_2", "icon", 80, 41, 2, 2),
+	}, Options{})
+	if len(withRows.Children) != 0 {
+		t.Fatalf("tiny icon fragments should not create flex rows: %+v", withRows.Children)
+	}
+	if len(decisions) != 0 {
+		t.Fatalf("decisions = %d, want 0", len(decisions))
+	}
+}
+
+func TestBuildRowsRejectsOversizedOverlayExpansion(t *testing.T) {
+	section := sectionNode(0, 0, 500, 300)
+	withRows, _ := BuildRows(section, []contract.Evidence{
+		item("label", "text", 40, 40, 90, 20),
+		item("icon", "icon", 150, 42, 18, 18),
+		item("hero", "image", 0, 0, 500, 240),
+	}, Options{})
+	if len(withRows.Children) != 1 {
+		t.Fatalf("rows = %d, want 1", len(withRows.Children))
+	}
+	row := withRows.Children[0]
+	if row.BBox.Width > 140 || row.BBox.Height > 30 {
+		t.Fatalf("oversized overlay should not inflate row bbox, got %+v", row.BBox)
+	}
+	if row.Meta["evidenceCount"] != "2" {
+		t.Fatalf("oversized overlay should not be absorbed, evidenceCount=%q", row.Meta["evidenceCount"])
+	}
+}
+
+func TestBuildRowsUsesSectionSourceRefsWhenPresent(t *testing.T) {
+	section := sectionNode(0, 0, 400, 160)
+	section.SourceRefs = []contract.SourceRef{
+		{Kind: "layout_evidence", ID: "a", Role: "section_member"},
+		{Kind: "layout_evidence", ID: "b", Role: "section_member"},
+	}
+	withRows, _ := BuildRows(section, []contract.Evidence{
+		item("a", "text", 20, 20, 80, 20),
+		item("b", "icon", 120, 22, 20, 18),
+		item("c", "text", 20, 90, 80, 20),
+		item("d", "icon", 120, 92, 20, 18),
+	}, Options{})
+	if len(withRows.Children) != 1 {
+		t.Fatalf("rows = %d, want 1 from section source refs: %+v", len(withRows.Children), withRows.Children)
+	}
+	row := withRows.Children[0]
+	if row.BBox.Y != 20 || row.BBox.Bottom() > 42 {
+		t.Fatalf("row should use only referenced evidence, got bbox %+v", row.BBox)
+	}
+	if row.Meta["evidenceCount"] != "2" {
+		t.Fatalf("row evidence count = %q, want 2", row.Meta["evidenceCount"])
+	}
+}
+
 func TestBuildRowsReturnsSectionWhenNoAnchors(t *testing.T) {
 	section := sectionNode(0, 0, 300, 180)
 	withRows, decisions := BuildRows(section, []contract.Evidence{

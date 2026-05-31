@@ -66,12 +66,27 @@ type structuralHealth struct {
 	FlexLeafCount         int
 	AbsoluteLeafCount     int
 	RowCount              int
+	AbsoluteRowCount      int
 	ColumnCount           int
 	SingleChildRowCount   int
+	ZeroFlowRowCount      int
+	HighGapRowCount       int
 	TextEraserCount       int
 	MeanGapVariance       float64
 	AutoLayoutCoverage    float64
 	AbsoluteFallbackRatio float64
+	BadRows               []rowHealth
+}
+
+type rowHealth struct {
+	ID           string
+	BBox         geometry.Rect
+	ChildCount   int
+	FlowCount    int
+	OverlayCount int
+	Gap          int
+	GapVariance  int
+	Reason       string
 }
 
 func Write(doc contract.Document, options Options) (Artifacts, error) {
@@ -145,10 +160,24 @@ func computeStructuralHealth(root contract.Node) structuralHealth {
 	walk = func(node contract.Node, inFlex bool) {
 		flexNode := renderedFlexContainer(node)
 		nextInFlex := inFlex || flexNode
-		if node.Layout.Mode == contract.LayoutRow {
-			health.RowCount++
+		if node.Type == contract.NodeRow {
+			if node.Layout.Mode == contract.LayoutRow {
+				health.RowCount++
+			} else {
+				health.AbsoluteRowCount++
+			}
 			if len(node.Children) <= 1 {
 				health.SingleChildRowCount++
+			}
+			row := inspectRow(node)
+			if row.FlowCount == 0 {
+				health.ZeroFlowRowCount++
+			}
+			if row.GapVariance > highGapVarianceThreshold(row.Gap) {
+				health.HighGapRowCount++
+			}
+			if row.Reason != "" {
+				health.BadRows = appendBadRow(health.BadRows, row)
 			}
 			if value, ok := intMeta(node, "gapVariance"); ok {
 				gapVarianceTotal += value
@@ -181,6 +210,69 @@ func computeStructuralHealth(root contract.Node) structuralHealth {
 		health.MeanGapVariance = float64(gapVarianceTotal) / float64(gapVarianceRows)
 	}
 	return health
+}
+
+func inspectRow(node contract.Node) rowHealth {
+	flow, overlays := splitRowChildren(node.Children)
+	row := rowHealth{
+		ID:           node.ID,
+		BBox:         node.BBox,
+		ChildCount:   len(node.Children),
+		FlowCount:    len(flow),
+		OverlayCount: len(overlays),
+		Gap:          node.Layout.Gap,
+	}
+	if value, ok := intMeta(node, "gapVariance"); ok {
+		row.GapVariance = value
+	}
+	switch {
+	case row.FlowCount == 0:
+		row.Reason = "zero_flow_children"
+	case row.FlowCount == 1:
+		row.Reason = "single_flow_child"
+	case row.GapVariance > highGapVarianceThreshold(row.Gap):
+		row.Reason = "gap_variance_high"
+	case row.OverlayCount > row.FlowCount*2 && row.OverlayCount >= 3:
+		row.Reason = "overlay_dominates_row"
+	}
+	return row
+}
+
+func appendBadRow(rows []rowHealth, row rowHealth) []rowHealth {
+	rows = append(rows, row)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if badRowSeverity(rows[i]) != badRowSeverity(rows[j]) {
+			return badRowSeverity(rows[i]) > badRowSeverity(rows[j])
+		}
+		if rows[i].GapVariance != rows[j].GapVariance {
+			return rows[i].GapVariance > rows[j].GapVariance
+		}
+		return rows[i].ID < rows[j].ID
+	})
+	if len(rows) > 12 {
+		rows = rows[:12]
+	}
+	return rows
+}
+
+func badRowSeverity(row rowHealth) int {
+	switch row.Reason {
+	case "zero_flow_children":
+		return 4
+	case "single_flow_child":
+		return 3
+	case "gap_variance_high":
+		return 2
+	case "overlay_dominates_row":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func highGapVarianceThreshold(gap int) int {
+	basis := max(24, gap)
+	return basis * basis / 5
 }
 
 func renderedFlexContainer(node contract.Node) bool {
@@ -581,6 +673,7 @@ func (ctx *renderContext) report() string {
 	fmt.Fprintf(&b, "- warnings: `%d`\n", len(ctx.warnings))
 	fmt.Fprintf(&b, "\n## Structural Health\n\n")
 	fmt.Fprintf(&b, "- row layout nodes: `%d`\n", ctx.health.RowCount)
+	fmt.Fprintf(&b, "- absolute row fallback nodes: `%d`\n", ctx.health.AbsoluteRowCount)
 	fmt.Fprintf(&b, "- column layout nodes: `%d`\n", ctx.health.ColumnCount)
 	fmt.Fprintf(&b, "- visible leaf nodes: `%d`\n", ctx.health.LeafCount)
 	fmt.Fprintf(&b, "- flex-covered leaf nodes: `%d`\n", ctx.health.FlexLeafCount)
@@ -588,8 +681,30 @@ func (ctx *renderContext) report() string {
 	fmt.Fprintf(&b, "- auto layout coverage: `%.4f`\n", ctx.health.AutoLayoutCoverage)
 	fmt.Fprintf(&b, "- absolute fallback ratio: `%.4f`\n", ctx.health.AbsoluteFallbackRatio)
 	fmt.Fprintf(&b, "- single-child row count: `%d`\n", ctx.health.SingleChildRowCount)
+	fmt.Fprintf(&b, "- zero-flow row count: `%d`\n", ctx.health.ZeroFlowRowCount)
+	fmt.Fprintf(&b, "- high-gap row count: `%d`\n", ctx.health.HighGapRowCount)
 	fmt.Fprintf(&b, "- mean gap variance: `%.2f`\n", ctx.health.MeanGapVariance)
 	fmt.Fprintf(&b, "- text eraser nodes: `%d`\n", ctx.health.TextEraserCount)
+	if len(ctx.health.BadRows) > 0 {
+		fmt.Fprintf(&b, "\n## Top Bad Rows\n\n")
+		fmt.Fprintf(&b, "| row | reason | bbox | children | flow | overlay | gap | gap variance |\n")
+		fmt.Fprintf(&b, "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n")
+		for _, row := range ctx.health.BadRows {
+			fmt.Fprintf(&b, "| `%s` | `%s` | `%d,%d,%d,%d` | `%d` | `%d` | `%d` | `%d` | `%d` |\n",
+				row.ID,
+				row.Reason,
+				row.BBox.X,
+				row.BBox.Y,
+				row.BBox.Width,
+				row.BBox.Height,
+				row.ChildCount,
+				row.FlowCount,
+				row.OverlayCount,
+				row.Gap,
+				row.GapVariance,
+			)
+		}
+	}
 	fmt.Fprintf(&b, "\n## Policy\n\n")
 	fmt.Fprintf(&b, "- renderer input is `ui_layout_ir.v1` only; it does not read M29/OCR/vision raw artifacts.\n")
 	fmt.Fprintf(&b, "- source PNG is used only for local crop assets referenced by IR bboxes.\n")

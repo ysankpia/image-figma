@@ -198,6 +198,8 @@ func TestWriteRendersRowLayoutAndReportsStructuralHealth(t *testing.T) {
 		"- flex-covered leaf nodes: `2`",
 		"- auto layout coverage: `0.6667`",
 		"- absolute fallback ratio: `0.3333`",
+		"- zero-flow row count: `0`",
+		"- high-gap row count: `0`",
 		"- mean gap variance: `0.00`",
 	} {
 		if !strings.Contains(report, want) {
