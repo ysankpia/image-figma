@@ -25,6 +25,7 @@ const (
 	StageDraftExport         Stage = "draft_export"
 	StageDraftCompleted      Stage = "draft_completed"
 	StageDraftFailed         Stage = "draft_failed"
+	StageDraftPanic          Stage = "draft_panic"
 )
 
 type Task struct {

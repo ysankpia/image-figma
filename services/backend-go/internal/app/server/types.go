@@ -4,6 +4,7 @@ import "path/filepath"
 
 type Config struct {
 	StorageRoot    string
+	OCRProvider    string
 	MaxUploadBytes int64
 }
 
