@@ -1,6 +1,6 @@
 # Current Code Map
 
-This document maps the current Editable Draft branch. It describes where new work should land. Historical files may still exist while the destructive refactor is in progress; this map is authoritative for new code.
+This document maps the current Editable Draft branch. It describes where new work should land. It is authoritative for new code.
 
 ## Product Mainline
 
@@ -69,23 +69,15 @@ services/backend-go/
       metrics/
 ```
 
-## Current Legacy To Avoid
+## Removed Legacy Generation
 
-Do not add new product behavior to:
+The old `services/backend-go/internal/codia/*` generation tree has been removed. Do not recreate Codia assembly/control/tree/emitter/compiler/leaf/DSL 0.2 packages as product-generation paths.
+
+Codia comparison-only code lives under:
 
 ```text
-services/backend-go/internal/codia/assembly
-services/backend-go/internal/codia/control
-services/backend-go/internal/codia/tree
-services/backend-go/internal/codia/emitter
-services/backend-go/internal/codia/compiler
-services/backend-go/internal/codia/canvasexport
-services/backend-go/internal/codia/leaf
-services/backend-go/internal/codia/ir
-services/backend-go/internal/codia/dsl02
+services/backend-go/internal/eval/codia
 ```
-
-These packages may remain temporarily for comparison or until the cleanup stage removes or archives them.
 
 ## Package Responsibilities
 
@@ -109,7 +101,7 @@ These packages may remain temporarily for comparison or until the cleanup stage 
 
 `cmd/draftdetect` is the detector-only CLI.
 
-`cmd/drafteval` is the eval CLI and may read Codia golden samples.
+`cmd/drafteval` is the eval CLI and may read Codia golden samples. It supports Codia canvas analysis, Codia IR diff, and failure audit only; it does not generate Draft output.
 
 `cmd/m29extract` and `cmd/m29trace` remain M29 diagnostic commands.
 

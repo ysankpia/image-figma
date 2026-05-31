@@ -361,7 +361,7 @@ GET /api/draft-preview/{taskId}/assets/asset_raster_0001.png -> HTTP 200 PNG 17x
 
 ### Stage 8: Product Entrypoint Cleanup
 
-Status: in progress.
+Status: completed in `refactor: remove codia beta product entrypoints`.
 
 First-principles decision:
 
@@ -412,6 +412,8 @@ Acceptance:
 
 ### Stage 9: Codia Generation Archive
 
+Status: completed in this stage.
+
 Actions:
 
 - Move Codia comparison-only code under `internal/eval/codia`.
@@ -432,6 +434,20 @@ Actions:
   - `codiadetector`
 - Keep only eval/reference command surface, preferably consolidated into `cmd/drafteval`.
 
+Implemented:
+
+- Removed `services/backend-go/internal/codia/*`.
+- Removed old `cmd/codia*` commands.
+- Moved Codia comparison-only packages to:
+
+```text
+services/backend-go/internal/eval/codia
+```
+
+- Added `cmd/drafteval` with `analyze`, `diff`, and `audit` subcommands.
+- Removed obsolete `services/backend-go/tools/codia_smoke_2img.sh` and `services/backend-go/tools/codia_smoke_4img.sh`; they depended on removed Codia generation commands.
+- Updated `docs/engineering/current-code-map.md` so new work routes to Draft generation and `internal/eval/codia` only for comparison.
+
 Validation:
 
 ```bash
@@ -445,6 +461,16 @@ Allowed remaining Codia references:
 - `docs/reference/codia-samples`
 - `internal/eval/codia`
 - historical archive docs
+
+Validation evidence:
+
+```text
+rg -n "internal/codia|cmd/codia|codia_runtime|Codia Beta|codia_smoke|codiacompile|codiadetector|codiaserver|codiaanalyze|codiadiff|codiaaudit|codialeaves|codiacontrols" services/backend-go -g'*.go' -g'*.sh' -g'*.md'
+-> no matches
+
+cd services/backend-go && go test ./...
+-> passed
+```
 
 ### Stage 10: Documentation Prune
 
