@@ -30,8 +30,18 @@ func Export(taskID string, graph contract.Document) Document {
 		}
 		return layers[i].ID < layers[j].ID
 	})
+	groupNodes := buildGroupNodes(graph, layers)
+	emittedGroups := map[string]bool{}
 	for _, layer := range layers {
 		if !layer.Visible {
+			continue
+		}
+		if layer.GroupID != "" {
+			groupNode, ok := groupNodes[layer.GroupID]
+			if ok && !emittedGroups[layer.GroupID] {
+				root.Children = append(root.Children, groupNode)
+				emittedGroups[layer.GroupID] = true
+			}
 			continue
 		}
 		root.Children = append(root.Children, nodeFromLayer(layer))
@@ -110,6 +120,68 @@ func nodeFromLayer(layer contract.Layer) Node {
 		}
 	}
 	return node
+}
+
+func buildGroupNodes(graph contract.Document, layers []contract.Layer) map[string]Node {
+	layersByID := map[string]contract.Layer{}
+	for _, layer := range layers {
+		layersByID[layer.ID] = layer
+	}
+	out := map[string]Node{}
+	for _, group := range graph.Groups {
+		children := make([]Node, 0, len(group.ChildLayerIDs))
+		minZ := 0
+		for _, id := range group.ChildLayerIDs {
+			layer, ok := layersByID[id]
+			if !ok || !layer.Visible || layer.GroupID != group.ID {
+				continue
+			}
+			child := nodeFromLayer(layer)
+			child.BBox = localBBox(child.BBox, group.BBox)
+			children = append(children, child)
+			if minZ == 0 || layer.Z < minZ {
+				minZ = layer.Z
+			}
+		}
+		if len(children) == 0 {
+			continue
+		}
+		sort.SliceStable(children, func(i, j int) bool {
+			if children[i].Z != children[j].Z {
+				return children[i].Z < children[j].Z
+			}
+			return children[i].ID < children[j].ID
+		})
+		visible := true
+		out[group.ID] = Node{
+			ID:      group.ID,
+			Type:    "group",
+			Name:    "Group / " + group.ID,
+			BBox:    group.BBox,
+			Z:       minZ,
+			Visible: &visible,
+			Style: map[string]any{
+				"fill":        nil,
+				"clipContent": false,
+			},
+			Children: children,
+			Meta: map[string]any{
+				"layerKind":    contract.LayerGroup,
+				"semanticTags": group.SemanticTags,
+				"decision":     group.Decision,
+			},
+		}
+	}
+	return out
+}
+
+func localBBox(box, parent geometry.Rect) geometry.Rect {
+	return geometry.Rect{
+		X:      box.X - parent.X,
+		Y:      box.Y - parent.Y,
+		Width:  box.Width,
+		Height: box.Height,
+	}
 }
 
 func nodeType(kind contract.LayerKind) string {

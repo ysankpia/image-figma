@@ -107,12 +107,17 @@ func Build(input Input) (contract.Document, error) {
 		}
 	}
 
+	layers, assets = suppressDuplicateVisibleOwners(input.Image, layers, assets)
+	groups := buildMajorGroups(input.Image, layers)
+	layers = applyLayerGroups(layers, groups)
+
 	return contract.Document{
 		Version: contract.Version,
 		Image:   input.Image,
 		Layers:  layers,
+		Groups:  groups,
 		Assets:  assets,
-		Summary: summarize(layers, nil, assets),
+		Summary: summarize(layers, groups, assets),
 	}, nil
 }
 
@@ -241,4 +246,283 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func abs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func suppressDuplicateVisibleOwners(image contract.ImageMeta, layers []contract.Layer, assets []contract.Asset) ([]contract.Layer, []contract.Asset) {
+	suppressedAssets := map[string]bool{}
+	for i := range layers {
+		if !layers[i].Visible || layers[i].Kind != contract.LayerRaster {
+			continue
+		}
+		if !structuralRasterOwner(image, layers[i], layers) {
+			continue
+		}
+		suppressLayer(&layers[i], "structural_raster_consumed_by_editable_children")
+		if layers[i].Raster != nil && layers[i].Raster.AssetID != "" {
+			suppressedAssets[layers[i].Raster.AssetID] = true
+		}
+	}
+
+	for i := range layers {
+		if !layers[i].Visible || layers[i].Kind != contract.LayerShape {
+			continue
+		}
+		if raster := coveringVisibleRaster(layers[i], layers); raster != nil {
+			suppressLayer(&layers[i], "shape_covered_by_raster_owner:"+raster.ID)
+		}
+	}
+
+	for i := range layers {
+		if !layers[i].Visible || layers[i].Kind != contract.LayerShape {
+			continue
+		}
+		for j := i + 1; j < len(layers); j++ {
+			if !layers[j].Visible || layers[j].Kind != contract.LayerShape {
+				continue
+			}
+			if nearDuplicateShape(layers[i], layers[j]) {
+				suppressLayer(&layers[j], "duplicate_shape_owner:"+layers[i].ID)
+			}
+		}
+	}
+
+	if len(suppressedAssets) == 0 {
+		return layers, assets
+	}
+	filtered := assets[:0]
+	for _, asset := range assets {
+		if !suppressedAssets[asset.ID] {
+			filtered = append(filtered, asset)
+		}
+	}
+	return layers, filtered
+}
+
+func structuralRasterOwner(image contract.ImageMeta, layer contract.Layer, layers []contract.Layer) bool {
+	imageArea := max(1, image.Width*image.Height)
+	box := layer.BBox
+	large := box.Area()*100 >= imageArea*18 || box.Width*100 >= image.Width*72 || box.Height*100 >= image.Height*28
+	contained := 0
+	containedRaster := 0
+	containedText := 0
+	containedRasterArea := 0
+	for _, child := range layers {
+		if !child.Visible || child.ID == layer.ID {
+			continue
+		}
+		if child.BBox.Area() <= 0 || child.BBox.Area()*100 >= box.Area()*92 {
+			continue
+		}
+		if geometry.IoA(child.BBox, box) < 0.92 {
+			continue
+		}
+		switch child.Kind {
+		case contract.LayerRaster:
+			contained++
+			containedRaster++
+			containedRasterArea += child.BBox.Area()
+		case contract.LayerShape:
+			contained++
+		case contract.LayerText:
+			contained++
+			containedText++
+		}
+	}
+	if large && (contained >= 3 || containedRaster >= 2 || (containedText >= 2 && contained >= 2)) {
+		return true
+	}
+	return containedRaster >= 2 && containedRasterArea*100 >= box.Area()*24
+}
+
+func nearDuplicateShape(a, b contract.Layer) bool {
+	if a.BBox.Area() <= 0 || b.BBox.Area() <= 0 {
+		return false
+	}
+	if geometry.IoU(a.BBox, b.BBox) >= 0.88 {
+		return true
+	}
+	overlap := maxFloat(geometry.IoA(a.BBox, b.BBox), geometry.IoA(b.BBox, a.BBox))
+	if overlap < 0.96 {
+		return false
+	}
+	areaDelta := abs(a.BBox.Area() - b.BBox.Area())
+	return areaDelta*100 <= max(a.BBox.Area(), b.BBox.Area())*18
+}
+
+func coveringVisibleRaster(shape contract.Layer, layers []contract.Layer) *contract.Layer {
+	for i := range layers {
+		raster := &layers[i]
+		if !raster.Visible || raster.Kind != contract.LayerRaster || raster.Z <= shape.Z {
+			continue
+		}
+		if raster.BBox.Area() < shape.BBox.Area() {
+			continue
+		}
+		if geometry.IoA(shape.BBox, raster.BBox) >= 0.98 {
+			return raster
+		}
+	}
+	return nil
+}
+
+func suppressLayer(layer *contract.Layer, reason string) {
+	layer.Visible = false
+	layer.GroupID = ""
+	layer.Decision.State = contract.DecisionSuppress
+	if layer.Decision.Reason == "" {
+		layer.Decision.Reason = reason
+	} else {
+		layer.Decision.Reason += "+" + reason
+	}
+}
+
+func buildMajorGroups(image contract.ImageMeta, layers []contract.Layer) []contract.Group {
+	ownerIndexes := make([]int, 0, len(layers))
+	imageArea := max(1, image.Width*image.Height)
+	for i, layer := range layers {
+		if !layer.Visible || !canOwnDraftGroup(layer) {
+			continue
+		}
+		if layer.BBox.Area() < max(1800, imageArea/500) {
+			continue
+		}
+		ownerIndexes = append(ownerIndexes, i)
+	}
+	sort.SliceStable(ownerIndexes, func(i, j int) bool {
+		a, b := layers[ownerIndexes[i]], layers[ownerIndexes[j]]
+		if a.BBox.Area() != b.BBox.Area() {
+			return a.BBox.Area() < b.BBox.Area()
+		}
+		return a.ID < b.ID
+	})
+
+	assigned := map[string]bool{}
+	var groups []contract.Group
+	nextGroup := 1
+	for _, ownerIndex := range ownerIndexes {
+		owner := layers[ownerIndex]
+		if assigned[owner.ID] {
+			continue
+		}
+		childIDs := []string{owner.ID}
+		for _, child := range layers {
+			if !child.Visible || child.ID == owner.ID || assigned[child.ID] {
+				continue
+			}
+			if child.BBox.Area() <= 0 || child.BBox.Area()*100 >= owner.BBox.Area()*94 {
+				continue
+			}
+			if geometry.IoA(child.BBox, owner.BBox) < 0.92 {
+				continue
+			}
+			childIDs = append(childIDs, child.ID)
+		}
+		if !acceptGroup(owner, childIDs, layers) {
+			continue
+		}
+		groupID := fmt.Sprintf("group_%04d", nextGroup)
+		nextGroup++
+		for _, id := range childIDs {
+			assigned[id] = true
+		}
+		groups = append(groups, contract.Group{
+			ID:            groupID,
+			Kind:          "major_region",
+			BBox:          owner.BBox,
+			SemanticTags:  groupTags(owner),
+			ChildLayerIDs: childIDs,
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityDerived,
+				Reason:        "major_region_contains_editable_layers",
+				SourceIDs:     sourceIDs(owner.SourceRefs),
+			},
+		})
+	}
+	return groups
+}
+
+func canOwnDraftGroup(layer contract.Layer) bool {
+	return layer.Kind == contract.LayerShape || layer.Kind == contract.LayerRaster
+}
+
+func acceptGroup(owner contract.Layer, childIDs []string, layers []contract.Layer) bool {
+	if len(childIDs) < 3 {
+		return false
+	}
+	text := 0
+	raster := 0
+	shape := 0
+	for _, id := range childIDs {
+		layer := layerByID(layers, id)
+		if layer == nil || layer.ID == owner.ID {
+			continue
+		}
+		switch layer.Kind {
+		case contract.LayerText:
+			text++
+		case contract.LayerRaster:
+			raster++
+		case contract.LayerShape:
+			shape++
+		}
+	}
+	return text+raster+shape >= 2 && (text > 0 || raster > 0)
+}
+
+func applyLayerGroups(layers []contract.Layer, groups []contract.Group) []contract.Layer {
+	groupByLayer := map[string]string{}
+	for _, group := range groups {
+		for _, id := range group.ChildLayerIDs {
+			groupByLayer[id] = group.ID
+		}
+	}
+	for i := range layers {
+		layers[i].GroupID = groupByLayer[layers[i].ID]
+	}
+	return layers
+}
+
+func layerByID(layers []contract.Layer, id string) *contract.Layer {
+	for i := range layers {
+		if layers[i].ID == id {
+			return &layers[i]
+		}
+	}
+	return nil
+}
+
+func groupTags(owner contract.Layer) []string {
+	tags := []string{"editable_group"}
+	switch owner.Kind {
+	case contract.LayerRaster:
+		tags = append(tags, "raster_backed_region")
+	case contract.LayerShape:
+		tags = append(tags, "shape_backed_region")
+	}
+	return tags
+}
+
+func sourceIDs(refs []contract.SourceRef) []string {
+	var ids []string
+	for _, ref := range refs {
+		if ref.ID != "" {
+			ids = append(ids, ref.ID)
+		}
+	}
+	return ids
 }

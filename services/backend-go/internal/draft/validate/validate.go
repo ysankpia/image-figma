@@ -81,7 +81,52 @@ func Graph(doc contract.Document) Report {
 		}
 	}
 
+	for i := range doc.Layers {
+		left := doc.Layers[i]
+		if !visibleNonTextOwner(left) {
+			continue
+		}
+		for j := i + 1; j < len(doc.Layers); j++ {
+			right := doc.Layers[j]
+			if !visibleNonTextOwner(right) || sameNonEmptyGroup(left, right) {
+				continue
+			}
+			if left.Kind != right.Kind {
+				continue
+			}
+			if min(left.BBox.Area(), right.BBox.Area()) < 800 {
+				continue
+			}
+			if duplicateVisibleOwner(left, right) {
+				report.addError(left.ID, "DRAFT_DUPLICATE_VISIBLE_OWNER", fmt.Sprintf("%s duplicates %s without shared group", left.ID, right.ID))
+			}
+		}
+	}
+
 	return report
+}
+
+func visibleNonTextOwner(layer contract.Layer) bool {
+	if !layer.Visible {
+		return false
+	}
+	return layer.Kind == contract.LayerRaster || layer.Kind == contract.LayerShape
+}
+
+func sameNonEmptyGroup(a, b contract.Layer) bool {
+	return a.GroupID != "" && a.GroupID == b.GroupID
+}
+
+func duplicateVisibleOwner(a, b contract.Layer) bool {
+	if geometry.IoU(a.BBox, b.BBox) >= 0.88 {
+		return true
+	}
+	overlap := maxFloat(geometry.IoA(a.BBox, b.BBox), geometry.IoA(b.BBox, a.BBox))
+	if overlap < 0.96 {
+		return false
+	}
+	areaDelta := abs(a.BBox.Area() - b.BBox.Area())
+	return areaDelta*100 <= max(a.BBox.Area(), b.BBox.Area())*18
 }
 
 func (r *Report) addError(layerID, code, message string) {
@@ -92,4 +137,32 @@ func (r *Report) addError(layerID, code, message string) {
 		LayerID:  layerID,
 		Message:  message,
 	})
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func abs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }

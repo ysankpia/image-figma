@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/app/server"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/config"
 )
 
 func main() {
+	config.LoadLocalEnvFromAncestors()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 

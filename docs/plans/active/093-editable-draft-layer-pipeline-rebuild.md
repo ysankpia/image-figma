@@ -310,6 +310,8 @@ GET /api/draft-preview/{taskId}/assets/asset_raster_0001.png -> HTTP 200 PNG 167
 
 ### Stage 7: Real Sample Validation
 
+Status: completed in `fix: assemble editable draft ownership groups`.
+
 Actions:
 
 - Run 018, 022, Lizhi, and Xianyu through Draft pipeline.
@@ -325,6 +327,37 @@ Acceptance:
 - major visible text remains editable.
 - compact image/icon/avatar/cover layers are draggable RasterLayers where supported.
 - major regions are grouped for movement.
+
+Validation evidence:
+
+```text
+cd services/backend-go && go test ./internal/draft/... ./cmd/draftserver
+cd services/backend-go && go test ./...
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
+```
+
+Four-sample artifact audit:
+
+```text
+腾讯动漫_018_1440.png -> visible=164 groups=18 assets=70 assetMissing=0 dslImageMissing=0 fullBackings=0 textCovered=0 duplicateVisibleOwners=0 validationErrors=0
+腾讯动漫_022_1440.png -> visible=104 groups=5 assets=31 assetMissing=0 dslImageMissing=0 fullBackings=0 textCovered=0 duplicateVisibleOwners=0 validationErrors=0
+荔枝_011_1440.png -> visible=69 groups=3 assets=30 assetMissing=0 dslImageMissing=0 fullBackings=0 textCovered=0 duplicateVisibleOwners=0 validationErrors=0
+闲鱼.png -> visible=121 groups=19 assets=35 assetMissing=0 dslImageMissing=0 fullBackings=0 textCovered=0 duplicateVisibleOwners=0 validationErrors=0
+```
+
+HTTP smoke:
+
+```text
+DRAFT_SERVER_STORAGE_ROOT=/tmp/draft-server-stage7b DRAFT_SERVER_ADDR=127.0.0.1:8767 go run ./cmd/draftserver
+POST /api/draft-preview with 腾讯动漫_018_1440.png -> task completed
+GET /api/draft-preview/{taskId}/dsl -> kind=draft_runtime version=1.0 rootChildren=45 groupNodes=18 assets=70
+GET /api/draft-preview/{taskId}/assets/asset_raster_0001.png -> HTTP 200 PNG 17x40
+```
 
 ### Stage 8: Legacy Cleanup
 

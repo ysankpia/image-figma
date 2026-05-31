@@ -104,9 +104,104 @@ func TestBuildIgnoresReviewAndSuppressedTokens(t *testing.T) {
 	}
 }
 
+func TestBuildSuppressesDuplicateShapeOwners(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{Tokens: []evidence.Token{
+			{
+				ID:          "shape_a",
+				TokenType:   "surface_region_token",
+				BBox:        m29contract.BBox{X: 40, Y: 40, Width: 120, Height: 80},
+				Disposition: "main",
+				Reasons:     []string{"surface_region"},
+			},
+			{
+				ID:          "shape_b",
+				TokenType:   "surface_region_token",
+				BBox:        m29contract.BBox{X: 41, Y: 41, Width: 118, Height: 79},
+				Disposition: "main",
+				Reasons:     []string{"surface_region"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	visibleShapes := 0
+	suppressedShapes := 0
+	for _, layer := range graph.Layers {
+		if layer.Kind != contract.LayerShape {
+			continue
+		}
+		if layer.Visible {
+			visibleShapes++
+		}
+		if layer.Decision.State == contract.DecisionSuppress {
+			suppressedShapes++
+		}
+	}
+	if visibleShapes != 1 || suppressedShapes != 1 {
+		t.Fatalf("expected one visible and one suppressed duplicate shape, visible=%d suppressed=%d layers=%+v", visibleShapes, suppressedShapes, graph.Layers)
+	}
+}
+
+func TestBuildCreatesMajorGroups(t *testing.T) {
+	graph, err := Build(Input{
+		Image: contract.ImageMeta{Width: 400, Height: 300},
+		Tokens: evidence.Document{Tokens: []evidence.Token{
+			{
+				ID:          "surface",
+				TokenType:   "surface_region_token",
+				BBox:        m29contract.BBox{X: 20, Y: 20, Width: 180, Height: 120},
+				Disposition: "main",
+				Reasons:     []string{"surface_region"},
+			},
+			{
+				ID:           "raster",
+				TokenType:    "raster_region_token",
+				BBox:         m29contract.BBox{X: 40, Y: 40, Width: 60, Height: 50},
+				Disposition:  "main",
+				Reasons:      []string{"raster_region"},
+				CompileHints: m29contract.CompileHints{CanBeImage: true},
+			},
+			{
+				ID:          "text",
+				TokenType:   "text_token",
+				BBox:        m29contract.BBox{X: 110, Y: 48, Width: 52, Height: 18},
+				Disposition: "main",
+				Content:     evidence.TokenContent{Text: "Title"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(graph.Groups) != 1 {
+		t.Fatalf("expected one major group, got %+v", graph.Groups)
+	}
+	if len(graph.Groups[0].ChildLayerIDs) != 3 {
+		t.Fatalf("expected group to own three layers, got %+v", graph.Groups[0])
+	}
+	for _, id := range graph.Groups[0].ChildLayerIDs {
+		layer := findLayerByID(graph, id)
+		if layer == nil || layer.GroupID != graph.Groups[0].ID {
+			t.Fatalf("layer %s not assigned to group %+v", id, layer)
+		}
+	}
+}
+
 func findLayer(graph contract.Document, kind contract.LayerKind) *contract.Layer {
 	for i := range graph.Layers {
 		if graph.Layers[i].Kind == kind {
+			return &graph.Layers[i]
+		}
+	}
+	return nil
+}
+
+func findLayerByID(graph contract.Document, id string) *contract.Layer {
+	for i := range graph.Layers {
+		if graph.Layers[i].ID == id {
 			return &graph.Layers[i]
 		}
 	}

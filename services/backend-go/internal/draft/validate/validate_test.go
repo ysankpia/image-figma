@@ -138,6 +138,76 @@ func TestGraphAcceptsTextAboveRaster(t *testing.T) {
 	}
 }
 
+func TestGraphRejectsDuplicateVisibleOwners(t *testing.T) {
+	doc := baseDocument()
+	doc.Layers = append(doc.Layers,
+		contract.Layer{
+			ID:      "shape_a",
+			Kind:    contract.LayerShape,
+			BBox:    geometry.Rect{X: 10, Y: 10, Width: 60, Height: 40},
+			Z:       10,
+			Visible: true,
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityM29,
+				Reason:        "surface",
+			},
+		},
+		contract.Layer{
+			ID:      "shape_b",
+			Kind:    contract.LayerShape,
+			BBox:    geometry.Rect{X: 11, Y: 11, Width: 59, Height: 39},
+			Z:       11,
+			Visible: true,
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityM29,
+				Reason:        "surface",
+			},
+		},
+	)
+
+	report := Graph(doc)
+	assertFinding(t, report, "DRAFT_DUPLICATE_VISIBLE_OWNER")
+}
+
+func TestGraphAcceptsBackgroundBehindRaster(t *testing.T) {
+	doc := baseDocument()
+	doc.Assets = append(doc.Assets, contract.Asset{ID: "asset_cover", Type: "image"})
+	doc.Layers = append(doc.Layers,
+		contract.Layer{
+			ID:      "background",
+			Kind:    contract.LayerShape,
+			BBox:    geometry.Rect{X: 0, Y: 0, Width: 90, Height: 70},
+			Z:       10,
+			Visible: true,
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityM29,
+				Reason:        "surface",
+			},
+		},
+		contract.Layer{
+			ID:      "cover",
+			Kind:    contract.LayerRaster,
+			BBox:    geometry.Rect{X: 10, Y: 10, Width: 60, Height: 40},
+			Z:       20,
+			Visible: true,
+			Raster:  &contract.Raster{AssetID: "asset_cover"},
+			Decision: contract.Decision{
+				State:         contract.DecisionEmit,
+				BBoxAuthority: contract.BBoxAuthorityM29,
+				Reason:        "compact_image",
+			},
+		},
+	)
+
+	report := Graph(doc)
+	if report.ErrorCount != 0 {
+		t.Fatalf("expected no validation errors, got %+v", report.Findings)
+	}
+}
+
 func baseDocument() contract.Document {
 	return contract.Document{
 		Version: contract.Version,
