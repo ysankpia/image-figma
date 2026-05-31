@@ -12,6 +12,7 @@ import (
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/exportdsl"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/report"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/draft/validate"
+	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/evidence"
 	"github.com/luqing-studio/image-figma/services/backend-go/internal/m29/pipeline"
 )
 
@@ -36,6 +37,7 @@ type Result struct {
 
 type Artifacts struct {
 	M29PhysicalEvidence string `json:"m29PhysicalEvidence"`
+	EvidenceTokens      string `json:"evidenceTokens"`
 	EditableLayerGraph  string `json:"editableLayerGraph"`
 	ValidationReport    string `json:"validationReport"`
 	AssetManifest       string `json:"assetManifest"`
@@ -55,6 +57,7 @@ func Run(options Options) (Result, error) {
 	}
 
 	m29Dir := filepath.Join(options.OutputDir, "m29")
+	tokensDir := filepath.Join(options.OutputDir, "tokens")
 	draftDir := filepath.Join(options.OutputDir, "draft")
 	assetsDir := filepath.Join(options.OutputDir, "assets")
 	if err := os.MkdirAll(draftDir, 0o755); err != nil {
@@ -70,6 +73,13 @@ func Run(options Options) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("m29 physical evidence: %w", err)
 	}
+	tokenDoc, err := evidence.Compile(evidence.Options{
+		InputPath: filepath.Join(m29Dir, "m29_physical_evidence.v1.json"),
+		OutputDir: tokensDir,
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("m29 evidence tokens: %w", err)
+	}
 
 	graph, err := assemble.Build(assemble.Input{
 		Image: contract.ImageMeta{
@@ -77,6 +87,7 @@ func Run(options Options) (Result, error) {
 			Width:  m29Doc.Image.Width,
 			Height: m29Doc.Image.Height,
 		},
+		Tokens: tokenDoc,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("draft assemble: %w", err)
@@ -93,6 +104,9 @@ func Run(options Options) (Result, error) {
 		return Result{}, fmt.Errorf("draft validation failed with %d errors", validation.ErrorCount)
 	}
 
+	if err := asset.WriteLayerAssets(assetsDir, options.InputPath, graph); err != nil {
+		return Result{}, err
+	}
 	manifest := asset.FromGraph(graph)
 	if err := asset.WriteManifest(assetsDir, manifest); err != nil {
 		return Result{}, err
@@ -109,6 +123,7 @@ func Run(options Options) (Result, error) {
 		DSL:        dsl,
 		Artifacts: Artifacts{
 			M29PhysicalEvidence: filepath.ToSlash(filepath.Join("m29", "m29_physical_evidence.v1.json")),
+			EvidenceTokens:      filepath.ToSlash(filepath.Join("tokens", "evidence_tokens.v1.json")),
 			EditableLayerGraph:  filepath.ToSlash(filepath.Join("draft", GraphArtifactName)),
 			ValidationReport:    filepath.ToSlash(filepath.Join("draft", report.ValidationReportName)),
 			AssetManifest:       filepath.ToSlash(filepath.Join("assets", asset.ManifestName)),

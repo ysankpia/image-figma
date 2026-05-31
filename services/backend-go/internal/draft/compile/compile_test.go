@@ -34,6 +34,7 @@ func TestRunWritesDraftArtifacts(t *testing.T) {
 		t.Fatalf("unexpected dsl identity: %+v", result.DSL)
 	}
 	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.M29PhysicalEvidence))
+	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.EvidenceTokens))
 	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.EditableLayerGraph))
 	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.ValidationReport))
 	assertFile(t, filepath.Join(tmp, "out", result.Artifacts.AssetManifest))
@@ -47,8 +48,14 @@ func TestRunWritesDraftArtifacts(t *testing.T) {
 	if err := json.Unmarshal(data, &graph); err != nil {
 		t.Fatalf("parse graph: %v", err)
 	}
-	if len(graph.Layers) != 1 || graph.Layers[0].Kind != contract.LayerReferenceImage || graph.Layers[0].Visible {
-		t.Fatalf("expected hidden reference image in minimal graph, got %+v", graph.Layers)
+	if len(graph.Layers) < 2 || graph.Layers[0].Kind != contract.LayerReferenceImage || graph.Layers[0].Visible {
+		t.Fatalf("expected hidden reference plus visible draft layers, got %+v", graph.Layers)
+	}
+	if !hasVisibleLayer(graph) {
+		t.Fatalf("expected at least one visible editable draft layer, got %+v", graph.Layers)
+	}
+	for _, asset := range graph.Assets {
+		assertFile(t, filepath.Join(tmp, "out", "assets", asset.ID+".png"))
 	}
 }
 
@@ -83,4 +90,13 @@ func assertFile(t *testing.T, path string) {
 	if info.Size() == 0 {
 		t.Fatalf("empty file %s", path)
 	}
+}
+
+func hasVisibleLayer(graph contract.Document) bool {
+	for _, layer := range graph.Layers {
+		if layer.Visible && layer.Kind != contract.LayerReferenceImage {
+			return true
+		}
+	}
+	return false
 }
