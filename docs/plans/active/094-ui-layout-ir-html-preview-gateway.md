@@ -859,3 +859,66 @@ Figma gateway 提前接入后又把调试面拖回 Figma。
   image evidence z-index: 20
   ```
 - 修正说明：Stage 5 新增 HTML preview 作为第一可视验收面。Renderer 只消费 `ui_layout_ir.v1`，不读取 M29/OCR/vision 原始 artifacts；source PNG 仅用于按 IR bbox 写本地 preview crop asset。文本 evidence 固定绘制在 image/shape evidence 上方，避免“文字被底图压住”的基础层级错误。当前 Stage 5 仍未做 child materialization 和 Figma gateway，因此 HTML 是结构草稿和调试面，不是最终设计稿。
+
+## Stage 6 Validation Evidence
+
+- 日期：2026-05-31
+- 状态：passed
+- 改动范围：
+  ```text
+  services/backend-go/internal/htmlpreview/render
+  services/backend-go/internal/htmlpreview/diff
+  services/backend-go/cmd/previewdiff
+  ```
+- 已执行：
+  ```bash
+  cd services/backend-go && go test ./internal/htmlpreview/... ./internal/layoutir/... ./internal/layoutcompile/... ./cmd/layoutcompile ./cmd/previewdiff
+  rm -rf /tmp/layout-018-stage6
+  cd services/backend-go && go run ./cmd/layoutcompile \
+    -input ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -out /tmp/layout-018-stage6
+  ```
+- Chrome DevTools MCP 验证：
+  ```text
+  navigate: file:///tmp/layout-018-stage6/preview.html?capture=1
+  evaluate:
+    pageRect: 665x1440
+    evidenceCount: 193
+    nodeCount: 37
+    assetImages: 80
+    textZ: 40
+    imageZ: 20
+  screenshot:
+    /tmp/layout-018-stage6/preview_screenshot.png
+  ```
+- Diff 命令：
+  ```bash
+  cd services/backend-go && go run ./cmd/previewdiff \
+    -source ../../docs/reference/codia-samples/images/腾讯动漫_018_1440.png \
+    -screenshot /tmp/layout-018-stage6/preview_screenshot.png \
+    -preview-html /tmp/layout-018-stage6/preview.html \
+    -out /tmp/layout-018-stage6
+  git diff --check
+  ```
+- 真实样图输出：
+  ```text
+  /tmp/layout-018-stage6/preview_screenshot.png
+  /tmp/layout-018-stage6/preview_screenshot_normalized.png
+  /tmp/layout-018-stage6/source_vs_html_diff.png
+  /tmp/layout-018-stage6/html_preview_diff_report.md
+  ```
+- 018 Stage 6 artifact summary：
+  ```text
+  source size: 665x1440
+  DevTools screenshot size: 2370x2880
+  normalized screenshot size: 665x1440
+  inferred screenshot scale: 2.00
+  mean channel diff: 66.91
+  max channel diff: 247
+  white hole pixels: 0
+  white hole ratio: 0.0000
+  large white hole: false
+  referenced assets: 80
+  missing assets: 0
+  ```
+- 修正说明：浏览器截图由 Chrome DevTools MCP 负责，Go 后端不再启动或管理 Chrome。`preview.html?capture=1` 只提供截图友好的零边距模式；`cmd/previewdiff` 是纯离线 PNG diff/report 工具，会把 Retina/高 DPR 截图按源图高度归一化到源图尺寸后再比较。Stage 6 只记录指标，不把 mean diff 设为硬阻断，因为当前 HTML 仍是 evidence/row 调试草稿。

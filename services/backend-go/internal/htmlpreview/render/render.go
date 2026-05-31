@@ -249,6 +249,7 @@ func (ctx *renderContext) html(debug bool) string {
 	}
 	fmt.Fprintf(&b, "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
 	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+	fmt.Fprintf(&b, "<script>if(new URLSearchParams(location.search).has('capture'))document.documentElement.classList.add('capture-mode')</script>\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n<style>\n%s\n</style>\n</head>\n<body class=\"%s\">\n", title, css(), modeClass(debug))
 	fmt.Fprintf(&b, "<main class=\"page\" style=\"width:%dpx;height:%dpx\" data-version=\"%s\">\n",
 		ctx.doc.SourceImage.Width,
@@ -332,6 +333,8 @@ func css() string {
 	return `html,body{margin:0;padding:0;background:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#202124}
 body{padding:24px}
 .page{position:relative;overflow:hidden;background:#f7f7f7;box-shadow:0 16px 48px rgba(0,0,0,.32);transform-origin:top left}
+.capture-mode body{padding:0;background:#fff}
+.capture-mode .page{box-shadow:none}
 .node,.evidence{position:absolute;box-sizing:border-box;left:var(--x);top:var(--y);width:var(--w);height:var(--h);z-index:var(--z);overflow:hidden}
 .node-section{background:rgba(255,255,255,.02)}
 .node-row{background:rgba(47,129,247,.035)}
