@@ -1,4 +1,4 @@
-import type { CodiaRuntimeDSL, DesignDSL, DraftRuntimeDSL } from "@image-figma/dsl-schema";
+import type { DraftRuntimeDSL } from "@image-figma/dsl-schema";
 
 export const API_BASE_URL = "http://localhost:8000/api";
 
@@ -46,14 +46,6 @@ export class BackendApiError extends Error {
   }
 }
 
-export async function uploadPngPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
-  return uploadPngTo("/upload-preview", fileName, bytes);
-}
-
-export async function uploadPngCodiaPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
-  return uploadPngTo("/codia-preview", fileName, bytes);
-}
-
 export async function uploadPngDraftPreview(fileName: string, bytes: Uint8Array): Promise<UploadResult> {
   return uploadPngTo("/draft-preview", fileName, bytes);
 }
@@ -71,37 +63,9 @@ async function uploadPngTo(endpoint: string, fileName: string, bytes: Uint8Array
   return response.data as UploadResult;
 }
 
-export async function getTask(taskId: string): Promise<TaskResult> {
-  const response = await apiFetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}`);
-  return response.data as TaskResult;
-}
-
-export async function getCodiaPreviewTask(taskId: string): Promise<TaskResult> {
-  const response = await apiFetch(`${API_BASE_URL}/codia-preview/${encodeURIComponent(taskId)}`);
-  return response.data as TaskResult;
-}
-
 export async function getDraftPreviewTask(taskId: string): Promise<TaskResult> {
   const response = await apiFetch(`${API_BASE_URL}/draft-preview/${encodeURIComponent(taskId)}`);
   return response.data as TaskResult;
-}
-
-export async function getTaskDsl(taskId: string): Promise<DesignDSL> {
-  const response = await apiFetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/dsl`);
-  const data = response.data as { dsl?: unknown };
-  if (!data || typeof data !== "object" || !data.dsl) {
-    throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid DSL response.");
-  }
-  return data.dsl as DesignDSL;
-}
-
-export async function getCodiaPreviewDsl(taskId: string): Promise<CodiaRuntimeDSL> {
-  const response = await apiFetch(`${API_BASE_URL}/codia-preview/${encodeURIComponent(taskId)}/dsl`);
-  const data = response.data as { dsl?: unknown };
-  if (!data || typeof data !== "object" || !data.dsl) {
-    throw new BackendApiError("BACKEND_DSL_INVALID_RESPONSE", "Backend returned an invalid Codia Runtime DSL response.");
-  }
-  return data.dsl as CodiaRuntimeDSL;
 }
 
 export async function getDraftPreviewDsl(taskId: string): Promise<DraftRuntimeDSL> {

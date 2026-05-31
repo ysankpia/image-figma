@@ -73,6 +73,6 @@ DRAFT_REFERENCE_IMAGE_VISIBLE
 
 Warnings are evidence. If a warning indicates backend ownership or asset failure, fix Draft assembly/export/asset, not renderer cosmetics.
 
-## Legacy Renderer Notes
+## Removed Legacy Renderer Notes
 
-Old Codia Runtime renderer entrypoints may remain while the destructive refactor is underway. They are not current product targets. New behavior should route through Draft Runtime DSL and `renderDesign` or its Draft successor.
+Old Codia Runtime renderer entrypoints have been removed from the public Renderer surface. New behavior must route through Draft Runtime DSL and the Draft renderer.

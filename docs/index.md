@@ -37,7 +37,7 @@ Figma Plugin
 
 旧路径状态：
 
-- Codia Beta / `Generate Beta`：legacy/eval reference，不再作为新功能落点。
+- Codia Beta / `Generate Beta`：产品入口已撤掉，只能作为 legacy/eval reference，不再作为新功能落点。
 - Python `/api/upload-preview`：historical/reference preview path，不是 Draft runtime。
 - Official Codia JSON：eval/reference/training-label material only，禁止 generation 读取。
 

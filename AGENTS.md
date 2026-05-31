@@ -60,7 +60,7 @@ GET /api/draft-preview/{taskId}/dsl
 GET /api/draft-preview/{taskId}/assets/{assetId}.png
 ```
 
-The former Go Codia Beta path is legacy/eval material on this branch:
+The former Go Codia Beta product entrypoint has been removed on this branch. The names below are legacy/eval material only:
 
 ```text
 /api/codia-preview
@@ -69,7 +69,7 @@ codia_runtime.dsl.v0_2.json
 Generate Beta
 ```
 
-Do not add new generation behavior to the Codia path. If a Codia concept is useful, translate the underlying need into Draft terms: layer ownership, asset crop, z-order, grouping, or eval metric.
+Do not restore the Codia HTTP route or add new generation behavior to Codia packages. If a Codia concept is useful, translate the underlying need into Draft terms: layer ownership, asset crop, z-order, grouping, or eval metric.
 
 The retained Python/FastAPI preview path is historical/reference unless explicitly targeted:
 

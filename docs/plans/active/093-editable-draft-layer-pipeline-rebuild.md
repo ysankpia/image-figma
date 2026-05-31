@@ -359,11 +359,63 @@ GET /api/draft-preview/{taskId}/dsl -> kind=draft_runtime version=1.0 rootChildr
 GET /api/draft-preview/{taskId}/assets/asset_raster_0001.png -> HTTP 200 PNG 17x40
 ```
 
-### Stage 8: Legacy Cleanup
+### Stage 8: Product Entrypoint Cleanup
+
+Status: in progress.
+
+First-principles decision:
+
+```text
+The product is Draft, not Codia Runtime.
+```
+
+The repository can keep Codia as eval/reference material, but current product packages must stop exporting Codia Beta runtime contracts or HTTP routes.
 
 Actions:
 
-- Remove or archive Codia generation path:
+- Remove `/api/codia-preview` runtime surface:
+  - `cmd/codiaserver`
+  - `internal/codia/server`
+- Remove Codia Runtime DSL from public TypeScript contracts:
+  - `packages/dsl-schema/src/codiaRuntimeTypes.ts`
+  - `packages/dsl-schema/src/codiaRuntimeValidator.ts`
+  - public exports from `packages/dsl-schema/src/index.ts`
+- Remove Codia Runtime renderer from public Renderer surface:
+  - `packages/image-to-figma-renderer/src/renderCodiaRuntimeDesign.ts`
+  - public export from `packages/image-to-figma-renderer/src/index.ts`
+- Remove plugin API client functions for legacy `/api/upload-preview` and `/api/codia-preview`.
+- Update current docs so `/api/codia-preview`, `Generate Beta`, and `codia_runtime.dsl.v0_2.json` are described only as removed/legacy facts, not usable product entrypoints.
+
+Validation:
+
+```bash
+rg -n "Generate Beta|/api/codia-preview|renderCodiaRuntime|codia_runtime" \
+  AGENTS.md docs/index.md docs/architecture docs/engineering \
+  figma-plugin/src packages/dsl-schema/src packages/image-to-figma-renderer/src
+cd services/backend-go && go test ./...
+pnpm --filter @image-figma/dsl-schema run typecheck
+pnpm --filter @image-figma/dsl-schema run test
+pnpm --filter @image-figma/image-to-figma-renderer run typecheck
+pnpm --filter @image-figma/image-to-figma-renderer run test
+pnpm --filter @image-figma/figma-plugin run typecheck
+pnpm --filter @image-figma/figma-plugin run build
+git diff --check
+```
+
+Acceptance:
+
+- `figma-plugin/src` contains only Draft Preview API calls.
+- `packages/dsl-schema/src/index.ts` exports Draft and old DSL v0.1 contracts, not Codia Runtime.
+- `packages/image-to-figma-renderer/src/index.ts` exports Draft renderer and old sample renderer, not Codia Runtime renderer.
+- `services/backend-go/cmd/codiaserver` and `services/backend-go/internal/codia/server` are gone.
+- Current docs do not route new work to Codia Beta product runtime.
+
+### Stage 9: Codia Generation Archive
+
+Actions:
+
+- Move Codia comparison-only code under `internal/eval/codia`.
+- Delete or legacy-gate old Codia generation packages:
   - `assembly`
   - `control`
   - `tree`
@@ -371,20 +423,20 @@ Actions:
   - `compiler`
   - `canvasexport`
   - `leaf`
-  - `ir`
-  - old DSL 0.2 Codia exporter
-- Keep Codia comparison under `internal/eval/codia` only.
-- Clean docs so `Start Here` and current runtime docs no longer route to legacy.
+  - `ir` if it is only supporting generation rather than eval import
+  - old DSL 0.2 exporter
+- Remove old generation CLIs:
+  - `codiacompile`
+  - `codiacontrols`
+  - `codialeaves`
+  - `codiadetector`
+- Keep only eval/reference command surface, preferably consolidated into `cmd/drafteval`.
 
 Validation:
 
 ```bash
-rg -n "internal/codia|Generate Beta|/api/codia-preview|codia_runtime" services/backend-go packages figma-plugin docs
+rg -n "internal/codia|cmd/codia|codia_runtime|Codia Beta" services/backend-go
 cd services/backend-go && go test ./...
-pnpm --filter @image-figma/image-to-figma-renderer run typecheck
-pnpm --filter @image-figma/image-to-figma-renderer run test
-pnpm --filter @image-figma/figma-plugin run typecheck
-pnpm --filter @image-figma/figma-plugin run build
 git diff --check
 ```
 
@@ -393,6 +445,41 @@ Allowed remaining Codia references:
 - `docs/reference/codia-samples`
 - `internal/eval/codia`
 - historical archive docs
+
+### Stage 10: Documentation Prune
+
+Actions:
+
+- Prune current docs that still describe Python upload-preview, old M29 multi-stage experiments, or Codia Beta as active runtime truth.
+- Keep current docs small and Draft-first:
+  - `docs/index.md`
+  - `docs/product/*`
+  - `docs/architecture/overview.md`
+  - `docs/architecture/runtime.md`
+  - `docs/architecture/api-contracts.md`
+  - `docs/architecture/draft-layer-graph.md`
+  - `docs/architecture/vision-provider.md`
+  - `docs/architecture/m29-physical-evidence.md`
+  - `docs/architecture/plugin-rendering.md`
+  - `docs/engineering/current-code-map.md`
+  - `docs/engineering/validation.md`
+  - `docs/engineering/anti-specialization.md`
+  - `docs/engineering/artifact-policy.md`
+  - `docs/engineering/dependency-policy.md`
+  - `docs/reference/env-vars.md`
+- Move or delete stale docs whose only purpose was old Python/Codia/M29 experiment routing. Git history remains the archive unless a document is needed for current eval/reference.
+
+Validation:
+
+```bash
+rg -n "Python /api/upload-preview|Codia Beta|Generate Beta|M30|M31|M39|ONNX proposer|formal mainline" AGENTS.md docs
+git diff --check
+```
+
+Acceptance:
+
+- Future agents can read `AGENTS.md` and `docs/index.md` without being routed back to Python upload-preview or Codia Beta.
+- Old plans and ADRs no longer override Draft runtime architecture.
 
 ## Acceptance
 

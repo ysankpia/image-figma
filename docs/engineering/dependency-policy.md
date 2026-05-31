@@ -12,14 +12,14 @@
 
 ## Preferred Defaults
 
-后续实现的默认技术选择：
+当前默认技术选择：
 
 - Monorepo：pnpm workspace，当前已初始化。
 - 插件：TypeScript + 静态 `ui.html`；React/Vite 只在后续 UI 复杂度真实需要时再评估。
 - 共享包：TypeScript，当前已实现 `@image-figma/dsl-schema` 和 `@image-figma/image-to-figma-renderer`。
-- Codia Beta 后端：Go，默认标准库优先；除非有明确计划和验证，不引入第三方 Go runtime 依赖。
+- Draft 后端：Go，默认标准库优先；除非有明确计划和验证，不引入第三方 Go runtime 依赖。
 - 保留 preview 后端：Python、FastAPI、Pydantic。
-- 数据库：SQLite，Python preview 后端使用 Python 标准库 `sqlite3`，暂不引入 ORM；Go Codia Beta 当前使用本地 task/artifact 文件，不引入数据库。
+- 数据库：SQLite，Python preview 后端使用 Python 标准库 `sqlite3`，暂不引入 ORM；Go Draft backend 当前使用本地 task/artifact 文件，不引入数据库。
 - 测试：按实际代码栈选择 Vitest、pytest、Playwright。
 
 ## Current Dependencies
@@ -46,7 +46,7 @@
 - `pytest`、`httpx`：后端 API 测试。
 - `rich`：后端 dev/script-only 输出格式化依赖，不进入 `backend/app/` runtime。
 
-这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环、Go Codia Beta、保留 Python preview 链路、OCR/DSL patch harness 和可选 visual primitive smoke，没有引入 React/Vite、ORM、队列或 CI。
+这些依赖只服务 DSL 合同、Renderer、Figma 插件最小闭环、Go Draft backend、保留 Python preview 链路、OCR/DSL patch harness 和可选 visual primitive smoke，没有引入 React/Vite、ORM、队列或 CI。
 
 M7 PNG region slicer 使用 Python 标准库完成 PNG metadata 解析和 crop：
 

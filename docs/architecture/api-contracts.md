@@ -149,9 +149,9 @@ Completed tasks must not expose visible raster layers with unresolved asset IDs.
 
 Optional development endpoint returning artifact paths and summary metadata. It is not required by the renderer.
 
-## Legacy Endpoints
+## Removed Product Endpoints
 
-The following are not current product runtime contracts on this branch:
+The following endpoints are not product runtime contracts on this branch:
 
 ```text
 POST /api/codia-preview
@@ -161,7 +161,7 @@ POST /api/upload-preview
 GET /api/tasks/{taskId}/dsl
 ```
 
-They may exist in legacy/reference code while the destructive refactor is in progress, but new product work must target `/api/draft-preview`.
+`/api/codia-preview` has been removed from the Go product server. Python `/api/upload-preview` may remain in historical/reference code, but new product work must target `/api/draft-preview`.
 
 ## Contract Ownership
 
