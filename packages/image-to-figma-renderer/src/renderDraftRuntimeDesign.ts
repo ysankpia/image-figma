@@ -161,7 +161,7 @@ async function renderText(context: DraftRuntimeRenderContext, node: DraftRuntime
     });
   }
   context.figma.setTextStyle(figmaNode, style ?? {});
-  context.figma.setTextAutoResize(figmaNode, "NONE");
+  context.figma.setTextAutoResize(figmaNode, "WIDTH_AND_HEIGHT");
   context.figma.setText(figmaNode, node.text?.characters ?? "");
   applyLayout(context.figma, figmaNode, node.bbox);
   if (node.style?.color) {
