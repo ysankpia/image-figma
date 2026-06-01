@@ -63,6 +63,9 @@ export async function renderDraftRuntimeDesign(
 
   try {
     const root = await renderDraftNode(context, dsl.root, "$.root");
+    if (dsl.page.background) {
+      context.figma.setFills(root, [solidPaint(dsl.page.background)]);
+    }
     context.figma.appendToCurrentPage?.(root);
     return {
       success: context.errors.length === 0,
