@@ -47,3 +47,4 @@ logs/
 figma-plugin/dist/
 figma-plugin/build/
 repomix-output.xml
+services/backend-python/storage/
