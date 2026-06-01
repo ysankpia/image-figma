@@ -76,7 +76,7 @@ async def _poll(client: httpx.AsyncClient, job_id: str, config: OCRConfig) -> st
 
 
 async def _download_jsonl(client: httpx.AsyncClient, url: str, config: OCRConfig) -> list[dict]:
-    resp = await client.get(url, headers={"Authorization": f"bearer {config.token}"})
+    resp = await client.get(url)
     resp.raise_for_status()
     rows = []
     for line in resp.text.strip().splitlines():

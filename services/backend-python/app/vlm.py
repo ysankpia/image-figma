@@ -4,12 +4,11 @@ import base64
 import json
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
-from PIL import Image
+import httpx
 
 from .config import VLMConfig
 
-SYSTEM_PROMPT = """You are a precise mobile UI detector.
+PROMPT = """You are a precise mobile UI detector.
 Return ONLY JSON.
 Use normalized coordinates relative to the received image.
 Coordinates must be [x1,y1,x2,y2], each value from 0 to 1.
@@ -39,26 +38,52 @@ async def run_vlm(image_path: str, image_size: tuple[int, int], config: VLMConfi
         return []
 
     img_w, img_h = image_size
-    client = AsyncOpenAI(base_url=config.base_url, api_key=config.api_key)
 
     with open(image_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
+        data_url = "data:image/png;base64," + base64.b64encode(f.read()).decode()
 
-    response = await client.chat.completions.create(
-        model=config.model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                {"type": "text", "text": "Detect all UI elements."},
-            ]},
+    # Use Responses API (same as Go backend)
+    base_url = config.base_url.rstrip("/")
+    payload = {
+        "model": config.model,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": PROMPT},
+                    {"type": "input_image", "image_url": data_url},
+                ],
+            }
         ],
-        temperature=0,
-        timeout=config.timeout,
-    )
+    }
 
-    text = response.choices[0].message.content or ""
-    # Extract JSON from response (may be wrapped in markdown code block)
+    async with httpx.AsyncClient(timeout=config.timeout) as client:
+        resp = await client.post(
+            f"{base_url}/v1/responses",
+            headers={
+                "Authorization": f"Bearer {config.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+        resp.raise_for_status()
+
+    body = resp.json()
+
+    # Parse Responses API output
+    text = ""
+    for output_item in body.get("output", []):
+        if output_item.get("type") == "message":
+            for content in output_item.get("content", []):
+                if content.get("type") == "output_text":
+                    text = content.get("text", "")
+                    break
+            if text:
+                break
+
+    if not text:
+        return []
+
     text = text.strip()
     if text.startswith("```"):
         lines = text.splitlines()

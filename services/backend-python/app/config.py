@@ -57,7 +57,7 @@ def load_config() -> Config:
             min_confidence=float(os.getenv("OCR_MIN_CONFIDENCE", "0.7")),
         ),
         omniparser=OmniParserConfig(
-            model_path=os.getenv("OMNIPARSER_MODEL_PATH", ""),
+            model_path=os.getenv("OMNIPARSER_MODEL_PATH", "/Volumes/WorkDrive/Models/model_fp16.onnx"),
             confidence=float(os.getenv("OMNIPARSER_CONFIDENCE", "0.3")),
             nms_iou=float(os.getenv("OMNIPARSER_NMS_IOU", "0.5")),
             input_size=int(os.getenv("OMNIPARSER_INPUT_SIZE", "640")),
