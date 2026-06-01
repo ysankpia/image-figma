@@ -2,21 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass
 
 import httpx
 
 from .config import OCRConfig
-
-
-@dataclass
-class TextBlock:
-    text: str
-    x: int
-    y: int
-    width: int
-    height: int
-    confidence: float
+from .schema import BBox, TextBlock
 
 
 async def run_ocr(image_path: str, config: OCRConfig) -> list[TextBlock]:
@@ -88,6 +78,7 @@ async def _download_jsonl(client: httpx.AsyncClient, url: str, config: OCRConfig
 
 def _parse_rows(rows: list[dict], min_confidence: float) -> list[TextBlock]:
     blocks: list[TextBlock] = []
+    next_id = 1
     for row in rows:
         result = row.get("result", {})
         ocr_results = result.get("ocrResults", [])
@@ -97,6 +88,9 @@ def _parse_rows(rows: list[dict], min_confidence: float) -> list[TextBlock]:
             scores = pruned.get("rec_scores", [])
             rec_boxes = pruned.get("rec_boxes", [])
             for i, text in enumerate(texts):
+                text = str(text).strip()
+                if not text:
+                    continue
                 score = scores[i] if i < len(scores) else 0
                 if score < min_confidence:
                     continue
@@ -104,9 +98,15 @@ def _parse_rows(rows: list[dict], min_confidence: float) -> list[TextBlock]:
                     box = rec_boxes[i]
                     if len(box) == 4:
                         x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                        width = x2 - x1
+                        height = y2 - y1
+                        if width <= 1 or height < 6:
+                            continue
                         blocks.append(TextBlock(
-                            text=text, x=x1, y=y1,
-                            width=x2 - x1, height=y2 - y1,
+                            id=f"text_{next_id:04d}",
+                            text=text,
+                            bbox=BBox(x=x1, y=y1, width=width, height=height),
                             confidence=float(score),
                         ))
+                        next_id += 1
     return blocks

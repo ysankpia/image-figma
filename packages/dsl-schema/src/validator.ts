@@ -5,7 +5,7 @@ import type {
   DSLElementType,
   DSLValidationError,
   DSLValidationResult
-} from "./types";
+} from "./types.js";
 
 const VALID_ELEMENT_TYPES = new Set<DSLElementType>([
   "frame",

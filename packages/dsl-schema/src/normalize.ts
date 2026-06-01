@@ -1,5 +1,5 @@
-import { DSL_DEFAULTS } from "./defaults";
-import type { DesignDSL, DSLElement, DSLLayout, DSLStyle } from "./types";
+import { DSL_DEFAULTS } from "./defaults.js";
+import type { DesignDSL, DSLElement, DSLLayout, DSLStyle } from "./types.js";
 
 export function normalizeDSL(dsl: DesignDSL): DesignDSL {
   return {

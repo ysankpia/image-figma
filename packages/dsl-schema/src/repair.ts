@@ -1,5 +1,5 @@
-import { normalizeDSL } from "./normalize";
-import { validateDSL } from "./validator";
+import { normalizeDSL } from "./normalize.js";
+import { validateDSL } from "./validator.js";
 import type {
   DesignDSL,
   DSLElement,
@@ -7,7 +7,7 @@ import type {
   DSLRepairResult,
   DSLRadius,
   DSLStyle
-} from "./types";
+} from "./types.js";
 
 export function repairDSL(dsl: DesignDSL): DSLRepairResult {
   const repairs: DSLRepairRecord[] = [];

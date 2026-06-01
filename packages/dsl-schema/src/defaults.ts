@@ -1,4 +1,4 @@
-import type { DSLStyle } from "./types";
+import type { DSLStyle } from "./types.js";
 
 export const DSL_DEFAULTS = {
   role: "unknown",

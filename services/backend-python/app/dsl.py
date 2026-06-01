@@ -4,62 +4,62 @@ from typing import Any
 
 from PIL import Image
 
-from .merge import MergedElement
+from .schema import DraftElement
+from .style import sample_background
 
 
 def build_dsl(
-    elements: list[MergedElement],
+    elements: list[DraftElement],
     asset_map: dict[str, str],
     image: Image.Image,
     task_id: str,
 ) -> dict[str, Any]:
-    """Build DraftRuntimeDSL v1.0 from merged elements."""
     page_w, page_h = image.size
-    background = _sample_background(image)
-
     children: list[dict[str, Any]] = []
     assets: list[dict[str, Any]] = []
 
-    for i, el in enumerate(elements):
-        node_id = f"node_{i:04d}"
+    for element in sorted(elements, key=lambda item: (item.z, item.bbox.y, item.bbox.x, item.id)):
         node: dict[str, Any] = {
-            "id": node_id,
-            "type": el.type,
-            "name": el.label or f"{el.role}_{i}",
-            "bbox": {"x": el.x, "y": el.y, "width": el.width, "height": el.height},
+            "id": element.id,
+            "type": element.type,
+            "name": element_name(element),
+            "bbox": element.bbox.to_dict(),
+            "z": element.z,
+            "meta": {
+                "sourceIds": element.source_ids,
+                "role": element.role,
+                "confidence": element.confidence,
+                "decisionReason": element.decision_reason,
+            },
         }
 
-        if el.type == "text":
-            chars = el.text.strip() if el.text else ""
-            if not chars:
+        if element.type == "text":
+            if not element.text.strip():
                 continue
-            node["text"] = {"characters": chars}
-            node["style"] = {"fontSize": _estimate_font_size(el)}
-        elif el.type == "image":
-            asset_filename = asset_map.get(str(i))
-            if asset_filename:
-                asset_id = f"asset_{i:04d}"
-                node["image"] = {"assetId": asset_id, "mode": "fill"}
-                assets.append({
+            node["text"] = {"characters": element.text}
+            node["style"] = element.style
+        elif element.type == "image":
+            asset_filename = asset_map.get(element.id)
+            if not asset_filename:
+                continue
+            asset_id = f"asset_{element.id}"
+            node["image"] = {"assetId": asset_id, "mode": "fill"}
+            assets.append(
+                {
                     "assetId": asset_id,
+                    "type": "image",
                     "url": f"assets/{asset_filename}",
-                    "width": el.width,
-                    "height": el.height,
-                })
-            else:
-                node["image"] = {"url": "", "mode": "fill"}
-        elif el.type == "shape":
-            node["style"] = {"fill": "#E5E7EB", "opacity": 0.6}
+                    "path": f"assets/{asset_filename}",
+                    "format": "png",
+                    "width": element.bbox.width,
+                    "height": element.bbox.height,
+                    "meta": {"sourceNodeId": element.id},
+                }
+            )
+        elif element.type == "shape":
+            node["style"] = element.style
 
         children.append(node)
-
-    root: dict[str, Any] = {
-        "id": "root",
-        "type": "frame",
-        "name": "Root",
-        "bbox": {"x": 0, "y": 0, "width": page_w, "height": page_h},
-        "children": children,
-    }
 
     return {
         "version": "1.0",
@@ -68,27 +68,22 @@ def build_dsl(
         "page": {
             "width": page_w,
             "height": page_h,
-            "background": background,
+            "background": sample_background(image),
         },
-        "root": root,
+        "root": {
+            "id": "root",
+            "type": "frame",
+            "name": "Root",
+            "bbox": {"x": 0, "y": 0, "width": page_w, "height": page_h},
+            "children": children,
+        },
         "assets": assets,
+        "meta": {"pipeline": "omniparser_ocr_vlm_candidate_classifier.v1"},
     }
 
 
-def _estimate_font_size(el: MergedElement) -> int:
-    char_count = max(1, len(el.text))
-    from_height = int(el.height * 0.8)
-    from_width = int(el.width / char_count * 1.6)
-    return max(10, min(from_height, from_width))
-
-
-def _sample_background(image: Image.Image) -> str:
-    """Sample background color from image corners."""
-    w, h = image.size
-    pixels = []
-    for x, y in [(2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3)]:
-        pixels.append(image.getpixel((x, y))[:3])
-    r = sum(p[0] for p in pixels) // 4
-    g = sum(p[1] for p in pixels) // 4
-    b = sum(p[2] for p in pixels) // 4
-    return f"#{r:02X}{g:02X}{b:02X}"
+def element_name(element: DraftElement) -> str:
+    if element.type == "text":
+        label = element.text.strip()
+        return label[:32] if label else element.id
+    return f"{element.type}_{element.role}_{element.id}"

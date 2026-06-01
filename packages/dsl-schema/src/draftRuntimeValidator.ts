@@ -4,8 +4,8 @@ import type {
   DraftRuntimeNode,
   DraftRuntimeNodeType,
   DraftRuntimeValidationResult
-} from "./draftRuntimeTypes";
-import type { DSLValidationError, DSLValidationWarning } from "./types";
+} from "./draftRuntimeTypes.js";
+import type { DSLValidationError, DSLValidationWarning } from "./types.js";
 
 const VALID_NODE_TYPES = new Set<DraftRuntimeNodeType>(["frame", "group", "text", "shape", "image"]);
 

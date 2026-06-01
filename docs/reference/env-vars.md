@@ -32,9 +32,22 @@
 | `VISION_DETECTOR_CONCURRENCY` | detector pass 并发数 | `3` | 否 |
 | `VISION_MAX_IMAGE_SIDE` | 每个 detector pass 发送给模型的最长边 | `1280` | 否 |
 | `VISION_TIMEOUT_SECONDS` | 每个 provider 请求超时秒数 | `90` | 否 |
+| `VISION_TRANSPORT_RETRIES` | Python OmniParser/VLM candidate classifier 的 provider transport retry 次数 | `3` | 否 |
 | `VISION_TEMPERATURE` | 模型 temperature；`0` 表示确定性/不显式传 | `0` | 否 |
 | `VISION_STREAM` | 是否请求 streaming/SSE 响应 | `false` | 否 |
 | `VISION_REVIEW_ENABLED` | 是否运行二次 review/reconciliation | `false` | 否 |
+| `PIPELINE_SERVER_PORT` | Python Draft MVP server 端口 | `8001` | 否 |
+| `PIPELINE_STORAGE_ROOT` | Python Draft MVP storage 根目录 | `./storage` | 否 |
+| `PIPELINE_MAX_UPLOAD_BYTES` | Python Draft MVP PNG 上传大小上限 | `20971520` | 否 |
+| `OMNIPARSER_MODEL_PATH` | OmniParser 6MB ONNX 模型路径 | `/Volumes/WorkDrive/Models/model_fp16.onnx` | 运行 Python OmniParser 时需要 |
+| `OMNIPARSER_CONFIDENCE` | OmniParser objectness 最低置信度 | `0.3` | 否 |
+| `OMNIPARSER_NMS_IOU` | OmniParser NMS IoU 阈值 | `0.5` | 否 |
+| `OMNIPARSER_INPUT_SIZE` | OmniParser letterbox 输入尺寸 | `640` | 否 |
+| `VLM_MIN_CONFIDENCE` | Python VLM candidate classification 最低置信度 | `0.65` | 否 |
+| `IMAGE_MIN_AREA` | Python planner image layer 最小面积 | `400` | 否 |
+| `SHAPE_MIN_AREA` | Python planner shape layer 最小面积 | `1200` | 否 |
+| `BATCH_MAX_CANDIDATES` | Python VLM candidate batch hard cap | `25` | 否 |
+| `TEXT_OVERLAP_SUPPRESS_RATIO` | Python planner image 候选允许的最大 OCR overlap 比例 | `0.08` | 否 |
 | `LAYOUT_ADVISOR_WIRE_API` | Layout advisor 实验使用的 OpenAI-compatible wire API，支持 `responses`、`chat.completions` | `responses` | 仅运行 advisor 实验时需要 |
 | `LAYOUT_ADVISOR_BASE_URL` | Layout advisor 实验 provider base URL | `https://api.openai.com` | 仅运行 advisor 实验时需要 |
 | `LAYOUT_ADVISOR_API_KEY` | Layout advisor 实验 API key | 无 | 仅运行 advisor 实验时需要 |
@@ -113,6 +126,27 @@ VISION_API_KEY=...
 ```
 
 `VISION_BASE_URL`、`VISION_MODEL`、`VISION_API_KEY`、`VISION_WIRE_API` 都是供应商可替换参数，不允许写死在代码里。
+
+## Backend Python OmniParser Draft MVP
+
+Python Draft MVP 使用 `OCR + OmniParser + VLM candidate classifier + deterministic planner`。这里的 VLM 只分类 OmniParser 候选框，不生成 bbox、文字、HTML、CSS、Figma 或最终 DSL。
+
+```bash
+cd services/backend-python
+PIPELINE_SERVER_PORT=8001
+OMNIPARSER_MODEL_PATH=/Volumes/WorkDrive/Models/model_fp16.onnx
+VISION_BASE_URL=https://aicode.cat
+VISION_MODEL=gpt-5.5
+VISION_API_KEY=...
+VLM_MIN_CONFIDENCE=0.65
+IMAGE_MIN_AREA=400
+SHAPE_MIN_AREA=1200
+BATCH_MAX_CANDIDATES=25
+TEXT_OVERLAP_SUPPRESS_RATIO=0.08
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+This path does not use M29 and must not read Codia golden data at runtime. OCR remains the text authority; OmniParser remains the bbox candidate source; VLM remains a classifier only.
 
 ## Layout Advisor Experiment
 

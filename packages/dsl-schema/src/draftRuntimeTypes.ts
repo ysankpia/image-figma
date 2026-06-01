@@ -5,7 +5,7 @@ import type {
   DSLStroke,
   DSLValidationError,
   DSLValidationWarning
-} from "./types";
+} from "./types.js";
 
 export type DraftRuntimeDSLVersion = "1.0";
 

@@ -29,6 +29,16 @@ class VLMConfig:
     api_key: str = ""
     model: str = "gpt-5.5"
     timeout: float = 90.0
+    min_confidence: float = 0.65
+    transport_retries: int = 3
+
+
+@dataclass(frozen=True)
+class PlannerConfig:
+    image_min_area: int = 400
+    shape_min_area: int = 1200
+    batch_max_candidates: int = 25
+    text_overlap_suppress_ratio: float = 0.08
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,7 @@ class Config:
     ocr: OCRConfig = field(default_factory=OCRConfig)
     omniparser: OmniParserConfig = field(default_factory=OmniParserConfig)
     vlm: VLMConfig = field(default_factory=VLMConfig)
+    planner: PlannerConfig = field(default_factory=PlannerConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
 
 
@@ -67,6 +78,14 @@ def load_config() -> Config:
             api_key=os.getenv("VISION_API_KEY", os.getenv("CODIA_UI_DETECTOR_API_KEY", "")),
             model=os.getenv("VISION_MODEL", os.getenv("CODIA_UI_DETECTOR_MODEL", "gpt-5.5")),
             timeout=float(os.getenv("VISION_TIMEOUT_SECONDS", "90")),
+            min_confidence=float(os.getenv("VLM_MIN_CONFIDENCE", "0.65")),
+            transport_retries=int(os.getenv("VISION_TRANSPORT_RETRIES", "3")),
+        ),
+        planner=PlannerConfig(
+            image_min_area=int(os.getenv("IMAGE_MIN_AREA", "400")),
+            shape_min_area=int(os.getenv("SHAPE_MIN_AREA", "1200")),
+            batch_max_candidates=int(os.getenv("BATCH_MAX_CANDIDATES", "25")),
+            text_overlap_suppress_ratio=float(os.getenv("TEXT_OVERLAP_SUPPRESS_RATIO", "0.08")),
         ),
         server=ServerConfig(
             port=int(os.getenv("PIPELINE_SERVER_PORT", "8001")),
