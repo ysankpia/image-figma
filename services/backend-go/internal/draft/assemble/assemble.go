@@ -115,6 +115,7 @@ func Build(input Input) (contract.Document, error) {
 	}
 
 	layers, assets, decisionEvidence, nextLayer, nextAsset = appendVisionImageCandidates(input.Image, input.Detector, layers, assets, decisionEvidence, nextLayer, nextAsset)
+	layers, assets = suppressM29CoveredByVision(layers, assets)
 	layers, assets = suppressDuplicateVisibleOwners(input.Image, layers, assets)
 	groups := buildMajorGroups(input.Image, layers)
 	layers = applyLayerGroups(layers, groups)
@@ -199,53 +200,84 @@ func appendVisionImageCandidates(image contract.ImageMeta, doc *visiondetector.D
 				"source": candidate.Source,
 			},
 		}
-		if candidate.Role != visiondetector.RoleImageView {
+		switch candidate.Role {
+		case visiondetector.RoleBackground:
+			if !canEmitVisionBackground(candidate, box, layers) {
+				item.State = contract.DecisionSuppress
+				item.Reason = "vision_background_rejected"
+				evidenceItems = append(evidenceItems, item)
+				continue
+			}
+			layer := contract.Layer{
+				ID:           fmt.Sprintf("vision_bg_%04d", nextLayer),
+				Kind:         contract.LayerShape,
+				BBox:         box,
+				Z:            10_000 + nextLayer,
+				Visible:      true,
+				Name:         fmt.Sprintf("Shape Vision %04d", nextLayer),
+				SemanticTags: []string{"vision_background_candidate"},
+				Shape:        &contract.Shape{Fill: "#E5E7EB", CornerRadius: 0, Opacity: 1},
+				SourceRefs:   []contract.SourceRef{{Kind: "vision_detector_candidate", ID: candidate.ID}},
+				Decision: contract.Decision{
+					State:         contract.DecisionEmit,
+					BBoxAuthority: contract.BBoxAuthorityVision,
+					Reason:        "vision_background_candidate",
+					SourceIDs:     []string{candidate.ID},
+				},
+			}
+			layers = append(layers, layer)
+			item.State = contract.DecisionEmit
+			item.Reason = "vision_background_candidate"
+			item.LayerID = layer.ID
+			evidenceItems = append(evidenceItems, item)
+			nextLayer++
+		case visiondetector.RoleImageView:
+			if !canEmitVisionImage(image, candidate, box, layers) {
+				item.State = contract.DecisionSuppress
+				item.Reason = "vision_image_rejected_by_compact_or_duplicate_gate"
+				evidenceItems = append(evidenceItems, item)
+				continue
+			}
+			assetID := fmt.Sprintf("asset_vision_%04d", nextAsset)
+			nextAsset++
+			layer := contract.Layer{
+				ID:           fmt.Sprintf("vision_image_%04d", nextLayer),
+				Kind:         contract.LayerRaster,
+				BBox:         box,
+				Z:            20_000 + nextLayer,
+				Visible:      true,
+				Name:         fmt.Sprintf("Raster Vision %04d", nextLayer),
+				SemanticTags: []string{"vision_image_candidate"},
+				Raster:       &contract.Raster{AssetID: assetID, Mode: "fill"},
+				SourceRefs:   []contract.SourceRef{{Kind: "vision_detector_candidate", ID: candidate.ID}},
+				Decision: contract.Decision{
+					State:         contract.DecisionEmit,
+					BBoxAuthority: contract.BBoxAuthorityVision,
+					Reason:        "vision_compact_image_candidate",
+					SourceIDs:     []string{candidate.ID},
+				},
+			}
+			layers = append(layers, layer)
+			assets = append(assets, contract.Asset{
+				ID:         assetID,
+				Type:       "image",
+				Path:       fmt.Sprintf("assets/%s.png", assetID),
+				URL:        fmt.Sprintf("assets/%s.png", assetID),
+				Format:     "png",
+				BBox:       box,
+				Width:      box.Width,
+				Height:     box.Height,
+				SourceRefs: layer.SourceRefs,
+			})
+			item.State = contract.DecisionEmit
+			item.Reason = "vision_compact_image_candidate"
+			item.LayerID = layer.ID
+			evidenceItems = append(evidenceItems, item)
+			nextLayer++
+		default:
 			item.State = contract.DecisionHint
 			evidenceItems = append(evidenceItems, item)
-			continue
 		}
-		if !canEmitVisionImage(image, candidate, box, layers) {
-			item.State = contract.DecisionSuppress
-			item.Reason = "vision_image_rejected_by_compact_or_duplicate_gate"
-			evidenceItems = append(evidenceItems, item)
-			continue
-		}
-		assetID := fmt.Sprintf("asset_vision_%04d", nextAsset)
-		nextAsset++
-		layer := contract.Layer{
-			ID:           fmt.Sprintf("vision_image_%04d", nextLayer),
-			Kind:         contract.LayerRaster,
-			BBox:         box,
-			Z:            20_000 + nextLayer,
-			Visible:      true,
-			Name:         fmt.Sprintf("Raster Vision %04d", nextLayer),
-			SemanticTags: []string{"vision_image_candidate"},
-			Raster:       &contract.Raster{AssetID: assetID, Mode: "fill"},
-			SourceRefs:   []contract.SourceRef{{Kind: "vision_detector_candidate", ID: candidate.ID}},
-			Decision: contract.Decision{
-				State:         contract.DecisionEmit,
-				BBoxAuthority: contract.BBoxAuthorityVision,
-				Reason:        "vision_compact_image_candidate",
-				SourceIDs:     []string{candidate.ID},
-			},
-		}
-		layers = append(layers, layer)
-		assets = append(assets, contract.Asset{
-			ID:         assetID,
-			Type:       "image",
-			Path:       fmt.Sprintf("assets/%s.png", assetID),
-			URL:        fmt.Sprintf("assets/%s.png", assetID),
-			Format:     "png",
-			BBox:       box,
-			Width:      box.Width,
-			Height:     box.Height,
-			SourceRefs: layer.SourceRefs,
-		})
-		item.State = contract.DecisionEmit
-		item.Reason = "vision_compact_image_candidate"
-		item.LayerID = layer.ID
-		evidenceItems = append(evidenceItems, item)
-		nextLayer++
 	}
 	return layers, assets, evidenceItems, nextLayer, nextAsset
 }
@@ -283,6 +315,78 @@ func canEmitVisionImage(image contract.ImageMeta, candidate visiondetector.Candi
 		}
 	}
 	return true
+}
+
+func canEmitVisionBackground(candidate visiondetector.Candidate, box geometry.Rect, layers []contract.Layer) bool {
+	if box.Empty() || candidate.Confidence < 0.45 {
+		return false
+	}
+	if box.Area() < 200 {
+		return false
+	}
+	return true
+}
+
+func suppressM29CoveredByVision(layers []contract.Layer, assets []contract.Asset) ([]contract.Layer, []contract.Asset) {
+	visionBoxes := make([]geometry.Rect, 0)
+	for _, layer := range layers {
+		if !layer.Visible {
+			continue
+		}
+		isVision := false
+		for _, ref := range layer.SourceRefs {
+			if ref.Kind == "vision_detector_candidate" {
+				isVision = true
+				break
+			}
+		}
+		if isVision {
+			visionBoxes = append(visionBoxes, layer.BBox)
+		}
+	}
+	if len(visionBoxes) == 0 {
+		return layers, assets
+	}
+	suppressedAssets := map[string]bool{}
+	for i := range layers {
+		if !layers[i].Visible {
+			continue
+		}
+		isVision := false
+		for _, ref := range layers[i].SourceRefs {
+			if ref.Kind == "vision_detector_candidate" {
+				isVision = true
+				break
+			}
+		}
+		if isVision {
+			continue
+		}
+		if layers[i].Kind != contract.LayerShape && layers[i].Kind != contract.LayerRaster {
+			continue
+		}
+		for _, vb := range visionBoxes {
+			if geometry.IoA(layers[i].BBox, vb) >= 0.70 {
+				layers[i].Visible = false
+				layers[i].Decision.State = contract.DecisionSuppress
+				layers[i].Decision.Reason += "+covered_by_vision_candidate"
+				if layers[i].Raster != nil && layers[i].Raster.AssetID != "" {
+					suppressedAssets[layers[i].Raster.AssetID] = true
+				}
+				break
+			}
+		}
+	}
+	if len(suppressedAssets) == 0 {
+		return layers, assets
+	}
+	filtered := assets[:0]
+	for _, asset := range assets {
+		if !suppressedAssets[asset.ID] {
+			filtered = append(filtered, asset)
+		}
+	}
+	return layers, filtered
 }
 
 func nameForLayer(kind contract.LayerKind, index int) string {

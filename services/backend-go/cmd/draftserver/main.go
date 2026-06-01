@@ -24,7 +24,7 @@ func main() {
 		StorageRoot:    envString("DRAFT_SERVER_STORAGE_ROOT", ""),
 		OCRProvider:    envString("OCR_PROVIDER", ""),
 		MaxUploadBytes: int64(envInt("DRAFT_SERVER_MAX_UPLOAD_BYTES", 10*1024*1024)),
-		VisionEnabled:  envBool("DRAFT_SERVER_VISION_ENABLED", false),
+		VisionEnabled:  envBool("DRAFT_SERVER_VISION_ENABLED", true),
 		VisionOptions:  detector.OptionsFromEnv(),
 	}
 	log.Printf("draft server listening on %s", addr)

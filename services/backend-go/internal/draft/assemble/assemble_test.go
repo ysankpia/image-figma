@@ -246,13 +246,18 @@ func TestBuildKeepsNonImageVisionRolesHintOnly(t *testing.T) {
 	if layer := findLayer(graph, contract.LayerRaster); layer != nil {
 		t.Fatalf("non-image detector roles must not emit raster layers: %+v", layer)
 	}
-	if len(graph.Evidence) != 3 {
-		t.Fatalf("expected three hint evidence items, got %+v", graph.Evidence)
+	bgShape := findLayerByTag(graph, "vision_background_candidate")
+	if bgShape == nil || bgShape.Kind != contract.LayerShape || !bgShape.Visible {
+		t.Fatalf("expected visible shape layer for background candidate, got %+v", bgShape)
 	}
+	hintCount := 0
 	for _, item := range graph.Evidence {
-		if item.State != contract.DecisionHint {
-			t.Fatalf("expected hint-only evidence, got %+v", graph.Evidence)
+		if item.State == contract.DecisionHint {
+			hintCount++
 		}
+	}
+	if hintCount != 2 {
+		t.Fatalf("expected 2 hint evidence items (button + list), got %d from %+v", hintCount, graph.Evidence)
 	}
 }
 
@@ -416,6 +421,17 @@ func findLayerByBBox(graph contract.Document, kind contract.LayerKind, x, y, wid
 		layer := &graph.Layers[i]
 		if layer.Kind == kind && layer.BBox.X == x && layer.BBox.Y == y && layer.BBox.Width == width && layer.BBox.Height == height {
 			return layer
+		}
+	}
+	return nil
+}
+
+func findLayerByTag(graph contract.Document, tag string) *contract.Layer {
+	for i := range graph.Layers {
+		for _, t := range graph.Layers[i].SemanticTags {
+			if t == tag {
+				return &graph.Layers[i]
+			}
 		}
 	}
 	return nil
