@@ -65,6 +65,16 @@ Output artifacts:
 - `diagnostics.v3.md`
 - `assets/*.png`
 
+## Current Stage Result
+
+Stage 1 implements the Deki YOLO export, V3 runner, V1/V3 batch A/B runner, and regression tests. The default V3 path is intentionally diagnostic-only for Deki ownership changes:
+
+- YOLO `Text` remains diagnostic-only.
+- YOLO `ImageView` is normalized, gated, and recorded, but does not expand or replace V1 raster output by default.
+- YOLO `View` candidates are normalized and checked, but final shape/raster ownership changes are behind the explicit `--enable-deki-view-shapes` experiment flag.
+
+Reason: a full 86-case run with Deki `View` ownership enabled reduced one knockout count but introduced a visual regression in one case. The safe default therefore preserves V1-equivalent final DSL while still writing Deki evidence and overlays for every case. The next stage must add a stricter local visual A/B gate before enabling any Deki-driven ownership change by default.
+
 ## Authority Rules
 
 OCR owns text content and text bbox. YOLO `Text` is written only to diagnostics.
@@ -123,13 +133,20 @@ git diff --check
 git status --short --branch
 ```
 
-Acceptance gates:
+Stage 1 safe acceptance gates:
 
 - V3 DSL valid for all batch cases.
 - Missing asset count is `0`.
 - Visible full-page backing is `0`.
 - TextLayer count equals OCR block count.
 - `rawTextOverlapRaster <= V1`.
-- `rasterTextKnockoutCount < V1`.
+- `rasterTextKnockoutCount <= V1`.
 - Average `visualMae` is not meaningfully worse than V1.
+- Deki evidence is produced for all cases with provider/export failures recorded as artifacts.
+- Default V3 ownership changes introduce `0` regressed cases.
+
+Future ownership-enabling gates:
+
+- `rasterTextKnockoutCount < V1`.
 - Button-like YOLO `View` candidates reduce button raster/inpainting cases without suppressing real photos.
+- Any enabled Deki ownership change must pass a local visual A/B guard before it can affect the default output.
