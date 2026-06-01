@@ -69,11 +69,6 @@ def merge_results(
         area_ratio = (v.width * v.height) / page_area if page_area > 0 else 0
         node_type = _role_to_type(v.role)
 
-        # Large areas (>10% of page) that are "image" → demote to shape
-        # They are containers, not actual images
-        if node_type == "image" and area_ratio > 0.10:
-            node_type = "shape"
-
         # Skip backgrounds that cover >85% of page
         if v.role == "Background" and area_ratio > 0.85:
             continue
