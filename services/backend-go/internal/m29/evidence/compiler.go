@@ -124,6 +124,16 @@ func compileTokens(source contract.Document) []Token {
 				consumed[primitive.ID] = true
 				continue
 			}
+			if isStructuralContainer(primitive, primitives) {
+				token := tokenFromPrimitive(nextID, "layer_background_token", primitive, "main", []string{"structural_container_demoted_from_image"})
+				token.CompileHints.CanBeImage = false
+				token.CompileHints.CanBeLayerBackground = true
+				token.CompileHints.Reasons = appendReason(token.CompileHints.Reasons, "structural_container_demoted_from_image")
+				tokens = append(tokens, token)
+				nextID++
+				consumed[primitive.ID] = true
+				continue
+			}
 			tokens = append(tokens, tokenFromPrimitive(nextID, "raster_region_token", primitive, "main", []string{"raster_region"}))
 			nextID++
 			consumed[primitive.ID] = true
@@ -177,6 +187,12 @@ func compileTokens(source contract.Document) []Token {
 
 	for _, primitive := range primitives {
 		if consumed[primitive.ID] {
+			continue
+		}
+		if belowPerceptualThreshold(primitive) {
+			tokens = append(tokens, tokenFromPrimitive(nextID, "noise_token", primitive, "suppressed", []string{"below_perceptual_threshold"}))
+			nextID++
+			consumed[primitive.ID] = true
 			continue
 		}
 		tokenType := tokenTypeForPrimitive(primitive)
@@ -239,6 +255,37 @@ func isRasterParent(p contract.Primitive, parents []contract.Primitive) bool {
 		}
 	}
 	return false
+}
+
+func isStructuralContainer(parent contract.Primitive, primitives []contract.Primitive) bool {
+	textCount := 0
+	surfaceCount := 0
+	otherMeaningful := 0
+	for _, p := range primitives {
+		if p.ID == parent.ID {
+			continue
+		}
+		if !contains(parent.BBox, p.BBox, 3) {
+			continue
+		}
+		switch p.PrimitiveType {
+		case "text_region":
+			textCount++
+		case "surface_region":
+			surfaceCount++
+		case "rect", "image_region", "symbol_region":
+			otherMeaningful++
+		}
+	}
+	return textCount >= 3 || surfaceCount >= 2 || (textCount+surfaceCount+otherMeaningful >= 8)
+}
+
+func belowPerceptualThreshold(p contract.Primitive) bool {
+	switch p.PrimitiveType {
+	case "line", "rect":
+		return false
+	}
+	return min(p.BBox.Width, p.BBox.Height) < 6
 }
 
 func containingRasterParentID(p contract.Primitive, parents []contract.Primitive) string {
