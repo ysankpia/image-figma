@@ -331,9 +331,6 @@ func emitRasterToken(image contract.ImageMeta, token evidence.Token) bool {
 	if box.Empty() {
 		return false
 	}
-	if min(box.Width, box.Height) < 6 {
-		return false
-	}
 	imageArea := max(1, image.Width*image.Height)
 	boxArea := box.Area()
 	if boxArea*100 >= imageArea*72 {
