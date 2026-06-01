@@ -30,7 +30,10 @@ def build_dsl(
         }
 
         if el.type == "text":
-            node["text"] = {"characters": el.text}
+            chars = el.text.strip() if el.text else ""
+            if not chars:
+                continue
+            node["text"] = {"characters": chars}
             node["style"] = {"fontSize": _estimate_font_size(el)}
         elif el.type == "image":
             asset_filename = asset_map.get(str(i))
@@ -43,6 +46,8 @@ def build_dsl(
                     "width": el.width,
                     "height": el.height,
                 })
+            else:
+                node["image"] = {"url": "", "mode": "fill"}
         elif el.type == "shape":
             node["style"] = {"fill": "#E5E7EB", "opacity": 0.6}
 
@@ -57,7 +62,9 @@ def build_dsl(
     }
 
     return {
-        "version": "draft-runtime-dsl-v1.0",
+        "version": "1.0",
+        "kind": "draft_runtime",
+        "taskId": task_id,
         "page": {
             "width": page_w,
             "height": page_h,
