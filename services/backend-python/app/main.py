@@ -33,7 +33,7 @@ async def health():
     return {"success": True, "data": {"status": "ok", "version": "pipeline-v0.1"}}
 
 
-@app.post("/api/pipeline-preview")
+@app.post("/api/draft-preview")
 async def upload_preview(file: UploadFile = File(...)):
     if not file.filename or not file.filename.lower().endswith(".png"):
         raise HTTPException(400, "Only PNG files are supported")
@@ -65,7 +65,7 @@ async def upload_preview(file: UploadFile = File(...)):
     return {"success": True, "data": {"taskId": task_id, "status": "queued"}}
 
 
-@app.post("/api/pipeline-preview/batch")
+@app.post("/api/draft-preview/batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
     if len(files) > 20:
         raise HTTPException(400, "Maximum 20 files per batch")
@@ -105,7 +105,7 @@ async def upload_batch(files: list[UploadFile] = File(...)):
     return {"success": True, "data": {"total": len(results), "tasks": results}}
 
 
-@app.get("/api/pipeline-preview/{task_id}")
+@app.get("/api/draft-preview/{task_id}")
 async def get_task(task_id: str):
     task = tasks.get(task_id)
     if not task:
@@ -113,7 +113,7 @@ async def get_task(task_id: str):
     return {"success": True, "data": task}
 
 
-@app.get("/api/pipeline-preview/{task_id}/dsl")
+@app.get("/api/draft-preview/{task_id}/dsl")
 async def get_dsl(task_id: str):
     task = tasks.get(task_id)
     if not task:
@@ -127,7 +127,7 @@ async def get_dsl(task_id: str):
     return {"success": True, "data": {"dsl": dsl}}
 
 
-@app.get("/api/pipeline-preview/{task_id}/assets/{asset_name}")
+@app.get("/api/draft-preview/{task_id}/assets/{asset_name}")
 async def get_asset(task_id: str, asset_name: str):
     task = tasks.get(task_id)
     if not task:

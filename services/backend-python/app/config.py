@@ -33,7 +33,7 @@ class VLMConfig:
 
 @dataclass(frozen=True)
 class ServerConfig:
-    port: int = 8001
+    port: int = 8000
     storage_root: str = "./storage"
     max_upload_bytes: int = 20 * 1024 * 1024
 
