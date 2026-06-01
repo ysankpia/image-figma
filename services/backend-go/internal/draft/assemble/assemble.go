@@ -328,7 +328,11 @@ func canEmitVisionBackground(candidate visiondetector.Candidate, box geometry.Re
 }
 
 func suppressM29CoveredByVision(layers []contract.Layer, assets []contract.Asset) ([]contract.Layer, []contract.Asset) {
-	visionBoxes := make([]geometry.Rect, 0)
+	type visionEntry struct {
+		BBox geometry.Rect
+		Kind contract.LayerKind
+	}
+	var visionEntries []visionEntry
 	for _, layer := range layers {
 		if !layer.Visible {
 			continue
@@ -340,11 +344,12 @@ func suppressM29CoveredByVision(layers []contract.Layer, assets []contract.Asset
 				break
 			}
 		}
-		if isVision {
-			visionBoxes = append(visionBoxes, layer.BBox)
+		if !isVision {
+			continue
 		}
+		visionEntries = append(visionEntries, visionEntry{BBox: layer.BBox, Kind: layer.Kind})
 	}
-	if len(visionBoxes) == 0 {
+	if len(visionEntries) == 0 {
 		return layers, assets
 	}
 	suppressedAssets := map[string]bool{}
@@ -365,8 +370,14 @@ func suppressM29CoveredByVision(layers []contract.Layer, assets []contract.Asset
 		if layers[i].Kind != contract.LayerShape && layers[i].Kind != contract.LayerRaster {
 			continue
 		}
-		for _, vb := range visionBoxes {
-			if geometry.IoA(layers[i].BBox, vb) >= 0.70 {
+		for _, ve := range visionEntries {
+			if ve.Kind != layers[i].Kind {
+				continue
+			}
+			if ve.BBox.Area() > layers[i].BBox.Area()*4 {
+				continue
+			}
+			if geometry.IoA(layers[i].BBox, ve.BBox) >= 0.70 {
 				layers[i].Visible = false
 				layers[i].Decision.State = contract.DecisionSuppress
 				layers[i].Decision.Reason += "+covered_by_vision_candidate"

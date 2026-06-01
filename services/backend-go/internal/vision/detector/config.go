@@ -42,12 +42,27 @@ type Artifacts struct {
 }
 
 func OptionsFromEnv() Options {
+	apiKey := envString("VISION_API_KEY", "")
+	if apiKey == "" {
+		apiKey = envString("CODIA_UI_DETECTOR_API_KEY", "")
+	}
+	if apiKey == "" {
+		apiKey = envString("OPENAI_API_KEY", "")
+	}
+	baseURL := envString("VISION_BASE_URL", "")
+	if baseURL == "" {
+		baseURL = envString("CODIA_UI_DETECTOR_BASE_URL", "https://api.openai.com")
+	}
+	model := envString("VISION_MODEL", "")
+	if model == "" {
+		model = envString("CODIA_UI_DETECTOR_MODEL", "")
+	}
 	return Options{
 		Provider:    envString("VISION_PROVIDER", ProviderOpenAICompatible),
 		WireAPI:     envString("VISION_WIRE_API", "responses"),
-		BaseURL:     envString("VISION_BASE_URL", "https://api.openai.com"),
-		APIKey:      envString("VISION_API_KEY", ""),
-		Model:       envString("VISION_MODEL", ""),
+		BaseURL:     baseURL,
+		APIKey:      apiKey,
+		Model:       model,
 		Passes:      splitCSV(envString("VISION_DETECTOR_PASSES", "")),
 		MaxSide:     envInt("VISION_MAX_IMAGE_SIDE", 1280),
 		Concurrency: envInt("VISION_DETECTOR_CONCURRENCY", 3),
