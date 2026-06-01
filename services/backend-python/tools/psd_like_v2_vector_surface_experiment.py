@@ -17,26 +17,36 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from tools.psd_like_layer_decomposition_experiment import (
     BBox,
+    Candidate,
     OCRBlock,
     binary_close,
     binary_dilate,
+    build_raster_candidates,
+    build_raster_ownership,
     build_draft_runtime_dsl,
-    build_layer_stack,
     build_text_mask,
+    build_text_knockout_mask,
     clamp,
     clamp_box,
     color_distance,
     color_hex,
+    compute_tile_maps,
     component_bbox,
     connected_components,
     count_text_blocks,
+    crop_raster_assets,
     dominant_cluster_stats,
+    draw_overlay,
     estimate_background_color,
     intersection_area,
+    ioa,
+    iou,
     load_ocr_blocks,
+    nms_candidates,
     relative_luminance,
     sample_text_color,
     write_draft_preview_png,
+    write_ownership_report,
     write_preview_html,
     write_preview_report,
 )
@@ -61,6 +71,31 @@ class RasterFallbackCandidate:
     score: float
     reason: str
     scores: dict[str, float]
+
+
+def candidate_from_surface(surface: VectorSurfaceCandidate, index: int) -> Candidate:
+    role = str(surface.scores.get("role", ""))
+    scores = dict(surface.scores)
+    scores.update(
+        {
+            "fillR": float(surface.fill[0]),
+            "fillG": float(surface.fill[1]),
+            "fillB": float(surface.fill[2]),
+            "cornerRadius": float(surface.corner_radius),
+            "vectorSurface": 1.0,
+            "confidence": float(surface.confidence),
+            "containedTextIds": list(surface.contained_text_ids),
+            **({"role": role} if role else {}),
+        }
+    )
+    return Candidate(
+        id=f"vector_surface_{index:04d}_{surface.id}",
+        kind="shape",
+        bbox=surface.bbox,
+        score=surface.confidence,
+        scores=scores,
+        reason="vector_surface",
+    )
 
 
 def contained_text_blocks(box: BBox, blocks: list[OCRBlock], min_coverage: float = 0.82) -> list[OCRBlock]:
@@ -431,6 +466,397 @@ def write_surface_diagnostics(path: Path, surfaces: list[VectorSurfaceCandidate]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def vector_surface_role(surface: VectorSurfaceCandidate, width: int, height: int) -> str:
+    area_ratio = surface.bbox.area / max(1, width * height)
+    aspect = surface.bbox.width / max(1, surface.bbox.height)
+    text_count = len(surface.contained_text_ids)
+    if text_count <= 2 and area_ratio <= 0.20 and 1.05 <= aspect <= 14.0:
+        return "control_surface"
+    return "container_surface"
+
+
+def select_vector_surfaces(surfaces: list[VectorSurfaceCandidate], width: int, height: int) -> list[VectorSurfaceCandidate]:
+    accepted: list[VectorSurfaceCandidate] = []
+
+    def sort_key(surface: VectorSurfaceCandidate) -> tuple[int, float, int]:
+        role_rank = 1 if vector_surface_role(surface, width, height) == "control_surface" else 0
+        return (role_rank, surface.confidence, -surface.bbox.area)
+
+    for surface in sorted(surfaces, key=sort_key, reverse=True):
+        text_ids = set(surface.contained_text_ids)
+        keep = True
+        for kept in accepted:
+            overlap = intersection_area(surface.bbox, kept.bbox)
+            if overlap <= 0:
+                continue
+            min_overlap = overlap / max(1, min(surface.bbox.area, kept.bbox.area))
+            fill_distance = color_distance(surface.fill, kept.fill)
+            shared_text = text_ids & set(kept.contained_text_ids)
+            if min_overlap >= 0.82 and fill_distance <= 18.0:
+                keep = False
+                break
+            if shared_text and min_overlap >= 0.45 and surface.bbox.area >= kept.bbox.area:
+                keep = False
+                break
+        if keep:
+            scores = dict(surface.scores)
+            scores["role"] = vector_surface_role(surface, width, height)
+            accepted.append(
+                VectorSurfaceCandidate(
+                    id=surface.id,
+                    bbox=surface.bbox,
+                    fill=surface.fill,
+                    corner_radius=surface.corner_radius,
+                    confidence=surface.confidence,
+                    contained_text_ids=surface.contained_text_ids,
+                    reason=surface.reason,
+                    scores=scores,
+                )
+            )
+
+    return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
+
+
+def filter_raster_fallbacks(
+    raster_candidates: list[Candidate],
+    vector_shapes: list[Candidate],
+    text_mask: np.ndarray,
+    width: int,
+    height: int,
+    max_text_overlap: float,
+) -> tuple[list[Candidate], list[dict[str, Any]]]:
+    accepted: list[Candidate] = []
+    rejected: list[dict[str, Any]] = []
+    control_shapes = [shape for shape in vector_shapes if shape.scores.get("role") == "control_surface"]
+
+    for raster in raster_candidates:
+        reason = ""
+        if is_full_page_backing(raster.bbox, width, height):
+            reason = "full_page_backing"
+        elif raster_text_overlap(raster.bbox, text_mask) > max_text_overlap:
+            reason = "text_overlap"
+        else:
+            for shape in control_shapes:
+                control_overlap = intersection_area(raster.bbox, shape.bbox)
+                control_min_overlap = control_overlap / max(1, min(raster.bbox.area, shape.bbox.area))
+                control_edge_distance = raster_edge_distance(raster.bbox, shape.bbox)
+                if ioa(raster.bbox, shape.bbox) >= 0.18:
+                    reason = "vector_control_owned_background"
+                    break
+                if control_min_overlap >= 0.18 and control_edge_distance <= max(8, min(shape.bbox.width, shape.bbox.height) // 6):
+                    reason = "vector_control_edge_residual"
+                    break
+                if is_surface_edge_residual(raster.bbox, shape.bbox):
+                    reason = "vector_control_edge_residual"
+                    break
+        if not reason:
+            for shape in vector_shapes:
+                overlap = intersection_area(raster.bbox, shape.bbox)
+                if overlap <= 0:
+                    continue
+                min_overlap = overlap / max(1, min(raster.bbox.area, shape.bbox.area))
+                close_to_shape_edge = raster_edge_distance(raster.bbox, shape.bbox) <= max(6, min(shape.bbox.width, shape.bbox.height) // 8)
+                if ioa(raster.bbox, shape.bbox) >= 0.86 and raster.bbox.area <= shape.bbox.area * 1.20:
+                    reason = "duplicate_vector_surface"
+                    break
+                if min_overlap >= 0.22 and close_to_shape_edge:
+                    reason = "vector_surface_edge_residual"
+                    break
+                if is_surface_edge_residual(raster.bbox, shape.bbox):
+                    reason = "vector_surface_edge_residual"
+                    break
+        if reason:
+            rejected.append(
+                {
+                    "kind": "raster_fallback",
+                    "bbox": raster.bbox.to_dict(),
+                    "reason": reason,
+                    "scores": raster.scores,
+                }
+            )
+            continue
+        accepted.append(raster)
+
+    return nms_candidates(accepted, overlap_threshold=0.50), rejected
+
+
+def raster_edge_distance(box: BBox, owner: BBox) -> int:
+    return min(
+        abs(box.x - owner.x),
+        abs(box.y - owner.y),
+        abs(box.x2 - owner.x2),
+        abs(box.y2 - owner.y2),
+    )
+
+
+def is_surface_edge_residual(box: BBox, owner: BBox) -> bool:
+    thin_limit = max(8, min(owner.width, owner.height) // 5)
+    if min(box.width, box.height) > thin_limit:
+        return False
+    edge_limit = max(8, min(owner.width, owner.height) // 5)
+    if raster_edge_distance(box, owner) > edge_limit:
+        return False
+    x_overlap = max(0, min(box.x2, owner.x2) - max(box.x, owner.x))
+    y_overlap = max(0, min(box.y2, owner.y2) - max(box.y, owner.y))
+    horizontal_projection = x_overlap / max(1, min(box.width, owner.width))
+    vertical_projection = y_overlap / max(1, min(box.height, owner.height))
+    return horizontal_projection >= 0.35 or vertical_projection >= 0.35
+
+
+def raster_text_overlap(box: BBox, text_mask: np.ndarray) -> float:
+    if box.area <= 0 or not text_mask.size:
+        return 0.0
+    region = text_mask[box.y : box.y2, box.x : box.x2]
+    return float(region.mean()) if region.size else 0.0
+
+
+def crop_v2_raster_assets(image: Image.Image, candidates: list[Candidate], output_dir: Path) -> dict[str, str]:
+    assets_dir = output_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    asset_refs: dict[str, str] = {}
+    for index, candidate in enumerate(candidates, start=1):
+        layer_id = f"raster_{index:04d}"
+        filename = f"{layer_id}.png"
+        crop = image.crop((candidate.bbox.x, candidate.bbox.y, candidate.bbox.x2, candidate.bbox.y2)).convert("RGBA")
+        crop.save(assets_dir / filename)
+        asset_refs[candidate.id] = f"assets/{filename}"
+    return asset_refs
+
+
+def build_v2_layer_stack(
+    image_path: Path,
+    ocr_path: Path | None,
+    image: Image.Image,
+    rgb: np.ndarray,
+    ocr_blocks: list[OCRBlock],
+    surfaces: list[VectorSurfaceCandidate],
+    raster_candidates: list[Candidate],
+    asset_refs: dict[str, str],
+    ownership: dict[str, dict[str, Any]],
+    rejected: list[dict[str, Any]],
+    thresholds: dict[str, Any],
+) -> dict[str, Any]:
+    layers: list[dict[str, Any]] = []
+    vector_shapes = [candidate_from_surface(surface, index) for index, surface in enumerate(surfaces, start=1)]
+
+    for index, shape in enumerate(vector_shapes, start=1):
+        radius = int(shape.scores.get("cornerRadius", 0))
+        role = str(shape.scores.get("role", ""))
+        layers.append(
+            {
+                "id": f"shape_{index:04d}",
+                "type": "shape",
+                "bbox": shape.bbox.to_dict(),
+                "z": (1200 if role == "container_surface" else 1600) + index,
+                "style": {
+                    "fill": color_hex(
+                        np.array(
+                            [
+                                shape.scores.get("fillR", 255.0),
+                                shape.scores.get("fillG", 255.0),
+                                shape.scores.get("fillB", 255.0),
+                            ],
+                            dtype=np.uint8,
+                        )
+                    ),
+                    **({"cornerRadius": radius} if radius > 0 else {}),
+                },
+                "scores": shape.scores,
+                "reason": shape.reason,
+                "sourceIds": [shape.id, *[str(item) for item in shape.scores.get("containedTextIds", [])]],
+            }
+        )
+
+    for index, raster in enumerate(raster_candidates, start=1):
+        layers.append(
+            {
+                "id": f"raster_{index:04d}",
+                "type": "raster",
+                "bbox": raster.bbox.to_dict(),
+                "z": 2200 + index,
+                "asset": asset_refs.get(raster.id, ""),
+                "scores": raster.scores,
+                "ownership": ownership.get(raster.id, {}),
+                "reason": raster.reason,
+                "sourceIds": [raster.id],
+            }
+        )
+
+    for index, block in enumerate(ocr_blocks, start=1):
+        layers.append(
+            {
+                "id": block.id or f"text_{index:04d}",
+                "type": "text",
+                "bbox": block.bbox.to_dict(),
+                "z": 3200 + index,
+                "text": block.text,
+                "confidence": round(block.confidence, 4),
+                "reason": "ocr_authority",
+                "sourceIds": [block.id],
+            }
+        )
+
+    page_area = image.width * image.height
+    raw_text_overlap_raster = sum(
+        1 for item in raster_candidates if item.scores.get("textOverlap", 0.0) > thresholds["maxTextOverlap"]
+    )
+    raster_text_knockout = sum(1 for item in raster_candidates if ownership.get(item.id, {}).get("textKnockout"))
+    covered_text_blocks = sum(int(ownership.get(item.id, {}).get("coveredTextBlockCount", 0)) for item in raster_candidates)
+    missing_assets = sum(1 for item in raster_candidates if not asset_refs.get(item.id))
+    page_background = color_hex(estimate_background_color(rgb))
+
+    return {
+        "version": "layer_stack.v2",
+        "sourceImage": str(image_path),
+        "ocr": str(ocr_path) if ocr_path else "",
+        "canvas": {"width": image.width, "height": image.height},
+        "pageBackground": page_background,
+        "layers": sorted(layers, key=lambda item: item["z"]),
+        "diagnostics": {
+            "layerCount": len(layers),
+            "textLayerCount": len(ocr_blocks),
+            "rasterLayerCount": len(raster_candidates),
+            "shapeLayerCount": len(vector_shapes),
+            "surfaceShapeLayerCount": len(vector_shapes),
+            "vectorSurfaceShapeLayerCount": len(vector_shapes),
+            "controlSurfaceShapeLayerCount": sum(1 for item in vector_shapes if item.scores.get("role") == "control_surface"),
+            "containerSurfaceShapeLayerCount": sum(1 for item in vector_shapes if item.scores.get("role") == "container_surface"),
+            "pageBackground": page_background,
+            "rejectedCandidateCount": len(rejected),
+            "fullPageVisibleRaster": sum(1 for item in raster_candidates if is_full_page_backing(item.bbox, image.width, image.height)),
+            "tinyRasterFragments": sum(1 for item in raster_candidates if item.bbox.area < 400),
+            "textOverlapRaster": sum(1 for item in raster_candidates if ownership.get(item.id, {}).get("visibleTextOwnershipConflict")),
+            "rawTextOverlapRaster": raw_text_overlap_raster,
+            "rasterTextKnockoutCount": raster_text_knockout,
+            "rasterCoveredTextBlockCount": covered_text_blocks,
+            "missingAssetCount": missing_assets,
+            "pageArea": page_area,
+        },
+        "thresholds": thresholds,
+        "rejected": rejected[:300],
+    }
+
+
+def build_v2_draft_runtime_dsl(layer_stack: dict[str, Any], rgb: np.ndarray) -> dict[str, Any]:
+    children: list[dict[str, Any]] = []
+    assets: list[dict[str, Any]] = []
+
+    for layer in sorted(layer_stack["layers"], key=lambda item: (item["z"], item["bbox"]["y"], item["bbox"]["x"], item["id"])):
+        bbox = layer["bbox"]
+        layer_type = layer["type"]
+        node: dict[str, Any] = {
+            "id": layer["id"],
+            "type": "image" if layer_type == "raster" else layer_type,
+            "name": v2_layer_name(layer),
+            "bbox": bbox,
+            "z": layer["z"],
+            "meta": {
+                "source": "psd_like_v2_vector_surface",
+                "reason": layer.get("reason", ""),
+                "sourceIds": layer.get("sourceIds", []),
+                "role": layer.get("scores", {}).get("role", ""),
+                "confidence": layer.get("scores", {}).get("confidence", layer.get("confidence", 1.0)),
+            },
+        }
+        if layer_type == "raster":
+            asset_id = f"asset_{layer['id']}"
+            node["image"] = {"assetId": asset_id, "mode": "fill"}
+            node["meta"]["ownership"] = layer.get("ownership", {})
+            assets.append(
+                {
+                    "assetId": asset_id,
+                    "type": "image",
+                    "url": layer.get("asset", ""),
+                    "path": layer.get("asset", ""),
+                    "format": "png",
+                    "width": bbox["width"],
+                    "height": bbox["height"],
+                    "meta": {"sourceLayerId": layer["id"]},
+                }
+            )
+        elif layer_type == "shape":
+            node["style"] = layer.get("style", {})
+            node["meta"]["containedTextIds"] = layer.get("scores", {}).get("containedTextIds", [])
+        elif layer_type == "text":
+            text = str(layer.get("text", ""))
+            if not text.strip():
+                continue
+            node["text"] = {"characters": text}
+            box = BBox(int(bbox["x"]), int(bbox["y"]), int(bbox["width"]), int(bbox["height"]))
+            node["style"] = {
+                "fontSize": max(8, min(96, round(box.height * 0.8))),
+                "fontWeight": 400,
+                "color": sample_text_color(rgb, box),
+            }
+        children.append(node)
+
+    canvas = layer_stack["canvas"]
+    return {
+        "version": "1.0",
+        "kind": "draft_runtime",
+        "taskId": "psd_like_v2_experiment",
+        "page": {
+            "name": "PSD-like v2 Draft Experiment",
+            "width": canvas["width"],
+            "height": canvas["height"],
+            "background": str(layer_stack.get("pageBackground") or color_hex(estimate_background_color(rgb))),
+        },
+        "root": {
+            "id": "root",
+            "type": "frame",
+            "name": "PSD-like v2 Draft",
+            "bbox": {"x": 0, "y": 0, "width": canvas["width"], "height": canvas["height"]},
+            "children": children,
+        },
+        "assets": assets,
+        "meta": {
+            "pipeline": "psd_like_v2_vector_surface_experiment",
+            "sourceImage": layer_stack.get("sourceImage", ""),
+            "diagnostics": layer_stack.get("diagnostics", {}),
+        },
+    }
+
+
+def v2_layer_name(layer: dict[str, Any]) -> str:
+    if layer["type"] == "text":
+        text = str(layer.get("text", "")).strip()
+        return text[:32] if text else layer["id"]
+    if layer["type"] == "raster":
+        return f"Raster {layer['id']}"
+    role = str(layer.get("scores", {}).get("role", "surface"))
+    return f"Vector {role} {layer['id']}"
+
+
+def write_v2_ownership_report(path: Path, layer_stack: dict[str, Any]) -> None:
+    raster_layers = [layer for layer in layer_stack["layers"] if layer["type"] == "raster"]
+    shape_layers = [layer for layer in layer_stack["layers"] if layer["type"] == "shape"]
+    report = {
+        "version": "psd_like_v2_ownership_report.v1",
+        "diagnostics": layer_stack["diagnostics"],
+        "vectorShapes": [
+            {
+                "id": layer["id"],
+                "bbox": layer["bbox"],
+                "role": layer.get("scores", {}).get("role", ""),
+                "containedTextIds": layer.get("scores", {}).get("containedTextIds", []),
+                "reason": layer.get("reason", ""),
+            }
+            for layer in shape_layers
+        ],
+        "rasterOwnership": [
+            {
+                "id": layer["id"],
+                "bbox": layer["bbox"],
+                "asset": layer.get("asset", ""),
+                "ownership": layer.get("ownership", {}),
+                "reason": layer.get("reason", ""),
+            }
+            for layer in raster_layers
+        ],
+    }
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     image_path = Path(args.image).expanduser().resolve()
     output_dir = Path(args.out).expanduser().resolve()
@@ -448,7 +874,55 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     rgb = np.asarray(image)
     ocr_blocks = load_ocr_blocks(ocr_path, image.width, image.height, args.ocr_min_confidence)
     text_mask = build_text_mask(image.width, image.height, ocr_blocks, args.text_padding)
+    text_knockout_mask = build_text_knockout_mask(rgb, ocr_blocks)
     surfaces = extract_vector_surfaces(rgb, ocr_blocks, text_mask, min_area=args.vector_min_area)
+    accepted_surfaces = select_vector_surfaces(surfaces, image.width, image.height)
+    vector_shapes = [candidate_from_surface(surface, index) for index, surface in enumerate(accepted_surfaces, start=1)]
+
+    maps = compute_tile_maps(rgb, text_mask, args.tile_size)
+    raw_raster_candidates, raster_rejected = build_raster_candidates(
+        maps=maps,
+        text_mask=text_mask,
+        ocr_blocks=ocr_blocks,
+        width=image.width,
+        height=image.height,
+        tile_size=args.tile_size,
+        threshold=args.raster_threshold,
+        min_area=args.raster_min_area,
+        max_text_overlap=args.max_text_overlap,
+    )
+    raster_candidates, ownership_rejected = filter_raster_fallbacks(
+        raw_raster_candidates,
+        vector_shapes,
+        text_knockout_mask,
+        image.width,
+        image.height,
+        args.max_text_overlap,
+    )
+    ownership = build_raster_ownership(raster_candidates, ocr_blocks, text_knockout_mask)
+    asset_refs = crop_v2_raster_assets(image, raster_candidates, output_dir)
+    thresholds = {
+        "tileSize": args.tile_size,
+        "rasterThreshold": args.raster_threshold,
+        "rasterMinArea": args.raster_min_area,
+        "vectorMinArea": args.vector_min_area,
+        "maxTextOverlap": args.max_text_overlap,
+        "ocrMinConfidence": args.ocr_min_confidence,
+    }
+    layer_stack = build_v2_layer_stack(
+        image_path=image_path,
+        ocr_path=ocr_path,
+        image=image,
+        rgb=rgb,
+        ocr_blocks=ocr_blocks,
+        surfaces=accepted_surfaces,
+        raster_candidates=raster_candidates,
+        asset_refs=asset_refs,
+        ownership=ownership,
+        rejected=raster_rejected + ownership_rejected,
+        thresholds=thresholds,
+    )
+    draft_runtime = build_v2_draft_runtime_dsl(layer_stack, rgb)
 
     artifact = {
         "version": "vector_surfaces.v1",
@@ -456,11 +930,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "ocr": str(ocr_path) if ocr_path else "",
         "canvas": {"width": image.width, "height": image.height},
         "surfaces": [surface_to_dict(surface) for surface in surfaces],
+        "acceptedSurfaceIds": [surface.id for surface in accepted_surfaces],
     }
     (output_dir / "vector_surfaces.v1.json").write_text(json.dumps(artifact, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     write_surface_overlay(image, surfaces, ocr_blocks, output_dir / "surface_overlay.png")
     write_surface_diagnostics(output_dir / "surface_diagnostics.md", surfaces, image, ocr_blocks)
-    return artifact
+    (output_dir / "layer_stack.v2.json").write_text(json.dumps(layer_stack, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (output_dir / "draft_runtime.v2.dsl.v1_0.json").write_text(
+        json.dumps(draft_runtime, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    write_preview_html(output_dir / "preview.v2.html", draft_runtime)
+    write_preview_report(output_dir / "preview_report.v2.md", draft_runtime, layer_stack)
+    write_draft_preview_png(output_dir / "draft_preview.v2.png", draft_runtime, output_dir)
+    draw_overlay(image, ocr_blocks, raster_candidates, vector_shapes, output_dir / "overlay.v2.png")
+    write_v2_ownership_report(output_dir / "ownership_report.v2.json", layer_stack)
+    return layer_stack
 
 
 def parse_args() -> argparse.Namespace:
@@ -472,15 +957,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text-padding", type=int, default=3)
     parser.add_argument("--ocr-min-confidence", type=float, default=0.70)
     parser.add_argument("--vector-min-area", type=int, default=480)
+    parser.add_argument("--tile-size", type=int, default=8)
+    parser.add_argument("--raster-threshold", type=float, default=0.42)
+    parser.add_argument("--raster-min-area", type=int, default=512)
+    parser.add_argument("--max-text-overlap", type=float, default=0.04)
     return parser.parse_args()
 
 
 def main() -> None:
-    artifact = run(parse_args())
+    layer_stack = run(parse_args())
+    diagnostics = layer_stack["diagnostics"]
     print(
         "PSD-like v2 vector surface: "
-        f"surfaces={len(artifact.get('surfaces', []))} "
-        f"out={Path(artifact.get('sourceImage', '')).name}"
+        f"text={diagnostics['textLayerCount']} "
+        f"shape={diagnostics['shapeLayerCount']} "
+        f"raster={diagnostics['rasterLayerCount']} "
+        f"rejected={diagnostics['rejectedCandidateCount']} "
+        f"out={Path(layer_stack.get('sourceImage', '')).name}"
     )
 
 

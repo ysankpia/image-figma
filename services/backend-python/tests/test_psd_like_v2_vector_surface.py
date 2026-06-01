@@ -1,10 +1,15 @@
+import argparse
+import json
+
 import numpy as np
 from PIL import Image, ImageDraw
 
-from tools.psd_like_layer_decomposition_experiment import BBox, OCRBlock, build_text_mask
+from tools.psd_like_layer_decomposition_experiment import BBox, Candidate, OCRBlock, build_text_mask
 from tools.psd_like_v2_vector_surface_experiment import (
     extract_vector_surfaces,
+    filter_raster_fallbacks,
     infer_corner_radius,
+    run,
 )
 
 
@@ -87,3 +92,78 @@ def test_corner_radius_inference_distinguishes_round_and_square():
 
     assert rounded_radius >= 8
     assert square_radius == 0
+
+
+def test_v2_run_outputs_shape_and_text_for_button_without_button_asset(tmp_path):
+    image = Image.new("RGB", (260, 180), (245, 245, 245))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((54, 62, 206, 112), radius=18, fill=(38, 120, 244))
+    draw.rectangle((103, 78, 157, 96), fill=(255, 255, 255))
+    image_path = tmp_path / "button.png"
+    image.save(image_path)
+    ocr_path = tmp_path / "ocr.json"
+    ocr_path.write_text(
+        json.dumps(
+            {
+                "version": "ocr_blocks.v1",
+                "blocks": [
+                    {
+                        "id": "text_0001",
+                        "text": "Submit",
+                        "bbox": {"x": 103, "y": 78, "width": 54, "height": 18},
+                        "confidence": 0.99,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    layer_stack = run(
+        argparse.Namespace(
+            image=str(image_path),
+            ocr=str(ocr_path),
+            out=str(tmp_path / "out"),
+            allow_missing_ocr=False,
+            text_padding=3,
+            ocr_min_confidence=0.70,
+            vector_min_area=480,
+            tile_size=8,
+            raster_threshold=0.42,
+            raster_min_area=512,
+            max_text_overlap=0.04,
+        )
+    )
+    dsl = json.loads((tmp_path / "out" / "draft_runtime.v2.dsl.v1_0.json").read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["shapeLayerCount"] == 1
+    assert layer_stack["diagnostics"]["rasterLayerCount"] == 0
+    assert layer_stack["diagnostics"]["textLayerCount"] == 1
+    assert dsl["assets"] == []
+    assert [node["type"] for node in dsl["root"]["children"]].count("shape") == 1
+    assert [node["type"] for node in dsl["root"]["children"]].count("text") == 1
+
+
+def test_raster_fallback_rejects_vector_owned_control_background():
+    text_mask = np.zeros((180, 260), dtype=bool)
+    control_shape = Candidate(
+        id="shape_surface_0001",
+        kind="shape",
+        bbox=BBox(54, 62, 152, 50),
+        score=0.95,
+        scores={"role": "control_surface"},
+        reason="vector_surface",
+    )
+    raster = Candidate(
+        id="raster_0001",
+        kind="raster",
+        bbox=BBox(60, 68, 120, 32),
+        score=0.8,
+        scores={"textOverlap": 0.0},
+        reason="high_texture_low_text_overlap",
+    )
+
+    accepted, rejected = filter_raster_fallbacks([raster], [control_shape], text_mask, 260, 180, 0.04)
+
+    assert accepted == []
+    assert rejected[0]["reason"] == "vector_control_owned_background"
