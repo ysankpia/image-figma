@@ -202,7 +202,7 @@ func appendVisionImageCandidates(image contract.ImageMeta, doc *visiondetector.D
 		}
 		switch candidate.Role {
 		case visiondetector.RoleBackground:
-			if !canEmitVisionBackground(candidate, box, layers) {
+			if !canEmitVisionBackground(image, candidate, box, layers) {
 				item.State = contract.DecisionSuppress
 				item.Reason = "vision_background_rejected"
 				evidenceItems = append(evidenceItems, item)
@@ -317,11 +317,15 @@ func canEmitVisionImage(image contract.ImageMeta, candidate visiondetector.Candi
 	return true
 }
 
-func canEmitVisionBackground(candidate visiondetector.Candidate, box geometry.Rect, layers []contract.Layer) bool {
+func canEmitVisionBackground(image contract.ImageMeta, candidate visiondetector.Candidate, box geometry.Rect, layers []contract.Layer) bool {
 	if box.Empty() || candidate.Confidence < 0.45 {
 		return false
 	}
 	if box.Area() < 200 {
+		return false
+	}
+	imageArea := max(1, image.Width*image.Height)
+	if box.Area()*100 >= imageArea*85 {
 		return false
 	}
 	return true

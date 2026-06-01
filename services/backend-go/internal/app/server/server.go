@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/draft-preview", s.handleDraftPreview)
+	mux.HandleFunc("/api/draft-preview/batch", s.handleDraftPreviewBatch)
 	mux.HandleFunc("/api/draft-preview/", s.handleDraftPreviewTask)
 	return withCORS(mux)
 }
@@ -122,6 +123,90 @@ func (s *Server) handleDraftPreview(w http.ResponseWriter, r *http.Request) {
 			"mimeType": "image/png",
 			"size":     len(data),
 		},
+	}})
+}
+
+func (s *Server) handleDraftPreviewBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.", "draft_preview_batch", "")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, s.config.MaxUploadBytes*20)
+	if err := r.ParseMultipartForm(s.config.MaxUploadBytes * 20); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BATCH_UPLOAD", "Batch upload is too large or invalid.", "draft_preview_batch", "")
+		return
+	}
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		writeError(w, http.StatusBadRequest, "NO_FILES", "No files provided. Use field name 'files'.", "draft_preview_batch", "")
+		return
+	}
+	if len(files) > 20 {
+		writeError(w, http.StatusBadRequest, "TOO_MANY_FILES", "Maximum 20 files per batch.", "draft_preview_batch", "")
+		return
+	}
+
+	type batchItem struct {
+		TaskID   string `json:"taskId"`
+		FileName string `json:"filename"`
+		Size     int    `json:"size"`
+		Status   string `json:"status"`
+		Error    string `json:"error,omitempty"`
+	}
+	items := make([]batchItem, 0, len(files))
+
+	for _, fh := range files {
+		file, err := fh.Open()
+		if err != nil {
+			items = append(items, batchItem{FileName: fh.Filename, Status: "rejected", Error: "cannot open file"})
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(file, s.config.MaxUploadBytes+1))
+		file.Close()
+		if err != nil || int64(len(data)) > s.config.MaxUploadBytes {
+			items = append(items, batchItem{FileName: fh.Filename, Status: "rejected", Error: "file too large"})
+			continue
+		}
+		if !bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
+			items = append(items, batchItem{FileName: fh.Filename, Status: "rejected", Error: "not a PNG file"})
+			continue
+		}
+		if _, err := png.DecodeConfig(bytes.NewReader(data)); err != nil {
+			items = append(items, batchItem{FileName: fh.Filename, Status: "rejected", Error: "invalid PNG dimensions"})
+			continue
+		}
+
+		taskID := newTaskID()
+		taskRoot := s.paths.TaskRoot(taskID)
+		if err := os.MkdirAll(taskRoot, 0o755); err != nil {
+			items = append(items, batchItem{TaskID: taskID, FileName: fh.Filename, Status: "rejected", Error: "storage error"})
+			continue
+		}
+		inputPath := filepath.Join(taskRoot, safeFileName(fh.Filename))
+		if err := os.WriteFile(inputPath, data, 0o644); err != nil {
+			items = append(items, batchItem{TaskID: taskID, FileName: fh.Filename, Status: "rejected", Error: "save error"})
+			continue
+		}
+
+		now := time.Now().UTC()
+		task := &apptask.Task{
+			ID:        taskID,
+			Status:    apptask.StatusQueued,
+			Stage:     apptask.StageDraftQueued,
+			Progress:  1,
+			Message:   "Draft pipeline queued.",
+			OutputDir: filepath.Join(taskRoot, "compile"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		s.storeTask(task)
+		go s.runTask(taskID, inputPath, task.OutputDir)
+		items = append(items, batchItem{TaskID: taskID, FileName: fh.Filename, Size: len(data), Status: "queued"})
+	}
+
+	writeJSON(w, http.StatusOK, apiSuccess{Success: true, Data: map[string]any{
+		"total": len(items),
+		"tasks": items,
 	}})
 }
 
