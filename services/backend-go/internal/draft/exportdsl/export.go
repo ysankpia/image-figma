@@ -65,9 +65,10 @@ func Export(taskID string, graph contract.Document) Document {
 		Kind:    Kind,
 		TaskID:  taskID,
 		Page: Page{
-			Name:   "Draft",
-			Width:  graph.Image.Width,
-			Height: graph.Image.Height,
+			Name:       "Draft",
+			Width:      graph.Image.Width,
+			Height:     graph.Image.Height,
+			Background: graph.Image.BackgroundColor,
 		},
 		Assets: assets,
 		Root:   root,
@@ -107,6 +108,19 @@ func nodeFromLayer(layer contract.Layer) Node {
 	}
 	if layer.Text != nil {
 		node.Text = &Text{Characters: layer.Text.Characters}
+		style := map[string]any{}
+		if layer.Text.FontSize > 0 {
+			style["fontSize"] = layer.Text.FontSize
+		}
+		if layer.Text.Color != "" {
+			style["color"] = layer.Text.Color
+		}
+		if layer.Text.FontWeight > 0 {
+			style["fontWeight"] = layer.Text.FontWeight
+		}
+		if len(style) > 0 {
+			node.Style = style
+		}
 	}
 	if layer.Raster != nil {
 		node.Image = &Image{AssetID: layer.Raster.AssetID, Mode: layer.Raster.Mode}

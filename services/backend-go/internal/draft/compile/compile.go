@@ -120,9 +120,10 @@ func Run(options Options) (Result, error) {
 
 	graph, err := assemble.Build(assemble.Input{
 		Image: contract.ImageMeta{
-			Path:   options.InputPath,
-			Width:  m29Doc.Image.Width,
-			Height: m29Doc.Image.Height,
+			Path:            options.InputPath,
+			Width:           m29Doc.Image.Width,
+			Height:          m29Doc.Image.Height,
+			BackgroundColor: m29Doc.Diagnostics.BackgroundColor,
 		},
 		Tokens:   tokenDoc,
 		Detector: detectorDoc,

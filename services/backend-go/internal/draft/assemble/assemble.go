@@ -104,7 +104,11 @@ func Build(input Input) (contract.Document, error) {
 			}
 			layer := baseLayer(nextLayer, contract.LayerText, box, 30_000+nextLayer, token)
 			layer.Name = nameForLayer(layer.Kind, nextLayer)
-			layer.Text = &contract.Text{Characters: text}
+			layer.Text = &contract.Text{
+				Characters: text,
+				FontSize:   estimateFontSize(box.Height),
+				Color:      firstNonEmpty(token.Measurements.MeanColor, "#333333"),
+			}
 			layer.Decision.BBoxAuthority = contract.BBoxAuthorityOCR
 			layers = append(layers, layer)
 			nextLayer++
@@ -366,6 +370,17 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func estimateFontSize(bboxHeight int) int {
+	size := int(math.Round(float64(bboxHeight) / 1.25))
+	if size < 8 {
+		return 8
+	}
+	if size > 120 {
+		return 120
+	}
+	return size
 }
 
 func max(a, b int) int {

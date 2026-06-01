@@ -49,10 +49,11 @@ type Document struct {
 }
 
 type ImageMeta struct {
-	Path   string `json:"path,omitempty"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	SHA256 string `json:"sha256,omitempty"`
+	Path            string `json:"path,omitempty"`
+	Width           int    `json:"width"`
+	Height          int    `json:"height"`
+	SHA256          string `json:"sha256,omitempty"`
+	BackgroundColor string `json:"backgroundColor,omitempty"`
 }
 
 type Layer struct {
@@ -74,7 +75,11 @@ type Layer struct {
 }
 
 type Text struct {
-	Characters string `json:"characters"`
+	Characters string  `json:"characters"`
+	FontSize   int     `json:"fontSize,omitempty"`
+	Color      string  `json:"color,omitempty"`
+	FontWeight int     `json:"fontWeight,omitempty"`
+	LineHeight float64 `json:"lineHeight,omitempty"`
 }
 
 type Raster struct {
