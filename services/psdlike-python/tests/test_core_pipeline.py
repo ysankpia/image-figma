@@ -587,6 +587,69 @@ def test_control_owned_shape_fragment_is_suppressed() -> None:
     assert suppressed[0]["reason"] == "control_surface_parent_shape_fragment"
 
 
+def test_control_adjacent_background_sliver_is_suppressed() -> None:
+    control = Candidate(
+        "control",
+        "shape",
+        BBox(331, 1362, 80, 37),
+        0.9,
+        {"confirmedControlSurface": 1.0, "fillR": 34.0, "fillG": 92.0, "fillB": 247.0},
+        "ocr_anchored_control_surface",
+    )
+    sliver = Candidate(
+        "sliver",
+        "shape",
+        BBox(400, 1352, 24, 56),
+        0.4,
+        {
+            "dominant": 0.89,
+            "texture": 0.26,
+            "edge": 0.18,
+            "entropy": 0.12,
+            "textOverlap": 0.0,
+        },
+        "low_texture_solid_region",
+    )
+
+    kept, suppressed = suppress_control_owned_shapes([sliver, control])
+
+    assert [item.id for item in kept] == ["control"]
+    assert suppressed[0]["kind"] == "control_owned_shape_suppressed"
+    assert suppressed[0]["reason"] == "control_adjacent_background_sliver"
+
+
+def test_adjacent_real_control_like_shape_is_not_suppressed_as_sliver() -> None:
+    control = Candidate(
+        "control",
+        "shape",
+        BBox(40, 40, 80, 36),
+        0.9,
+        {"confirmedControlSurface": 1.0, "fillR": 34.0, "fillG": 92.0, "fillB": 247.0},
+        "ocr_anchored_control_surface",
+    )
+    sibling = Candidate(
+        "sibling",
+        "shape",
+        BBox(124, 40, 72, 36),
+        0.8,
+        {
+            "dominant": 0.88,
+            "texture": 0.16,
+            "edge": 0.16,
+            "entropy": 0.12,
+            "textOverlap": 0.0,
+            "boundaryStrongSideCount": 4.0,
+            "containedTextBlockCount": 1.0,
+        },
+        "low_texture_solid_region",
+    )
+
+    kept, suppressed = suppress_control_owned_shapes([control, sibling])
+
+    assert [item.id for item in kept] == ["control", "sibling"]
+    assert suppressed == []
+
+
 def test_container_parent_shape_is_suppressed_by_sibling_surfaces() -> None:
     parent = Candidate("parent", "shape", BBox(24, 80, 360, 120), 0.5, {}, "low_texture_solid_region")
     children = [

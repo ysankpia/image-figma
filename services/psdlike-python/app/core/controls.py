@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from .schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
+
 # Mechanical migration from PSD-like V1 oracle. Keep behavior changes out of this stage.
 
 
@@ -1631,7 +1633,7 @@ def suppress_control_owned_shapes(shape_candidates: list[Candidate]) -> tuple[li
         if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
             kept.append(shape)
             continue
-        owner = best_control_owner(shape, controls)
+        owner = best_shape_control_owner(shape, controls)
         if owner is None:
             kept.append(shape)
             continue
@@ -1654,6 +1656,46 @@ def suppress_control_owned_shapes(shape_candidates: list[Candidate]) -> tuple[li
             }
         )
     return kept, suppressed
+
+
+def best_shape_control_owner(shape: Candidate, control_shapes: list[Candidate]) -> Candidate | None:
+    best: tuple[float, Candidate] | None = None
+    for control in control_shapes:
+        shape_in_control = ioa(shape.bbox, control.bbox)
+        control_in_shape = ioa(control.bbox, shape.bbox)
+        overlap = iou(shape.bbox, control.bbox)
+        edge_score = adjacent_control_edge_score(shape.bbox, control.bbox)
+        score = max(shape_in_control, control_in_shape, overlap, edge_score)
+        if score <= 0:
+            continue
+        if best is None or score > best[0]:
+            best = (score, control)
+    return best[1] if best is not None else None
+
+
+def adjacent_control_edge_score(shape: BBox, control: BBox) -> float:
+    if shape.area <= 0 or control.area <= 0:
+        return 0.0
+    vertical_overlap = max(0, min(shape.y2, control.y2) - max(shape.y, control.y))
+    horizontal_overlap = max(0, min(shape.x2, control.x2) - max(shape.x, control.x))
+    vertical_ratio = vertical_overlap / max(1, min(shape.height, control.height))
+    horizontal_ratio = horizontal_overlap / max(1, min(shape.width, control.width))
+    margin = max(2, int(round(min(control.width, control.height) * 0.18)))
+    horizontal_touch = (
+        0 <= shape.x - control.x2 <= margin
+        or 0 <= control.x - shape.x2 <= margin
+        or intersection_area(shape, control) > 0
+    )
+    vertical_touch = (
+        0 <= shape.y - control.y2 <= margin
+        or 0 <= control.y - shape.y2 <= margin
+        or intersection_area(shape, control) > 0
+    )
+    if horizontal_touch and vertical_ratio >= 0.55:
+        return 0.36 + min(0.24, vertical_ratio * 0.24)
+    if vertical_touch and horizontal_ratio >= 0.55:
+        return 0.30 + min(0.20, horizontal_ratio * 0.20)
+    return 0.0
 
 
 def suppress_container_parent_shapes(shape_candidates: list[Candidate]) -> tuple[list[Candidate], list[dict[str, Any]]]:
@@ -1759,7 +1801,79 @@ def classify_control_owned_shape(shape: Candidate, control: Candidate) -> str:
         return "control_surface_internal_shape_fragment"
     if overlap >= 0.52 and control_shape_fill_distance(shape, control) <= 48.0:
         return "control_surface_duplicate_shape_fragment"
+    if is_control_adjacent_background_sliver(shape, control, shape_in_control, control_in_shape, overlap):
+        return "control_adjacent_background_sliver"
     return ""
+
+
+def is_control_adjacent_background_sliver(
+    shape: Candidate,
+    control: Candidate,
+    shape_in_control: float,
+    control_in_shape: float,
+    overlap: float,
+) -> bool:
+    if shape.reason != "low_texture_solid_region":
+        return False
+    if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+        return False
+    if shape.scores.get("textOverlap", 0.0) > 0.05:
+        return False
+    if shape.bbox.area <= 0 or control.bbox.area <= 0:
+        return False
+    area_ratio = shape.bbox.area / max(1, control.bbox.area)
+    if area_ratio > 0.55:
+        return False
+    if intersection_area(shape.bbox, control.bbox) <= 0:
+        return False
+    if shape_in_control < 0.10 and overlap < 0.06:
+        return False
+    if control_in_shape >= 0.36:
+        return False
+    if shape_like_independent_control(shape, control):
+        return False
+    if not is_background_sliver_like(shape, control):
+        return False
+    if max(shape_in_control, overlap, adjacent_control_edge_score(shape.bbox, control.bbox)) < 0.34:
+        return False
+    return True
+
+
+def is_background_sliver_like(shape: Candidate, control: Candidate) -> bool:
+    width_ratio = shape.bbox.width / max(1, control.bbox.width)
+    height_ratio = shape.bbox.height / max(1, control.bbox.height)
+    narrow = width_ratio <= 0.36 and height_ratio >= 0.55
+    flat = height_ratio <= 0.36 and width_ratio >= 0.55
+    small_residual = shape.bbox.area <= control.bbox.area * 0.32 and (width_ratio <= 0.45 or height_ratio <= 0.45)
+    if not (narrow or flat or small_residual):
+        return False
+    dominant = float(shape.scores.get("dominant", 0.0))
+    texture = float(shape.scores.get("texture", 1.0))
+    entropy = float(shape.scores.get("entropy", 1.0))
+    edge = float(shape.scores.get("edge", 1.0))
+    if dominant < 0.72:
+        return False
+    if texture > 0.42 or entropy > 0.32 or edge > 0.34:
+        return False
+    return True
+
+
+def shape_like_independent_control(shape: Candidate, control: Candidate) -> bool:
+    if shape.scores.get("surfaceRoleControl", 0.0) >= 1.0 or shape.scores.get("controlSurface", 0.0) >= 1.0:
+        return True
+    if shape.reason in {"ocr_anchored_control_surface", "model_assisted_control_surface", "editable_control_surface_from_raster"}:
+        return True
+    width_ratio = shape.bbox.width / max(1, control.bbox.width)
+    height_ratio = shape.bbox.height / max(1, control.bbox.height)
+    aspect = shape.bbox.width / max(1, shape.bbox.height)
+    comparable = 0.58 <= width_ratio <= 1.75 and 0.58 <= height_ratio <= 1.75
+    control_like_aspect = 1.1 <= aspect <= 14.0
+    has_control_evidence = (
+        shape.scores.get("boundaryStrongSideCount", 0.0) >= 2.0
+        or shape.scores.get("containedTextBlockCount", 0.0) >= 1.0
+        or shape.scores.get("relatedTextBlockCount", 0.0) >= 1.0
+    )
+    return comparable and control_like_aspect and has_control_evidence
 
 
 def extract_control_foreground_residuals(
