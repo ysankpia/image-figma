@@ -569,7 +569,7 @@ def test_ocr_anchored_short_text_wide_pill_recovers_surface_width():
 
     assert controls
     assert controls[0].bbox.width >= 110
-    assert controls[0].scores["outerRingDelta"] >= 18
+    assert controls[0].scores["outerRingSupportDelta"] >= 18
 
 
 def test_ocr_anchored_dark_button_allows_weaker_outer_boundary():
@@ -587,6 +587,25 @@ def test_ocr_anchored_dark_button_allows_weaker_outer_boundary():
     assert controls[0].scores["darkControlSurface"] == 1.0
     assert controls[0].scores["outerRingDelta"] < 18
     assert controls[0].scores["outerRingThreshold"] == 8.0
+
+
+def test_ocr_anchored_light_button_on_complex_dark_card_uses_text_support_surface():
+    image = Image.new("RGB", (320, 180), (8, 8, 8))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((24, 18, 296, 160), radius=18, fill=(7, 7, 7))
+    draw.text((64, 36), "7999", fill=(235, 208, 170))
+    draw.rounded_rectangle((68, 92, 252, 134), radius=21, fill=(226, 199, 161))
+    draw.rectangle((112, 104, 208, 124), fill=(22, 22, 22))
+    rgb = np.asarray(image)
+    block = OCRBlock(id="text_0001", text="立即购买", bbox=BBox(112, 100, 96, 28), confidence=0.99)
+    text_mask = build_text_mask(320, 180, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls
+    assert controls[0].bbox.width >= 130
+    assert controls[0].scores["fillLuminance"] > 150
+    assert controls[0].scores["outerRingSupportDelta"] >= 18
 
 
 def test_ocr_anchored_large_dark_background_does_not_become_control_surface():

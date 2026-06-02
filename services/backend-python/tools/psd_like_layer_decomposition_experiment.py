@@ -736,20 +736,121 @@ def merge_surface_and_shape_candidates(surface_candidates: list[Candidate], shap
     return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
 
 
-def control_surface_fill(rgb: np.ndarray, candidate: Candidate, text_mask: np.ndarray) -> tuple[np.ndarray, float, float]:
+def control_surface_fill(
+    rgb: np.ndarray,
+    candidate: Candidate,
+    text_mask: np.ndarray,
+    support_box: BBox | None = None,
+    text_box: BBox | None = None,
+) -> tuple[np.ndarray, float, float]:
     crop = rgb[candidate.bbox.y : candidate.bbox.y2, candidate.bbox.x : candidate.bbox.x2]
     if crop.size == 0:
         return np.array([255, 255, 255], dtype=np.uint8), 0.0, 0.0
     local_text = text_mask[candidate.bbox.y : candidate.bbox.y2, candidate.bbox.x : candidate.bbox.x2]
     if local_text.shape != crop.shape[:2]:
         local_text = np.zeros(crop.shape[:2], dtype=bool)
-    pixels = crop[~local_text]
-    if pixels.shape[0] < max(16, crop.shape[0] * crop.shape[1] // 8):
-        pixels = crop.reshape(-1, 3)
-    fill, coverage = dominant_cluster_stats(pixels.astype(np.uint8), bucket_size=20)
-    distances = np.linalg.norm(pixels.astype(np.float32) - fill.reshape(1, 3).astype(np.float32), axis=1)
+
+    fill_pixels = None
+    if text_box is not None:
+        support_pixels = control_surface_text_support_pixels(rgb, candidate.bbox, text_box, text_mask)
+        if support_pixels.shape[0] >= max(12, crop.shape[0] * crop.shape[1] // 36):
+            fill_pixels = support_pixels
+    if fill_pixels is None and support_box is not None:
+        support_mask = support_surface_mask(candidate.bbox, support_box, crop.shape[1], crop.shape[0])
+        support_pixels = crop[support_mask & ~local_text]
+        if support_pixels.shape[0] >= max(12, crop.shape[0] * crop.shape[1] // 24):
+            fill_pixels = support_pixels
+    if fill_pixels is None:
+        fill_pixels = crop[~local_text]
+    if fill_pixels.shape[0] < max(16, crop.shape[0] * crop.shape[1] // 8):
+        fill_pixels = crop.reshape(-1, 3)
+
+    fill, _ = dominant_cluster_stats(fill_pixels.astype(np.uint8), bucket_size=20)
+    measure_pixels = crop[~binary_dilate(local_text, iterations=1)]
+    if measure_pixels.shape[0] < max(16, crop.shape[0] * crop.shape[1] // 8):
+        measure_pixels = fill_pixels
+    distances = np.linalg.norm(measure_pixels.astype(np.float32) - fill.reshape(1, 3).astype(np.float32), axis=1)
+    coverage = float((distances <= 32.0).mean()) if distances.size else 0.0
     close_coverage = float((distances <= 64.0).mean()) if distances.size else 0.0
     return fill, coverage, close_coverage
+
+
+def control_surface_text_support_pixels(
+    rgb: np.ndarray,
+    candidate_box: BBox,
+    text_box: BBox,
+    text_mask: np.ndarray,
+) -> np.ndarray:
+    height, width, _ = rgb.shape
+    candidate = clamp_box(candidate_box, width, height)
+    if candidate is None:
+        return np.empty((0, 3), dtype=np.uint8)
+    y_pad = max(2, min(10, round(text_box.height * 0.24)))
+    x_pad = max(3, min(16, round(text_box.height * 0.42)))
+    vertical_band = (
+        max(candidate.y, text_box.y - y_pad),
+        min(candidate.y2, text_box.y2 + y_pad),
+    )
+    horizontal_band = (
+        max(candidate.x, text_box.x - x_pad),
+        min(candidate.x2, text_box.x2 + x_pad),
+    )
+
+    side_regions = [
+        BBox(candidate.x, vertical_band[0], max(0, text_box.x - candidate.x), max(0, vertical_band[1] - vertical_band[0])),
+        BBox(text_box.x2, vertical_band[0], max(0, candidate.x2 - text_box.x2), max(0, vertical_band[1] - vertical_band[0])),
+    ]
+    side_pixels = sample_regions_excluding_text(rgb, text_mask, side_regions)
+    if side_pixels.shape[0] >= max(12, candidate.area // 48):
+        return side_pixels
+
+    vertical_regions = [
+        BBox(horizontal_band[0], candidate.y, max(0, horizontal_band[1] - horizontal_band[0]), max(0, text_box.y - candidate.y)),
+        BBox(horizontal_band[0], text_box.y2, max(0, horizontal_band[1] - horizontal_band[0]), max(0, candidate.y2 - text_box.y2)),
+    ]
+    return sample_regions_excluding_text(rgb, text_mask, side_regions + vertical_regions)
+
+
+def sample_regions_excluding_text(rgb: np.ndarray, text_mask: np.ndarray, regions: list[BBox]) -> np.ndarray:
+    height, width, _ = rgb.shape
+    samples: list[np.ndarray] = []
+    for region in regions:
+        box = clamp_box(region, width, height)
+        if box is None or box.area <= 0:
+            continue
+        crop = rgb[box.y : box.y2, box.x : box.x2]
+        local_text = text_mask[box.y : box.y2, box.x : box.x2]
+        if local_text.shape != crop.shape[:2]:
+            local_text = np.zeros(crop.shape[:2], dtype=bool)
+        pixels = crop[~local_text]
+        if pixels.size:
+            samples.append(pixels.reshape(-1, 3))
+    if not samples:
+        return np.empty((0, 3), dtype=np.uint8)
+    return np.concatenate(samples, axis=0).astype(np.uint8)
+
+
+def support_surface_mask(candidate_box: BBox, support_box: BBox, width: int, height: int) -> np.ndarray:
+    x1 = max(0, min(width, support_box.x - candidate_box.x))
+    y1 = max(0, min(height, support_box.y - candidate_box.y))
+    x2 = max(0, min(width, support_box.x2 - candidate_box.x))
+    y2 = max(0, min(height, support_box.y2 - candidate_box.y))
+    mask = np.zeros((height, width), dtype=bool)
+    if x2 <= x1 or y2 <= y1:
+        return mask
+    mask[y1:y2, x1:x2] = True
+    return mask
+
+
+def ocr_support_box(text_box: BBox, candidate_box: BBox) -> BBox:
+    pad_x = max(4, min(18, round(text_box.height * 0.45)))
+    pad_y = max(3, min(12, round(text_box.height * 0.28)))
+    return BBox(
+        max(candidate_box.x, text_box.x - pad_x),
+        max(candidate_box.y, text_box.y - pad_y),
+        min(candidate_box.x2, text_box.x2 + pad_x) - max(candidate_box.x, text_box.x - pad_x),
+        min(candidate_box.y2, text_box.y2 + pad_y) - max(candidate_box.y, text_box.y - pad_y),
+    )
 
 
 def contained_text_blocks(candidate: Candidate, ocr_blocks: list[OCRBlock]) -> list[OCRBlock]:
@@ -1046,15 +1147,22 @@ def score_ocr_anchored_control_surface(
     if top_pad + bottom_pad < max(5, int(box.height * 0.10)):
         return False, {}, "not_enough_padding"
 
-    fill, fill_coverage, close_coverage = control_surface_fill(rgb, candidate, text_mask)
-    texture, entropy, edge_density = control_surface_local_complexity(rgb, box, text_mask)
+    support_box = ocr_support_box(block.bbox, box)
+    fill, fill_coverage, close_coverage = control_surface_fill(
+        rgb,
+        candidate,
+        text_mask,
+        support_box=support_box,
+        text_box=block.bbox,
+    )
+    texture, entropy, edge_density = control_surface_local_complexity(rgb, box, text_mask, fill=fill)
     if texture > 42.0 or entropy > 0.70 or edge_density > 0.20:
         return False, {}, "high_texture"
     if fill_coverage < 0.30 and close_coverage < 0.58:
         return False, {}, "unstable_fill"
 
-    ring_delta = control_surface_outer_ring_delta(rgb, box, fill)
-    if ring_delta is None:
+    ring_min_delta, ring_support_delta = control_surface_outer_ring_delta(rgb, box, fill)
+    if ring_min_delta is None or ring_support_delta is None:
         return False, {}, "missing_outer_ring"
     fill_luminance = relative_luminance(fill)
     dark_surface = (
@@ -1066,7 +1174,7 @@ def score_ocr_anchored_control_surface(
         and edge_density <= 0.22
     )
     ring_threshold = 8.0 if dark_surface else 18.0
-    if ring_delta < ring_threshold:
+    if ring_support_delta < ring_threshold:
         return False, {}, "weak_outer_boundary"
 
     text_contrast = control_text_contrast(rgb, [block], fill)
@@ -1076,7 +1184,7 @@ def score_ocr_anchored_control_surface(
     score = (
         0.42
         + min(0.22, close_coverage * 0.18)
-        + min(0.16, ring_delta / 260.0)
+        + min(0.16, ring_support_delta / 260.0)
         + min(0.14, text_contrast / 520.0)
         + min(0.08, aspect / 140.0)
         - min(0.12, texture / 800.0)
@@ -1090,7 +1198,8 @@ def score_ocr_anchored_control_surface(
         "aspect": round(float(aspect), 4),
         "fillCoverage": round(float(fill_coverage), 4),
         "closeFillCoverage": round(float(close_coverage), 4),
-        "outerRingDelta": round(float(ring_delta), 4),
+        "outerRingDelta": round(float(ring_min_delta), 4),
+        "outerRingSupportDelta": round(float(ring_support_delta), 4),
         "outerRingThreshold": round(float(ring_threshold), 4),
         "textContrast": round(float(text_contrast), 4),
         "fillLuminance": round(float(fill_luminance), 4),
@@ -1105,14 +1214,25 @@ def score_ocr_anchored_control_surface(
     return True, scores, ""
 
 
-def control_surface_local_complexity(rgb: np.ndarray, box: BBox, text_mask: np.ndarray) -> tuple[float, float, float]:
+def control_surface_local_complexity(
+    rgb: np.ndarray,
+    box: BBox,
+    text_mask: np.ndarray,
+    fill: np.ndarray | None = None,
+) -> tuple[float, float, float]:
     crop = rgb[box.y : box.y2, box.x : box.x2]
     if crop.size == 0:
         return 999.0, 1.0, 1.0
     local_text = text_mask[box.y : box.y2, box.x : box.x2]
     if local_text.shape != crop.shape[:2]:
         local_text = np.zeros(crop.shape[:2], dtype=bool)
-    pixels = crop[~binary_dilate(local_text, iterations=1)]
+    usable = ~binary_dilate(local_text, iterations=1)
+    if fill is not None:
+        distances = np.linalg.norm(crop.astype(np.float32) - fill.reshape(1, 1, 3).astype(np.float32), axis=2)
+        close_fill = distances <= 64.0
+        if int((usable & close_fill).sum()) >= max(12, crop.shape[0] * crop.shape[1] // 10):
+            usable &= close_fill
+    pixels = crop[usable]
     if pixels.shape[0] < max(12, crop.shape[0] * crop.shape[1] // 8):
         pixels = crop.reshape(-1, 3)
     texture = float(np.mean(np.std(pixels.astype(np.float32), axis=0))) if pixels.size else 999.0
@@ -1129,11 +1249,11 @@ def control_surface_local_complexity(rgb: np.ndarray, box: BBox, text_mask: np.n
     return texture, entropy, edge_density
 
 
-def control_surface_outer_ring_delta(rgb: np.ndarray, box: BBox, fill: np.ndarray) -> float | None:
+def control_surface_outer_ring_delta(rgb: np.ndarray, box: BBox, fill: np.ndarray) -> tuple[float | None, float | None]:
     height, width, _ = rgb.shape
     pad = max(2, min(5, box.height // 8))
     if box.x - pad < 0 or box.y - pad < 0 or box.x2 + pad > width or box.y2 + pad > height:
-        return None
+        return None, None
     strips = [
         rgb[box.y - pad : box.y, box.x : box.x2],
         rgb[box.y2 : box.y2 + pad, box.x : box.x2],
@@ -1143,10 +1263,11 @@ def control_surface_outer_ring_delta(rgb: np.ndarray, box: BBox, fill: np.ndarra
     deltas: list[float] = []
     for strip in strips:
         if strip.size == 0:
-            return None
+            return None, None
         color = dominant_cluster_color(strip.reshape(-1, 3).astype(np.uint8), bucket_size=24)
         deltas.append(color_distance(color, fill))
-    return float(min(deltas))
+    sorted_deltas = sorted(deltas)
+    return float(sorted_deltas[0]), float(sorted_deltas[1])
 
 
 def merge_control_surfaces(candidates: list[Candidate]) -> list[Candidate]:
