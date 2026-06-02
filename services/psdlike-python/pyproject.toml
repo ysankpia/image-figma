@@ -5,6 +5,7 @@ description = "Clean Python PSD-like Draft service"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
+    "httpx>=0.28.0",
     "uvicorn>=0.32.0",
     "python-multipart>=0.0.20",
     "pillow>=11.0.0",

@@ -38,12 +38,18 @@ def copy_input(src: Path, dst: Path) -> None:
 
 
 def write_error(task_id: str, exc: Exception) -> None:
+    write_error_payload(
+        task_id,
+        {
+            "taskId": task_id,
+            "status": "failed",
+            "errorType": type(exc).__name__,
+            "message": str(exc),
+        },
+    )
+
+
+def write_error_payload(task_id: str, payload: dict[str, Any]) -> None:
     root = task_dir(task_id)
     root.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = {
-        "taskId": task_id,
-        "status": "failed",
-        "errorType": type(exc).__name__,
-        "message": str(exc),
-    }
     (root / "error.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

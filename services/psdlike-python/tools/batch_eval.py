@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.config import get_settings
 from app.core.pipeline import PipelineOptions, run_pipeline
+from app.ocr_cache import ResolvedOCRArtifact, resolve_or_create_ocr_artifact
 from tools._eval_common import (
     InputCase,
     build_cases,
@@ -117,6 +119,10 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
         "duplicatePaths": [str(path) for path in case.duplicate_paths],
         "ocrPresent": False,
         "ocrTextCount": 0,
+        "ocrProvider": "",
+        "ocrCacheHit": False,
+        "ocrElapsedSeconds": 0,
+        "ocrArtifactPath": "",
         "ocrError": "",
         "modelEvidencePresent": False,
         "modelDetectionCount": 0,
@@ -135,9 +141,11 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
     except Exception as exc:
         return finish_failed_case(row, case_out, "IMAGE_LOAD_FAILURE", exc)
 
-    ocr_path = find_ocr_path(case, args)
+    ocr_resolution = resolve_case_ocr(case, case_out, args)
+    ocr_path = ocr_resolution.path
+    row.update(ocr_resolution.diagnostics)
     if ocr_path is None:
-        row["ocrError"] = "missing"
+        row["ocrError"] = row.get("ocrError") or "missing"
         if args.require_ocr:
             return finish_failed_case(row, case_out, "OCR_MISSING", FileNotFoundError(case.sha256))
     else:
@@ -157,6 +165,7 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
             options=PipelineOptions(tile_size=args.tile_size),
             task_id=case.case_id,
             model_evidence_path=find_model_evidence_path(case, args),
+            ocr_diagnostics=ocr_resolution.diagnostics,
         )
         layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
         diagnostics = layer_stack.get("diagnostics", {})
@@ -187,6 +196,11 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
                 "rawTextOverlapRaster": diagnostics.get("rawTextOverlapRaster", 0),
                 "rasterTextKnockoutCount": diagnostics.get("rasterTextKnockoutCount", 0),
                 "rasterCoveredTextBlockCount": diagnostics.get("rasterCoveredTextBlockCount", 0),
+                "ocrProvider": diagnostics.get("ocrProvider", row.get("ocrProvider", "")),
+                "ocrCacheHit": diagnostics.get("ocrCacheHit", row.get("ocrCacheHit", False)),
+                "ocrElapsedSeconds": diagnostics.get("ocrElapsedSeconds", row.get("ocrElapsedSeconds", 0)),
+                "ocrArtifactPath": diagnostics.get("ocrArtifactPath", row.get("ocrArtifactPath", "")),
+                "ocrError": diagnostics.get("ocrError", row.get("ocrError", "")),
                 "modelEvidencePresent": diagnostics.get("modelEvidencePresent", False),
                 "modelDetectionCount": diagnostics.get("modelDetectionCount", 0),
                 "modelControlDetectionCount": diagnostics.get("modelControlDetectionCount", 0),
@@ -212,6 +226,53 @@ def find_ocr_path(case: InputCase, args: argparse.Namespace) -> Path | None:
         return None
     path = Path(args.ocr_cache_dir).expanduser().resolve() / f"{case.sha256}.ocr_blocks.v1.json"
     return path if path.exists() else None
+
+
+def resolve_case_ocr(case: InputCase, case_out: Path, args: argparse.Namespace) -> ResolvedOCRArtifact:
+    cached = find_ocr_path(case, args)
+    if cached is not None:
+        data = read_ocr_artifact(cached)
+        blocks = data.get("blocks", []) if isinstance(data, dict) else []
+        return ResolvedOCRArtifact(
+            path=cached,
+            diagnostics={
+                "ocrProvider": data.get("provider") or data.get("meta", {}).get("provider") or "cache",
+                "ocrPresent": True,
+                "ocrTextCount": len(blocks) if isinstance(blocks, list) else 0,
+                "ocrCacheHit": True,
+                "ocrElapsedSeconds": 0.0,
+                "ocrError": "",
+                "ocrArtifactPath": str(cached),
+            },
+        )
+    if args.ocr_cache_dir:
+        return ResolvedOCRArtifact(
+            path=None,
+            diagnostics={
+                "ocrProvider": "",
+                "ocrPresent": False,
+                "ocrTextCount": 0,
+                "ocrCacheHit": False,
+                "ocrElapsedSeconds": 0.0,
+                "ocrError": "missing",
+                "ocrArtifactPath": "",
+            },
+        )
+    settings = get_settings()
+    return resolve_or_create_ocr_artifact(
+        image_path=case.source_path,
+        task_ocr_path=case_out / "input.ocr_blocks.v1.json",
+        settings=settings,
+        require_ocr=args.require_ocr,
+    )
+
+
+def read_ocr_artifact(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def find_model_evidence_path(case: InputCase, args: argparse.Namespace) -> Path | None:
@@ -293,12 +354,13 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
         f"- failed cases: {sum(1 for row in rows if row.get('failureTypes'))}",
         f"- failure types: `{json.dumps(count_failure_types(rows), ensure_ascii=False)}`",
         "",
-        "| case | size | ocr | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | visualMae | diff30 | dsl | failures |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| case | size | ocr | ocrProvider | ocrCache | ocrSec | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | visualMae | diff30 | dsl | failures |",
+        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         lines.append(
-            "|{case}|{width}x{height}|{ocrTextCount}|{textLayerCount}|{mediaOwnedTextBlockCount}|"
+            "|{case}|{width}x{height}|{ocrTextCount}|{ocrProvider}|{ocrCacheHit}|{ocrElapsedSeconds}|"
+            "{textLayerCount}|{mediaOwnedTextBlockCount}|"
             "{textFitShrinkCount}|{darkControlSurfaceCount}|{rasterLayerCount}|{shapeLayerCount}|"
             "{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
             "{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
@@ -308,6 +370,9 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
                 width=row.get("width", 0),
                 height=row.get("height", 0),
                 ocrTextCount=row.get("ocrTextCount", 0),
+                ocrProvider=row.get("ocrProvider", ""),
+                ocrCacheHit=row.get("ocrCacheHit", False),
+                ocrElapsedSeconds=row.get("ocrElapsedSeconds", 0),
                 textLayerCount=row.get("textLayerCount", 0),
                 mediaOwnedTextBlockCount=row.get("mediaOwnedTextBlockCount", 0),
                 textFitShrinkCount=row.get("textFitShrinkCount", 0),

@@ -80,6 +80,7 @@ def run_pipeline(
     options: PipelineOptions = PipelineOptions(),
     task_id: str = "local",
     model_evidence_path: Path | None = None,
+    ocr_diagnostics: dict[str, Any] | None = None,
 ) -> PipelineResult:
     wire_runtime_namespace()
 
@@ -94,6 +95,8 @@ def run_pipeline(
             resolved_ocr = candidate
         elif not allow_missing_ocr:
             raise FileNotFoundError(f"OCR artifact not found: {candidate}")
+    elif not allow_missing_ocr:
+        raise FileNotFoundError("OCR artifact is required when allow_missing_ocr is false")
     resolved_model_evidence: Path | None = None
     if model_evidence_path is not None:
         candidate = model_evidence_path.expanduser().resolve()
@@ -242,6 +245,8 @@ def run_pipeline(
         media_owned_text_ids=media_owned_text_ids,
         media_owned_text_decisions=media_owned_text_decisions,
     )
+    if ocr_diagnostics:
+        layer_stack.setdefault("diagnostics", {}).update(ocr_diagnostics)
     semantic_evidence_path = apply_model_evidence(
         layer_stack,
         resolved_model_evidence,
