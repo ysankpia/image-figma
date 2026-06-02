@@ -97,9 +97,14 @@ def render_preview_node(node: dict[str, Any], asset_urls: dict[str, str]) -> str
         style = node.get("style", {})
         fill = html.escape(str(style.get("fill") or "transparent"))
         radius = int(style.get("cornerRadius") or style.get("radius") or 0)
+        stroke = style.get("stroke") or {}
+        border = ""
+        if isinstance(stroke, dict) and stroke.get("color"):
+            border_width = max(1, int(round(float(stroke.get("width") or 1))))
+            border = f"border:{border_width}px solid {html.escape(str(stroke.get('color')))};box-sizing:border-box;"
         return (
             f'<div class="node shape" data-node-id="{node_id}" title="{title}" '
-            f'style="{base_style}background:{fill};border-radius:{radius}px;"></div>'
+            f'style="{base_style}background:{fill};border-radius:{radius}px;{border}"></div>'
         )
 
     if node_type == "text":
@@ -176,10 +181,16 @@ def write_draft_preview_png(output_path: Path, dsl: dict[str, Any], output_dir: 
             style = node.get("style", {})
             fill = css_color_to_rgba(str(style.get("fill") or "#ffffff"))
             radius = int(style.get("cornerRadius") or style.get("radius") or 0)
+            stroke = style.get("stroke") or {}
+            outline = None
+            width = 1
+            if isinstance(stroke, dict) and stroke.get("color"):
+                outline = css_color_to_rgba(str(stroke.get("color") or "#000000"))
+                width = max(1, int(round(float(stroke.get("width") or 1))))
             if radius > 0:
-                draw.rounded_rectangle(box, radius=radius, fill=fill)
+                draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
             else:
-                draw.rectangle(box, fill=fill)
+                draw.rectangle(box, fill=fill, outline=outline, width=width)
         elif node["type"] == "image":
             asset_id = str(node.get("image", {}).get("assetId", ""))
             asset_url = assets.get(asset_id, "")

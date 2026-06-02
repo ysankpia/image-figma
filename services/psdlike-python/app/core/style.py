@@ -55,6 +55,19 @@ def shape_fill(rgb: np.ndarray, shape: Candidate) -> str:
 
 def shape_style(rgb: np.ndarray, shape: Candidate) -> dict[str, Any]:
     style: dict[str, Any] = {"fill": shape_fill(rgb, shape)}
+    if all(key in shape.scores for key in ("strokeR", "strokeG", "strokeB")):
+        stroke = np.array(
+            [
+                shape.scores.get("strokeR", 0.0),
+                shape.scores.get("strokeG", 0.0),
+                shape.scores.get("strokeB", 0.0),
+            ],
+            dtype=np.uint8,
+        )
+        style["stroke"] = {
+            "color": color_hex(stroke),
+            "width": max(1, int(round(shape.scores.get("strokeWidth", 1.0)))),
+        }
     if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
         radius = infer_control_corner_radius(rgb, shape)
         if radius > 0:

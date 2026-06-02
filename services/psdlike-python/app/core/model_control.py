@@ -24,7 +24,6 @@ from .style import relative_luminance
 
 CONTROL_TRIGGER_CONFIDENCE = 0.55
 CONTROL_HIGH_CONFIDENCE = 0.75
-MAX_CONTROL_WINDOW_AREA_RATIO = 0.08
 
 
 @dataclass(frozen=True)
@@ -65,13 +64,13 @@ def detect_model_assisted_control_surfaces(
         search_count += 1
         if det.confidence >= CONTROL_HIGH_CONFIDENCE:
             high_confidence_count += 1
-        window = expanded_control_window(det.bbox, width, height)
+        window = expanded_control_window(det.bbox, width, height, profile)
         if window is None:
             reason = "empty_control_search_window"
             reason_counts[reason] += 1
             decisions.append(rejected_decision(det, reason))
             continue
-        if window.area > page_area * MAX_CONTROL_WINDOW_AREA_RATIO:
+        if window.area > page_area * profile.max_local_window_area_ratio:
             reason = "control_search_window_too_large"
             reason_counts[reason] += 1
             decisions.append(rejected_decision(det, reason, search_window=window))
@@ -96,6 +95,7 @@ def detect_model_assisted_control_surfaces(
                 ocr_blocks=ocr_blocks,
                 page_background=page_background,
                 surface_id=f"model_control_{det.id}_{block.id}",
+                profile=profile,
                 limit_window=window,
             )
             if surface is None:
@@ -167,8 +167,11 @@ def detect_model_assisted_control_surfaces(
     return ModelControlResult(candidates=merged, decisions=decisions, diagnostics=diagnostics)
 
 
-def expanded_control_window(box: BBox, width: int, height: int) -> BBox | None:
-    pad = min(12, max(2, round(min(box.width, box.height) * 0.12)))
+def expanded_control_window(box: BBox, width: int, height: int, profile: ControlProfile | None = None) -> BBox | None:
+    profile = profile or build_control_profile(width, height)
+    pad_ratio = 0.16 if profile.kind == "web_like" else 0.12
+    pad_cap = 24 if profile.kind == "web_like" else 12
+    pad = min(pad_cap, max(2, round(min(box.width, box.height) * pad_ratio)))
     return clamp_box(BBox(box.x - pad, box.y - pad, box.width + pad * 2, box.height + pad * 2), width, height)
 
 
@@ -346,6 +349,7 @@ def score_model_window_control_surface(
         ring=ring,
         ring_threshold=ring_threshold,
         strong_boundary_required=role_requires_strong_boundary(text_role),
+        allow_low_contrast_stroke=profile.kind == "web_like" and not role_requires_strong_boundary(text_role),
     )
     if not boundary_ok:
         return False, {}, boundary_reason
@@ -362,7 +366,7 @@ def score_model_window_control_surface(
         + min(0.08, aspect / 140.0)
         - min(0.12, texture / 800.0)
     )
-    return True, {
+    scores = {
         "score": round(float(max(0.72, min(0.94, score))), 4),
         "controlSurface": 1.0,
         "modelWindowControlSurface": 1.0,
@@ -391,7 +395,18 @@ def score_model_window_control_surface(
         "fillR": float(fill[0]),
         "fillG": float(fill[1]),
         "fillB": float(fill[2]),
-    }, ""
+    }
+    if ring.stroke_color is not None and ring.stroke_delta >= 10.0:
+        scores.update(
+            {
+                "strokeR": float(ring.stroke_color[0]),
+                "strokeG": float(ring.stroke_color[1]),
+                "strokeB": float(ring.stroke_color[2]),
+                "strokeWidth": 1.0,
+                "strokeDelta": round(float(ring.stroke_delta), 4),
+            }
+        )
+    return True, scores, ""
 
 
 def intersection_box(a: BBox, b: BBox) -> BBox | None:

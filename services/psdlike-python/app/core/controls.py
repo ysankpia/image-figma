@@ -23,6 +23,12 @@ class ControlProfile:
     max_aspect: float
     min_height: int
     min_area: int = 480
+    max_container_area_ratio: float = 0.08
+    max_local_window_area_ratio: float = 0.10
+    search_x_scale: float = 2.2
+    search_y_scale: float = 4.2
+    search_x_cap: int = 220
+    search_y_cap: int = 150
 
 
 @dataclass(frozen=True)
@@ -35,6 +41,8 @@ class RingEvidence:
     fill_to_local_delta: float
     fill_to_page_delta: float
     side_deltas: tuple[float, float, float, float]
+    stroke_color: tuple[int, int, int] | None = None
+    stroke_delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -72,12 +80,24 @@ def build_control_profile(width: int, height: int) -> ControlProfile:
             max_area=int(min(24_000, max(6_000, page_area * 0.04))),
             max_aspect=14.0,
             min_height=14,
+            max_container_area_ratio=0.08,
+            max_local_window_area_ratio=0.10,
+            search_x_scale=2.2,
+            search_y_scale=4.2,
+            search_x_cap=220,
+            search_y_cap=150,
         )
     return ControlProfile(
         kind="web_like",
         max_area=int(min(48_000, max(6_000, page_area * 0.04))),
         max_aspect=36.0,
         min_height=12,
+        max_container_area_ratio=0.14,
+        max_local_window_area_ratio=0.18,
+        search_x_scale=10.0,
+        search_y_scale=4.0,
+        search_x_cap=640,
+        search_y_cap=180,
     )
 
 
@@ -86,6 +106,8 @@ def control_profile_diagnostics(profile: ControlProfile) -> dict[str, Any]:
         "controlProfileKind": profile.kind,
         "controlMaxArea": profile.max_area,
         "controlMaxAspect": profile.max_aspect,
+        "controlMaxContainerAreaRatio": profile.max_container_area_ratio,
+        "controlMaxLocalWindowAreaRatio": profile.max_local_window_area_ratio,
     }
 
 
@@ -367,14 +389,49 @@ def local_surface_window_for_text(
     box: BBox,
     width: int,
     height: int,
+    profile: ControlProfile | None = None,
     limit_window: BBox | None = None,
 ) -> BBox | None:
-    x_pad = max(32, min(220, int(round(box.width * 2.2))))
-    y_pad = max(22, min(150, int(round(box.height * 4.2))))
+    profile = profile or build_control_profile(width, height)
+    x_pad = max(32, min(profile.search_x_cap, int(round(box.width * profile.search_x_scale))))
+    y_pad = max(22, min(profile.search_y_cap, int(round(box.height * profile.search_y_scale))))
     window = expanded_box(box, width, height, x_pad, y_pad)
     if window is None or limit_window is None:
+        return clamp_local_surface_window(window, box, width, height, profile)
+    return clamp_local_surface_window(intersection_box(window, limit_window), box, width, height, profile)
+
+
+def clamp_local_surface_window(
+    window: BBox | None,
+    seed: BBox,
+    width: int,
+    height: int,
+    profile: ControlProfile,
+) -> BBox | None:
+    if window is None:
+        return None
+    max_area = max(profile.max_area * 2, int(width * height * profile.max_local_window_area_ratio))
+    if window.area <= max_area:
         return window
-    return intersection_box(window, limit_window)
+    aspect = window.width / max(1, window.height)
+    target_height = max(seed.height + 44, int(round(math.sqrt(max_area / max(1.0, aspect)))))
+    target_width = max(seed.width + 64, int(round(target_height * aspect)))
+    if target_width * target_height > max_area:
+        scale = math.sqrt(max_area / max(1, target_width * target_height))
+        target_width = max(seed.width + 64, int(round(target_width * scale)))
+        target_height = max(seed.height + 44, int(round(target_height * scale)))
+    center_x_value = seed.x + seed.width / 2
+    center_y_value = seed.y + seed.height / 2
+    return clamp_box(
+        BBox(
+            int(round(center_x_value - target_width / 2)),
+            int(round(center_y_value - target_height / 2)),
+            min(width, target_width),
+            min(height, target_height),
+        ),
+        width,
+        height,
+    )
 
 
 def estimate_local_surface_fill_near_text(
@@ -453,10 +510,12 @@ def extract_local_surface_from_text_seed(
     ocr_blocks: list[OCRBlock],
     page_background: tuple[int, int, int],
     surface_id: str,
+    profile: ControlProfile | None = None,
     limit_window: BBox | None = None,
 ) -> LocalSurfaceCandidate | None:
     height, width, _ = rgb.shape
-    window = local_surface_window_for_text(block.bbox, width, height, limit_window=limit_window)
+    profile = profile or build_control_profile(width, height)
+    window = local_surface_window_for_text(block.bbox, width, height, profile=profile, limit_window=limit_window)
     if window is None or window.area <= 0:
         return None
 
@@ -583,7 +642,8 @@ def classify_local_surface_role(
     def decision(role: str, state: str, reason: str) -> SurfaceRoleDecision:
         return SurfaceRoleDecision(surface.id, role, state, reason, source_refs)
 
-    if chart_tick_like_block(seed_block, ocr_blocks):
+    chart_tick_like = chart_tick_like_block(seed_block, ocr_blocks)
+    if chart_tick_like and not numeric_seed_inside_labeled_surface(seed_block, contained):
         scores["surfaceRoleChartInternal"] = 1.0
         return decision("chart_or_media_internal", "metadata_only", "chart_tick_like_surface_not_control"), scores
     if area_ratio > 0.20:
@@ -659,14 +719,35 @@ def local_surface_to_container_candidate(
     )
 
 
-def is_visible_container_surface(surface: LocalSurfaceCandidate, scores: dict[str, float], width: int, height: int) -> bool:
+def numeric_seed_inside_labeled_surface(seed_block: OCRBlock, contained: list[OCRBlock]) -> bool:
+    if ocr_text_role(seed_block.text) not in {"numeric_metric", "currency_or_percent", "date_or_time"}:
+        return False
+    non_numeric = [
+        block
+        for block in contained
+        if block.id != seed_block.id and ocr_text_role(block.text) not in {"numeric_metric", "currency_or_percent", "date_or_time"}
+    ]
+    return bool(non_numeric)
+
+
+def is_visible_container_surface(
+    surface: LocalSurfaceCandidate,
+    scores: dict[str, float],
+    width: int,
+    height: int,
+    profile: ControlProfile | None = None,
+    ocr_blocks: list[OCRBlock] | None = None,
+) -> bool:
+    profile = profile or build_control_profile(width, height)
     page_area = max(1, width * height)
     area_ratio = surface.bbox.area / page_area
     if surface.bbox.area < 1800:
         return False
-    if area_ratio > 0.08:
+    if area_ratio > profile.max_container_area_ratio:
         return False
     if surface.bbox.width < 48 or surface.bbox.height < 32:
+        return False
+    if profile.kind == "web_like" and web_table_or_list_row_like_surface(surface.bbox, ocr_blocks or [], width, height):
         return False
     if scores.get("containedTextBlockCount", 0.0) < 2.0:
         return False
@@ -679,6 +760,50 @@ def is_visible_container_surface(surface: LocalSurfaceCandidate, scores: dict[st
     if scores.get("surfaceRoleChartInternal", 0.0) >= 1.0 or scores.get("surfaceRoleControl", 0.0) >= 1.0:
         return False
     return True
+
+
+def web_table_or_list_row_like_surface(box: BBox, ocr_blocks: list[OCRBlock], width: int, height: int) -> bool:
+    if box.area <= 0 or not ocr_blocks:
+        return False
+    page_area = max(1, width * height)
+    aspect = box.width / max(1, box.height)
+    if aspect < 6.0 or box.width < width * 0.42 or box.area > page_area * 0.09:
+        return False
+    contained = [
+        block
+        for block in ocr_blocks
+        if block.bbox.area > 0 and intersection_area(block.bbox, box) / block.bbox.area >= 0.76
+    ]
+    if len(contained) < 3:
+        return False
+    peer_rows = table_like_peer_rows(box, ocr_blocks, width)
+    return len(peer_rows) >= 2
+
+
+def table_like_peer_rows(box: BBox, ocr_blocks: list[OCRBlock], width: int) -> list[BBox]:
+    centers = sorted({round(center_y(block.bbox)) for block in ocr_blocks if block.bbox.area > 0})
+    row_height = max(18, min(64, int(round(box.height * 0.72))))
+    rows: list[BBox] = []
+    for center in centers:
+        row = BBox(box.x, int(round(center - row_height / 2)), box.width, row_height)
+        if row.y < 0:
+            continue
+        contained = [
+            block
+            for block in ocr_blocks
+            if block.bbox.area > 0 and intersection_area(block.bbox, row) / block.bbox.area >= 0.58
+        ]
+        if len(contained) < 3:
+            continue
+        span_x1 = min(block.bbox.x for block in contained)
+        span_x2 = max(block.bbox.x2 for block in contained)
+        if span_x2 - span_x1 < min(box.width * 0.36, width * 0.24):
+            continue
+        if abs(center_y(row) - center_y(box)) <= max(8, box.height * 0.55):
+            continue
+        if abs(row.width - box.width) / max(1, box.width) <= 0.12 and abs(row.x - box.x) <= max(18, box.width * 0.05):
+            rows.append(row)
+    return rows
 
 
 def surface_role_decision_payload(
@@ -841,7 +966,10 @@ def promote_control_surfaces(
     remaining_rasters = [item for item in raster_candidates if item.id not in consumed_raster_ids]
     merged_rasters = nms_candidates(remaining_rasters + residual_rasters, overlap_threshold=0.52)
     merged_shapes: list[Candidate] = []
-    for candidate in sorted(shape_candidates + promoted_shapes, key=lambda item: (item.bbox.y, item.bbox.x, -item.bbox.area, item.id)):
+    for candidate in sorted(
+        shape_candidates + promoted_shapes,
+        key=lambda item: (-shape_merge_priority(item), item.bbox.y, item.bbox.x, -item.bbox.area, item.id),
+    ):
         if any(is_duplicate_control_shape(candidate, kept) for kept in merged_shapes):
             decisions.append(
                 {
@@ -857,6 +985,16 @@ def promote_control_surfaces(
             continue
         merged_shapes.append(candidate)
     return merged_rasters, merged_shapes, decisions
+
+
+def shape_merge_priority(candidate: Candidate) -> int:
+    if candidate.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+        return 3
+    if candidate.reason == "local_container_surface":
+        return 2
+    if candidate.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands"}:
+        return 0
+    return 1
 
 
 def detect_ocr_anchored_control_surfaces(
@@ -882,6 +1020,7 @@ def detect_ocr_anchored_control_surfaces(
             ocr_blocks=ocr_blocks,
             page_background=page_background,
             surface_id=f"ocr_control_{index:04d}",
+            profile=profile,
         )
         if surface is None:
             decisions.append(
@@ -910,7 +1049,7 @@ def detect_ocr_anchored_control_surfaces(
             source_refs=[f"ocr:{block.id}", "pixel:local_surface_gate"],
         )
         decisions.append(surface_role_decision_payload(role, surface, block, scores, "ocr_control_surface"))
-        if role.role == "container_surface" and is_visible_container_surface(surface, scores, width, height):
+        if role.role == "container_surface" and is_visible_container_surface(surface, scores, width, height, profile, ocr_blocks):
             candidates.append(local_surface_to_container_candidate(surface, scores))
             continue
         if role.role != "control_surface" or role.decision != "accepted":
@@ -920,7 +1059,13 @@ def detect_ocr_anchored_control_surfaces(
     return merge_local_surface_candidates(candidates), decisions[:160]
 
 
-def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> list[BBox]:
+def control_surface_search_boxes(
+    text_box: BBox,
+    width: int,
+    height: int,
+    profile: ControlProfile | None = None,
+) -> list[BBox]:
+    profile = profile or build_control_profile(width, height)
     pad_x_values = sorted(
         {
             max(6, round(text_box.height * 0.65)),
@@ -941,6 +1086,16 @@ def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> lis
                 {
                     max(26, round(text_box.width * 2.80)),
                     max(32, round(text_box.width * 3.60)),
+                }
+            )
+        )
+    if profile.kind == "web_like":
+        pad_x_values.extend(
+            sorted(
+                {
+                    max(32, round(text_box.width * 2.50)),
+                    max(44, round(text_box.width * 3.50)),
+                    max(56, round(text_box.width * 4.80)),
                 }
             )
         )
@@ -977,6 +1132,8 @@ def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> lis
             )
             if box is None:
                 continue
+            if box.area > max(profile.max_area * 2, int(width * height * profile.max_local_window_area_ratio)):
+                continue
             key = (box.x, box.y, box.width, box.height)
             if key in seen:
                 continue
@@ -1008,6 +1165,10 @@ def score_ocr_anchored_control_surface(
     area_ratio = box.area / block.bbox.area
     text_role = ocr_text_role(block.text)
     max_area_ratio = 30.0 if block.bbox.width <= block.bbox.height * 2.4 else 12.0
+    if profile.kind == "web_like":
+        candidate_aspect = box.width / max(1, box.height)
+        if candidate_aspect >= 4.5:
+            max_area_ratio = max(max_area_ratio, 48.0)
     if area_ratio < 1.18 or area_ratio > max_area_ratio:
         return False, {}, "bad_area_ratio"
     if box.area > profile.max_area or box.width < 24 or box.height < profile.min_height:
@@ -1069,6 +1230,7 @@ def score_ocr_anchored_control_surface(
         ring=ring,
         ring_threshold=ring_threshold,
         strong_boundary_required=role_requires_strong_boundary(text_role),
+        allow_low_contrast_stroke=profile.kind == "web_like" and not role_requires_strong_boundary(text_role),
     )
     if not boundary_ok:
         return False, {}, boundary_reason
@@ -1115,6 +1277,16 @@ def score_ocr_anchored_control_surface(
         "fillG": float(fill[1]),
         "fillB": float(fill[2]),
     }
+    if ring.stroke_color is not None and ring.stroke_delta >= 10.0:
+        scores.update(
+            {
+                "strokeR": float(ring.stroke_color[0]),
+                "strokeG": float(ring.stroke_color[1]),
+                "strokeB": float(ring.stroke_color[2]),
+                "strokeWidth": 1.0,
+                "strokeDelta": round(float(ring.stroke_delta), 4),
+            }
+        )
     return True, scores, ""
 
 
@@ -1185,8 +1357,20 @@ def control_surface_ring_evidence(
         colors.append(color)
         deltas.append(color_distance(color, fill))
     sorted_deltas = sorted(deltas)
+    ring_pixels = np.concatenate([strip.reshape(-1, 3) for strip in strips.values()], axis=0).astype(np.uint8)
     local_pixels = np.concatenate([color.reshape(1, 3) for color in colors], axis=0).astype(np.uint8)
     local_color = dominant_cluster_color(local_pixels, bucket_size=24)
+    fill_to_page = color_distance(fill, page_background)
+    stroke_color: tuple[int, int, int] | None = None
+    stroke_delta = 0.0
+    if fill_to_page <= 36.0 and ring_pixels.size:
+        stroke_distances = np.linalg.norm(ring_pixels.astype(np.float32) - fill.reshape(1, 3).astype(np.float32), axis=1)
+        stroke_threshold = max(18.0, fill_to_page + 8.0)
+        stroke_pixels = ring_pixels[(stroke_distances >= stroke_threshold) & (stroke_distances <= 128.0)]
+        if stroke_pixels.shape[0] >= max(8, int(ring_pixels.shape[0] * 0.012)):
+            stroke_sample = dominant_cluster_color(stroke_pixels.astype(np.uint8), bucket_size=16)
+            stroke_color = tuple(int(v) for v in stroke_sample.tolist())
+            stroke_delta = color_distance(stroke_sample, fill)
     threshold = max(10.0, min(18.0, float(np.median(sorted_deltas)) * 0.80))
     strong_side_count = sum(1 for delta in deltas if delta >= threshold)
     return RingEvidence(
@@ -1196,8 +1380,10 @@ def control_surface_ring_evidence(
         max_delta=float(sorted_deltas[-1]),
         strong_side_count=strong_side_count,
         fill_to_local_delta=color_distance(fill, local_color),
-        fill_to_page_delta=color_distance(fill, page_background),
+        fill_to_page_delta=fill_to_page,
         side_deltas=(float(deltas[0]), float(deltas[1]), float(deltas[2]), float(deltas[3])),
+        stroke_color=stroke_color,
+        stroke_delta=stroke_delta,
     )
 
 
@@ -1205,8 +1391,16 @@ def passes_boundary_gate(
     ring: RingEvidence,
     ring_threshold: float,
     strong_boundary_required: bool,
+    allow_low_contrast_stroke: bool = False,
 ) -> tuple[bool, str]:
     required_sides = 3 if strong_boundary_required else 2
+    if (
+        allow_low_contrast_stroke
+        and ring.stroke_color is not None
+        and ring.strong_side_count >= required_sides
+        and ring.stroke_delta >= 18.0
+    ):
+        return True, ""
     if ring.support_delta < ring_threshold or ring.median_delta < ring_threshold:
         return False, "weak_boundary_closure"
     if ring.strong_side_count < required_sides:
@@ -1288,7 +1482,7 @@ def merge_local_surface_candidates(candidates: list[Candidate]) -> list[Candidat
     controls = [item for item in candidates if item.scores.get("confirmedControlSurface", 0.0) >= 1.0]
     containers = [item for item in candidates if item.reason == "local_container_surface"]
     accepted: list[Candidate] = merge_control_surfaces(controls)
-    for candidate in sorted(containers, key=lambda item: (-item.score, item.bbox.area, item.bbox.y, item.bbox.x)):
+    for candidate in sorted(containers, key=lambda item: (-item.bbox.area, -item.score, item.bbox.y, item.bbox.x)):
         duplicate = False
         for kept in accepted:
             if kept.reason != "local_container_surface":

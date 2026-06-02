@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 def merge_surface_and_shape_candidates(surface_candidates: list[Candidate], shape_candidates: list[Candidate]) -> list[Candidate]:
     merged = nms_surface_candidates(surface_candidates) + shape_candidates
     accepted: list[Candidate] = []
-    for candidate in sorted(merged, key=lambda item: (item.bbox.y, item.bbox.x, -item.bbox.area, item.id)):
+    for candidate in sorted(merged, key=lambda item: (-surface_merge_priority(item), item.bbox.y, item.bbox.x, -item.bbox.area, item.id)):
         duplicate = False
         for kept in accepted:
             if iou(candidate.bbox, kept.bbox) >= 0.82:
@@ -27,6 +27,18 @@ def merge_surface_and_shape_candidates(surface_candidates: list[Candidate], shap
         if not duplicate:
             accepted.append(candidate)
     return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
+
+
+def surface_merge_priority(candidate: Candidate) -> int:
+    if candidate.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+        return 4
+    if candidate.reason == "local_container_surface":
+        return 3
+    if candidate.reason in {"low_texture_solid_region"}:
+        return 2
+    if candidate.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands"}:
+        return 0
+    return 1
 
 
 def infer_background_plate_candidates(

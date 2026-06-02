@@ -14,7 +14,7 @@ from app.core.pipeline import PipelineOptions, run_pipeline
 from app.core.runtime import wire_runtime_namespace
 from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
 from app.core.style import TextStyleContext, sample_text_color_with_diagnostics
-from app.core.controls import suppress_container_parent_shapes, suppress_control_owned_shapes
+from app.core.controls import build_control_profile, suppress_container_parent_shapes, suppress_control_owned_shapes
 
 
 def test_bbox_geometry() -> None:
@@ -631,6 +631,99 @@ def test_multi_text_sibling_cards_materialize_as_container_surfaces(tmp_path: Pa
     assert len(container_shapes) == 3
     assert not control_shapes
     assert layer_stack["diagnostics"]["containerSurfaceShapeLayerCount"] == 3
+
+
+def test_web_profile_wide_search_input_materializes_as_one_control(tmp_path: Path) -> None:
+    image_path = tmp_path / "web_search_input.png"
+    image = Image.new("RGB", (1280, 720), (246, 248, 252))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((360, 84, 920, 132), radius=12, fill=(255, 255, 255), outline=(202, 210, 222), width=2)
+    draw.text((392, 100), "Search", fill=(80, 90, 108))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "web_search_input.ocr_blocks.v1.json", [("text_0001", "Search", 392, 100, 52, 16)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    controls = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0.0) >= 1.0
+    ]
+
+    assert layer_stack["diagnostics"]["controlProfileKind"] == "web_like"
+    assert len(controls) == 1
+    assert controls[0]["bbox"]["width"] >= 500
+    assert controls[0]["bbox"]["height"] >= 40
+    assert controls[0]["style"]["fill"].lower() == "#ffffff"
+    assert controls[0]["style"]["stroke"]["color"].lower() == "#cad2de"
+
+
+def test_web_dashboard_cards_can_materialize_as_profile_aware_containers(tmp_path: Path) -> None:
+    image_path = tmp_path / "web_dashboard_cards.png"
+    image = Image.new("RGB", (1280, 720), (244, 246, 250))
+    draw = ImageDraw.Draw(image)
+    rows: list[tuple[str, str, int, int, int, int]] = []
+    for index, x in enumerate((72, 384, 696), start=1):
+        draw.rounded_rectangle((x, 96, x + 264, 236), radius=12, fill=(255, 255, 255), outline=(224, 229, 238), width=2)
+        draw.text((x + 24, 124), f"Metric {index}", fill=(35, 45, 60))
+        draw.text((x + 24, 168), f"{index * 1280}", fill=(10, 20, 35))
+        rows.append((f"text_{index}_a", f"Metric {index}", x + 24, 124, 72, 16))
+        rows.append((f"text_{index}_b", f"{index * 1280}", x + 24, 168, 64, 22))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "web_dashboard_cards.ocr_blocks.v1.json", rows)
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    containers = [
+        layer for layer in layer_stack["layers"] if layer["type"] == "shape" and layer.get("reason") == "local_container_surface"
+    ]
+
+    assert layer_stack["diagnostics"]["controlProfileKind"] == "web_like"
+    assert len(containers) == 3
+    assert all(layer["bbox"]["width"] >= 240 and layer["bbox"]["height"] >= 120 for layer in containers)
+
+
+def test_web_table_rows_do_not_materialize_as_large_container_surfaces(tmp_path: Path) -> None:
+    image_path = tmp_path / "web_table_rows.png"
+    image = Image.new("RGB", (1280, 720), (246, 248, 252))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((80, 84, 1200, 420), radius=10, fill=(255, 255, 255), outline=(226, 231, 240), width=1)
+    rows: list[tuple[str, str, int, int, int, int]] = []
+    for row_index, y in enumerate((130, 184, 238, 292, 346), start=1):
+        if row_index % 2 == 0:
+            draw.rectangle((92, y - 14, 1188, y + 32), fill=(250, 252, 255))
+        draw.line((92, y + 36, 1188, y + 36), fill=(229, 234, 242), width=1)
+        values = (f"Item {row_index}", f"Owner {row_index}", f"{row_index * 108}", "Active")
+        for col_index, (x, text, w) in enumerate(zip((116, 420, 720, 980), values, (72, 80, 44, 52)), start=1):
+            draw.text((x, y), text, fill=(40, 50, 64))
+            rows.append((f"text_{row_index}_{col_index}", text, x, y, w, 16))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "web_table_rows.ocr_blocks.v1.json", rows)
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    row_like_containers = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape"
+        and layer.get("reason") == "local_container_surface"
+        and layer["bbox"]["width"] >= 600
+        and layer["bbox"]["height"] <= 80
+    ]
+
+    assert layer_stack["diagnostics"]["controlProfileKind"] == "web_like"
+    assert not row_like_containers
+
+
+def test_control_profile_keeps_mobile_and_web_thresholds_distinct() -> None:
+    mobile = build_control_profile(390, 844)
+    web = build_control_profile(1440, 900)
+
+    assert mobile.kind == "mobile"
+    assert web.kind == "web_like"
+    assert web.max_aspect > mobile.max_aspect
+    assert web.max_area > mobile.max_area
+    assert web.max_container_area_ratio > mobile.max_container_area_ratio
 
 
 def test_container_surface_does_not_trigger_control_raster_suppression(tmp_path: Path) -> None:
