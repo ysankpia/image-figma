@@ -246,6 +246,11 @@ def test_valid_model_control_emits_shape_and_keeps_text_above(tmp_path: Path) ->
     assert layer_stack["diagnostics"]["modelControlAcceptedCount"] >= 1
     assert all(text_layers[0]["z"] > shape["z"] for shape in model_shapes)
     assert layer_stack["semanticEvidence"]["diagnostics"]["modelOwnershipDecisionCount"] >= 1
+    assert (result.out_dir / "semantic_evidence_report.md").exists()
+    tags_summary = json.loads((result.out_dir / "semantic_tags_summary.json").read_text(encoding="utf-8"))
+    ownership_decisions = json.loads((result.out_dir / "model_ownership_decisions.v1.json").read_text(encoding="utf-8"))
+    assert tags_summary["diagnostics"]["modelOwnershipDecisionCount"] >= 1
+    assert ownership_decisions["summary"]["acceptedCount"] >= 1
 
 
 def test_model_image_detection_with_no_texture_is_rejected(tmp_path: Path) -> None:

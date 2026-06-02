@@ -43,7 +43,7 @@ from .previews import (
     write_preview_html,
     write_preview_report,
 )
-from .reports import write_diagnostics, write_ownership_report
+from .reports import write_diagnostics, write_ownership_report, write_semantic_audit_artifacts
 from .runtime import wire_runtime_namespace
 from .surfaces import infer_background_plate_candidates, merge_surface_and_shape_candidates
 
@@ -338,6 +338,7 @@ def run_pipeline(
     diagnostics_path = out_dir / "diagnostics.md"
     write_diagnostics(diagnostics_path, layer_stack)
     write_ownership_report(out_dir / "ownership_report.v1.json", layer_stack)
+    write_semantic_audit_artifacts(out_dir, layer_stack, semantic_evidence_path)
 
     diagnostics = dict(layer_stack.get("diagnostics") or {})
     assets_dir = out_dir / "assets"

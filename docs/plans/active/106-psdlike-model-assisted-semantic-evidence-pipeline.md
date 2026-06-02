@@ -359,7 +359,7 @@ case_0016_29094ac707
 
 ### Stage 106D: Semantic Evidence Audit Layer
 
-状态：pending after 106C。
+状态：implemented。
 
 目标：
 
@@ -555,6 +555,59 @@ modelControlAcceptedTotal: 22
 modelMediaAcceptedTotal: 131
 modelMediaAddedRasterTotal: 5
 modelMediaMergedRasterTotal: 0
+modelMediaOwnedTextSuppressedTotal: 5
+semanticTagTotal: 341
+```
+
+## 106D Validation Evidence
+
+实现范围：
+
+```text
+services/psdlike-python/app/core/reports.py
+services/psdlike-python/app/core/pipeline.py
+services/psdlike-python/tests/test_core_pipeline.py
+```
+
+新增输出：
+
+```text
+semantic_evidence_report.md
+semantic_tags_summary.json
+model_ownership_decisions.v1.json
+```
+
+验证命令：
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/psdlike-python
+python -m py_compile $(find app tools -name '*.py' | sort)
+uv run pytest -q
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --model-evidence-root /Users/luhui/Downloads/psdlike_model_evidence_eval_all \
+  --out /Users/luhui/Downloads/psdlike_106d_model_audit_eval_10 \
+  --limit 10
+```
+
+结果：
+
+```text
+py_compile pass
+pytest: 22 passed
+10-case model audit: 10/10 pass
+semantic_evidence_report.md: 10/10 present
+semantic_tags_summary.json: 10/10 present
+model_ownership_decisions.v1.json: 10/10 present
+missingAssetTotal: 0
+shapeAssetTotal: 0
+fullPageVisibleRasterTotal: 0
+rawTextOverlapRasterTotal: 4
+rasterTextKnockoutCountTotal: 7
+modelControlAcceptedTotal: 22
+modelMediaAcceptedTotal: 131
+modelMediaAddedRasterTotal: 5
 modelMediaOwnedTextSuppressedTotal: 5
 semanticTagTotal: 341
 ```
