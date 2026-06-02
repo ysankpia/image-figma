@@ -321,13 +321,15 @@ def score_media_box(
         return False, {}, "empty"
     if is_full_page_backing(box, width, height):
         return False, {}, "full_page_backing"
-    min_area = 128 if class_name == "Icon" else 512
+    min_area = 400 if class_name == "Icon" else 512
     if box.area < min_area or box.width < 8 or box.height < 8:
         return False, {}, "too_small"
     if box.area > page_area * MAX_MEDIA_WINDOW_AREA_RATIO:
         return False, {}, "too_large"
     scores = bbox_scores(box, maps, text_mask, tile_size)
     text_ratio = text_mask_ratio(box, text_mask)
+    if box.area < 8_000 and text_ratio > 0.015:
+        return False, {}, "ocr_overlap_too_high"
     if class_name == "Icon" and text_ratio > 0.08:
         return False, {}, "ocr_overlap_too_high"
     if box.area < 18_000 and text_ratio > 0.08:

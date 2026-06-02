@@ -559,6 +559,46 @@ modelMediaOwnedTextSuppressedTotal: 5
 semanticTagTotal: 341
 ```
 
+全量 86-case 最终验证：
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/psdlike-python
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --model-evidence-root /Users/luhui/Downloads/psdlike_model_evidence_eval_all \
+  --out /Users/luhui/Downloads/psdlike_106bcd_model_visible_eval_all_r3 \
+  --limit 0
+```
+
+结果：
+
+```text
+86-case model visible: 86/86 pass
+DSL valid: 86/86
+missingAssetTotal: 0
+shapeAssetTotal: 0
+fullPageVisibleRasterTotal: 0
+rawTextOverlapRasterTotal: no-model 32, model 32
+rasterTextKnockoutCountTotal: no-model 52, model 52
+textOverlapRasterTotal: no-model 0, model 0
+tinyRasterFragmentsTotal: no-model 0, model 0
+visualMaeAverage: no-model 9.9612, model 9.9400
+visualDiff30RatioAverage: no-model 0.0656, model 0.0654
+modelControlAcceptedTotal: 149
+modelControlRejectedTotal: 382
+modelMediaAcceptedTotal: 1059
+modelMediaRejectedTotal: 2075
+modelMediaAddedRasterTotal: 20
+modelMediaMergedRasterTotal: 0
+modelMediaLimitedRasterTotal: 0
+modelMediaOwnedTextSuppressedTotal: 33
+semanticTagTotal: 2597
+modelDetectionTotal: 8866
+modelOcrOverlapRiskTotal: 297
+quality increases: none for rawTextOverlapRaster, rasterTextKnockoutCount, textOverlapRaster, tinyRasterFragments
+```
+
 ## 106D Validation Evidence
 
 实现范围：
@@ -610,6 +650,17 @@ modelMediaAcceptedTotal: 131
 modelMediaAddedRasterTotal: 5
 modelMediaOwnedTextSuppressedTotal: 5
 semanticTagTotal: 341
+```
+
+全量 86-case 审计产物验证：
+
+```text
+/Users/luhui/Downloads/psdlike_106bcd_model_visible_eval_all_r3
+semantic_evidence.v1.json: 86/86 present
+semantic_evidence_report.md: 86/86 present
+semantic_tags_summary.json: 86/86 present
+model_ownership_decisions.v1.json: 86/86 present
+draft_runtime.dsl.v1_0.json: 86/86 present
 ```
 
 ## Validation Plan

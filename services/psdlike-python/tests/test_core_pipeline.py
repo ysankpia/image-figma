@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from app.core.model_evidence import apply_model_evidence
 from app.core.media_text import assign_media_owned_text_blocks
 from app.core.ocr import load_ocr_blocks
-from app.core.pipeline import run_pipeline
+from app.core.pipeline import PipelineOptions, run_pipeline
 from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
 
 
@@ -277,12 +277,17 @@ def test_model_icon_detection_with_texture_can_add_raster(tmp_path: Path) -> Non
     model_path = write_model_evidence(
         tmp_path,
         "Icon",
-        {"x": 48, "y": 48, "width": 12, "height": 12},
+        {"x": 48, "y": 48, "width": 24, "height": 24},
         confidence=0.86,
         canvas={"width": 200, "height": 160},
     )
 
-    result = run_pipeline(image_path=image_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    result = run_pipeline(
+        image_path=image_path,
+        out_dir=tmp_path / "model",
+        model_evidence_path=model_path,
+        options=PipelineOptions(raster_min_area=2000),
+    )
     layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
     dsl = json.loads(result.dsl_path.read_text(encoding="utf-8"))
 
@@ -435,10 +440,10 @@ def write_texture_icon_fixture(tmp_path: Path) -> Path:
     image_path = tmp_path / "texture_icon.png"
     image = Image.new("RGB", (200, 160), "white")
     draw = ImageDraw.Draw(image)
-    for y in range(48, 60, 3):
-        for x in range(48, 60, 3):
+    for y in range(48, 72, 4):
+        for x in range(48, 72, 4):
             fill = (30, 30, 30) if ((x + y) // 4) % 2 == 0 else (30, 180, 120)
-            draw.rectangle((x, y, x + 2, y + 2), fill=fill)
+            draw.rectangle((x, y, x + 3, y + 3), fill=fill)
     image.save(image_path)
     return image_path
 

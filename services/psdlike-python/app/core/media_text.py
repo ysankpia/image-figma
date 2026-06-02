@@ -40,7 +40,14 @@ def assign_media_owned_text_blocks(
                 covered.append((block, coverage))
         if not covered:
             continue
-        if len(covered) == 1 and raster.bbox.area < page_area * 0.035 and media_complexity_score(raster) < 0.52 and not small_media:
+        model_assisted_media = raster.reason in {"model_assisted_media_refinement", "model_assisted_media_merge"}
+        if (
+            len(covered) == 1
+            and raster.bbox.area < page_area * 0.035
+            and media_complexity_score(raster) < 0.52
+            and not small_media
+            and not model_assisted_media
+        ):
             continue
         text_area = sum(intersection_area(raster.bbox, block.bbox) for block, _ in covered)
         text_area_ratio = text_area / max(1, raster.bbox.area)
@@ -94,8 +101,10 @@ def classify_media_text_owner_candidate(
         return ""
     if raster.reason in {"control_foreground_residual"}:
         return ""
+    model_assisted_media = raster.reason in {"model_assisted_media_refinement", "model_assisted_media_merge"}
     small_media = is_small_embedded_media_candidate(raster)
-    if raster.bbox.area < max(18_000, int(page_area * 0.012)) and not small_media:
+    min_media_area = 14_000 if model_assisted_media else max(18_000, int(page_area * 0.012))
+    if raster.bbox.area < min_media_area and not small_media:
         return ""
     if (raster.bbox.width < 72 or raster.bbox.height < 56) and not small_media:
         return ""
