@@ -11,12 +11,19 @@ import mobileHome from "../../packages/dsl-schema/examples/mobile-home.dsl.json"
 import {
   API_BASE_URL,
   BackendApiError,
+  type DraftDiagnostics,
   getDraftPreviewDsl,
   getDraftPreviewTask,
   uploadPngDraftPreview
 } from "./apiClient";
-import type { MainToPluginMessage, PluginRenderMessage, PluginState, PluginToMainMessage } from "./messages";
-import type { TaskResult } from "./apiClient";
+import type {
+  MainToPluginMessage,
+  PluginDraftDiagnostics,
+  PluginRenderMessage,
+  PluginState,
+  PluginToMainMessage
+} from "./messages";
+import type { TaskResult, UploadResult } from "./apiClient";
 
 declare const __html__: string;
 
@@ -90,7 +97,7 @@ async function renderUploadedPngDraft(fileName: string, bytes: Uint8Array): Prom
   const upload = await uploadPngDraftPreview(fileName, bytes);
   postToUI({ type: "status", message: "Running Draft layer pipeline.", tone: "normal" });
 
-  const task = await waitForCompletedTaskWith(upload.taskId, getDraftPreviewTask, "draft_preview_poll");
+  const task = await resolveCompletedTask(upload);
   if (task.status === "failed") {
     throw new BackendApiError("BACKEND_TASK_FAILED", task.message || "Backend task failed.", task.stage, task.taskId);
   }
@@ -105,7 +112,33 @@ async function renderUploadedPngDraft(fileName: string, bytes: Uint8Array): Prom
     createOriginalReference: false,
     assetBaseUrl: `${API_BASE_URL}/draft-preview/${encodeURIComponent(upload.taskId)}`
   });
-  reportRenderResult(result);
+  reportRenderResult(result, toPluginDraftDiagnostics(task.diagnostics || upload.diagnostics));
+}
+
+async function resolveCompletedTask(upload: UploadResult): Promise<TaskResult> {
+  if (upload.status === "completed") {
+    const task: TaskResult = {
+      taskId: upload.taskId,
+      status: upload.status
+    };
+    if (upload.stage !== undefined) {
+      task.stage = upload.stage;
+    }
+    if (upload.progress !== undefined) {
+      task.progress = upload.progress;
+    }
+    if (upload.dslUrl !== undefined) {
+      task.dslUrl = upload.dslUrl;
+    }
+    if (upload.previewUrl !== undefined) {
+      task.previewUrl = upload.previewUrl;
+    }
+    if (upload.diagnostics !== undefined) {
+      task.diagnostics = upload.diagnostics;
+    }
+    return task;
+  }
+  return await waitForCompletedTaskWith(upload.taskId, getDraftPreviewTask, "draft_preview_poll");
 }
 
 async function waitForCompletedTaskWith(
@@ -123,17 +156,19 @@ async function waitForCompletedTaskWith(
   throw new BackendApiError("BACKEND_TASK_TIMEOUT", "Backend task timed out.", stage, taskId);
 }
 
-function reportRenderResult(result: RenderResult): void {
+function reportRenderResult(result: RenderResult, diagnostics?: PluginDraftDiagnostics): void {
   if (result.success) {
-    postToUI({
+    const message: MainToPluginMessage = {
       type: "render-succeeded",
       renderedElementCount: result.renderedElementCount,
       warningCount: result.warnings.length,
       warnings: result.warnings.map(toPluginRenderMessage)
-    });
-    figma.notify(
-      `Image-to-Figma rendered ${result.renderedElementCount} elements with ${result.warnings.length} warnings.`
-    );
+    };
+    if (diagnostics !== undefined) {
+      message.diagnostics = diagnostics;
+    }
+    postToUI(message);
+    figma.notify(renderSuccessMessage(result, diagnostics));
     return;
   }
 
@@ -146,6 +181,68 @@ function reportRenderResult(result: RenderResult): void {
     warnings: result.warnings.map(toPluginRenderMessage)
   });
   figma.notify(`Image-to-Figma failed: ${message}`, { error: true });
+}
+
+function renderSuccessMessage(result: RenderResult, diagnostics?: PluginDraftDiagnostics): string {
+  const suffix = diagnosticsSummary(diagnostics);
+  const base = `Image-to-Figma rendered ${result.renderedElementCount} elements with ${result.warnings.length} warnings.`;
+  return suffix ? `${base} ${suffix}` : base;
+}
+
+function toPluginDraftDiagnostics(diagnostics: DraftDiagnostics | undefined): PluginDraftDiagnostics | undefined {
+  if (diagnostics === undefined) {
+    return undefined;
+  }
+  const next: PluginDraftDiagnostics = {};
+  if (diagnostics.ocrProvider !== undefined) {
+    next.ocrProvider = diagnostics.ocrProvider;
+  }
+  if (diagnostics.ocrTextCount !== undefined) {
+    next.ocrTextCount = diagnostics.ocrTextCount;
+  }
+  if (diagnostics.ocrCacheHit !== undefined) {
+    next.ocrCacheHit = diagnostics.ocrCacheHit;
+  }
+  if (diagnostics.textLayerCount !== undefined) {
+    next.textLayerCount = diagnostics.textLayerCount;
+  }
+  if (diagnostics.rasterLayerCount !== undefined) {
+    next.rasterLayerCount = diagnostics.rasterLayerCount;
+  }
+  if (diagnostics.shapeLayerCount !== undefined) {
+    next.shapeLayerCount = diagnostics.shapeLayerCount;
+  }
+  if (diagnostics.missingAssetCount !== undefined) {
+    next.missingAssetCount = diagnostics.missingAssetCount;
+  }
+  return next;
+}
+
+function diagnosticsSummary(diagnostics: PluginDraftDiagnostics | undefined): string {
+  if (diagnostics === undefined) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (diagnostics.ocrProvider !== undefined) {
+    const cache = diagnostics.ocrCacheHit === true ? "cache hit" : "fresh";
+    parts.push(`OCR ${diagnostics.ocrProvider} ${cache}`);
+  }
+  if (diagnostics.ocrTextCount !== undefined) {
+    parts.push(`text ${diagnostics.ocrTextCount}`);
+  }
+  if (
+    diagnostics.textLayerCount !== undefined ||
+    diagnostics.rasterLayerCount !== undefined ||
+    diagnostics.shapeLayerCount !== undefined
+  ) {
+    parts.push(
+      `layers T${diagnostics.textLayerCount || 0}/R${diagnostics.rasterLayerCount || 0}/S${diagnostics.shapeLayerCount || 0}`
+    );
+  }
+  if (diagnostics.missingAssetCount !== undefined) {
+    parts.push(`missing assets ${diagnostics.missingAssetCount}`);
+  }
+  return parts.join(", ");
 }
 
 function postToUI(message: MainToPluginMessage): void {

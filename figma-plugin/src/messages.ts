@@ -17,6 +17,7 @@ export type MainToPluginMessage =
       renderedElementCount: number;
       warningCount: number;
       warnings: PluginRenderMessage[];
+      diagnostics?: PluginDraftDiagnostics;
     }
   | {
       type: "render-failed";
@@ -31,6 +32,16 @@ export type PluginState = {
   mode: "upload";
   rendererReady: boolean;
   apiBaseUrl: string;
+};
+
+export type PluginDraftDiagnostics = {
+  ocrProvider?: string;
+  ocrTextCount?: number;
+  ocrCacheHit?: boolean;
+  textLayerCount?: number;
+  rasterLayerCount?: number;
+  shapeLayerCount?: number;
+  missingAssetCount?: number;
 };
 
 export type PluginRenderMessage = {

@@ -415,9 +415,13 @@
 
         if (message.type === "render-succeeded") {
           updateButtons(false);
+          const diagnostics = diagnosticsSummary(message.diagnostics);
+          const detail = diagnostics
+            ? `${message.renderedElementCount} elements rendered. ${message.warningCount} warnings. ${diagnostics}.`
+            : `${message.renderedElementCount} elements rendered. ${message.warningCount} warnings.`;
           setStatus(
             "Rendered",
-            `${message.renderedElementCount} elements rendered. ${message.warningCount} warnings.`,
+            detail,
             "success"
           );
           setWarnings(message.warnings || []);
@@ -475,6 +479,32 @@
           item.append(code, message);
           warningList.appendChild(item);
         }
+      }
+
+      function diagnosticsSummary(diagnostics) {
+        if (!diagnostics || typeof diagnostics !== "object") {
+          return "";
+        }
+        const parts = [];
+        if (diagnostics.ocrProvider) {
+          parts.push(`OCR ${diagnostics.ocrProvider} ${diagnostics.ocrCacheHit ? "cache hit" : "fresh"}`);
+        }
+        if (typeof diagnostics.ocrTextCount === "number") {
+          parts.push(`text ${diagnostics.ocrTextCount}`);
+        }
+        if (
+          typeof diagnostics.textLayerCount === "number" ||
+          typeof diagnostics.rasterLayerCount === "number" ||
+          typeof diagnostics.shapeLayerCount === "number"
+        ) {
+          parts.push(
+            `layers T${diagnostics.textLayerCount || 0}/R${diagnostics.rasterLayerCount || 0}/S${diagnostics.shapeLayerCount || 0}`
+          );
+        }
+        if (typeof diagnostics.missingAssetCount === "number") {
+          parts.push(`missing assets ${diagnostics.missingAssetCount}`);
+        }
+        return parts.join(", ");
       }
 
       function updateButtons(isBusy) {

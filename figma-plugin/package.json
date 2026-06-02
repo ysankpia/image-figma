@@ -11,7 +11,7 @@
     "scan:bundle": "node tools/scan-bundle.mjs dist/main.global.js",
     "check": "pnpm run typecheck && pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm run typecheck"
+    "test": "pnpm run typecheck && vitest run tests --exclude **/dist/**"
   },
   "dependencies": {
     "@image-figma/dsl-schema": "workspace:*",
