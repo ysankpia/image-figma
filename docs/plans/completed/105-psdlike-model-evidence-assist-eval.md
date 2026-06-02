@@ -1,7 +1,8 @@
 # 105 PSD-like Model Evidence Assist Eval
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-06-02
+- 完成日期：2026-06-02
 - 负责人：Codex
 
 ## Goal
@@ -113,3 +114,31 @@ uv run python tools/model_evidence_eval.py \
 
 - 当前本机已有 `ultralytics` 和 `onnxruntime`，本阶段不把它们写入 `pyproject.toml`。
 - 如果模型效果好，下一阶段再规划 `model_assisted_pipeline`，并只允许模型触发局部二次搜索和 semantic tags。
+
+## Completion Evidence
+
+全量评估已完成，产物位于：
+
+```text
+/Users/luhui/Downloads/psdlike_model_evidence_eval_all
+```
+
+结果：
+
+```text
+86/86 ok
+total detections = 8866
+control detections = 531
+media detections = 3134
+low-control cases with model controls = 10
+media missing physical candidates = 530
+OCR overlap risk = 297
+```
+
+决策：
+
+```text
+模型适合作为 semantic evidence provider。
+模型不直接生成 ShapeLayer / RasterLayer / TextLayer。
+模型只允许触发 semanticTags、diagnostics 和后续局部物理重搜。
+```
