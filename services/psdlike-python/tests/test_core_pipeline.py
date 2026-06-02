@@ -6,9 +6,10 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from app.core.model_evidence import apply_model_evidence
+from app.core.media_text import assign_media_owned_text_blocks
 from app.core.ocr import load_ocr_blocks
 from app.core.pipeline import run_pipeline
-from app.core.schema import BBox, OCRBlock, intersection_area, ioa, iou
+from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
 
 
 def test_bbox_geometry() -> None:
@@ -247,6 +248,95 @@ def test_valid_model_control_emits_shape_and_keeps_text_above(tmp_path: Path) ->
     assert layer_stack["semanticEvidence"]["diagnostics"]["modelOwnershipDecisionCount"] >= 1
 
 
+def test_model_image_detection_with_no_texture_is_rejected(tmp_path: Path) -> None:
+    image_path = write_plain_media_fixture(tmp_path)
+    model_path = write_model_evidence(
+        tmp_path,
+        "Image",
+        {"x": 36, "y": 34, "width": 80, "height": 46},
+        confidence=0.90,
+        canvas={"width": 200, "height": 160},
+    )
+
+    result = run_pipeline(image_path=image_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["modelMediaSearchWindowCount"] == 1
+    assert layer_stack["diagnostics"]["modelMediaAcceptedCount"] == 0
+    assert layer_stack["diagnostics"]["modelMediaRejectedCount"] == 1
+    assert layer_stack["diagnostics"]["modelMediaRejectedReasons"]["missing_local_media_component"] == 1
+
+
+def test_model_icon_detection_with_texture_can_add_raster(tmp_path: Path) -> None:
+    image_path = write_texture_icon_fixture(tmp_path)
+    model_path = write_model_evidence(
+        tmp_path,
+        "Icon",
+        {"x": 48, "y": 48, "width": 12, "height": 12},
+        confidence=0.86,
+        canvas={"width": 200, "height": 160},
+    )
+
+    result = run_pipeline(image_path=image_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    dsl = json.loads(result.dsl_path.read_text(encoding="utf-8"))
+
+    model_rasters = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "raster" and layer.get("reason") == "model_assisted_media_refinement"
+    ]
+    assert model_rasters
+    assert layer_stack["diagnostics"]["modelMediaAddedRasterCount"] >= 1
+    assert layer_stack["diagnostics"]["modelAssistedMediaRasterCount"] >= 1
+    assert layer_stack["diagnostics"]["missingAssetCount"] == 0
+    assert layer_stack["diagnostics"]["fullPageVisibleRaster"] == 0
+    asset_ids = {asset["assetId"] for asset in dsl.get("assets", [])}
+    assert asset_ids
+
+
+def test_model_image_detection_overlapping_control_is_rejected(tmp_path: Path) -> None:
+    image_path, ocr_path = write_model_control_fixture(tmp_path)
+    model_path = write_model_evidence(
+        tmp_path,
+        "Image",
+        {"x": 50, "y": 42, "width": 140, "height": 40},
+        confidence=0.91,
+        canvas={"width": 400, "height": 300},
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["controlSurfaceShapeLayerCount"] >= 1
+    assert layer_stack["diagnostics"]["modelMediaAcceptedCount"] == 0
+    assert layer_stack["diagnostics"]["modelMediaRejectedReasons"]["overlaps_accepted_control"] == 1
+
+
+def test_model_media_candidate_can_own_internal_ocr_after_physical_gate() -> None:
+    block = OCRBlock(id="text_0001", text="SALE", bbox=BBox(72, 70, 42, 14), confidence=0.98)
+    text_mask = blank_text_mask(220, 180, [block])
+    raster = Candidate(
+        id="model_media_det_0001",
+        kind="raster",
+        bbox=BBox(20, 30, 170, 112),
+        score=0.82,
+        scores={"texture": 0.58, "edge": 0.48, "entropy": 0.46, "unique": 0.38, "textOverlap": 0.03},
+        reason="model_assisted_media_refinement",
+    )
+
+    media_owned_ids, decisions = assign_media_owned_text_blocks(
+        raster_candidates=[raster],
+        ocr_blocks=[block],
+        text_mask=text_mask,
+        image_width=220,
+        image_height=180,
+    )
+
+    assert media_owned_ids == {"text_0001"}
+    assert decisions[0]["ownerRasterId"] == "model_media_det_0001"
+
+
 def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:
     image_path = tmp_path / "button.png"
     image = Image.new("RGB", (240, 120), "white")
@@ -328,6 +418,33 @@ def write_model_control_fixture(tmp_path: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return image_path, ocr_path
+
+
+def write_plain_media_fixture(tmp_path: Path) -> Path:
+    image_path = tmp_path / "plain_media.png"
+    Image.new("RGB", (200, 160), "white").save(image_path)
+    return image_path
+
+
+def write_texture_icon_fixture(tmp_path: Path) -> Path:
+    image_path = tmp_path / "texture_icon.png"
+    image = Image.new("RGB", (200, 160), "white")
+    draw = ImageDraw.Draw(image)
+    for y in range(48, 60, 3):
+        for x in range(48, 60, 3):
+            fill = (30, 30, 30) if ((x + y) // 4) % 2 == 0 else (30, 180, 120)
+            draw.rectangle((x, y, x + 2, y + 2), fill=fill)
+    image.save(image_path)
+    return image_path
+
+
+def blank_text_mask(width: int, height: int, blocks: list[OCRBlock]):
+    import numpy as np
+
+    mask = np.zeros((height, width), dtype=bool)
+    for block in blocks:
+        mask[block.bbox.y : block.bbox.y2, block.bbox.x : block.bbox.x2] = True
+    return mask
 
 
 def write_model_evidence(

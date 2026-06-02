@@ -110,6 +110,9 @@ def build_layer_stack(
     )
     ocr_control_surfaces = sum(1 for item in shape_candidates if item.reason == "ocr_anchored_control_surface")
     model_control_surfaces = sum(1 for item in shape_candidates if item.reason == "model_assisted_control_surface")
+    model_media_rasters = sum(
+        1 for item in raster_candidates if item.reason in {"model_assisted_media_refinement", "model_assisted_media_merge"}
+    )
     control_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_raster_suppressed")
     control_residual_suppressed = sum(1 for item in rejected if item.get("reason", "").startswith("control_residual_"))
     text_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "text_owned_raster_suppressed")
@@ -137,6 +140,7 @@ def build_layer_stack(
             "textFitShrinkCount": text_fit_shrink_count,
             "darkControlSurfaceCount": dark_control_surfaces,
             "rasterLayerCount": len(raster_candidates),
+            "modelAssistedMediaRasterCount": model_media_rasters,
             "shapeLayerCount": len(shape_candidates),
             "surfaceShapeLayerCount": surface_shapes,
             "backgroundPlateLayerCount": background_plates,

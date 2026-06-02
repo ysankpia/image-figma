@@ -109,6 +109,8 @@ def classify_media_text_owner_candidate(
         "high_texture_low_text_overlap",
         "complex_visual_region_promoted_from_shape",
         "foreground_object_on_surface",
+        "model_assisted_media_refinement",
+        "model_assisted_media_merge",
     }
     if complexity < 0.42 and not complex_reason and not small_media:
         return ""

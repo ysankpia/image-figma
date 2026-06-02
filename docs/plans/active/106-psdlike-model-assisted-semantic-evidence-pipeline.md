@@ -225,7 +225,7 @@ YOLO bbox 不生成 asset
 
 ### Stage 106B: Control Local Re-Search
 
-状态：implementing。
+状态：implemented。
 
 目标：
 
@@ -298,7 +298,7 @@ case_0085_fcd7ad45fe
 
 ### Stage 106C: Media/Icon Local Re-Search
 
-状态：pending after 106B。
+状态：implemented。
 
 目标：
 
@@ -503,6 +503,60 @@ modelOcrOverlapRiskTotal: 297
 ignoredCount: 0
 visible diffs vs /Users/luhui/Downloads/psdlike_python_service_eval_all: 0
 FastAPI smoke: POST /api/draft-preview with modelEvidence completed; /dsl and /preview returned 200
+```
+
+## 106B/106C Validation Evidence
+
+实现范围：
+
+```text
+services/psdlike-python/app/core/model_control.py
+services/psdlike-python/app/core/model_media.py
+services/psdlike-python/app/core/pipeline.py
+services/psdlike-python/app/core/layers.py
+services/psdlike-python/app/core/media_text.py
+services/psdlike-python/app/core/reports.py
+services/psdlike-python/tools/batch_eval.py
+services/psdlike-python/tests/test_core_pipeline.py
+```
+
+验证命令：
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/psdlike-python
+python -m py_compile $(find app tools -name '*.py' | sort)
+uv run pytest -q
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --out /Users/luhui/Downloads/psdlike_106c_nomodel_eval_10 \
+  --limit 10
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --model-evidence-root /Users/luhui/Downloads/psdlike_model_evidence_eval_all \
+  --out /Users/luhui/Downloads/psdlike_106c_model_visible_eval_10_r2 \
+  --limit 10
+```
+
+结果：
+
+```text
+py_compile pass
+pytest: 22 passed
+10-case no-model: 10/10 pass
+10-case model visible: 10/10 pass
+missingAssetTotal: 0
+shapeAssetTotal: 0
+fullPageVisibleRasterTotal: 0
+rawTextOverlapRaster: no-model 4, model 4
+rasterTextKnockoutCount: no-model 7, model 7
+modelControlAcceptedTotal: 22
+modelMediaAcceptedTotal: 131
+modelMediaAddedRasterTotal: 5
+modelMediaMergedRasterTotal: 0
+modelMediaOwnedTextSuppressedTotal: 5
+semanticTagTotal: 341
 ```
 
 ## Validation Plan

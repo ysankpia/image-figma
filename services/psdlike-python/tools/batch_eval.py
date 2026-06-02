@@ -129,6 +129,16 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
         "modelControlDetectionCount": 0,
         "modelMediaDetectionCount": 0,
         "modelOcrOverlapRiskCount": 0,
+        "modelControlSearchWindowCount": 0,
+        "modelControlAcceptedCount": 0,
+        "modelControlRejectedCount": 0,
+        "modelMediaSearchWindowCount": 0,
+        "modelMediaAcceptedCount": 0,
+        "modelMediaRejectedCount": 0,
+        "modelMediaMergedRasterCount": 0,
+        "modelMediaLimitedRasterCount": 0,
+        "modelMediaAddedRasterCount": 0,
+        "modelMediaOwnedTextSuppressedCount": 0,
         "semanticTagCount": 0,
         "modelEvidenceIgnoredReason": "",
         "dslValid": False,
@@ -206,6 +216,16 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
                 "modelControlDetectionCount": diagnostics.get("modelControlDetectionCount", 0),
                 "modelMediaDetectionCount": diagnostics.get("modelMediaDetectionCount", 0),
                 "modelOcrOverlapRiskCount": diagnostics.get("modelOcrOverlapRiskCount", 0),
+                "modelControlSearchWindowCount": diagnostics.get("modelControlSearchWindowCount", 0),
+                "modelControlAcceptedCount": diagnostics.get("modelControlAcceptedCount", 0),
+                "modelControlRejectedCount": diagnostics.get("modelControlRejectedCount", 0),
+                "modelMediaSearchWindowCount": diagnostics.get("modelMediaSearchWindowCount", 0),
+                "modelMediaAcceptedCount": diagnostics.get("modelMediaAcceptedCount", 0),
+                "modelMediaRejectedCount": diagnostics.get("modelMediaRejectedCount", 0),
+                "modelMediaMergedRasterCount": diagnostics.get("modelMediaMergedRasterCount", 0),
+                "modelMediaLimitedRasterCount": diagnostics.get("modelMediaLimitedRasterCount", 0),
+                "modelMediaAddedRasterCount": diagnostics.get("modelMediaAddedRasterCount", 0),
+                "modelMediaOwnedTextSuppressedCount": diagnostics.get("modelMediaOwnedTextSuppressedCount", 0),
                 "semanticTagCount": diagnostics.get("semanticTagCount", 0),
                 "modelEvidenceIgnoredReason": diagnostics.get("modelEvidenceIgnoredReason", ""),
                 "rejectedCandidateCount": diagnostics.get("rejectedCandidateCount", 0),
@@ -354,8 +374,8 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
         f"- failed cases: {sum(1 for row in rows if row.get('failureTypes'))}",
         f"- failure types: `{json.dumps(count_failure_types(rows), ensure_ascii=False)}`",
         "",
-        "| case | size | ocr | ocrProvider | ocrCache | ocrSec | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | visualMae | diff30 | dsl | failures |",
-        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| case | size | ocr | ocrProvider | ocrCache | ocrSec | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | mCtrlA | mCtrlR | mMediaA | mMediaR | mAdd | mMerge | mLimit | mTxt | visualMae | diff30 | dsl | failures |",
+        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         lines.append(
@@ -365,7 +385,10 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
             "{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
             "{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
             "{rawTextOverlapRaster}|{rasterTextKnockoutCount}|{modelDetectionCount}|{semanticTagCount}|"
-            "{modelOcrOverlapRiskCount}|{visualMae}|{visualDiff30Ratio}|{dslValid}|{failures}|".format(
+            "{modelOcrOverlapRiskCount}|{modelControlAcceptedCount}|{modelControlRejectedCount}|"
+            "{modelMediaAcceptedCount}|{modelMediaRejectedCount}|{modelMediaAddedRasterCount}|"
+            "{modelMediaMergedRasterCount}|{modelMediaLimitedRasterCount}|{modelMediaOwnedTextSuppressedCount}|"
+            "{visualMae}|{visualDiff30Ratio}|{dslValid}|{failures}|".format(
                 case=row.get("case", ""),
                 width=row.get("width", 0),
                 height=row.get("height", 0),
@@ -391,6 +414,14 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
                 modelDetectionCount=row.get("modelDetectionCount", 0),
                 semanticTagCount=row.get("semanticTagCount", 0),
                 modelOcrOverlapRiskCount=row.get("modelOcrOverlapRiskCount", 0),
+                modelControlAcceptedCount=row.get("modelControlAcceptedCount", 0),
+                modelControlRejectedCount=row.get("modelControlRejectedCount", 0),
+                modelMediaAcceptedCount=row.get("modelMediaAcceptedCount", 0),
+                modelMediaRejectedCount=row.get("modelMediaRejectedCount", 0),
+                modelMediaAddedRasterCount=row.get("modelMediaAddedRasterCount", 0),
+                modelMediaMergedRasterCount=row.get("modelMediaMergedRasterCount", 0),
+                modelMediaLimitedRasterCount=row.get("modelMediaLimitedRasterCount", 0),
+                modelMediaOwnedTextSuppressedCount=row.get("modelMediaOwnedTextSuppressedCount", 0),
                 visualMae=row.get("visualMae", 0),
                 visualDiff30Ratio=row.get("visualDiff30Ratio", 0),
                 dslValid=row.get("dslValid", False),

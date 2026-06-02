@@ -32,6 +32,7 @@ from .masks import build_text_knockout_mask, build_text_mask
 from .media_text import assign_media_owned_text_blocks
 from .model_control import detect_model_assisted_control_surfaces
 from .model_evidence import apply_model_evidence, load_model_evidence_context
+from .model_media import refine_model_assisted_media
 from .ocr import load_ocr_blocks
 from .ownership import build_raster_ownership
 from .previews import (
@@ -172,6 +173,7 @@ def run_pipeline(
     )
     model_ownership_decisions: list[dict[str, Any]] = []
     model_control_diagnostics: dict[str, Any] = {}
+    model_media_diagnostics: dict[str, Any] = {}
     if options.enable_model_control_refinement and model_context is not None:
         model_control_result = detect_model_assisted_control_surfaces(
             detections=model_context.detections,
@@ -211,6 +213,22 @@ def run_pipeline(
     raster_candidates = control_suppression.rasters
     promotion_decisions.extend(control_suppression.suppressed)
 
+    if options.enable_model_media_refinement and model_context is not None:
+        model_media_result = refine_model_assisted_media(
+            detections=model_context.detections,
+            raster_candidates=raster_candidates,
+            control_shapes=control_shape_candidates(shape_candidates),
+            maps=maps,
+            text_mask=text_knockout_mask,
+            ocr_blocks=ocr_blocks,
+            width=image.width,
+            height=image.height,
+            tile_size=options.tile_size,
+        )
+        raster_candidates = model_media_result.rasters
+        model_ownership_decisions.extend(model_media_result.decisions)
+        model_media_diagnostics.update(model_media_result.diagnostics)
+
     raster_candidates, text_owned_suppressed = suppress_text_owned_raster_fragments(
         raster_candidates,
         ocr_blocks,
@@ -225,6 +243,16 @@ def run_pipeline(
         image_width=image.width,
         image_height=image.height,
     )
+    if model_media_diagnostics:
+        accepted_model_media_ids = {
+            str(item.get("candidateId", ""))
+            for item in model_ownership_decisions
+            if str(item.get("kind", "")) == "model_media_ownership_decision"
+            and str(item.get("decision", "")).startswith("accepted_")
+        }
+        model_media_diagnostics["modelMediaOwnedTextSuppressedCount"] = sum(
+            1 for item in media_owned_text_decisions if str(item.get("ownerRasterId", "")) in accepted_model_media_ids
+        )
     visible_ocr_blocks = [block for block in ocr_blocks if block.id not in media_owned_text_ids]
     visible_text_knockout_mask = build_text_knockout_mask(rgb, visible_ocr_blocks)
 
@@ -271,6 +299,8 @@ def run_pipeline(
         layer_stack.setdefault("diagnostics", {}).update(ocr_diagnostics)
     if model_control_diagnostics:
         layer_stack.setdefault("diagnostics", {}).update(model_control_diagnostics)
+    if model_media_diagnostics:
+        layer_stack.setdefault("diagnostics", {}).update(model_media_diagnostics)
     semantic_evidence_path = apply_model_evidence(
         layer_stack,
         resolved_model_evidence,

@@ -54,6 +54,10 @@ def write_diagnostics(output_path: Path, layer_stack: dict[str, Any]) -> None:
                 f"- structure detections: {diagnostics.get('modelStructureDetectionCount', 0)}",
                 f"- semantic tags: {diagnostics.get('semanticTagCount', 0)}",
                 f"- OCR overlap risks: {diagnostics.get('modelOcrOverlapRiskCount', 0)}",
+                f"- model control accepted/rejected: {diagnostics.get('modelControlAcceptedCount', 0)}/{diagnostics.get('modelControlRejectedCount', 0)}",
+                f"- model media accepted/rejected: {diagnostics.get('modelMediaAcceptedCount', 0)}/{diagnostics.get('modelMediaRejectedCount', 0)}",
+                f"- model media added/merged/limited: {diagnostics.get('modelMediaAddedRasterCount', 0)}/{diagnostics.get('modelMediaMergedRasterCount', 0)}/{diagnostics.get('modelMediaLimitedRasterCount', 0)}",
+                f"- model media-owned text suppressed: {diagnostics.get('modelMediaOwnedTextSuppressedCount', 0)}",
                 f"- ignored reason: `{diagnostics.get('modelEvidenceIgnoredReason', '')}`",
                 "",
             ]
