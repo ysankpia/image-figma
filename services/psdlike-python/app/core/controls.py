@@ -341,7 +341,7 @@ def control_text_contrast(rgb: np.ndarray, blocks: list[OCRBlock], fill: np.ndar
         pixels = region.reshape(-1, 3).astype(np.float32)
         distances = np.linalg.norm(pixels - fill.reshape(1, 3).astype(np.float32), axis=1)
         if distances.size:
-            best = max(best, float(np.percentile(distances, 92)))
+            best = max(best, float(np.percentile(distances, 98)))
     return best
 
 
@@ -381,6 +381,7 @@ def estimate_local_surface_fill_near_text(
     rgb: np.ndarray,
     text_mask: np.ndarray,
     block: OCRBlock,
+    page_background: tuple[int, int, int] | np.ndarray,
     limit_window: BBox | None = None,
 ) -> tuple[np.ndarray, float]:
     height, width, _ = rgb.shape
@@ -408,7 +409,17 @@ def estimate_local_surface_fill_near_text(
     pixels = crop[~local_text]
     if pixels.shape[0] < 16:
         pixels = crop.reshape(-1, 3)
-    return dominant_cluster_stats(pixels.astype(np.uint8), bucket_size=20)
+    local_fill, local_coverage = dominant_cluster_stats(pixels.astype(np.uint8), bucket_size=20)
+
+    text_crop = rgb[block.bbox.y : block.bbox.y2, block.bbox.x : block.bbox.x2]
+    if text_crop.size == 0:
+        return local_fill, local_coverage
+    box_fill, box_coverage = dominant_cluster_stats(text_crop.reshape(-1, 3).astype(np.uint8), bucket_size=16)
+    box_page_distance = color_distance(box_fill, page_background)
+    local_page_distance = color_distance(local_fill, page_background)
+    if box_coverage >= 0.18 and box_page_distance >= max(48.0, local_page_distance + 28.0):
+        return box_fill.astype(np.uint8), box_coverage
+    return local_fill, local_coverage
 
 
 def local_surface_component_touching_seed(
@@ -449,7 +460,7 @@ def extract_local_surface_from_text_seed(
     if window is None or window.area <= 0:
         return None
 
-    fill_seed, seed_coverage = estimate_local_surface_fill_near_text(rgb, text_mask, block, limit_window=window)
+    fill_seed, seed_coverage = estimate_local_surface_fill_near_text(rgb, text_mask, block, page_background, limit_window=window)
     page_distance = color_distance(fill_seed, page_background)
     crop = rgb[window.y : window.y2, window.x : window.x2]
     if crop.size == 0:
@@ -1355,6 +1366,64 @@ def control_shape_candidates(shape_candidates: list[Candidate]) -> list[Candidat
         for item in shape_candidates
         if item.scores.get("confirmedControlSurface", 0.0) >= 1.0
     ]
+
+
+def suppress_control_owned_shapes(shape_candidates: list[Candidate]) -> tuple[list[Candidate], list[dict[str, Any]]]:
+    controls = control_shape_candidates(shape_candidates)
+    if not controls:
+        return shape_candidates, []
+    kept: list[Candidate] = []
+    suppressed: list[dict[str, Any]] = []
+    for shape in shape_candidates:
+        if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+            kept.append(shape)
+            continue
+        owner = best_control_owner(shape, controls)
+        if owner is None:
+            kept.append(shape)
+            continue
+        reason = classify_control_owned_shape(shape, owner)
+        if reason == "":
+            kept.append(shape)
+            continue
+        suppressed.append(
+            {
+                "kind": "control_owned_shape_suppressed",
+                "id": shape.id,
+                "bbox": shape.bbox.to_dict(),
+                "reason": reason,
+                "controlSurfaceId": owner.id,
+                "controlSurfaceReason": owner.reason,
+                "controlSurfaceBBox": owner.bbox.to_dict(),
+                "ioaShapeInControl": round(ioa(shape.bbox, owner.bbox), 4),
+                "ioaControlInShape": round(ioa(owner.bbox, shape.bbox), 4),
+                "iou": round(iou(shape.bbox, owner.bbox), 4),
+            }
+        )
+    return kept, suppressed
+
+
+def classify_control_owned_shape(shape: Candidate, control: Candidate) -> str:
+    if shape.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands"}:
+        return ""
+    shape_in_control = ioa(shape.bbox, control.bbox)
+    control_in_shape = ioa(control.bbox, shape.bbox)
+    overlap = iou(shape.bbox, control.bbox)
+    area_ratio = shape.bbox.area / max(1, control.bbox.area)
+    center_dx = abs((shape.bbox.x + shape.bbox.width / 2) - (control.bbox.x + control.bbox.width / 2))
+    center_dy = abs((shape.bbox.y + shape.bbox.height / 2) - (control.bbox.y + control.bbox.height / 2))
+    center_close = center_dx <= control.bbox.width * 0.45 and center_dy <= control.bbox.height * 0.55
+    if control_in_shape >= 0.72 and control_shape_fill_distance(shape, control) <= 42.0:
+        return "control_surface_owned_background_shape"
+    if control_in_shape >= 0.72 and area_ratio <= 1.65 and center_close:
+        return "control_surface_parent_shape_fragment"
+    if control_in_shape >= 0.55 and shape_in_control >= 0.45 and area_ratio <= 1.80 and center_close:
+        return "control_surface_overlapping_shape_fragment"
+    if shape_in_control >= 0.72 and shape.bbox.area <= control.bbox.area * 0.35:
+        return "control_surface_internal_shape_fragment"
+    if overlap >= 0.52 and control_shape_fill_distance(shape, control) <= 48.0:
+        return "control_surface_duplicate_shape_fragment"
+    return ""
 
 
 def extract_control_foreground_residuals(

@@ -49,6 +49,45 @@ describe("renderDraftRuntimeDesign", () => {
     expect(result.warnings.some((warning) => warning.code === "IMAGE_LOAD_FAILED")).toBe(true);
     expect(adapter.findNodeByName("Title")?.characters).toBe("首页");
   });
+
+  it("maps Draft Runtime font families and weights to Figma font styles", async () => {
+    const adapter = new FakeFigmaAdapter();
+    const dsl = makeDraftRuntimeDsl();
+    dsl.root.children = [
+      {
+        id: "medium",
+        type: "text",
+        name: "Medium Text",
+        bbox: { x: 10, y: 10, width: 100, height: 24 },
+        text: { characters: "确认" },
+        style: { fontFamily: "PingFang SC", fontSize: 16, fontWeight: 500, color: "#111111" }
+      },
+      {
+        id: "semibold",
+        type: "text",
+        name: "Semibold Text",
+        bbox: { x: 10, y: 40, width: 100, height: 24 },
+        text: { characters: "标题" },
+        style: { fontFamily: "PingFang SC", fontSize: 16, fontWeight: 600, color: "#111111" }
+      },
+      {
+        id: "bold",
+        type: "text",
+        name: "Bold Text",
+        bbox: { x: 10, y: 70, width: 100, height: 24 },
+        text: { characters: "100" },
+        style: { fontSize: 16, fontWeight: 700, color: "#111111" }
+      }
+    ];
+
+    const result = await renderDraftRuntimeDesign(dsl, { figma: adapter });
+
+    expect(result.success).toBe(true);
+    expect(adapter.findNodeByName("Medium Text")?.fontName).toEqual({ family: "PingFang SC", style: "Medium" });
+    expect(adapter.findNodeByName("Semibold Text")?.fontName).toEqual({ family: "PingFang SC", style: "Semibold" });
+    expect(adapter.findNodeByName("Bold Text")?.fontName).toEqual({ family: "Inter", style: "Bold" });
+    expect(adapter.findNodeByName("Medium Text")?.textAutoResize).toBe("NONE");
+  });
 });
 
 function makeDraftRuntimeDsl(): DraftRuntimeDSL {

@@ -159,6 +159,19 @@ export class FakeFigmaAdapter implements FigmaAdapter {
 function toFakeFontName(style: DSLStyle): FigmaFontName {
   return {
     family: style.fontFamily ?? "Inter",
-    style: style.fontWeight !== undefined && style.fontWeight >= 600 ? "Bold" : "Regular"
+    style: fakeFontStyleFromWeight(style.fontWeight)
   };
+}
+
+function fakeFontStyleFromWeight(weight: number | undefined): string {
+  if (weight !== undefined && weight >= 700) {
+    return "Bold";
+  }
+  if (weight !== undefined && weight >= 600) {
+    return "Semibold";
+  }
+  if (weight !== undefined && weight >= 500) {
+    return "Medium";
+  }
+  return "Regular";
 }

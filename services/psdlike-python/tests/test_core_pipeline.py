@@ -3,13 +3,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw
 
+from app.core.layers import build_layer_stack
 from app.core.model_evidence import apply_model_evidence
 from app.core.media_text import assign_media_owned_text_blocks
 from app.core.ocr import load_ocr_blocks
 from app.core.pipeline import PipelineOptions, run_pipeline
+from app.core.runtime import wire_runtime_namespace
 from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
+from app.core.style import TextStyleContext, sample_text_color_with_diagnostics
+from app.core.controls import suppress_control_owned_shapes
 
 
 def test_bbox_geometry() -> None:
@@ -512,6 +517,76 @@ def test_model_control_without_pixel_surface_is_rejected(tmp_path: Path) -> None
     ]
 
 
+def test_solid_text_button_misdetected_as_image_does_not_add_edge_raster(tmp_path: Path) -> None:
+    image_path = tmp_path / "solid_button_as_image.png"
+    image = Image.new("RGB", (260, 140), (250, 250, 250))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((80, 48, 180, 92), radius=20, fill=(35, 92, 247))
+    draw.text((111, 60), "办理", fill=(255, 255, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "solid_button_as_image.ocr_blocks.v1.json", [("text_0001", "办理", 111, 60, 42, 22)])
+    model_path = write_model_evidence(
+        tmp_path,
+        "Image",
+        {"x": 78, "y": 46, "width": 104, "height": 48},
+        confidence=0.84,
+        canvas={"width": 260, "height": 140},
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0.0) >= 1.0
+    ]
+    assert not [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "raster" and layer.get("reason") == "model_assisted_media_refinement"
+    ]
+    assert layer_stack["diagnostics"]["modelMediaRejectedReasons"].get(
+        "control_like_solid_text_surface", 0
+    ) + layer_stack["diagnostics"]["modelMediaRejectedReasons"].get("overlaps_accepted_control", 0) >= 1
+    text = next(layer for layer in layer_stack["layers"] if layer["type"] == "text")
+    control = next(
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0.0) >= 1.0
+    )
+    text_center_y = text["bbox"]["y"] + text["bbox"]["height"] / 2
+    control_center_y = control["bbox"]["y"] + control["bbox"]["height"] / 2
+    assert abs(text_center_y - control_center_y) <= 1.5
+    assert text["textFit"]["ownerBboxRecentered"] == 1
+    assert layer_stack["diagnostics"]["textOwnerBboxRecenteredCount"] >= 1
+
+
+def test_control_owned_shape_fragment_is_suppressed() -> None:
+    control = Candidate(
+        "control",
+        "shape",
+        BBox(80, 48, 100, 44),
+        0.9,
+        {"confirmedControlSurface": 1.0, "fillR": 35.0, "fillG": 92.0, "fillB": 247.0},
+        "ocr_anchored_control_surface",
+    )
+    fragment = Candidate(
+        "fragment",
+        "shape",
+        BBox(70, 42, 110, 54),
+        0.4,
+        {},
+        "low_texture_solid_region",
+    )
+
+    kept, suppressed = suppress_control_owned_shapes([fragment, control])
+
+    assert [item.id for item in kept] == ["control"]
+    assert suppressed[0]["kind"] == "control_owned_shape_suppressed"
+    assert suppressed[0]["reason"] == "control_surface_parent_shape_fragment"
+
+
 def test_container_surface_does_not_trigger_control_raster_suppression(tmp_path: Path) -> None:
     image_path = tmp_path / "container_with_texture.png"
     image = Image.new("RGB", (360, 220), "white")
@@ -567,6 +642,147 @@ def test_adjacent_chip_controls_are_not_deduped_together(tmp_path: Path) -> None
     ]
 
     assert len(control_shapes) == 2
+
+
+def test_control_text_uses_owner_surface_for_contrast_color_and_font(tmp_path: Path) -> None:
+    image_path = tmp_path / "owner_text_color.png"
+    image = Image.new("RGB", (280, 140), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((80, 40, 200, 84), radius=18, fill=(31, 91, 247))
+    draw.text((121, 55), "确认", fill=(255, 255, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "owner_text_color.ocr_blocks.v1.json", [("text_0001", "确认", 121, 55, 38, 14)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    text = next(layer for layer in layer_stack["layers"] if layer["type"] == "text")
+
+    assert text["style"]["fontFamily"] == "PingFang SC"
+    assert text["style"]["fontWeight"] == 500
+    assert text["style"]["color"].lower() in {"#ffffff", "#fefefe", "#fbfbfb"}
+    assert text["textFit"]["textColorSource"] == "owner_surface_contrast_sample"
+    assert text["textFit"]["textOwnerRole"] == "control_surface"
+    assert layer_stack["diagnostics"]["textOwnerAwareColorCount"] >= 1
+
+
+def test_text_foreground_sample_prefers_small_high_contrast_strokes(tmp_path: Path) -> None:
+    image_path = tmp_path / "foreground_bucket.png"
+    image = Image.new("RGB", (80, 80), (76, 60, 35))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((20, 20, 60, 60), fill=(105, 83, 52))
+    draw.rectangle((38, 38, 42, 42), fill=(255, 255, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "foreground_bucket.ocr_blocks.v1.json", [("text_0001", "A", 20, 20, 40, 40)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    text = next(layer for layer in layer_stack["layers"] if layer["type"] == "text")
+
+    assert text["style"]["color"].lower() == "#ffffff"
+    assert text["textFit"]["textColorSource"] in {"local_contrast_sample", "owner_surface_contrast_sample"}
+
+
+def test_text_color_bucket_encoding_keeps_rgb_channels_separate(tmp_path: Path) -> None:
+    image_path = tmp_path / "foreground_bucket_channels.png"
+    image = Image.new("RGB", (96, 72), (32, 64, 96))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((16, 18, 80, 54), fill=(32, 64, 96))
+    draw.rectangle((34, 30, 62, 42), fill=(240, 248, 255))
+    draw.rectangle((16, 18, 80, 22), fill=(224, 64, 96))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "foreground_bucket_channels.ocr_blocks.v1.json", [("text_0001", "OK", 16, 18, 64, 36)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    text = next(layer for layer in layer_stack["layers"] if layer["type"] == "text")
+
+    assert text["style"]["color"].lower() in {"#f0f8ff", "#eff8ff", "#f0f7ff"}
+
+
+def test_text_color_uses_ocr_box_background_when_owner_fill_is_wrong() -> None:
+    wire_runtime_namespace()
+    rgb = np.full((80, 120, 3), (252, 252, 252), dtype=np.uint8)
+    rgb[24:58, 28:92] = np.array([35, 92, 247], dtype=np.uint8)
+    rgb[36:44, 48:72] = np.array([255, 255, 255], dtype=np.uint8)
+    context = TextStyleContext(
+        owner_bbox=BBox(28, 24, 64, 34),
+        owner_fill=(230, 240, 253),
+        owner_role="container_surface",
+        owner_reason="low_texture_solid_region",
+    )
+
+    sample = sample_text_color_with_diagnostics(rgb, BBox(42, 30, 40, 24), context)
+
+    assert sample.source == "ocr_box_dominant_background_contrast_sample"
+    assert sample.color.lower() == "#ffffff"
+
+
+def test_latin_numeric_text_uses_inter_font_family(tmp_path: Path) -> None:
+    image_path = tmp_path / "latin_text.png"
+    image = Image.new("RGB", (180, 80), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((24, 28), "web-01", fill=(20, 20, 20))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "latin_text.ocr_blocks.v1.json", [("text_0001", "web-01", 24, 28, 58, 16)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    text = next(layer for layer in layer_stack["layers"] if layer["type"] == "text")
+
+    assert text["style"]["fontFamily"] == "Inter"
+    assert text["style"]["fontWeight"] == 400
+
+
+def test_same_row_similar_action_text_font_sizes_are_harmonized(tmp_path: Path) -> None:
+    image_path = tmp_path / "row_actions.png"
+    image = Image.new("RGB", (420, 120), (18, 20, 24))
+    draw = ImageDraw.Draw(image)
+    for x in (30, 160, 290):
+        draw.rounded_rectangle((x, 36, x + 104, 78), radius=8, fill=(31, 41, 56))
+        draw.text((x + 20, 48), "在线办理", fill=(63, 148, 250))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "row_actions.ocr_blocks.v1.json",
+        [
+            ("text_0001", "在线办理", 50, 47, 72, 22),
+            ("text_0002", "在线办理", 180, 47, 75, 26),
+            ("text_0003", "在线办理", 310, 47, 73, 24),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    texts = [layer for layer in layer_stack["layers"] if layer["type"] == "text"]
+    sizes = {layer["style"]["fontSize"] for layer in texts}
+
+    assert len(sizes) == 1
+    assert layer_stack["diagnostics"]["textRowHarmonizedCount"] >= 1
+
+
+def test_media_owned_text_still_not_emitted_as_visible_text(tmp_path: Path) -> None:
+    block = OCRBlock(id="text_0001", text="SALE", bbox=BBox(72, 70, 42, 14), confidence=0.98)
+    image = Image.new("RGB", (220, 180), "white")
+    image_path = tmp_path / "media_owned_style.png"
+    image.save(image_path)
+
+    layer_stack = build_layer_stack(
+        image_path=image_path,
+        ocr_path=None,
+        image=image,
+        rgb=np.asarray(image),
+        ocr_blocks=[block],
+        raster_candidates=[],
+        shape_candidates=[],
+        asset_refs={},
+        ownership={},
+        rejected=[],
+        thresholds={"maxTextOverlap": 0.24},
+        media_owned_text_ids={"text_0001"},
+    )
+
+    assert not [layer for layer in layer_stack["layers"] if layer["type"] == "text"]
+    assert layer_stack["diagnostics"]["visibleTextLayerCount"] == 0
 
 
 def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:

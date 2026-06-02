@@ -154,8 +154,14 @@ export function toFontName(style: DSLStyle): FigmaFontName {
 }
 
 function fontStyleFromWeight(weight: number | undefined): string {
-  if (weight !== undefined && weight >= 600) {
+  if (weight !== undefined && weight >= 700) {
     return "Bold";
+  }
+  if (weight !== undefined && weight >= 600) {
+    return "Semibold";
+  }
+  if (weight !== undefined && weight >= 500) {
+    return "Medium";
   }
   return "Regular";
 }
