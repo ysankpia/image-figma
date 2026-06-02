@@ -14,7 +14,7 @@ from app.core.pipeline import PipelineOptions, run_pipeline
 from app.core.runtime import wire_runtime_namespace
 from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
 from app.core.style import TextStyleContext, sample_text_color_with_diagnostics
-from app.core.controls import suppress_control_owned_shapes
+from app.core.controls import suppress_container_parent_shapes, suppress_control_owned_shapes
 
 
 def test_bbox_geometry() -> None:
@@ -585,6 +585,52 @@ def test_control_owned_shape_fragment_is_suppressed() -> None:
     assert [item.id for item in kept] == ["control"]
     assert suppressed[0]["kind"] == "control_owned_shape_suppressed"
     assert suppressed[0]["reason"] == "control_surface_parent_shape_fragment"
+
+
+def test_container_parent_shape_is_suppressed_by_sibling_surfaces() -> None:
+    parent = Candidate("parent", "shape", BBox(24, 80, 360, 120), 0.5, {}, "low_texture_solid_region")
+    children = [
+        Candidate(f"card_{index}", "shape", BBox(40 + index * 112, 96, 96, 72), 0.8, {"surfaceRoleContainer": 1.0}, "local_container_surface")
+        for index in range(3)
+    ]
+
+    kept, suppressed = suppress_container_parent_shapes([parent, *children])
+
+    assert [item.id for item in kept] == [child.id for child in children]
+    assert suppressed[0]["kind"] == "container_parent_shape_suppressed"
+    assert suppressed[0]["reason"] == "container_children_own_surface"
+    assert suppressed[0]["childSurfaceCount"] == 3
+
+
+def test_multi_text_sibling_cards_materialize_as_container_surfaces(tmp_path: Path) -> None:
+    image_path = tmp_path / "sibling_cards.png"
+    image = Image.new("RGB", (520, 420), (18, 20, 24))
+    draw = ImageDraw.Draw(image)
+    colors = [(54, 88, 139), (47, 110, 75), (38, 75, 127)]
+    rows: list[tuple[str, str, int, int, int, int]] = []
+    for index, (x, color) in enumerate(zip((32, 188, 344), colors), start=1):
+        draw.rounded_rectangle((x, 62, x + 132, 154), radius=8, fill=color)
+        draw.text((x + 12, 80), f"Card {index}", fill=(250, 250, 250))
+        draw.text((x + 12, 108), f"Issuer {index}", fill=(235, 245, 255))
+        rows.append((f"text_{index}_a", f"Card {index}", x + 12, 80, 54, 16))
+        rows.append((f"text_{index}_b", f"Issuer {index}", x + 12, 108, 72, 16))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "sibling_cards.ocr_blocks.v1.json", rows)
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    container_shapes = [
+        layer for layer in layer_stack["layers"] if layer["type"] == "shape" and layer.get("reason") == "local_container_surface"
+    ]
+    control_shapes = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0.0) >= 1.0
+    ]
+
+    assert len(container_shapes) == 3
+    assert not control_shapes
+    assert layer_stack["diagnostics"]["containerSurfaceShapeLayerCount"] == 3
 
 
 def test_container_surface_does_not_trigger_control_raster_suppression(tmp_path: Path) -> None:

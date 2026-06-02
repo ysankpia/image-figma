@@ -24,6 +24,7 @@ from .controls import (
     control_profile_diagnostics,
     detect_ocr_anchored_control_surfaces,
     promote_control_surfaces,
+    suppress_container_parent_shapes,
     suppress_control_owned_shapes,
     suppress_control_owned_rasters,
     suppress_text_owned_raster_fragments,
@@ -255,6 +256,9 @@ def run_pipeline(
 
     shape_candidates, control_shape_suppressed = suppress_control_owned_shapes(shape_candidates)
     promotion_decisions.extend(control_shape_suppressed)
+
+    shape_candidates, container_parent_suppressed = suppress_container_parent_shapes(shape_candidates)
+    promotion_decisions.extend(container_parent_suppressed)
 
     control_suppression = suppress_control_owned_rasters(
         raster_candidates,

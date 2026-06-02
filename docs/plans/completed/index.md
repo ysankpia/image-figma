@@ -102,3 +102,4 @@
 - [PSD-like Python OCR Product Readiness](106-5-psdlike-python-ocr-product-readiness.md) — `completed`
 - [PSD-like Python Figma Plugin Integration](107-psdlike-python-figma-plugin-integration.md) — `completed`
 - [PSD-like Surface-Aware Text Style And Layout Repair](109-psdlike-surface-aware-text-style-repair.md) — `completed`
+- [PSD-like Visible Container Surface Ownership](110-psdlike-visible-container-surface-ownership.md) — `completed`

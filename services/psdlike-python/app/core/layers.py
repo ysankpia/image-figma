@@ -107,6 +107,7 @@ def build_layer_stack(
     missing_assets = sum(1 for item in layers if item["type"] == "raster" and not item.get("asset"))
     surface_shapes = sum(1 for item in shape_candidates if item.reason == "background_surface_band")
     background_plates = sum(1 for item in shape_candidates if item.reason == "inferred_background_plate_from_surface_bands")
+    container_surfaces = sum(1 for item in shape_candidates if item.reason == "local_container_surface")
     control_surfaces = sum(1 for item in shape_candidates if item.scores.get("confirmedControlSurface", 0.0) >= 1.0)
     ocr_control_surfaces = sum(
         1
@@ -123,6 +124,7 @@ def build_layer_stack(
     )
     control_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_raster_suppressed")
     control_owned_shape_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_shape_suppressed")
+    container_parent_shape_suppressed = sum(1 for item in rejected if item.get("kind") == "container_parent_shape_suppressed")
     control_residual_suppressed = sum(1 for item in rejected if item.get("reason", "").startswith("control_residual_"))
     text_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "text_owned_raster_suppressed")
     media_owned_text_count = len(media_owned_text_ids)
@@ -189,11 +191,13 @@ def build_layer_stack(
             "shapeLayerCount": len(shape_candidates),
             "surfaceShapeLayerCount": surface_shapes,
             "backgroundPlateLayerCount": background_plates,
+            "containerSurfaceShapeLayerCount": container_surfaces,
             "controlSurfaceShapeLayerCount": control_surfaces,
             "ocrAnchoredControlSurfaceCount": ocr_control_surfaces,
             "modelAssistedControlSurfaceCount": model_control_surfaces,
             "controlOwnedRasterSuppressedCount": control_owned_raster_suppressed,
             "controlOwnedShapeSuppressedCount": control_owned_shape_suppressed,
+            "containerParentShapeSuppressedCount": container_parent_shape_suppressed,
             "controlResidualSuppressedCount": control_residual_suppressed,
             "textOwnedRasterSuppressedCount": text_owned_raster_suppressed,
             "shapeAssetCount": shape_asset_count,

@@ -642,6 +642,45 @@ def local_surface_to_control_candidate(
     )
 
 
+def local_surface_to_container_candidate(
+    surface: LocalSurfaceCandidate,
+    scores: dict[str, float],
+) -> Candidate:
+    output_scores = dict(scores)
+    output_scores["surfaceRoleContainer"] = 1.0
+    output_scores["confirmedControlSurface"] = 0.0
+    return Candidate(
+        id=surface.id,
+        kind="shape",
+        bbox=surface.bbox,
+        score=max(0.66, float(scores.get("score", surface.score))),
+        scores=output_scores,
+        reason="local_container_surface",
+    )
+
+
+def is_visible_container_surface(surface: LocalSurfaceCandidate, scores: dict[str, float], width: int, height: int) -> bool:
+    page_area = max(1, width * height)
+    area_ratio = surface.bbox.area / page_area
+    if surface.bbox.area < 1800:
+        return False
+    if area_ratio > 0.08:
+        return False
+    if surface.bbox.width < 48 or surface.bbox.height < 32:
+        return False
+    if scores.get("containedTextBlockCount", 0.0) < 2.0:
+        return False
+    if scores.get("touchesWindowEdgeCount", 0.0) > 1.0:
+        return False
+    if scores.get("fillCoverage", 0.0) < 0.58 or scores.get("closeFillCoverage", 0.0) < 0.68:
+        return False
+    if scores.get("texture", 1.0) > 0.34 or scores.get("edge", 1.0) > 0.28 or scores.get("entropy", 1.0) > 0.56:
+        return False
+    if scores.get("surfaceRoleChartInternal", 0.0) >= 1.0 or scores.get("surfaceRoleControl", 0.0) >= 1.0:
+        return False
+    return True
+
+
 def surface_role_decision_payload(
     role: SurfaceRoleDecision,
     surface: LocalSurfaceCandidate,
@@ -871,11 +910,14 @@ def detect_ocr_anchored_control_surfaces(
             source_refs=[f"ocr:{block.id}", "pixel:local_surface_gate"],
         )
         decisions.append(surface_role_decision_payload(role, surface, block, scores, "ocr_control_surface"))
+        if role.role == "container_surface" and is_visible_container_surface(surface, scores, width, height):
+            candidates.append(local_surface_to_container_candidate(surface, scores))
+            continue
         if role.role != "control_surface" or role.decision != "accepted":
             continue
         candidates.append(local_surface_to_control_candidate(surface, scores, "ocr_anchored_control_surface"))
 
-    return merge_control_surfaces(candidates), decisions[:160]
+    return merge_local_surface_candidates(candidates), decisions[:160]
 
 
 def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> list[BBox]:
@@ -1242,6 +1284,23 @@ def merge_control_surfaces(candidates: list[Candidate]) -> list[Candidate]:
     return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
 
 
+def merge_local_surface_candidates(candidates: list[Candidate]) -> list[Candidate]:
+    controls = [item for item in candidates if item.scores.get("confirmedControlSurface", 0.0) >= 1.0]
+    containers = [item for item in candidates if item.reason == "local_container_surface"]
+    accepted: list[Candidate] = merge_control_surfaces(controls)
+    for candidate in sorted(containers, key=lambda item: (-item.score, item.bbox.area, item.bbox.y, item.bbox.x)):
+        duplicate = False
+        for kept in accepted:
+            if kept.reason != "local_container_surface":
+                continue
+            if iou(candidate.bbox, kept.bbox) >= 0.70 or ioa(candidate.bbox, kept.bbox) >= 0.90 or ioa(kept.bbox, candidate.bbox) >= 0.90:
+                duplicate = True
+                break
+        if not duplicate:
+            accepted.append(candidate)
+    return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
+
+
 def suppress_control_owned_rasters(raster_candidates: list[Candidate], control_shapes: list[Candidate]) -> ControlSuppressionResult:
     if not control_shapes:
         return ControlSuppressionResult(rasters=raster_candidates, suppressed=[], residual_suppressed_count=0)
@@ -1401,6 +1460,89 @@ def suppress_control_owned_shapes(shape_candidates: list[Candidate]) -> tuple[li
             }
         )
     return kept, suppressed
+
+
+def suppress_container_parent_shapes(shape_candidates: list[Candidate]) -> tuple[list[Candidate], list[dict[str, Any]]]:
+    containers = [item for item in shape_candidates if item.reason == "local_container_surface"]
+    if len(containers) < 2:
+        return shape_candidates, []
+    kept: list[Candidate] = []
+    suppressed: list[dict[str, Any]] = []
+    for shape in shape_candidates:
+        reason, children = classify_container_parent_shape(shape, containers)
+        if reason == "":
+            kept.append(shape)
+            continue
+        suppressed.append(
+            {
+                "kind": "container_parent_shape_suppressed",
+                "id": shape.id,
+                "bbox": shape.bbox.to_dict(),
+                "reason": reason,
+                "childSurfaceIds": [child.id for child in children],
+                "childSurfaceBBoxes": [child.bbox.to_dict() for child in children],
+                "childSurfaceCount": len(children),
+                "childAreaRatio": round(sum(child.bbox.area for child in children) / max(1, shape.bbox.area), 4),
+            }
+        )
+    return kept, suppressed
+
+
+def classify_container_parent_shape(shape: Candidate, containers: list[Candidate]) -> tuple[str, list[Candidate]]:
+    if shape.reason != "low_texture_solid_region":
+        return "", []
+    if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+        return "", []
+    children = [child for child in containers if child.id != shape.id and ioa(child.bbox, shape.bbox) >= 0.82]
+    if len(children) < 2:
+        return "", []
+    union = union_bbox([child.bbox for child in children])
+    if union is None:
+        return "", []
+    if ioa(union, shape.bbox) < 0.78:
+        return "", []
+    child_area_ratio = sum(child.bbox.area for child in children) / max(1, shape.bbox.area)
+    if child_area_ratio < 0.24:
+        return "", []
+    if shape.bbox.area > union.area * 3.2:
+        return "", []
+    if not sibling_surface_group(children):
+        return "", []
+    return "container_children_own_surface", children
+
+
+def union_bbox(boxes: list[BBox]) -> BBox | None:
+    if not boxes:
+        return None
+    x1 = min(box.x for box in boxes)
+    y1 = min(box.y for box in boxes)
+    x2 = max(box.x2 for box in boxes)
+    y2 = max(box.y2 for box in boxes)
+    return BBox(x1, y1, x2 - x1, y2 - y1)
+
+
+def sibling_surface_group(children: list[Candidate]) -> bool:
+    if len(children) < 2:
+        return False
+    boxes = sorted([child.bbox for child in children], key=lambda box: (box.y + box.height / 2, box.x))
+    heights = [box.height for box in boxes]
+    widths = [box.width for box in boxes]
+    median_height = float(np.median(heights))
+    median_width = float(np.median(widths))
+    if median_height <= 0 or median_width <= 0:
+        return False
+    same_row = max(abs((box.y + box.height / 2) - (boxes[0].y + boxes[0].height / 2)) for box in boxes) <= median_height * 0.42
+    similar_height = max(abs(box.height - median_height) for box in boxes) <= median_height * 0.48
+    horizontal_gutters = [max(0, boxes[index + 1].x - boxes[index].x2) for index in range(len(boxes) - 1)]
+    visible_horizontal_gutter = any(gap >= max(4, median_height * 0.04) for gap in horizontal_gutters)
+    if same_row and similar_height and visible_horizontal_gutter:
+        return True
+    boxes = sorted([child.bbox for child in children], key=lambda box: (box.x + box.width / 2, box.y))
+    same_col = max(abs((box.x + box.width / 2) - (boxes[0].x + boxes[0].width / 2)) for box in boxes) <= median_width * 0.42
+    similar_width = max(abs(box.width - median_width) for box in boxes) <= median_width * 0.48
+    vertical_gutters = [max(0, boxes[index + 1].y - boxes[index].y2) for index in range(len(boxes) - 1)]
+    visible_vertical_gutter = any(gap >= max(4, median_width * 0.04) for gap in vertical_gutters)
+    return same_col and similar_width and visible_vertical_gutter
 
 
 def classify_control_owned_shape(shape: Candidate, control: Candidate) -> str:
