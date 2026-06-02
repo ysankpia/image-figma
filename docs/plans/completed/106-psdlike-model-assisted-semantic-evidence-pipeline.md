@@ -1,6 +1,6 @@
 # 106 PSD-like Model-Assisted Semantic Evidence Pipeline
 
-- 状态：active，106A implemented；106B/106C/106D executing in order
+- 状态：completed，106A/106B/106C/106D implemented and validated
 - 创建日期：2026-06-02
 - 负责人：Codex
 

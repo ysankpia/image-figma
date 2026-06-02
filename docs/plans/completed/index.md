@@ -98,5 +98,6 @@
 - [PSD-like V1 Media Text Ownership And Layout Fit](101-psd-like-v1-media-text-ownership-and-layout-fit.md) — `completed`
 - [PSD-like V1 Baseline Audit And Dark Control Recall](103-psd-like-v1-baseline-audit-and-dark-control-recall.md) — `completed`
 - [PSD-like Model Evidence Assist Eval](105-psdlike-model-evidence-assist-eval.md) — `completed`
+- [PSD-like Model-Assisted Semantic Evidence Pipeline](106-psdlike-model-assisted-semantic-evidence-pipeline.md) — `completed`
 - [PSD-like Python OCR Product Readiness](106-5-psdlike-python-ocr-product-readiness.md) — `completed`
 - [PSD-like Python Figma Plugin Integration](107-psdlike-python-figma-plugin-integration.md) — `completed`
