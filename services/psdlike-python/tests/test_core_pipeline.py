@@ -347,6 +347,228 @@ def test_model_media_candidate_can_own_internal_ocr_after_physical_gate() -> Non
     assert decisions[0]["ownerRasterId"] == "model_media_det_0001"
 
 
+def test_chart_tick_near_graphic_line_does_not_create_control_shape(tmp_path: Path) -> None:
+    image_path = tmp_path / "chart_ticks.png"
+    image = Image.new("RGB", (320, 220), "white")
+    draw = ImageDraw.Draw(image)
+    for text, y in [("18万", 54), ("12万", 92), ("6万", 130), ("0", 168)]:
+        draw.text((252, y), text, fill=(30, 30, 30))
+    draw.line((210, 50, 286, 176), fill=(64, 116, 249), width=4)
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "chart_ticks.ocr_blocks.v1.json",
+        [
+            ("text_0001", "18万", 252, 54, 28, 12),
+            ("text_0002", "12万", 252, 92, 28, 12),
+            ("text_0003", "6万", 252, 130, 22, 12),
+            ("text_0004", "0", 252, 168, 10, 12),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert not [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("reason") == "ocr_anchored_control_surface"
+    ]
+    assert layer_stack["diagnostics"]["controlTextRoleRejectedCount"] >= 1
+
+
+def test_numeric_button_with_closed_boundary_remains_shape(tmp_path: Path) -> None:
+    image_path = tmp_path / "numeric_button.png"
+    image = Image.new("RGB", (260, 120), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((72, 34, 188, 82), radius=20, fill=(38, 94, 247))
+    draw.text((114, 51), "24", fill=(255, 255, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(tmp_path, "numeric_button.ocr_blocks.v1.json", [("text_0001", "24", 114, 51, 18, 12)])
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("reason") == "ocr_anchored_control_surface"
+    ]
+
+
+def test_large_dark_data_card_does_not_promote_to_control(tmp_path: Path) -> None:
+    image_path = tmp_path / "dark_card.png"
+    image = Image.new("RGB", (360, 220), (0, 2, 11))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((24, 38, 332, 150), fill=(2, 8, 20))
+    draw.text((48, 62), "Total", fill=(180, 188, 204))
+    draw.text((48, 94), "186,745.23", fill=(245, 247, 255))
+    draw.text((48, 126), "$1,335,567.98", fill=(160, 168, 184))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "dark_card.ocr_blocks.v1.json",
+        [
+            ("text_0001", "Total", 48, 62, 42, 14),
+            ("text_0002", "186,745.23", 48, 94, 100, 18),
+            ("text_0003", "$1,335,567.98", 48, 126, 128, 14),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert not [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape"
+        and layer.get("reason") in {"ocr_anchored_control_surface", "editable_control_surface_from_raster"}
+        and layer["bbox"]["width"] > 220
+    ]
+
+
+def test_model_control_inherits_chart_tick_rejection(tmp_path: Path) -> None:
+    image_path = tmp_path / "model_chart_tick.png"
+    image = Image.new("RGB", (320, 220), "white")
+    draw = ImageDraw.Draw(image)
+    for text, y in [("18万", 54), ("12万", 92), ("6万", 130), ("0", 168)]:
+        draw.text((252, y), text, fill=(30, 30, 30))
+    draw.line((210, 50, 286, 176), fill=(64, 116, 249), width=4)
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "model_chart_tick.ocr_blocks.v1.json",
+        [
+            ("text_0001", "18万", 252, 54, 28, 12),
+            ("text_0002", "12万", 252, 92, 28, 12),
+            ("text_0003", "6万", 252, 130, 22, 12),
+            ("text_0004", "0", 252, 168, 10, 12),
+        ],
+    )
+    model_path = write_model_evidence(
+        tmp_path,
+        "TextButton",
+        {"x": 244, "y": 48, "width": 58, "height": 34},
+        confidence=0.91,
+        canvas={"width": 320, "height": 220},
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["modelControlAcceptedCount"] == 0
+    assert layer_stack["diagnostics"]["modelControlRejectedReasons"]["chart_tick_like_surface_not_control"] >= 1
+
+
+def test_multi_text_container_surface_does_not_create_overlapping_controls(tmp_path: Path) -> None:
+    image_path = tmp_path / "multi_text_container.png"
+    image = Image.new("RGB", (360, 220), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((36, 42, 324, 150), radius=18, fill=(42, 124, 212))
+    draw.text((62, 62), "Title", fill=(255, 255, 255))
+    draw.text((62, 92), "Issuer", fill=(235, 245, 255))
+    draw.text((62, 122), "3301****", fill=(235, 245, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "multi_text_container.ocr_blocks.v1.json",
+        [
+            ("text_0001", "Title", 62, 62, 34, 12),
+            ("text_0002", "Issuer", 62, 92, 42, 12),
+            ("text_0003", "3301****", 62, 122, 66, 12),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    control_shapes = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0) >= 1
+    ]
+    assert not control_shapes
+    assert layer_stack["diagnostics"]["localSurfaceContainerCount"] >= 1
+
+
+def test_model_control_without_pixel_surface_is_rejected(tmp_path: Path) -> None:
+    image_path, ocr_path = write_plain_text_fixture(tmp_path)
+    model_path = write_model_evidence(
+        tmp_path,
+        "TextButton",
+        {"x": 52, "y": 42, "width": 92, "height": 36},
+        confidence=0.94,
+        canvas={"width": 240, "height": 120},
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["modelControlAcceptedCount"] == 0
+    assert not [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("reason") == "model_assisted_control_surface"
+    ]
+
+
+def test_container_surface_does_not_trigger_control_raster_suppression(tmp_path: Path) -> None:
+    image_path = tmp_path / "container_with_texture.png"
+    image = Image.new("RGB", (360, 220), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((36, 42, 324, 152), radius=18, fill=(38, 118, 204))
+    for x in range(210, 294, 8):
+        draw.line((x, 64, x + 24, 132), fill=(16, 76, 170), width=3)
+    draw.text((62, 62), "Title", fill=(255, 255, 255))
+    draw.text((62, 94), "Issuer", fill=(235, 245, 255))
+    draw.text((62, 126), "3301****", fill=(235, 245, 255))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "container_with_texture.ocr_blocks.v1.json",
+        [
+            ("text_0001", "Title", 62, 62, 34, 12),
+            ("text_0002", "Issuer", 62, 94, 42, 12),
+            ("text_0003", "3301****", 62, 126, 66, 12),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["localSurfaceContainerCount"] >= 1
+    assert layer_stack["diagnostics"]["controlOwnedRasterSuppressedCount"] == 0
+
+
+def test_adjacent_chip_controls_are_not_deduped_together(tmp_path: Path) -> None:
+    image_path = tmp_path / "chips.png"
+    image = Image.new("RGB", (260, 120), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((36, 40, 104, 76), radius=14, fill=(230, 241, 255))
+    draw.rounded_rectangle((116, 40, 186, 76), radius=14, fill=(230, 241, 255))
+    draw.text((58, 51), "A", fill=(20, 20, 20))
+    draw.text((140, 51), "B", fill=(20, 20, 20))
+    image.save(image_path)
+    ocr_path = write_ocr_artifact(
+        tmp_path,
+        "chips.ocr_blocks.v1.json",
+        [
+            ("text_0001", "A", 58, 51, 10, 12),
+            ("text_0002", "B", 140, 51, 10, 12),
+        ],
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "out")
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+    control_shapes = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("scores", {}).get("confirmedControlSurface", 0) >= 1
+    ]
+
+    assert len(control_shapes) == 2
+
+
 def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:
     image_path = tmp_path / "button.png"
     image = Image.new("RGB", (240, 120), "white")
@@ -373,6 +595,28 @@ def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return image_path, ocr_path
+
+
+def write_ocr_artifact(tmp_path: Path, name: str, rows: list[tuple[str, str, int, int, int, int]]) -> Path:
+    path = tmp_path / name
+    path.write_text(
+        json.dumps(
+            {
+                "version": "ocr_blocks.v1",
+                "blocks": [
+                    {
+                        "id": row[0],
+                        "text": row[1],
+                        "bbox": {"x": row[2], "y": row[3], "width": row[4], "height": row[5]},
+                        "confidence": 1.0,
+                    }
+                    for row in rows
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def write_plain_text_fixture(tmp_path: Path) -> tuple[Path, Path]:

@@ -6,13 +6,16 @@ from typing import Any
 
 import numpy as np
 
+from .colors import estimate_background_color
 from .controls import (
-    control_surface_fill,
-    control_surface_local_complexity,
-    control_surface_outer_ring_delta,
-    control_text_contrast,
+    ControlProfile,
+    build_control_profile,
+    classify_local_surface_role,
+    extract_local_surface_from_text_seed,
+    local_surface_to_control_candidate,
     merge_control_surfaces,
-    score_ocr_anchored_control_surface,
+    ocr_text_role,
+    surface_role_decision_payload,
 )
 from .model_evidence import CONTROL_CLASSES, ModelDetection
 from .schema import BBox, Candidate, OCRBlock, clamp_box, intersection_area, ioa
@@ -36,9 +39,14 @@ def detect_model_assisted_control_surfaces(
     rgb: np.ndarray,
     ocr_blocks: list[OCRBlock],
     text_mask: np.ndarray,
+    profile: ControlProfile | None = None,
+    page_background: tuple[int, int, int] | None = None,
 ) -> ModelControlResult:
     height, width, _ = rgb.shape
     page_area = max(1, width * height)
+    profile = profile or build_control_profile(width, height)
+    if page_background is None:
+        page_background = estimate_background_color(rgb)
     accepted: list[Candidate] = []
     decisions: list[dict[str, Any]] = []
     reason_counts: Counter[str] = Counter()
@@ -77,59 +85,51 @@ def detect_model_assisted_control_surfaces(
             continue
 
         best_candidate: Candidate | None = None
-        best_scores: dict[str, float] = {}
+        best_payload: dict[str, Any] | None = None
         best_block: OCRBlock | None = None
         rejected_reasons: Counter[str] = Counter()
         for block in blocks:
-            for box in model_control_search_boxes(block.bbox, window, width, height, det.confidence):
-                candidate = Candidate(
-                    id=f"model_control_{det.id}_{block.id}",
-                    kind="shape",
-                    bbox=box,
-                    score=0.78,
-                    scores={},
-                    reason="model_assisted_control_surface",
-                )
-                ok, scores, reason = score_ocr_anchored_control_surface(
-                    rgb=rgb,
-                    candidate=candidate,
-                    block=block,
-                    text_mask=text_mask,
-                    page_area=page_area,
-                )
-                if not ok:
-                    ok, scores, reason = score_model_window_control_surface(
-                        rgb=rgb,
-                        candidate=candidate,
-                        block=block,
-                        text_mask=text_mask,
-                        page_area=page_area,
-                    )
-                if not ok:
-                    rejected_reasons[reason] += 1
-                    continue
-                scored = Candidate(
-                    id=f"model_control_{det.id}_{block.id}",
-                    kind="shape",
-                    bbox=box,
-                    score=max(float(scores["score"]), 0.76),
-                    scores={
-                        **scores,
-                        "modelControlSurface": 1.0,
-                        "modelConfidence": round(float(det.confidence), 4),
-                    },
-                    reason="model_assisted_control_surface",
-                )
-                rank = scored.score + ioa(block.bbox, box) * 0.04 - box.area / page_area * 0.20
-                current_rank = (
-                    best_candidate.score + ioa(best_block.bbox, best_candidate.bbox) * 0.04 - best_candidate.bbox.area / page_area * 0.20
-                    if best_candidate is not None and best_block is not None
-                    else -1.0
-                )
-                if best_candidate is None or rank > current_rank:
-                    best_candidate = scored
-                    best_scores = scores
-                    best_block = block
+            surface = extract_local_surface_from_text_seed(
+                rgb=rgb,
+                text_mask=text_mask,
+                block=block,
+                ocr_blocks=ocr_blocks,
+                page_background=page_background,
+                surface_id=f"model_control_{det.id}_{block.id}",
+                limit_window=window,
+            )
+            if surface is None:
+                rejected_reasons["missing_local_surface"] += 1
+                continue
+            role, scores = classify_local_surface_role(
+                surface=surface,
+                seed_block=block,
+                ocr_blocks=ocr_blocks,
+                rgb=rgb,
+                text_mask=text_mask,
+                profile=profile,
+                page_background=page_background,
+                source_refs=[f"model_evidence:{det.id}", f"ocr:{block.id}", "pixel:local_surface_gate"],
+            )
+            if role.role != "control_surface" or role.decision != "accepted":
+                rejected_reasons[role.reason] += 1
+                continue
+            scores = {
+                **scores,
+                "modelControlSurface": 1.0,
+                "modelConfidence": round(float(det.confidence), 4),
+            }
+            scored = local_surface_to_control_candidate(surface, scores, "model_assisted_control_surface")
+            rank = scored.score + ioa(block.bbox, scored.bbox) * 0.04 - scored.bbox.area / page_area * 0.20
+            current_rank = (
+                best_candidate.score + ioa(best_block.bbox, best_candidate.bbox) * 0.04 - best_candidate.bbox.area / page_area * 0.20
+                if best_candidate is not None and best_block is not None
+                else -1.0
+            )
+            if best_candidate is None or rank > current_rank:
+                best_candidate = scored
+                best_block = block
+                best_payload = surface_role_decision_payload(role, surface, block, scores, "model_control_surface")
 
         if best_candidate is None or best_block is None:
             reason = most_common_reason(rejected_reasons) or "failed_control_physical_gate"
@@ -138,22 +138,23 @@ def detect_model_assisted_control_surfaces(
             continue
 
         accepted.append(best_candidate)
-        decisions.append(
-            {
-                "kind": "model_control_ownership_decision",
-                "detectionId": det.id,
-                "className": det.class_name,
-                "confidence": round(float(det.confidence), 4),
-                "decision": "accepted_model_control_surface",
-                "candidateId": best_candidate.id,
-                "bbox": best_candidate.bbox.to_dict(),
-                "searchWindow": window.to_dict(),
-                "reason": "ocr_containment_fill_ring_padding_passed",
-                "sourceRefs": [f"model_evidence:{det.id}", f"ocr:{best_block.id}", "pixel:local_control_gate"],
-                "sourceTextBlockIds": [best_block.id],
-                "scores": {key: round(float(value), 4) for key, value in best_scores.items()},
-            }
-        )
+        payload = {
+            "kind": "model_control_ownership_decision",
+            "detectionId": det.id,
+            "className": det.class_name,
+            "confidence": round(float(det.confidence), 4),
+            "decision": "accepted_model_control_surface",
+            "candidateId": best_candidate.id,
+            "bbox": best_candidate.bbox.to_dict(),
+            "searchWindow": window.to_dict(),
+            "reason": "connected_surface_control_gate_passed",
+            "sourceRefs": [f"model_evidence:{det.id}", f"ocr:{best_block.id}", "pixel:local_surface_gate"],
+            "sourceTextBlockIds": [best_block.id],
+            "scores": {key: round(float(value), 4) for key, value in best_candidate.scores.items()},
+        }
+        if best_payload is not None:
+            payload["surfaceRoleDecision"] = best_payload
+        decisions.append(payload)
 
     merged = merge_control_surfaces(accepted)
     diagnostics = {
@@ -270,21 +271,40 @@ def score_model_window_control_surface(
     rgb: np.ndarray,
     candidate: Candidate,
     block: OCRBlock,
+    ocr_blocks: list[OCRBlock],
     text_mask: np.ndarray,
     page_area: int,
+    profile: ControlProfile | None = None,
+    page_background: tuple[int, int, int] | None = None,
 ) -> tuple[bool, dict[str, float], str]:
+    height, width, _ = rgb.shape
+    profile = profile or build_control_profile(width, height)
+    if page_background is None:
+        page_background = estimate_background_color(rgb)
+    _ = page_area
     box = candidate.bbox
     if block.bbox.area <= 0 or box.area <= 0:
         return False, {}, "empty"
     if intersection_area(box, block.bbox) / block.bbox.area < 0.90:
         return False, {}, "text_not_contained"
-    if box.area > max(12_000, page_area * MAX_CONTROL_WINDOW_AREA_RATIO) or box.width < 24 or box.height < 14:
+    area_ratio = box.area / block.bbox.area
+    if area_ratio < 1.18 or area_ratio > (30.0 if block.bbox.width <= block.bbox.height * 2.4 else 14.0):
+        return False, {}, "bad_area_ratio"
+    if box.area > profile.max_area or box.width < 24 or box.height < profile.min_height:
         return False, {}, "bad_size"
     aspect = box.width / max(1, box.height)
-    if aspect < 1.10 or aspect > 14.0:
+    if aspect < 1.10 or aspect > profile.max_aspect:
         return False, {}, "bad_aspect"
     if box.height > max(112, block.bbox.height * 7):
         return False, {}, "too_tall"
+    text_role = ocr_text_role(block.text)
+    contained = contained_text_blocks(candidate, ocr_blocks)
+    related = related_control_text_blocks(block, contained)
+    related_ids = {item.id for item in related}
+    if [item for item in contained if item.id not in related_ids]:
+        return False, {}, "single_control_contains_unrelated_text"
+    if chart_tick_like_block(block, ocr_blocks):
+        return False, {}, "chart_tick_like_control_rejected"
 
     left_pad = block.bbox.x - box.x
     right_pad = box.x2 - block.bbox.x2
@@ -309,8 +329,8 @@ def score_model_window_control_surface(
     if fill_coverage < 0.30 and close_coverage < 0.58:
         return False, {}, "unstable_fill"
 
-    ring_min_delta, ring_support_delta = control_surface_outer_ring_delta(rgb, box, fill)
-    if ring_min_delta is None or ring_support_delta is None:
+    ring = control_surface_ring_evidence(rgb, box, fill, page_background)
+    if ring is None:
         return False, {}, "missing_outer_ring"
     fill_luminance = relative_luminance(fill)
     dark_surface = (
@@ -322,8 +342,13 @@ def score_model_window_control_surface(
         and edge_density <= 0.22
     )
     ring_threshold = 8.0 if dark_surface else 18.0
-    if ring_support_delta < ring_threshold:
-        return False, {}, "weak_outer_boundary"
+    boundary_ok, boundary_reason = passes_boundary_gate(
+        ring=ring,
+        ring_threshold=ring_threshold,
+        strong_boundary_required=role_requires_strong_boundary(text_role),
+    )
+    if not boundary_ok:
+        return False, {}, boundary_reason
 
     text_contrast = control_text_contrast(rgb, [block], fill)
     if text_contrast < 34.0:
@@ -332,7 +357,7 @@ def score_model_window_control_surface(
     score = (
         0.40
         + min(0.22, close_coverage * 0.18)
-        + min(0.16, ring_support_delta / 260.0)
+        + min(0.16, ring.support_delta / 260.0)
         + min(0.14, text_contrast / 520.0)
         + min(0.08, aspect / 140.0)
         - min(0.12, texture / 800.0)
@@ -342,16 +367,24 @@ def score_model_window_control_surface(
         "controlSurface": 1.0,
         "modelWindowControlSurface": 1.0,
         "textContainment": round(float(intersection_area(box, block.bbox) / block.bbox.area), 4),
-        "areaRatio": round(float(box.area / block.bbox.area), 4),
+        "areaRatio": round(float(area_ratio), 4),
         "aspect": round(float(aspect), 4),
         "fillCoverage": round(float(fill_coverage), 4),
         "closeFillCoverage": round(float(close_coverage), 4),
-        "outerRingDelta": round(float(ring_min_delta), 4),
-        "outerRingSupportDelta": round(float(ring_support_delta), 4),
+        "outerRingDelta": round(float(ring.min_delta), 4),
+        "outerRingSupportDelta": round(float(ring.support_delta), 4),
+        "outerRingMedianDelta": round(float(ring.median_delta), 4),
+        "outerRingMaxDelta": round(float(ring.max_delta), 4),
         "outerRingThreshold": round(float(ring_threshold), 4),
+        "boundaryStrongSideCount": float(ring.strong_side_count),
+        "fillToLocalDelta": round(float(ring.fill_to_local_delta), 4),
+        "fillToPageDelta": round(float(ring.fill_to_page_delta), 4),
         "textContrast": round(float(text_contrast), 4),
         "fillLuminance": round(float(fill_luminance), 4),
         "darkControlSurface": 1.0 if dark_surface else 0.0,
+        "textRoleRisk": 1.0 if role_requires_strong_boundary(text_role) else 0.0,
+        "containedTextBlockCount": float(len(contained)),
+        "sourceTextBlockKey": stable_text_block_key(block.id),
         "texture": round(float(texture / 255.0), 4),
         "entropy": round(float(entropy), 4),
         "edge": round(float(edge_density), 4),

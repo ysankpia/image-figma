@@ -103,13 +103,17 @@ def build_layer_stack(
     missing_assets = sum(1 for item in layers if item["type"] == "raster" and not item.get("asset"))
     surface_shapes = sum(1 for item in shape_candidates if item.reason == "background_surface_band")
     background_plates = sum(1 for item in shape_candidates if item.reason == "inferred_background_plate_from_surface_bands")
-    control_surfaces = sum(
+    control_surfaces = sum(1 for item in shape_candidates if item.scores.get("confirmedControlSurface", 0.0) >= 1.0)
+    ocr_control_surfaces = sum(
         1
         for item in shape_candidates
-        if item.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface", "model_assisted_control_surface"}
+        if item.reason == "ocr_anchored_control_surface" and item.scores.get("confirmedControlSurface", 0.0) >= 1.0
     )
-    ocr_control_surfaces = sum(1 for item in shape_candidates if item.reason == "ocr_anchored_control_surface")
-    model_control_surfaces = sum(1 for item in shape_candidates if item.reason == "model_assisted_control_surface")
+    model_control_surfaces = sum(
+        1
+        for item in shape_candidates
+        if item.reason == "model_assisted_control_surface" and item.scores.get("confirmedControlSurface", 0.0) >= 1.0
+    )
     model_media_rasters = sum(
         1 for item in raster_candidates if item.reason in {"model_assisted_media_refinement", "model_assisted_media_merge"}
     )
@@ -119,7 +123,11 @@ def build_layer_stack(
     media_owned_text_count = len(media_owned_text_ids)
     media_text_owner_raster_count = len({str(item.get("ownerRasterId", "")) for item in media_owned_text_decisions if item.get("ownerRasterId")})
     text_fit_shrink_count = sum(1 for item in layers if item["type"] == "text" and item.get("textFit", {}).get("shrink", 0) > 0)
-    dark_control_surfaces = sum(1 for item in shape_candidates if item.scores.get("darkControlSurface", 0.0) >= 1.0)
+    dark_control_surfaces = sum(
+        1
+        for item in shape_candidates
+        if item.scores.get("darkControlSurface", 0.0) >= 1.0 and item.scores.get("confirmedControlSurface", 0.0) >= 1.0
+    )
     shape_asset_count = sum(1 for item in layers if item["type"] == "shape" and item.get("asset"))
     page_background = color_hex(estimate_background_color(rgb))
 

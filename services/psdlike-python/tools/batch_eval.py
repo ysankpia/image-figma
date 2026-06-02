@@ -68,6 +68,9 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    if args.case_id:
+        wanted = set(args.case_id)
+        cases = [case for case in cases if case.case_id in wanted]
     if args.limit:
         cases = cases[: args.limit]
 
@@ -94,6 +97,7 @@ def parse_args() -> argparse.Namespace:
     source.add_argument("--input-dir", default="", help="Directory containing screenshots/images.")
     parser.add_argument("--out", required=True, help="Output directory for batch artifacts.")
     parser.add_argument("--limit", type=int, default=0, help="Limit cases. 0 means all.")
+    parser.add_argument("--case-id", action="append", default=[], help="Run only the selected case id. Can be repeated.")
     parser.add_argument("--no-dedupe", action="store_true", help="When using --input-dir, evaluate every image path.")
     parser.add_argument("--ocr-cache-dir", default="", help="Directory containing <sha>.ocr_blocks.v1.json artifacts.")
     parser.add_argument(
@@ -132,6 +136,13 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
         "modelControlSearchWindowCount": 0,
         "modelControlAcceptedCount": 0,
         "modelControlRejectedCount": 0,
+        "localSurfaceCandidateCount": 0,
+        "localSurfaceAcceptedControlCount": 0,
+        "localSurfaceContainerCount": 0,
+        "localSurfaceChartInternalCount": 0,
+        "localSurfaceAuditOnlyCount": 0,
+        "controlParentSurfaceSliceRejectedCount": 0,
+        "controlChartInternalRejectedCount": 0,
         "modelMediaSearchWindowCount": 0,
         "modelMediaAcceptedCount": 0,
         "modelMediaRejectedCount": 0,
@@ -219,6 +230,13 @@ def run_case(case: InputCase, out_dir: Path, args: argparse.Namespace) -> dict[s
                 "modelControlSearchWindowCount": diagnostics.get("modelControlSearchWindowCount", 0),
                 "modelControlAcceptedCount": diagnostics.get("modelControlAcceptedCount", 0),
                 "modelControlRejectedCount": diagnostics.get("modelControlRejectedCount", 0),
+                "localSurfaceCandidateCount": diagnostics.get("localSurfaceCandidateCount", 0),
+                "localSurfaceAcceptedControlCount": diagnostics.get("localSurfaceAcceptedControlCount", 0),
+                "localSurfaceContainerCount": diagnostics.get("localSurfaceContainerCount", 0),
+                "localSurfaceChartInternalCount": diagnostics.get("localSurfaceChartInternalCount", 0),
+                "localSurfaceAuditOnlyCount": diagnostics.get("localSurfaceAuditOnlyCount", 0),
+                "controlParentSurfaceSliceRejectedCount": diagnostics.get("controlParentSurfaceSliceRejectedCount", 0),
+                "controlChartInternalRejectedCount": diagnostics.get("controlChartInternalRejectedCount", 0),
                 "modelMediaSearchWindowCount": diagnostics.get("modelMediaSearchWindowCount", 0),
                 "modelMediaAcceptedCount": diagnostics.get("modelMediaAcceptedCount", 0),
                 "modelMediaRejectedCount": diagnostics.get("modelMediaRejectedCount", 0),
@@ -374,8 +392,8 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
         f"- failed cases: {sum(1 for row in rows if row.get('failureTypes'))}",
         f"- failure types: `{json.dumps(count_failure_types(rows), ensure_ascii=False)}`",
         "",
-        "| case | size | ocr | ocrProvider | ocrCache | ocrSec | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | mCtrlA | mCtrlR | mMediaA | mMediaR | mAdd | mMerge | mLimit | mTxt | visualMae | diff30 | dsl | failures |",
-        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| case | size | ocr | ocrProvider | ocrCache | ocrSec | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | localSurf | localCtrl | localContainer | localChart | localAudit | parentSlice | chartReject | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | model | semTags | risk | mCtrlA | mCtrlR | mMediaA | mMediaR | mAdd | mMerge | mLimit | mTxt | visualMae | diff30 | dsl | failures |",
+        "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         lines.append(
@@ -383,7 +401,9 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
             "{textLayerCount}|{mediaOwnedTextBlockCount}|"
             "{textFitShrinkCount}|{darkControlSurfaceCount}|{rasterLayerCount}|{shapeLayerCount}|"
             "{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
-            "{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
+            "{localSurfaceCandidateCount}|{localSurfaceAcceptedControlCount}|{localSurfaceContainerCount}|"
+            "{localSurfaceChartInternalCount}|{localSurfaceAuditOnlyCount}|{controlParentSurfaceSliceRejectedCount}|"
+            "{controlChartInternalRejectedCount}|{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
             "{rawTextOverlapRaster}|{rasterTextKnockoutCount}|{modelDetectionCount}|{semanticTagCount}|"
             "{modelOcrOverlapRiskCount}|{modelControlAcceptedCount}|{modelControlRejectedCount}|"
             "{modelMediaAcceptedCount}|{modelMediaRejectedCount}|{modelMediaAddedRasterCount}|"
@@ -405,6 +425,13 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
                 controlSurfaceShapeLayerCount=row.get("controlSurfaceShapeLayerCount", 0),
                 ocrAnchoredControlSurfaceCount=row.get("ocrAnchoredControlSurfaceCount", 0),
                 controlOwnedRasterSuppressedCount=row.get("controlOwnedRasterSuppressedCount", 0),
+                localSurfaceCandidateCount=row.get("localSurfaceCandidateCount", 0),
+                localSurfaceAcceptedControlCount=row.get("localSurfaceAcceptedControlCount", 0),
+                localSurfaceContainerCount=row.get("localSurfaceContainerCount", 0),
+                localSurfaceChartInternalCount=row.get("localSurfaceChartInternalCount", 0),
+                localSurfaceAuditOnlyCount=row.get("localSurfaceAuditOnlyCount", 0),
+                controlParentSurfaceSliceRejectedCount=row.get("controlParentSurfaceSliceRejectedCount", 0),
+                controlChartInternalRejectedCount=row.get("controlChartInternalRejectedCount", 0),
                 textOwnedRasterSuppressedCount=row.get("textOwnedRasterSuppressedCount", 0),
                 surfaceShapeLayerCount=row.get("surfaceShapeLayerCount", 0),
                 foregroundObjectCount=row.get("foregroundObjectCount", 0),

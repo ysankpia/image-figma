@@ -4,6 +4,7 @@ import argparse
 import html
 import json
 import math
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +14,104 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 # Mechanical migration from PSD-like V1 oracle. Keep behavior changes out of this stage.
+
+
+@dataclass(frozen=True)
+class ControlProfile:
+    kind: str
+    max_area: int
+    max_aspect: float
+    min_height: int
+    min_area: int = 480
+
+
+@dataclass(frozen=True)
+class RingEvidence:
+    min_delta: float
+    support_delta: float
+    median_delta: float
+    max_delta: float
+    strong_side_count: int
+    fill_to_local_delta: float
+    fill_to_page_delta: float
+    side_deltas: tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
+class LocalSurfaceCandidate:
+    id: str
+    bbox: BBox
+    fill: tuple[int, int, int]
+    seed_text_id: str
+    contained_text_ids: list[str]
+    score: float
+    scores: dict[str, float]
+    extraction_reason: str
+
+
+@dataclass(frozen=True)
+class SurfaceRoleDecision:
+    surface_id: str
+    role: str
+    decision: str
+    reason: str
+    source_refs: list[str]
+
+
+NUMERIC_METRIC_PATTERN = re.compile(r"^[+\-≈~￥¥$€£\s]*\d[\d,.\s]*(万|亿|k|K|m|M|g|G)?$")
+CURRENCY_PERCENT_PATTERN = re.compile(r"^[+\-≈~￥¥$€£\s]*\d[\d,.\s]*(%|％|万|亿|k|K|m|M)?$")
+DATE_TIME_PATTERN = re.compile(r"^(\d{1,4}[-/:]\d{1,2}([-/:\s]\d{1,4})?|\d{1,2}:\d{2})$")
+
+
+def build_control_profile(width: int, height: int) -> ControlProfile:
+    page_area = max(1, width * height)
+    aspect = width / max(1, height)
+    if aspect < 0.85:
+        return ControlProfile(
+            kind="mobile",
+            max_area=int(min(24_000, max(6_000, page_area * 0.04))),
+            max_aspect=14.0,
+            min_height=14,
+        )
+    return ControlProfile(
+        kind="web_like",
+        max_area=int(min(48_000, max(6_000, page_area * 0.04))),
+        max_aspect=36.0,
+        min_height=12,
+    )
+
+
+def control_profile_diagnostics(profile: ControlProfile) -> dict[str, Any]:
+    return {
+        "controlProfileKind": profile.kind,
+        "controlMaxArea": profile.max_area,
+        "controlMaxAspect": profile.max_aspect,
+    }
+
+
+def ocr_text_role(text: str) -> str:
+    normalized = "".join(text.strip().split())
+    if not normalized:
+        return "short_symbol"
+    if DATE_TIME_PATTERN.match(normalized):
+        return "date_or_time"
+    if "%" in normalized or "％" in normalized or normalized[:1] in {"￥", "¥", "$", "€", "£"}:
+        if CURRENCY_PERCENT_PATTERN.match(normalized):
+            return "currency_or_percent"
+    digit_count = sum(ch.isdigit() for ch in normalized)
+    if digit_count > 0 and digit_count / max(1, len(normalized)) >= 0.55 and NUMERIC_METRIC_PATTERN.match(normalized):
+        return "numeric_metric"
+    if len(normalized) <= 2 and not any(ch.isalnum() for ch in normalized):
+        return "short_symbol"
+    return "normal_label"
+
+
+def role_requires_strong_boundary(role: str) -> bool:
+    return role in {"numeric_metric", "currency_or_percent", "date_or_time", "short_symbol"}
+
+
+def stable_text_block_key(block_id: str) -> float:
+    return float(sum((index + 1) * ord(char) for index, char in enumerate(block_id)))
 
 
 def control_surface_fill(
@@ -143,6 +242,92 @@ def contained_text_blocks(candidate: Candidate, ocr_blocks: list[OCRBlock]) -> l
     return blocks
 
 
+def related_control_text_blocks(anchor: OCRBlock, contained: list[OCRBlock]) -> list[OCRBlock]:
+    related: list[OCRBlock] = []
+    for block in contained:
+        if block.id == anchor.id:
+            related.append(block)
+            continue
+        same_baseline = abs((block.bbox.y + block.bbox.height / 2) - (anchor.bbox.y + anchor.bbox.height / 2)) <= max(
+            4, min(block.bbox.height, anchor.bbox.height) * 0.42
+        )
+        vertical_overlap = intersection_1d(block.bbox.y, block.bbox.y2, anchor.bbox.y, anchor.bbox.y2) / max(
+            1, min(block.bbox.height, anchor.bbox.height)
+        )
+        compact_gap = horizontal_gap(block.bbox, anchor.bbox) <= max(12, min(block.bbox.height, anchor.bbox.height) * 0.85)
+        if same_baseline and vertical_overlap >= 0.55 and compact_gap:
+            related.append(block)
+    return sorted(related, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
+
+
+def intersection_1d(a1: int, a2: int, b1: int, b2: int) -> int:
+    return max(0, min(a2, b2) - max(a1, b1))
+
+
+def horizontal_gap(a: BBox, b: BBox) -> int:
+    if a.x2 < b.x:
+        return b.x - a.x2
+    if b.x2 < a.x:
+        return a.x - b.x2
+    return 0
+
+
+def chart_tick_like_block(anchor: OCRBlock, ocr_blocks: list[OCRBlock]) -> bool:
+    role = ocr_text_role(anchor.text)
+    if role not in {"numeric_metric", "currency_or_percent", "date_or_time"}:
+        return False
+    peers = [
+        block
+        for block in ocr_blocks
+        if block.bbox.area > 0
+        and ocr_text_role(block.text) in {"numeric_metric", "currency_or_percent", "date_or_time"}
+        and nearby_axis_peer(anchor.bbox, block.bbox)
+    ]
+    if len(peers) < 3:
+        return False
+    return aligned_tick_group(peers, axis="x") or aligned_tick_group(peers, axis="y")
+
+
+def nearby_axis_peer(anchor: BBox, peer: BBox) -> bool:
+    x_close = abs(center_x(anchor) - center_x(peer)) <= max(anchor.width, peer.width, 48)
+    y_close = abs(center_y(anchor) - center_y(peer)) <= max(anchor.height, peer.height, 48)
+    vertical_zone = abs(center_x(anchor) - center_x(peer)) <= max(anchor.width, peer.width) * 1.8
+    horizontal_zone = abs(center_y(anchor) - center_y(peer)) <= max(anchor.height, peer.height) * 1.8
+    return x_close or y_close or vertical_zone or horizontal_zone
+
+
+def aligned_tick_group(blocks: list[OCRBlock], axis: str) -> bool:
+    if len(blocks) < 3:
+        return False
+    if axis == "x":
+        aligned_values = [center_x(block.bbox) for block in blocks]
+        spread_values = [center_y(block.bbox) for block in blocks]
+        tolerance = max(12.0, float(np.median([block.bbox.width for block in blocks])) * 0.75)
+    else:
+        aligned_values = [center_y(block.bbox) for block in blocks]
+        spread_values = [center_x(block.bbox) for block in blocks]
+        tolerance = max(12.0, float(np.median([block.bbox.height for block in blocks])) * 0.75)
+    if max(aligned_values) - min(aligned_values) > tolerance:
+        return False
+    ordered = sorted(spread_values)
+    gaps = [ordered[index + 1] - ordered[index] for index in range(len(ordered) - 1) if ordered[index + 1] - ordered[index] > 1]
+    if len(gaps) < 2:
+        return False
+    median_gap = float(np.median(gaps))
+    if median_gap <= 0:
+        return False
+    stable_gaps = sum(1 for gap in gaps if abs(gap - median_gap) <= max(8.0, median_gap * 0.45))
+    return stable_gaps >= max(2, len(gaps) - 1)
+
+
+def center_x(box: BBox) -> float:
+    return box.x + box.width / 2
+
+
+def center_y(box: BBox) -> float:
+    return box.y + box.height / 2
+
+
 def control_text_contrast(rgb: np.ndarray, blocks: list[OCRBlock], fill: np.ndarray) -> float:
     best = 0.0
     height, width, _ = rgb.shape
@@ -160,22 +345,330 @@ def control_text_contrast(rgb: np.ndarray, blocks: list[OCRBlock], fill: np.ndar
     return best
 
 
+def expanded_box(box: BBox, width: int, height: int, x_pad: int, y_pad: int) -> BBox | None:
+    return clamp_box(
+        BBox(box.x - x_pad, box.y - y_pad, box.width + x_pad * 2, box.height + y_pad * 2),
+        width,
+        height,
+    )
+
+
+def intersection_box(a: BBox, b: BBox) -> BBox | None:
+    x1 = max(a.x, b.x)
+    y1 = max(a.y, b.y)
+    x2 = min(a.x2, b.x2)
+    y2 = min(a.y2, b.y2)
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return BBox(x1, y1, x2 - x1, y2 - y1)
+
+
+def local_surface_window_for_text(
+    box: BBox,
+    width: int,
+    height: int,
+    limit_window: BBox | None = None,
+) -> BBox | None:
+    x_pad = max(32, min(220, int(round(box.width * 2.2))))
+    y_pad = max(22, min(150, int(round(box.height * 4.2))))
+    window = expanded_box(box, width, height, x_pad, y_pad)
+    if window is None or limit_window is None:
+        return window
+    return intersection_box(window, limit_window)
+
+
+def estimate_local_surface_fill_near_text(
+    rgb: np.ndarray,
+    text_mask: np.ndarray,
+    block: OCRBlock,
+    limit_window: BBox | None = None,
+) -> tuple[np.ndarray, float]:
+    height, width, _ = rgb.shape
+    outer_pad_x = max(8, min(80, int(round(block.bbox.width * 0.55))))
+    outer_pad_y = max(6, min(48, int(round(block.bbox.height * 1.35))))
+    outer = expanded_box(block.bbox, width, height, outer_pad_x, outer_pad_y)
+    inner = expanded_box(block.bbox, width, height, 1, 1)
+    if outer is None:
+        return np.array([255, 255, 255], dtype=np.uint8), 0.0
+    if limit_window is not None:
+        outer = intersection_box(outer, limit_window)
+        if outer is None:
+            return np.array([255, 255, 255], dtype=np.uint8), 0.0
+
+    crop = rgb[outer.y : outer.y2, outer.x : outer.x2]
+    local_text = text_mask[outer.y : outer.y2, outer.x : outer.x2].copy()
+    if local_text.shape != crop.shape[:2]:
+        local_text = np.zeros(crop.shape[:2], dtype=bool)
+    if inner is not None:
+        local_text[
+            max(0, inner.y - outer.y) : max(0, inner.y2 - outer.y),
+            max(0, inner.x - outer.x) : max(0, inner.x2 - outer.x),
+        ] = True
+
+    pixels = crop[~local_text]
+    if pixels.shape[0] < 16:
+        pixels = crop.reshape(-1, 3)
+    return dominant_cluster_stats(pixels.astype(np.uint8), bucket_size=20)
+
+
+def local_surface_component_touching_seed(
+    mask: np.ndarray,
+    seed_box: BBox,
+    origin_x: int,
+    origin_y: int,
+) -> list[tuple[int, int]] | None:
+    local_seed = BBox(seed_box.x - origin_x, seed_box.y - origin_y, seed_box.width, seed_box.height)
+    x1 = max(0, local_seed.x)
+    y1 = max(0, local_seed.y)
+    x2 = min(mask.shape[1], local_seed.x2)
+    y2 = min(mask.shape[0], local_seed.y2)
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    best: list[tuple[int, int]] | None = None
+    best_overlap = 0
+    for component in connected_components(mask):
+        overlap = sum(1 for row, col in component if y1 <= row < y2 and x1 <= col < x2)
+        if overlap > best_overlap:
+            best = component
+            best_overlap = overlap
+    return best if best_overlap > 0 else None
+
+
+def extract_local_surface_from_text_seed(
+    rgb: np.ndarray,
+    text_mask: np.ndarray,
+    block: OCRBlock,
+    ocr_blocks: list[OCRBlock],
+    page_background: tuple[int, int, int],
+    surface_id: str,
+    limit_window: BBox | None = None,
+) -> LocalSurfaceCandidate | None:
+    height, width, _ = rgb.shape
+    window = local_surface_window_for_text(block.bbox, width, height, limit_window=limit_window)
+    if window is None or window.area <= 0:
+        return None
+
+    fill_seed, seed_coverage = estimate_local_surface_fill_near_text(rgb, text_mask, block, limit_window=window)
+    page_distance = color_distance(fill_seed, page_background)
+    crop = rgb[window.y : window.y2, window.x : window.x2]
+    if crop.size == 0:
+        return None
+    local_text = text_mask[window.y : window.y2, window.x : window.x2]
+    if local_text.shape != crop.shape[:2]:
+        local_text = np.zeros(crop.shape[:2], dtype=bool)
+
+    distances = np.linalg.norm(crop.astype(np.float32) - fill_seed.reshape(1, 1, 3).astype(np.float32), axis=2)
+    if page_distance >= 80.0:
+        close_threshold = 58.0
+    elif page_distance >= 32.0:
+        close_threshold = max(20.0, page_distance * 0.70)
+    else:
+        close_threshold = max(10.0, page_distance * 0.55)
+    close = distances <= close_threshold
+    close |= local_text
+    close = binary_close(close, iterations=2)
+
+    seed_support = ocr_support_box(block.bbox, window)
+    component = local_surface_component_touching_seed(close, seed_support, window.x, window.y)
+    if component is None:
+        component = local_surface_component_touching_seed(close, block.bbox, window.x, window.y)
+    if component is None:
+        return None
+
+    local_box = component_bbox(component, 1, window.width, window.height)
+    global_box = clamp_box(BBox(window.x + local_box.x, window.y + local_box.y, local_box.width, local_box.height), width, height)
+    if global_box is None or global_box.area <= 0:
+        return None
+
+    candidate = Candidate(surface_id, "shape", global_box, 0.0, {}, "local_surface_candidate")
+    contained = contained_text_blocks(candidate, ocr_blocks)
+    fill, fill_coverage, close_coverage = control_surface_fill(
+        rgb,
+        candidate,
+        text_mask,
+        support_box=ocr_support_box(block.bbox, global_box),
+        text_box=block.bbox,
+    )
+    texture, entropy, edge_density = control_surface_local_complexity(rgb, global_box, text_mask, fill=fill)
+    text_contrast = control_text_contrast(rgb, contained or [block], fill)
+    touches_edges = local_surface_touches_window_edges(global_box, window)
+    score = (
+        0.34
+        + min(0.24, close_coverage * 0.22)
+        + min(0.18, fill_coverage * 0.20)
+        + min(0.14, text_contrast / 480.0)
+        - min(0.14, texture / 700.0)
+    )
+    scores = {
+        "score": round(float(max(0.0, min(0.95, score))), 4),
+        "localSurface": 1.0,
+        "seedFillCoverage": round(float(seed_coverage), 4),
+        "seedPageDistance": round(float(page_distance), 4),
+        "seedCloseThreshold": round(float(close_threshold), 4),
+        "fillCoverage": round(float(fill_coverage), 4),
+        "closeFillCoverage": round(float(close_coverage), 4),
+        "textContrast": round(float(text_contrast), 4),
+        "texture": round(float(texture / 255.0), 4),
+        "entropy": round(float(entropy), 4),
+        "edge": round(float(edge_density), 4),
+        "containedTextBlockCount": float(len(contained)),
+        "touchesWindowEdgeCount": float(touches_edges),
+        "windowAreaRatio": round(float(global_box.area / max(1, window.area)), 4),
+        "canvasAreaRatio": round(float(global_box.area / max(1, width * height)), 4),
+        "sourceTextBlockKey": stable_text_block_key(block.id),
+        "fillR": float(fill[0]),
+        "fillG": float(fill[1]),
+        "fillB": float(fill[2]),
+    }
+    return LocalSurfaceCandidate(
+        id=surface_id,
+        bbox=global_box,
+        fill=(int(fill[0]), int(fill[1]), int(fill[2])),
+        seed_text_id=block.id,
+        contained_text_ids=[item.id for item in contained],
+        score=float(scores["score"]),
+        scores=scores,
+        extraction_reason="ocr_text_seed_connected_surface",
+    )
+
+
+def local_surface_touches_window_edges(surface: BBox, window: BBox) -> int:
+    margin = 2
+    return int(surface.x <= window.x + margin) + int(surface.y <= window.y + margin) + int(surface.x2 >= window.x2 - margin) + int(
+        surface.y2 >= window.y2 - margin
+    )
+
+
+def classify_local_surface_role(
+    surface: LocalSurfaceCandidate,
+    seed_block: OCRBlock,
+    ocr_blocks: list[OCRBlock],
+    rgb: np.ndarray,
+    text_mask: np.ndarray,
+    profile: ControlProfile,
+    page_background: tuple[int, int, int],
+    source_refs: list[str],
+) -> tuple[SurfaceRoleDecision, dict[str, float]]:
+    height, width, _ = rgb.shape
+    page_area = max(1, width * height)
+    candidate = Candidate(surface.id, "shape", surface.bbox, surface.score, surface.scores, "local_surface_candidate")
+    contained = contained_text_blocks(candidate, ocr_blocks)
+    related = related_control_text_blocks(seed_block, contained)
+    related_ids = {item.id for item in related}
+    unrelated = [item for item in contained if item.id not in related_ids]
+    area_ratio = surface.bbox.area / page_area
+    aspect = surface.bbox.width / max(1, surface.bbox.height)
+    scores = dict(surface.scores)
+    scores.update(
+        {
+            "surfaceAspect": round(float(aspect), 4),
+            "surfaceCanvasAreaRatio": round(float(area_ratio), 4),
+            "relatedTextBlockCount": float(len(related)),
+            "unrelatedTextBlockCount": float(len(unrelated)),
+        }
+    )
+
+    def decision(role: str, state: str, reason: str) -> SurfaceRoleDecision:
+        return SurfaceRoleDecision(surface.id, role, state, reason, source_refs)
+
+    if chart_tick_like_block(seed_block, ocr_blocks):
+        scores["surfaceRoleChartInternal"] = 1.0
+        return decision("chart_or_media_internal", "metadata_only", "chart_tick_like_surface_not_control"), scores
+    if area_ratio > 0.20:
+        scores["surfaceRoleContainer"] = 1.0
+        return decision("container_surface", "metadata_only", "surface_area_too_large_for_control"), scores
+    if surface.bbox.area > profile.max_area:
+        scores["surfaceRoleContainer"] = 1.0
+        return decision("container_surface", "metadata_only", "container_surface_area_exceeds_control_profile"), scores
+    if unrelated:
+        scores["surfaceRoleContainer"] = 1.0
+        return decision("container_surface", "metadata_only", "single_control_contains_unrelated_text"), scores
+
+    scored_candidate = Candidate(surface.id, "shape", surface.bbox, surface.score, scores, "ocr_anchored_control_surface")
+    accepted, control_scores, reason = score_ocr_anchored_control_surface(
+        rgb=rgb,
+        candidate=scored_candidate,
+        block=seed_block,
+        ocr_blocks=ocr_blocks,
+        text_mask=text_mask,
+        page_area=page_area,
+        profile=profile,
+        page_background=page_background,
+    )
+    scores.update(control_scores)
+    if accepted:
+        scores.update(
+            {
+                "confirmedControlSurface": 1.0,
+                "surfaceRoleControl": 1.0,
+                "controlSurface": 1.0,
+            }
+        )
+        return decision("control_surface", "accepted", "connected_surface_control_gate_passed"), scores
+    if scores.get("touchesWindowEdgeCount", 0.0) >= 2.0 and scores.get("windowAreaRatio", 0.0) >= 0.72:
+        scores["surfaceRoleContainer"] = 1.0
+        return decision("container_surface", "metadata_only", "parent_surface_slice_not_control"), scores
+    if reason in {"high_texture", "one_sided_graphic_edge", "weak_boundary_closure"} and role_requires_strong_boundary(ocr_text_role(seed_block.text)):
+        scores["surfaceRoleChartInternal"] = 1.0
+        return decision("chart_or_media_internal", "metadata_only", "chart_or_media_internal"), scores
+    scores["surfaceRoleAuditOnly"] = 1.0
+    return decision("audit_only", "rejected", reason or "failed_connected_surface_control_gate"), scores
+
+
+def local_surface_to_control_candidate(
+    surface: LocalSurfaceCandidate,
+    scores: dict[str, float],
+    reason: str,
+) -> Candidate:
+    return Candidate(
+        id=surface.id,
+        kind="shape",
+        bbox=surface.bbox,
+        score=max(0.72, float(scores.get("score", surface.score))),
+        scores=scores,
+        reason=reason,
+    )
+
+
+def surface_role_decision_payload(
+    role: SurfaceRoleDecision,
+    surface: LocalSurfaceCandidate,
+    seed_block: OCRBlock,
+    scores: dict[str, float],
+    kind: str,
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "id": surface.id,
+        "bbox": surface.bbox.to_dict(),
+        "decision": role.decision,
+        "role": role.role,
+        "reason": role.reason,
+        "sourceTextBlockId": seed_block.id,
+        "sourceTextRole": ocr_text_role(seed_block.text),
+        "containedTextBlockIds": surface.contained_text_ids,
+        "sourceRefs": role.source_refs,
+        "scores": {key: round(float(value), 4) for key, value in scores.items() if isinstance(value, int | float)},
+    }
+
+
 def is_editable_control_surface(
     candidate: Candidate,
     blocks: list[OCRBlock],
     fill_coverage: float,
     close_coverage: float,
     text_contrast: float,
-    page_area: int,
+    profile: ControlProfile,
 ) -> bool:
     if not blocks or len(blocks) > 2:
         return False
-    if candidate.bbox.area < 480 or candidate.bbox.area > page_area * 0.08:
+    if candidate.bbox.area < profile.min_area or candidate.bbox.area > profile.max_area:
         return False
-    if candidate.bbox.width < 24 or candidate.bbox.height < 14:
+    if candidate.bbox.width < 24 or candidate.bbox.height < profile.min_height:
         return False
     aspect = candidate.bbox.width / max(1, candidate.bbox.height)
-    if aspect < 1.15 or aspect > 12.0:
+    if aspect < 1.15 or aspect > profile.max_aspect:
         return False
     if candidate.scores.get("texture", 1.0) > 0.86:
         return False
@@ -215,8 +708,12 @@ def promote_control_surfaces(
     ocr_blocks: list[OCRBlock],
     text_mask: np.ndarray,
     rgb: np.ndarray,
+    profile: ControlProfile | None = None,
+    page_background: tuple[int, int, int] | None = None,
 ) -> tuple[list[Candidate], list[Candidate], list[dict[str, Any]]]:
-    page_area = int(rgb.shape[0] * rgb.shape[1])
+    height, width, _ = rgb.shape
+    profile = profile or build_control_profile(width, height)
+    page_background = page_background or estimate_background_color(rgb)
     promoted_shapes: list[Candidate] = []
     residual_rasters: list[Candidate] = []
     consumed_raster_ids: set[str] = set()
@@ -226,16 +723,31 @@ def promote_control_surfaces(
         blocks = contained_text_blocks(raster, ocr_blocks)
         fill, fill_coverage, close_coverage = control_surface_fill(rgb, raster, text_mask)
         text_contrast = control_text_contrast(rgb, blocks, fill)
-        if not is_editable_control_surface(raster, blocks, fill_coverage, close_coverage, text_contrast, page_area):
+        if not is_editable_control_surface(raster, blocks, fill_coverage, close_coverage, text_contrast, profile):
+            continue
+        ring = control_surface_ring_evidence(rgb, raster.bbox, fill, page_background)
+        if ring is None:
+            continue
+        ok, reason = passes_boundary_gate(
+            ring=ring,
+            ring_threshold=8.0 if relative_luminance(fill) <= 96.0 else 18.0,
+            strong_boundary_required=False,
+        )
+        if not ok:
             continue
 
         scores = dict(raster.scores)
         scores.update(
             {
                 "controlSurface": 1.0,
+                "confirmedControlSurface": 1.0,
+                "surfaceRoleControl": 1.0,
                 "fillCoverage": round(float(fill_coverage), 4),
                 "closeFillCoverage": round(float(close_coverage), 4),
                 "textContrast": round(float(text_contrast), 4),
+                "boundaryStrongSideCount": float(ring.strong_side_count),
+                "fillToLocalDelta": round(float(ring.fill_to_local_delta), 4),
+                "fillToPageDelta": round(float(ring.fill_to_page_delta), 4),
                 "fillR": float(fill[0]),
                 "fillG": float(fill[1]),
                 "fillB": float(fill[2]),
@@ -271,6 +783,7 @@ def promote_control_surfaces(
                 "fillCoverage": round(float(fill_coverage), 4),
                 "closeFillCoverage": round(float(close_coverage), 4),
                 "textContrast": round(float(text_contrast), 4),
+                "boundaryReason": reason,
                 "residualRasterCount": len(residuals),
             }
         )
@@ -279,7 +792,18 @@ def promote_control_surfaces(
     merged_rasters = nms_candidates(remaining_rasters + residual_rasters, overlap_threshold=0.52)
     merged_shapes: list[Candidate] = []
     for candidate in sorted(shape_candidates + promoted_shapes, key=lambda item: (item.bbox.y, item.bbox.x, -item.bbox.area, item.id)):
-        if any(iou(candidate.bbox, kept.bbox) >= 0.82 for kept in merged_shapes):
+        if any(is_duplicate_control_shape(candidate, kept) for kept in merged_shapes):
+            decisions.append(
+                {
+                    "kind": "control_duplicate_shape_suppressed",
+                    "id": candidate.id,
+                    "bbox": candidate.bbox.to_dict(),
+                    "reason": "cross_source_control_duplicate",
+                    "keptShapeId": next(
+                        kept.id for kept in merged_shapes if is_duplicate_control_shape(candidate, kept)
+                    ),
+                }
+            )
             continue
         merged_shapes.append(candidate)
     return merged_rasters, merged_shapes, decisions
@@ -289,59 +813,58 @@ def detect_ocr_anchored_control_surfaces(
     rgb: np.ndarray,
     ocr_blocks: list[OCRBlock],
     text_mask: np.ndarray,
+    profile: ControlProfile | None = None,
+    page_background: tuple[int, int, int] | None = None,
 ) -> tuple[list[Candidate], list[dict[str, Any]]]:
     height, width, _ = rgb.shape
-    page_area = width * height
+    profile = profile or build_control_profile(width, height)
+    page_background = page_background or estimate_background_color(rgb)
     candidates: list[Candidate] = []
-    rejected: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
 
     for index, block in enumerate(ocr_blocks, start=1):
         if block.bbox.area <= 0 or block.bbox.width < 4 or block.bbox.height < 6:
             continue
-        best: tuple[float, Candidate] | None = None
-        for box in control_surface_search_boxes(block.bbox, width, height):
-            candidate = Candidate(
-                id=f"ocr_control_{index:04d}",
-                kind="shape",
-                bbox=box,
-                score=0.78,
-                scores={},
-                reason="ocr_anchored_control_surface",
+        surface = extract_local_surface_from_text_seed(
+            rgb=rgb,
+            text_mask=text_mask,
+            block=block,
+            ocr_blocks=ocr_blocks,
+            page_background=page_background,
+            surface_id=f"ocr_control_{index:04d}",
+        )
+        if surface is None:
+            decisions.append(
+                {
+                    "kind": "ocr_control_surface",
+                    "id": f"ocr_control_{index:04d}",
+                    "bbox": block.bbox.to_dict(),
+                    "decision": "rejected",
+                    "role": "audit_only",
+                    "reason": "missing_local_surface",
+                    "sourceTextBlockId": block.id,
+                    "sourceTextRole": ocr_text_role(block.text),
+                    "sourceRefs": [f"ocr:{block.id}", "pixel:local_surface_gate"],
+                }
             )
-            accepted, scores, reason = score_ocr_anchored_control_surface(
-                rgb=rgb,
-                candidate=candidate,
-                block=block,
-                text_mask=text_mask,
-                page_area=page_area,
-            )
-            if not accepted:
-                if reason in {"high_texture", "missing_outer_ring", "not_enough_padding"}:
-                    rejected.append(
-                        {
-                            "kind": "ocr_control_surface",
-                            "id": candidate.id,
-                            "bbox": box.to_dict(),
-                            "reason": reason,
-                            "sourceTextBlockId": block.id,
-                        }
-                    )
-                continue
-            scored = Candidate(
-                id=candidate.id,
-                kind="shape",
-                bbox=box,
-                score=float(scores["score"]),
-                scores=scores,
-                reason="ocr_anchored_control_surface",
-            )
-            rank = float(scores["score"]) - (box.area / max(1, page_area)) * 0.20
-            if best is None or rank > best[0] or (rank == best[0] and box.area < best[1].bbox.area):
-                best = (rank, scored)
-        if best is not None:
-            candidates.append(best[1])
+            continue
 
-    return merge_control_surfaces(candidates), rejected[:80]
+        role, scores = classify_local_surface_role(
+            surface=surface,
+            seed_block=block,
+            ocr_blocks=ocr_blocks,
+            rgb=rgb,
+            text_mask=text_mask,
+            profile=profile,
+            page_background=page_background,
+            source_refs=[f"ocr:{block.id}", "pixel:local_surface_gate"],
+        )
+        decisions.append(surface_role_decision_payload(role, surface, block, scores, "ocr_control_surface"))
+        if role.role != "control_surface" or role.decision != "accepted":
+            continue
+        candidates.append(local_surface_to_control_candidate(surface, scores, "ocr_anchored_control_surface"))
+
+    return merge_control_surfaces(candidates), decisions[:160]
 
 
 def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> list[BBox]:
@@ -359,6 +882,15 @@ def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> lis
             max(22, round(text_box.width * 2.00)),
         }
     )
+    if text_box.width <= text_box.height * 2.4:
+        pad_x_values.extend(
+            sorted(
+                {
+                    max(26, round(text_box.width * 2.80)),
+                    max(32, round(text_box.width * 3.60)),
+                }
+            )
+        )
     pad_y_values = sorted(
         {
             max(4, round(text_box.height * 0.35)),
@@ -367,6 +899,15 @@ def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> lis
             max(6, round(text_box.height * 0.85)),
         }
     )
+    if text_box.width <= text_box.height * 2.4:
+        pad_y_values.extend(
+            sorted(
+                {
+                    max(8, round(text_box.height * 1.15)),
+                    max(12, round(text_box.height * 1.65)),
+                }
+            )
+        )
     boxes: list[BBox] = []
     seen: set[tuple[int, int, int, int]] = set()
     for pad_x in pad_x_values:
@@ -395,9 +936,16 @@ def score_ocr_anchored_control_surface(
     rgb: np.ndarray,
     candidate: Candidate,
     block: OCRBlock,
+    ocr_blocks: list[OCRBlock],
     text_mask: np.ndarray,
     page_area: int,
+    profile: ControlProfile | None = None,
+    page_background: tuple[int, int, int] | None = None,
 ) -> tuple[bool, dict[str, float], str]:
+    height, width, _ = rgb.shape
+    profile = profile or build_control_profile(width, height)
+    page_background = page_background or estimate_background_color(rgb)
+    _ = page_area
     box = candidate.bbox
     if block.bbox.area <= 0 or box.area <= 0:
         return False, {}, "empty"
@@ -405,15 +953,24 @@ def score_ocr_anchored_control_surface(
     if text_containment < 0.90:
         return False, {}, "text_not_contained"
     area_ratio = box.area / block.bbox.area
-    if area_ratio < 1.18 or area_ratio > 12.0:
+    text_role = ocr_text_role(block.text)
+    max_area_ratio = 30.0 if block.bbox.width <= block.bbox.height * 2.4 else 12.0
+    if area_ratio < 1.18 or area_ratio > max_area_ratio:
         return False, {}, "bad_area_ratio"
-    if box.area > max(12_000, page_area * 0.08) or box.width < 24 or box.height < 14:
+    if box.area > profile.max_area or box.width < 24 or box.height < profile.min_height:
         return False, {}, "bad_size"
     aspect = box.width / max(1, box.height)
-    if aspect < 1.10 or aspect > 14.0:
+    if aspect < 1.10 or aspect > profile.max_aspect:
         return False, {}, "bad_aspect"
     if box.height > max(96, block.bbox.height * 5):
         return False, {}, "too_tall"
+    contained = contained_text_blocks(candidate, ocr_blocks)
+    related = related_control_text_blocks(block, contained)
+    related_ids = {item.id for item in related}
+    unrelated = [item for item in contained if item.id not in related_ids]
+    if unrelated:
+        return False, {}, "single_control_contains_unrelated_text"
+    chart_tick_like = chart_tick_like_block(block, ocr_blocks)
 
     left_pad = block.bbox.x - box.x
     right_pad = box.x2 - block.bbox.x2
@@ -440,8 +997,8 @@ def score_ocr_anchored_control_surface(
     if fill_coverage < 0.30 and close_coverage < 0.58:
         return False, {}, "unstable_fill"
 
-    ring_min_delta, ring_support_delta = control_surface_outer_ring_delta(rgb, box, fill)
-    if ring_min_delta is None or ring_support_delta is None:
+    ring = control_surface_ring_evidence(rgb, box, fill, page_background)
+    if ring is None:
         return False, {}, "missing_outer_ring"
     fill_luminance = relative_luminance(fill)
     dark_surface = (
@@ -453,8 +1010,15 @@ def score_ocr_anchored_control_surface(
         and edge_density <= 0.22
     )
     ring_threshold = 8.0 if dark_surface else 18.0
-    if ring_support_delta < ring_threshold:
-        return False, {}, "weak_outer_boundary"
+    if chart_tick_like:
+        return False, {}, "chart_tick_like_control_rejected"
+    boundary_ok, boundary_reason = passes_boundary_gate(
+        ring=ring,
+        ring_threshold=ring_threshold,
+        strong_boundary_required=role_requires_strong_boundary(text_role),
+    )
+    if not boundary_ok:
+        return False, {}, boundary_reason
 
     text_contrast = control_text_contrast(rgb, [block], fill)
     if text_contrast < 34.0:
@@ -463,7 +1027,7 @@ def score_ocr_anchored_control_surface(
     score = (
         0.42
         + min(0.22, close_coverage * 0.18)
-        + min(0.16, ring_support_delta / 260.0)
+        + min(0.16, ring.support_delta / 260.0)
         + min(0.14, text_contrast / 520.0)
         + min(0.08, aspect / 140.0)
         - min(0.12, texture / 800.0)
@@ -477,12 +1041,20 @@ def score_ocr_anchored_control_surface(
         "aspect": round(float(aspect), 4),
         "fillCoverage": round(float(fill_coverage), 4),
         "closeFillCoverage": round(float(close_coverage), 4),
-        "outerRingDelta": round(float(ring_min_delta), 4),
-        "outerRingSupportDelta": round(float(ring_support_delta), 4),
+        "outerRingDelta": round(float(ring.min_delta), 4),
+        "outerRingSupportDelta": round(float(ring.support_delta), 4),
+        "outerRingMedianDelta": round(float(ring.median_delta), 4),
+        "outerRingMaxDelta": round(float(ring.max_delta), 4),
         "outerRingThreshold": round(float(ring_threshold), 4),
+        "boundaryStrongSideCount": float(ring.strong_side_count),
+        "fillToLocalDelta": round(float(ring.fill_to_local_delta), 4),
+        "fillToPageDelta": round(float(ring.fill_to_page_delta), 4),
         "textContrast": round(float(text_contrast), 4),
         "fillLuminance": round(float(fill_luminance), 4),
         "darkControlSurface": 1.0 if dark_surface else 0.0,
+        "textRoleRisk": 1.0 if role_requires_strong_boundary(text_role) else 0.0,
+        "containedTextBlockCount": float(len(contained)),
+        "sourceTextBlockKey": stable_text_block_key(block.id),
         "texture": round(float(texture / 255.0), 4),
         "entropy": round(float(entropy), 4),
         "edge": round(float(edge_density), 4),
@@ -529,24 +1101,125 @@ def control_surface_local_complexity(
 
 
 def control_surface_outer_ring_delta(rgb: np.ndarray, box: BBox, fill: np.ndarray) -> tuple[float | None, float | None]:
+    evidence = control_surface_ring_evidence(rgb, box, fill, estimate_background_color(rgb))
+    if evidence is None:
+        return None, None
+    return evidence.min_delta, evidence.support_delta
+
+
+def control_surface_ring_evidence(
+    rgb: np.ndarray,
+    box: BBox,
+    fill: np.ndarray,
+    page_background: tuple[int, int, int] | np.ndarray,
+) -> RingEvidence | None:
     height, width, _ = rgb.shape
     pad = max(2, min(5, box.height // 8))
     if box.x - pad < 0 or box.y - pad < 0 or box.x2 + pad > width or box.y2 + pad > height:
-        return None, None
-    strips = [
-        rgb[box.y - pad : box.y, box.x : box.x2],
-        rgb[box.y2 : box.y2 + pad, box.x : box.x2],
-        rgb[box.y : box.y2, box.x - pad : box.x],
-        rgb[box.y : box.y2, box.x2 : box.x2 + pad],
-    ]
+        return None
+    strips = {
+        "top": rgb[box.y - pad : box.y, box.x : box.x2],
+        "bottom": rgb[box.y2 : box.y2 + pad, box.x : box.x2],
+        "left": rgb[box.y : box.y2, box.x - pad : box.x],
+        "right": rgb[box.y : box.y2, box.x2 : box.x2 + pad],
+    }
+    colors: list[np.ndarray] = []
     deltas: list[float] = []
-    for strip in strips:
+    for strip in strips.values():
         if strip.size == 0:
-            return None, None
+            return None
         color = dominant_cluster_color(strip.reshape(-1, 3).astype(np.uint8), bucket_size=24)
+        colors.append(color)
         deltas.append(color_distance(color, fill))
     sorted_deltas = sorted(deltas)
-    return float(sorted_deltas[0]), float(sorted_deltas[1])
+    local_pixels = np.concatenate([color.reshape(1, 3) for color in colors], axis=0).astype(np.uint8)
+    local_color = dominant_cluster_color(local_pixels, bucket_size=24)
+    threshold = max(10.0, min(18.0, float(np.median(sorted_deltas)) * 0.80))
+    strong_side_count = sum(1 for delta in deltas if delta >= threshold)
+    return RingEvidence(
+        min_delta=float(sorted_deltas[0]),
+        support_delta=float(sorted_deltas[1]),
+        median_delta=float(np.median(sorted_deltas)),
+        max_delta=float(sorted_deltas[-1]),
+        strong_side_count=strong_side_count,
+        fill_to_local_delta=color_distance(fill, local_color),
+        fill_to_page_delta=color_distance(fill, page_background),
+        side_deltas=(float(deltas[0]), float(deltas[1]), float(deltas[2]), float(deltas[3])),
+    )
+
+
+def passes_boundary_gate(
+    ring: RingEvidence,
+    ring_threshold: float,
+    strong_boundary_required: bool,
+) -> tuple[bool, str]:
+    required_sides = 3 if strong_boundary_required else 2
+    if ring.support_delta < ring_threshold or ring.median_delta < ring_threshold:
+        return False, "weak_boundary_closure"
+    if ring.strong_side_count < required_sides:
+        return False, "one_sided_graphic_edge"
+    if ring.fill_to_local_delta <= 14.0 and ring.fill_to_page_delta <= 18.0:
+        return False, "invisible_background_like_control"
+    return True, ""
+
+
+def is_duplicate_control_shape(candidate: Candidate, kept: Candidate) -> bool:
+    if not is_control_like_shape(candidate) or not is_control_like_shape(kept):
+        return iou(candidate.bbox, kept.bbox) >= 0.82
+    overlap = iou(candidate.bbox, kept.bbox)
+    containment = max(ioa(candidate.bbox, kept.bbox), ioa(kept.bbox, candidate.bbox))
+    if overlap < 0.65 and containment < 0.85:
+        return False
+    if distinct_adjacent_controls(candidate.bbox, kept.bbox):
+        return False
+    if control_shape_fill_distance(candidate, kept) <= 34.0:
+        return True
+    if same_control_source(candidate, kept):
+        return True
+    return containment >= 0.92
+
+
+def is_control_like_shape(candidate: Candidate) -> bool:
+    if candidate.scores.get("confirmedControlSurface", 0.0) >= 1.0:
+        return True
+    return candidate.reason in {"editable_control_surface_from_raster"} and candidate.scores.get("controlSurface", 0.0) >= 1.0
+
+
+def control_shape_fill_distance(a: Candidate, b: Candidate) -> float:
+    if not all(key in a.scores for key in ("fillR", "fillG", "fillB")):
+        return 999.0
+    if not all(key in b.scores for key in ("fillR", "fillG", "fillB")):
+        return 999.0
+    return color_distance(
+        np.array([a.scores["fillR"], a.scores["fillG"], a.scores["fillB"]], dtype=np.float32),
+        np.array([b.scores["fillR"], b.scores["fillG"], b.scores["fillB"]], dtype=np.float32),
+    )
+
+
+def same_control_source(a: Candidate, b: Candidate) -> bool:
+    source_a = float(a.scores.get("sourceTextBlockKey", 0.0))
+    source_b = float(b.scores.get("sourceTextBlockKey", 0.0))
+    if source_a and source_b and source_a == source_b:
+        return True
+    return a.reason != b.reason
+
+
+def distinct_adjacent_controls(a: BBox, b: BBox) -> bool:
+    horizontal_overlap = intersection_1d(a.y, a.y2, b.y, b.y2) / max(1, min(a.height, b.height))
+    vertical_overlap = intersection_1d(a.x, a.x2, b.x, b.x2) / max(1, min(a.width, b.width))
+    if horizontal_overlap >= 0.60 and horizontal_gap(a, b) >= max(4, min(a.height, b.height) * 0.18):
+        return True
+    if vertical_overlap >= 0.60 and vertical_gap(a, b) >= max(4, min(a.width, b.width) * 0.12):
+        return True
+    return False
+
+
+def vertical_gap(a: BBox, b: BBox) -> int:
+    if a.y2 < b.y:
+        return b.y - a.y2
+    if b.y2 < a.y:
+        return a.y - b.y2
+    return 0
 
 
 def merge_control_surfaces(candidates: list[Candidate]) -> list[Candidate]:
@@ -680,7 +1353,7 @@ def control_shape_candidates(shape_candidates: list[Candidate]) -> list[Candidat
     return [
         item
         for item in shape_candidates
-        if item.reason in {"ocr_anchored_control_surface", "editable_control_surface_from_raster", "model_assisted_control_surface"}
+        if item.scores.get("confirmedControlSurface", 0.0) >= 1.0
     ]
 
 

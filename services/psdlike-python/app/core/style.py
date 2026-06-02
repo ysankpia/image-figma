@@ -16,7 +16,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def shape_fill(rgb: np.ndarray, shape: Candidate) -> str:
-    if shape.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands", "editable_control_surface_from_raster", "ocr_anchored_control_surface"}:
+    if shape.reason in {
+        "background_surface_band",
+        "inferred_background_plate_from_surface_bands",
+        "editable_control_surface_from_raster",
+        "ocr_anchored_control_surface",
+        "model_assisted_control_surface",
+    }:
         return color_hex(
             np.array(
                 [
@@ -32,7 +38,7 @@ def shape_fill(rgb: np.ndarray, shape: Candidate) -> str:
 
 def shape_style(rgb: np.ndarray, shape: Candidate) -> dict[str, Any]:
     style: dict[str, Any] = {"fill": shape_fill(rgb, shape)}
-    if shape.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface"}:
+    if shape.scores.get("confirmedControlSurface", 0.0) >= 1.0:
         radius = infer_control_corner_radius(rgb, shape)
         if radius > 0:
             style["cornerRadius"] = radius

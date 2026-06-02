@@ -19,7 +19,9 @@ from .candidates import (
 )
 from .colors import estimate_background_color
 from .controls import (
+    build_control_profile,
     control_shape_candidates,
+    control_profile_diagnostics,
     detect_ocr_anchored_control_surfaces,
     promote_control_surfaces,
     suppress_control_owned_rasters,
@@ -76,6 +78,42 @@ class PipelineResult:
     diagnostics: dict[str, Any]
 
 
+def control_hardening_diagnostics(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    reasons = [str(item.get("reason", "")) for item in decisions]
+    roles = [str(item.get("role", "")) for item in decisions]
+    accepted_controls = sum(
+        1
+        for item in decisions
+        if str(item.get("role", "")) == "control_surface"
+        and str(item.get("decision", "")) in {"accepted", "accepted_model_control_surface"}
+    )
+    return {
+        "localSurfaceCandidateCount": sum(1 for item in decisions if str(item.get("kind", "")).endswith("control_surface")),
+        "localSurfaceAcceptedControlCount": accepted_controls,
+        "localSurfaceContainerCount": sum(1 for role in roles if role == "container_surface"),
+        "localSurfaceChartInternalCount": sum(1 for role in roles if role == "chart_or_media_internal"),
+        "localSurfaceAuditOnlyCount": sum(1 for role in roles if role == "audit_only"),
+        "localSurfaceRejectedReasons": dict(sorted({reason: reasons.count(reason) for reason in reasons if reason}.items())),
+        "controlParentSurfaceSliceRejectedCount": sum(1 for reason in reasons if reason == "parent_surface_slice_not_control"),
+        "controlChartInternalRejectedCount": sum(
+            1 for reason in reasons if reason in {"chart_tick_like_surface_not_control", "chart_or_media_internal"}
+        ),
+        "controlTextRoleRejectedCount": sum(
+            1 for reason in reasons if reason in {"chart_tick_like_control_rejected", "chart_tick_like_surface_not_control"}
+        ),
+        "controlMultiTextRejectedCount": sum(1 for reason in reasons if reason == "single_control_contains_unrelated_text"),
+        "controlBoundaryClosureRejectedCount": sum(
+            1 for reason in reasons if reason in {"one_sided_graphic_edge", "weak_boundary_closure"}
+        ),
+        "controlBackgroundLikeRejectedCount": sum(1 for reason in reasons if reason == "invisible_background_like_control"),
+        "controlDuplicateShapeSuppressedCount": sum(
+            1 for item in decisions if item.get("kind") == "control_duplicate_shape_suppressed"
+        ),
+        "controlFalsePositiveHardeningVersion": 108,
+        "controlFalsePositiveHardeningMode": "surface_first",
+    }
+
+
 def run_pipeline(
     image_path: Path,
     out_dir: Path,
@@ -109,6 +147,8 @@ def run_pipeline(
 
     image = Image.open(image_path).convert("RGB")
     rgb = np.asarray(image)
+    page_background = estimate_background_color(rgb)
+    control_profile = build_control_profile(image.width, image.height)
     model_context = load_model_evidence_context(
         resolved_model_evidence,
         {"width": image.width, "height": image.height},
@@ -151,7 +191,7 @@ def run_pipeline(
         surface_candidates,
         width=image.width,
         height=image.height,
-        page_background=estimate_background_color(rgb),
+        page_background=page_background,
     )
     foreground_candidates, foreground_rejected = build_foreground_object_candidates(
         maps=maps,
@@ -170,6 +210,8 @@ def run_pipeline(
         rgb=rgb,
         ocr_blocks=ocr_blocks,
         text_mask=text_knockout_mask,
+        profile=control_profile,
+        page_background=page_background,
     )
     model_ownership_decisions: list[dict[str, Any]] = []
     model_control_diagnostics: dict[str, Any] = {}
@@ -180,6 +222,8 @@ def run_pipeline(
             rgb=rgb,
             ocr_blocks=ocr_blocks,
             text_mask=text_knockout_mask,
+            profile=control_profile,
+            page_background=page_background,
         )
         ocr_control_candidates = merge_surface_and_shape_candidates(
             model_control_result.candidates,
@@ -203,6 +247,8 @@ def run_pipeline(
         ocr_blocks=ocr_blocks,
         text_mask=text_knockout_mask,
         rgb=rgb,
+        profile=control_profile,
+        page_background=page_background,
     )
     promotion_decisions.extend(control_decisions)
 
@@ -297,6 +343,10 @@ def run_pipeline(
     )
     if ocr_diagnostics:
         layer_stack.setdefault("diagnostics", {}).update(ocr_diagnostics)
+    layer_stack.setdefault("diagnostics", {}).update(control_profile_diagnostics(control_profile))
+    layer_stack.setdefault("diagnostics", {}).update(
+        control_hardening_diagnostics(ocr_control_rejected + promotion_decisions + model_ownership_decisions)
+    )
     if model_control_diagnostics:
         layer_stack.setdefault("diagnostics", {}).update(model_control_diagnostics)
     if model_media_diagnostics:
