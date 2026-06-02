@@ -12,12 +12,15 @@ from tools.psd_like_layer_decomposition_experiment import (
     build_raster_candidates,
     build_shape_candidates,
     build_surface_candidates,
+    build_text_knockout_mask,
     build_text_mask,
     detect_ocr_anchored_control_surfaces,
     color_distance,
     compute_tile_maps,
     crop_raster_assets,
+    assign_media_owned_text_blocks,
     estimate_inpaint_fill_for_candidate_text,
+    estimate_text_style,
     estimate_text_background_for_box,
     estimate_background_color,
     exported_rejections,
@@ -223,6 +226,30 @@ def test_text_color_uses_foreground_contrast_on_dark_or_colored_background():
     rgb[14:24, 20:60] = (255, 255, 255)
 
     assert sample_text_color(rgb, BBox(10, 8, 60, 24)) == "#ffffff"
+
+
+def test_text_style_fits_tall_narrow_ocr_box_without_giant_font():
+    rgb = np.full((120, 120, 3), 255, dtype=np.uint8)
+    rgb[36:80, 24:48] = (20, 20, 20)
+    box = BBox(20, 20, 34, 80)
+
+    result = estimate_text_style(rgb, box, "深猴")
+
+    assert result["diagnostics"]["rawFontSize"] == 64
+    assert result["style"]["fontSize"] < 30
+    assert result["diagnostics"]["measuredWidth"] <= box.width
+    assert result["diagnostics"]["measuredHeight"] <= box.height
+
+
+def test_text_style_does_not_over_shrink_normal_button_text():
+    rgb = np.full((80, 180, 3), (246, 196, 42), dtype=np.uint8)
+    rgb[30:44, 70:112] = (20, 20, 20)
+    box = BBox(64, 24, 60, 24)
+
+    result = estimate_text_style(rgb, box, "确认")
+
+    assert result["style"]["fontSize"] >= 16
+    assert result["diagnostics"]["shrink"] <= 3
 
 
 def test_foreground_object_candidate_from_smooth_object_on_surface():
@@ -545,6 +572,37 @@ def test_ocr_anchored_short_text_wide_pill_recovers_surface_width():
     assert controls[0].scores["outerRingDelta"] >= 18
 
 
+def test_ocr_anchored_dark_button_allows_weaker_outer_boundary():
+    image = Image.new("RGB", (220, 120), (24, 24, 26))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((48, 36, 172, 72), radius=16, fill=(32, 32, 34))
+    draw.rectangle((82, 48, 138, 62), fill=(238, 238, 238))
+    rgb = np.asarray(image)
+    block = OCRBlock(id="text_0001", text="继续", bbox=BBox(82, 46, 56, 18), confidence=0.99)
+    text_mask = build_text_mask(220, 120, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls
+    assert controls[0].scores["darkControlSurface"] == 1.0
+    assert controls[0].scores["outerRingDelta"] < 18
+    assert controls[0].scores["outerRingThreshold"] == 8.0
+
+
+def test_ocr_anchored_large_dark_background_does_not_become_control_surface():
+    image = Image.new("RGB", (360, 260), (18, 18, 20))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((20, 24, 340, 224), radius=16, fill=(38, 38, 42))
+    draw.rectangle((56, 82, 128, 102), fill=(238, 238, 238))
+    rgb = np.asarray(image)
+    block = OCRBlock(id="text_0001", text="标题", bbox=BBox(56, 80, 72, 24), confidence=0.99)
+    text_mask = build_text_mask(360, 260, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls == []
+
+
 def test_ocr_anchored_plain_text_does_not_create_control_surface():
     rgb = np.full((120, 180, 3), 248, dtype=np.uint8)
     rgb[42:58, 70:118] = (20, 20, 20)
@@ -707,6 +765,130 @@ def test_text_owned_raster_keeps_large_parent_region_with_text():
 
     assert kept == [parent]
     assert suppressed == []
+
+
+def test_media_raster_owns_internal_text_without_visible_text_or_knockout(tmp_path: Path):
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    image = Image.new("RGB", (320, 220), (245, 245, 245))
+    pixels = np.asarray(image).copy()
+    for y in range(36, 176):
+        for x in range(36, 284):
+            value = 40 if (x // 6 + y // 5) % 2 == 0 else 210
+            pixels[y, x] = (value, 110, 255 - value)
+    pixels[70:88, 86:156] = (255, 255, 255)
+    pixels[118:136, 180:250] = (255, 255, 255)
+    image = Image.fromarray(pixels, mode="RGB")
+    rgb = np.asarray(image)
+    blocks = [
+        OCRBlock(id="text_0001", text="地图", bbox=BBox(86, 70, 70, 18), confidence=0.99),
+        OCRBlock(id="text_0002", text="道路", bbox=BBox(180, 118, 70, 18), confidence=0.99),
+    ]
+    text_mask = build_text_mask(320, 220, blocks, padding=0)
+    raster = Candidate(
+        id="media_map",
+        kind="raster",
+        bbox=BBox(36, 36, 248, 140),
+        score=0.9,
+        scores={"textOverlap": 0.03, "texture": 0.86, "edge": 0.72, "entropy": 0.80, "unique": 0.55},
+        reason="high_texture_with_internal_text",
+    )
+
+    media_ids, media_decisions = assign_media_owned_text_blocks([raster], blocks, text_mask, 320, 220)
+    visible_blocks = [block for block in blocks if block.id not in media_ids]
+    visible_mask = build_text_knockout_mask(rgb, visible_blocks)
+    ownership = build_raster_ownership([raster], visible_blocks, visible_mask)
+    assets = crop_raster_assets(image, [raster], tmp_path, text_mask=visible_mask, ocr_blocks=visible_blocks, rgb=rgb)
+    stack = build_layer_stack(
+        image_path=tmp_path / "source.png",
+        ocr_path=None,
+        image=image,
+        rgb=rgb,
+        ocr_blocks=blocks,
+        raster_candidates=[raster],
+        shape_candidates=[],
+        asset_refs=assets,
+        ownership=ownership,
+        rejected=[],
+        thresholds={"maxTextOverlap": 0.2},
+        media_owned_text_ids=media_ids,
+        media_owned_text_decisions=media_decisions,
+    )
+
+    asset = Image.open(tmp_path / assets[raster.id]).convert("RGB")
+    asset_pixels = np.asarray(asset)
+    assert media_ids == {"text_0001", "text_0002"}
+    assert stack["diagnostics"]["mediaOwnedTextBlockCount"] == 2
+    assert stack["diagnostics"]["textLayerCount"] == 0
+    assert stack["diagnostics"]["rasterTextKnockoutCount"] == 0
+    assert tuple(asset_pixels[74 - raster.bbox.y, 90 - raster.bbox.x]) == (255, 255, 255)
+
+
+def test_media_ownership_does_not_swallow_low_texture_ui_list_text():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    rgb = np.full((240, 240, 3), 246, dtype=np.uint8)
+    blocks = [
+        OCRBlock(id="text_0001", text="名称", bbox=BBox(44, 52, 64, 18), confidence=0.99),
+        OCRBlock(id="text_0002", text="价格", bbox=BBox(44, 92, 64, 18), confidence=0.99),
+        OCRBlock(id="text_0003", text="状态", bbox=BBox(44, 132, 64, 18), confidence=0.99),
+    ]
+    text_mask = build_text_mask(240, 240, blocks, padding=0)
+    card = Candidate(
+        id="flat_card",
+        kind="raster",
+        bbox=BBox(28, 32, 180, 140),
+        score=0.6,
+        scores={"textOverlap": 0.08, "texture": 0.08, "edge": 0.05, "entropy": 0.12, "unique": 0.04},
+        reason="low_texture_card",
+    )
+
+    media_ids, decisions = assign_media_owned_text_blocks([card], blocks, text_mask, 240, 240)
+
+    assert media_ids == set()
+    assert decisions == []
+
+
+def test_small_embedded_media_can_own_internal_badge_text():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    rgb = np.full((180, 180, 3), 245, dtype=np.uint8)
+    block = OCRBlock(id="text_0001", text="12", bbox=BBox(102, 36, 28, 22), confidence=0.99)
+    text_mask = build_text_mask(180, 180, [block], padding=0)
+    badge = Candidate(
+        id="calendar_badge",
+        kind="raster",
+        bbox=BBox(80, 32, 56, 48),
+        score=0.8,
+        scores={"textOverlap": 0.28, "texture": 0.74, "edge": 0.66, "entropy": 0.40, "unique": 0.30},
+        reason="foreground_object_on_surface",
+    )
+
+    media_ids, decisions = assign_media_owned_text_blocks([badge], [block], text_mask, 180, 180)
+
+    assert media_ids == {"text_0001"}
+    assert decisions[0]["ownerRasterId"] == "calendar_badge"
+
+
+def test_wide_button_like_raster_does_not_use_small_media_ownership():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    rgb = np.full((180, 240, 3), 245, dtype=np.uint8)
+    block = OCRBlock(id="text_0001", text="立即购买", bbox=BBox(84, 60, 88, 30), confidence=0.99)
+    text_mask = build_text_mask(240, 180, [block], padding=0)
+    button = Candidate(
+        id="wide_button",
+        kind="raster",
+        bbox=BBox(56, 52, 144, 48),
+        score=0.8,
+        scores={"textOverlap": 0.64, "texture": 0.72, "edge": 0.56, "entropy": 0.38, "unique": 0.24},
+        reason="foreground_object_on_surface",
+    )
+
+    media_ids, decisions = assign_media_owned_text_blocks([button], [block], text_mask, 240, 180)
+
+    assert media_ids == set()
+    assert decisions == []
 
 
 def test_complex_shape_region_promotes_to_single_raster():

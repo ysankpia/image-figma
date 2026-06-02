@@ -94,3 +94,5 @@
 - [Go M29 Offline Group Evidence Audit](088-go-m29-offline-group-evidence-audit.md) — `completed`
 - [Codia DSL 0.2 Plugin Beta Runtime](091-codia-dsl-02-plugin-beta-runtime.md) — `completed`
 - [Codia Beta Assets And Online Detector](092-codia-beta-assets-and-online-detector.md) — `completed`
+- [PSD-like V1 Control Surface Ownership Repair](100-psd-like-v1-control-surface-ownership-repair.md) — `completed`
+- [PSD-like V1 Media Text Ownership And Layout Fit](101-psd-like-v1-media-text-ownership-and-layout-fit.md) — `completed`

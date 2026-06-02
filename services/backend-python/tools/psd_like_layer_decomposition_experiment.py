@@ -6,6 +6,7 @@ import html
 import json
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -1055,7 +1056,17 @@ def score_ocr_anchored_control_surface(
     ring_delta = control_surface_outer_ring_delta(rgb, box, fill)
     if ring_delta is None:
         return False, {}, "missing_outer_ring"
-    if ring_delta < 18.0:
+    fill_luminance = relative_luminance(fill)
+    dark_surface = (
+        fill_luminance <= 96.0
+        and close_coverage >= 0.62
+        and fill_coverage >= 0.26
+        and texture <= 38.0
+        and entropy <= 0.68
+        and edge_density <= 0.22
+    )
+    ring_threshold = 8.0 if dark_surface else 18.0
+    if ring_delta < ring_threshold:
         return False, {}, "weak_outer_boundary"
 
     text_contrast = control_text_contrast(rgb, [block], fill)
@@ -1080,7 +1091,10 @@ def score_ocr_anchored_control_surface(
         "fillCoverage": round(float(fill_coverage), 4),
         "closeFillCoverage": round(float(close_coverage), 4),
         "outerRingDelta": round(float(ring_delta), 4),
+        "outerRingThreshold": round(float(ring_threshold), 4),
         "textContrast": round(float(text_contrast), 4),
+        "fillLuminance": round(float(fill_luminance), 4),
+        "darkControlSurface": 1.0 if dark_surface else 0.0,
         "texture": round(float(texture / 255.0), 4),
         "entropy": round(float(entropy), 4),
         "edge": round(float(edge_density), 4),
@@ -1205,6 +1219,135 @@ def suppress_text_owned_raster_fragments(
     return kept, suppressed
 
 
+def assign_media_owned_text_blocks(
+    raster_candidates: list[Candidate],
+    ocr_blocks: list[OCRBlock],
+    text_mask: np.ndarray,
+    image_width: int,
+    image_height: int,
+) -> tuple[set[str], list[dict[str, Any]]]:
+    page_area = max(1, image_width * image_height)
+    best_by_text: dict[str, tuple[float, Candidate, OCRBlock, float, str]] = {}
+
+    for raster in raster_candidates:
+        reason = classify_media_text_owner_candidate(raster, page_area, image_width, image_height, text_mask)
+        if not reason:
+            continue
+        small_media = is_small_embedded_media_candidate(raster)
+        coverage_threshold = 0.68 if small_media else 0.72
+        covered: list[tuple[OCRBlock, float]] = []
+        for block in ocr_blocks:
+            if block.bbox.area <= 0:
+                continue
+            coverage = intersection_area(raster.bbox, block.bbox) / block.bbox.area
+            if coverage >= coverage_threshold:
+                covered.append((block, coverage))
+        if not covered:
+            continue
+        if len(covered) == 1 and raster.bbox.area < page_area * 0.035 and media_complexity_score(raster) < 0.52 and not small_media:
+            continue
+        text_area = sum(intersection_area(raster.bbox, block.bbox) for block, _ in covered)
+        text_area_ratio = text_area / max(1, raster.bbox.area)
+        max_text_area_ratio = 0.45 if small_media else 0.22
+        if text_area_ratio > max_text_area_ratio:
+            continue
+
+        owner_score = (
+            media_complexity_score(raster)
+            + min(0.25, raster.bbox.area / page_area)
+            + min(0.18, len(covered) * 0.035)
+            - min(0.20, text_area_ratio)
+        )
+        for block, coverage in covered:
+            previous = best_by_text.get(block.id)
+            score = owner_score + coverage * 0.10
+            if previous is None or score > previous[0]:
+                best_by_text[block.id] = (score, raster, block, coverage, reason)
+
+    decisions: list[dict[str, Any]] = []
+    for text_id, (score, raster, block, coverage, reason) in sorted(best_by_text.items(), key=lambda item: item[0]):
+        decisions.append(
+            {
+                "kind": "media_owned_text",
+                "sourceTextBlockId": text_id,
+                "sourceTextBBox": block.bbox.to_dict(),
+                "ownerRasterId": raster.id,
+                "ownerRasterBBox": raster.bbox.to_dict(),
+                "reason": reason,
+                "coverage": round(float(coverage), 4),
+                "ownerScore": round(float(score), 4),
+                "rasterReason": raster.reason,
+                "rasterAreaRatio": round(float(raster.bbox.area / max(1, page_area)), 4),
+                "mediaComplexity": round(float(media_complexity_score(raster)), 4),
+                "textMaskRatio": round(float(text_mask_ratio(raster.bbox, text_mask)), 4),
+            }
+        )
+    return set(best_by_text), decisions
+
+
+def classify_media_text_owner_candidate(
+    raster: Candidate,
+    page_area: int,
+    image_width: int,
+    image_height: int,
+    text_mask: np.ndarray,
+) -> str:
+    if raster.bbox.area <= 0:
+        return ""
+    if is_full_page_backing(raster.bbox, image_width, image_height):
+        return ""
+    if raster.reason in {"control_foreground_residual"}:
+        return ""
+    small_media = is_small_embedded_media_candidate(raster)
+    if raster.bbox.area < max(18_000, int(page_area * 0.012)) and not small_media:
+        return ""
+    if (raster.bbox.width < 72 or raster.bbox.height < 56) and not small_media:
+        return ""
+    if text_mask_ratio(raster.bbox, text_mask) > 0.24:
+        return ""
+
+    complexity = media_complexity_score(raster)
+    complex_reason = raster.reason in {
+        "high_texture_region",
+        "high_texture_with_internal_text",
+        "high_texture_low_text_overlap",
+        "complex_visual_region_promoted_from_shape",
+        "foreground_object_on_surface",
+    }
+    if complexity < 0.42 and not complex_reason and not small_media:
+        return ""
+
+    aspect = raster.bbox.width / max(1, raster.bbox.height)
+    compact_control_like = raster.bbox.height <= 80 and raster.bbox.width <= 360 and 1.15 <= aspect <= 12.0
+    if compact_control_like and complexity < 0.58 and not small_media:
+        return ""
+
+    return "complex_media_raster_owns_internal_text"
+
+
+def is_small_embedded_media_candidate(raster: Candidate) -> bool:
+    if raster.reason not in {"foreground_object_on_surface", "high_texture_with_internal_text"}:
+        return False
+    if raster.bbox.area < 1_600 or raster.bbox.area > 38_000:
+        return False
+    if raster.bbox.width < 32 or raster.bbox.height < 32:
+        return False
+    aspect = raster.bbox.width / max(1, raster.bbox.height)
+    if aspect < 0.35 or aspect > 2.10:
+        return False
+    return media_complexity_score(raster) >= 0.54
+
+
+def media_complexity_score(raster: Candidate) -> float:
+    texture = float(raster.scores.get("texture", 0.0))
+    edge = float(raster.scores.get("edge", 0.0))
+    entropy = float(raster.scores.get("entropy", 0.0))
+    unique = float(raster.scores.get("unique", 0.0))
+    promoted = 0.18 if raster.reason == "complex_visual_region_promoted_from_shape" else 0.0
+    foreground = 0.08 if raster.reason == "foreground_object_on_surface" else 0.0
+    return max(texture, edge * 1.15, entropy * 0.80, unique * 0.70) + promoted + foreground
+
+
 def classify_text_owned_raster_fragment(
     raster: Candidate,
     ocr_blocks: list[OCRBlock],
@@ -1221,7 +1364,8 @@ def classify_text_owned_raster_fragment(
 
     mask_ratio = text_mask_ratio(raster.bbox, text_mask)
     score_overlap = float(raster.scores.get("textOverlap", 0.0))
-    thin_fragment = shortest_side <= 10 and longest_side <= 160 and mask_ratio >= 0.18
+    score_overlap = max(score_overlap, text_mask_score_for_box(raster.bbox, text_mask))
+    thin_fragment = shortest_side <= 10 and longest_side <= 160 and score_overlap >= 0.24
     compact_text_chip = raster.bbox.area <= 2304 and mask_ratio >= 0.26
     if not thin_fragment and not compact_text_chip and score_overlap < 0.34:
         return "", None
@@ -1248,6 +1392,27 @@ def text_mask_ratio(box: BBox, text_mask: np.ndarray) -> float:
     if clamped is None or clamped.area <= 0:
         return 0.0
     return float(text_mask[clamped.y : clamped.y2, clamped.x : clamped.x2].mean())
+
+
+def text_mask_score_for_box(box: BBox, text_mask: np.ndarray) -> float:
+    if not text_mask.size or box.area <= 0:
+        return 0.0
+    height, width = text_mask.shape
+    clamped = clamp_box(box, width, height)
+    if clamped is None or clamped.area <= 0:
+        return 0.0
+    local = text_mask[clamped.y : clamped.y2, clamped.x : clamped.x2]
+    if local.size == 0:
+        return 0.0
+    if local.any():
+        return max(float(local.mean()), 0.24)
+    padded = clamp_box(BBox(clamped.x - 2, clamped.y - 2, clamped.width + 4, clamped.height + 4), width, height)
+    if padded is None:
+        return 0.0
+    expanded = text_mask[padded.y : padded.y2, padded.x : padded.x2]
+    if not expanded.any():
+        return 0.0
+    return min(0.34, 0.18 + float(expanded.mean()) * 0.50)
 
 
 def best_text_owner(box: BBox, ocr_blocks: list[OCRBlock]) -> OCRBlock | None:
@@ -1326,7 +1491,7 @@ def control_shape_candidates(shape_candidates: list[Candidate]) -> list[Candidat
 def exported_rejections(rejected: list[dict[str, Any]], limit: int = 200) -> list[dict[str, Any]]:
     if len(rejected) <= limit:
         return rejected
-    priority_kinds = {"control_owned_raster_suppressed", "text_owned_raster_suppressed"}
+    priority_kinds = {"control_owned_raster_suppressed", "text_owned_raster_suppressed", "media_owned_text"}
     priority = [item for item in rejected if item.get("kind") in priority_kinds]
     remaining = [item for item in rejected if item.get("kind") not in priority_kinds]
     return (priority + remaining)[:limit]
@@ -2025,6 +2190,77 @@ def sample_text_color(rgb: np.ndarray, box: BBox) -> str:
     return color_hex(best_color)
 
 
+def estimate_text_style(rgb: np.ndarray, box: BBox, text: str) -> dict[str, Any]:
+    raw_size = max(8, min(96, round(box.height * 0.8)))
+    fitted_size, measured = fit_text_font_size(text, box, raw_size)
+    line_height = max(8, min(120, math.ceil(fitted_size * 1.12)))
+    return {
+        "style": {
+            "fontSize": fitted_size,
+            "fontWeight": 400,
+            "lineHeight": line_height,
+            "color": sample_text_color(rgb, box),
+        },
+        "diagnostics": {
+            "rawFontSize": raw_size,
+            "fontSize": fitted_size,
+            "lineHeight": line_height,
+            "shrink": max(0, raw_size - fitted_size),
+            "measuredWidth": measured["width"],
+            "measuredHeight": measured["height"],
+            "targetWidth": box.width,
+            "targetHeight": box.height,
+        },
+    }
+
+
+def fit_text_font_size(text: str, box: BBox, raw_size: int) -> tuple[int, dict[str, int]]:
+    value = text.strip()
+    if not value or box.width <= 0 or box.height <= 0:
+        return max(8, min(96, raw_size)), {"width": 0, "height": 0}
+    max_size = max(8, min(96, raw_size))
+    min_size = 8
+    target_width = max(1, int(box.width * 0.98))
+    target_height = max(1, int(box.height * 0.98))
+    best_size = min_size
+    best_measured = measure_text_pixels(value, min_size)
+    for size in range(max_size, min_size - 1, -1):
+        measured = measure_text_pixels(value, size)
+        if measured["width"] <= target_width and measured["height"] <= target_height:
+            best_size = size
+            best_measured = measured
+            break
+        best_measured = measured
+    return best_size, best_measured
+
+
+def measure_text_pixels(text: str, font_size: int) -> dict[str, int]:
+    font = cached_preview_font(max(1, int(font_size)))
+    lines = text.splitlines() or [text]
+    widths: list[int] = []
+    heights: list[int] = []
+    for line in lines:
+        content = line if line else " "
+        try:
+            left, top, right, bottom = font.getbbox(content)
+            widths.append(max(0, int(math.ceil(right - left))))
+            heights.append(max(1, int(math.ceil(bottom - top))))
+        except AttributeError:
+            width, height = font.getsize(content)
+            widths.append(int(width))
+            heights.append(int(height))
+    line_height = max(max(heights), int(math.ceil(font_size * 1.08)))
+    return {
+        "width": max(widths) if widths else 0,
+        "height": line_height * max(1, len(lines)),
+    }
+
+
+@lru_cache(maxsize=128)
+def cached_preview_font(size: int) -> ImageFont.ImageFont:
+    return load_preview_font(size)
+
+
 def estimate_text_box_background(region: np.ndarray) -> np.ndarray:
     height, width, _ = region.shape
     edge = max(1, min(height, width, 3))
@@ -2070,8 +2306,12 @@ def build_layer_stack(
     ownership: dict[str, dict[str, Any]],
     rejected: list[dict[str, Any]],
     thresholds: dict[str, Any],
+    media_owned_text_ids: set[str] | None = None,
+    media_owned_text_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     layers: list[dict[str, Any]] = []
+    media_owned_text_ids = media_owned_text_ids or set()
+    media_owned_text_decisions = media_owned_text_decisions or []
 
     for index, shape in enumerate(shape_candidates, start=1):
         if shape.reason == "inferred_background_plate_from_surface_bands":
@@ -2106,7 +2346,9 @@ def build_layer_stack(
             }
         )
 
-    for index, block in enumerate(ocr_blocks, start=1):
+    visible_ocr_blocks = [block for block in ocr_blocks if block.id not in media_owned_text_ids]
+    for index, block in enumerate(visible_ocr_blocks, start=1):
+        text_style = estimate_text_style(rgb, block.bbox, block.text)
         layers.append(
             {
                 "id": block.id or f"text_{index:04d}",
@@ -2114,6 +2356,8 @@ def build_layer_stack(
                 "bbox": block.bbox.to_dict(),
                 "z": 30000 + index,
                 "text": block.text,
+                "style": text_style["style"],
+                "textFit": text_style["diagnostics"],
                 "confidence": round(block.confidence, 4),
                 "reason": "ocr_authority",
             }
@@ -2134,6 +2378,10 @@ def build_layer_stack(
     control_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_raster_suppressed")
     control_residual_suppressed = sum(1 for item in rejected if item.get("reason", "").startswith("control_residual_"))
     text_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "text_owned_raster_suppressed")
+    media_owned_text_count = len(media_owned_text_ids)
+    media_text_owner_raster_count = len({str(item.get("ownerRasterId", "")) for item in media_owned_text_decisions if item.get("ownerRasterId")})
+    text_fit_shrink_count = sum(1 for item in layers if item["type"] == "text" and item.get("textFit", {}).get("shrink", 0) > 0)
+    dark_control_surfaces = sum(1 for item in shape_candidates if item.scores.get("darkControlSurface", 0.0) >= 1.0)
     shape_asset_count = sum(1 for item in layers if item["type"] == "shape" and item.get("asset"))
     page_background = color_hex(estimate_background_color(rgb))
 
@@ -2146,7 +2394,13 @@ def build_layer_stack(
         "layers": sorted(layers, key=lambda item: item["z"]),
         "diagnostics": {
             "layerCount": len(layers),
-            "textLayerCount": len(ocr_blocks),
+            "ocrTextCount": len(ocr_blocks),
+            "textLayerCount": len(visible_ocr_blocks),
+            "visibleTextLayerCount": len(visible_ocr_blocks),
+            "mediaOwnedTextBlockCount": media_owned_text_count,
+            "mediaTextOwnerRasterCount": media_text_owner_raster_count,
+            "textFitShrinkCount": text_fit_shrink_count,
+            "darkControlSurfaceCount": dark_control_surfaces,
             "rasterLayerCount": len(raster_candidates),
             "shapeLayerCount": len(shape_candidates),
             "surfaceShapeLayerCount": surface_shapes,
@@ -2169,7 +2423,8 @@ def build_layer_stack(
             "pageArea": page_area,
         },
         "thresholds": thresholds,
-        "rejected": exported_rejections(rejected),
+        "mediaOwnedText": media_owned_text_decisions,
+        "rejected": exported_rejections(rejected + media_owned_text_decisions),
     }
 
 
@@ -2216,11 +2471,8 @@ def build_draft_runtime_dsl(layer_stack: dict[str, Any], rgb: np.ndarray) -> dic
                 continue
             node["text"] = {"characters": text}
             box = BBox(int(bbox["x"]), int(bbox["y"]), int(bbox["width"]), int(bbox["height"]))
-            node["style"] = {
-                "fontSize": max(8, min(96, round(box.height * 0.8))),
-                "fontWeight": 400,
-                "color": sample_text_color(rgb, box),
-            }
+            node["style"] = layer.get("style") or estimate_text_style(rgb, box, text)["style"]
+            node["meta"]["textFit"] = layer.get("textFit", {})
 
         children.append(node)
 
@@ -2354,7 +2606,7 @@ def render_preview_node(node: dict[str, Any], asset_urls: dict[str, str]) -> str
         font_size = int(style.get("fontSize") or max(8, round(float(bbox["height"]) * 0.8)))
         color = html.escape(str(style.get("color") or "#111111"))
         font_weight = int(style.get("fontWeight") or 400)
-        line_height = max(font_size, int(bbox["height"]))
+        line_height = int(style.get("lineHeight") or max(font_size, int(math.ceil(font_size * 1.12))))
         return (
             f'<div class="node text" data-node-id="{node_id}" title="{title}" '
             f'style="{base_style}font-size:{font_size}px;line-height:{line_height}px;'
@@ -2723,13 +2975,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
     promotion_decisions.extend(text_owned_suppressed)
 
-    ownership = build_raster_ownership(raster_candidates, ocr_blocks, text_knockout_mask)
+    media_owned_text_ids, media_owned_text_decisions = assign_media_owned_text_blocks(
+        raster_candidates=raster_candidates,
+        ocr_blocks=ocr_blocks,
+        text_mask=text_knockout_mask,
+        image_width=image.width,
+        image_height=image.height,
+    )
+    visible_ocr_blocks = [block for block in ocr_blocks if block.id not in media_owned_text_ids]
+    visible_text_knockout_mask = build_text_knockout_mask(rgb, visible_ocr_blocks)
+
+    ownership = build_raster_ownership(raster_candidates, visible_ocr_blocks, visible_text_knockout_mask)
     asset_refs = crop_raster_assets(
         image,
         raster_candidates,
         output_dir,
-        text_mask=text_knockout_mask,
-        ocr_blocks=ocr_blocks,
+        text_mask=visible_text_knockout_mask,
+        ocr_blocks=visible_ocr_blocks,
         rgb=rgb,
     )
     thresholds = {
@@ -2754,6 +3016,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ownership=ownership,
         rejected=raster_rejected + shape_rejected + surface_rejected + foreground_rejected + ocr_control_rejected + promotion_decisions,
         thresholds=thresholds,
+        media_owned_text_ids=media_owned_text_ids,
+        media_owned_text_decisions=media_owned_text_decisions,
     )
 
     (output_dir / "layer_stack.v1.json").write_text(
@@ -2771,7 +3035,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     heatmap_image(maps["raster"], image.width, image.height, args.tile_size, (255, 80, 80)).save(output_dir / "raster_heatmap.png")
     heatmap_image(maps["shape"], image.width, image.height, args.tile_size, (80, 220, 120)).save(output_dir / "shape_heatmap.png")
     draw_overlay(image, ocr_blocks, raster_candidates, shape_candidates, output_dir / "overlay.png")
-    draw_reconstructed_preview(image, rgb, ocr_blocks, raster_candidates, shape_candidates, text_knockout_mask, output_dir / "reconstructed_preview.png")
+    draw_reconstructed_preview(image, rgb, visible_ocr_blocks, raster_candidates, shape_candidates, visible_text_knockout_mask, output_dir / "reconstructed_preview.png")
     write_diagnostics(output_dir / "diagnostics.md", layer_stack)
     write_ownership_report(output_dir / "ownership_report.v1.json", layer_stack)
     return layer_stack

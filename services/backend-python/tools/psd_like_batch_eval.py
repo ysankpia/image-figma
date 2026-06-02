@@ -223,6 +223,11 @@ def run_case(case: InputCase, out_dir: Path, config: Any, args: argparse.Namespa
         row = {
             **base_row,
             "textLayerCount": diagnostics.get("textLayerCount", 0),
+            "visibleTextLayerCount": diagnostics.get("visibleTextLayerCount", diagnostics.get("textLayerCount", 0)),
+            "mediaOwnedTextBlockCount": diagnostics.get("mediaOwnedTextBlockCount", 0),
+            "mediaTextOwnerRasterCount": diagnostics.get("mediaTextOwnerRasterCount", 0),
+            "textFitShrinkCount": diagnostics.get("textFitShrinkCount", 0),
+            "darkControlSurfaceCount": diagnostics.get("darkControlSurfaceCount", 0),
             "rasterLayerCount": diagnostics.get("rasterLayerCount", 0),
             "shapeLayerCount": diagnostics.get("shapeLayerCount", 0),
             "surfaceShapeLayerCount": diagnostics.get("surfaceShapeLayerCount", 0),
@@ -456,13 +461,13 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
         f"- failed cases: {sum(1 for row in rows if row.get('failureTypes'))}",
         f"- failure types: `{json.dumps(count_failure_types(rows), ensure_ascii=False)}`",
         "",
-        "| case | size | ocr | text | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | coveredText | visualMae | diff30 | dsl | failures |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| case | size | ocr | text | mediaText | fitShrink | darkCtrl | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | coveredText | visualMae | diff30 | dsl | failures |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         lines.append(
-            "|{case}|{width}x{height}|{ocrTextCount}|{textLayerCount}|{rasterLayerCount}|"
-            "{shapeLayerCount}|{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
+            "|{case}|{width}x{height}|{ocrTextCount}|{textLayerCount}|{mediaOwnedTextBlockCount}|"
+            "{textFitShrinkCount}|{darkControlSurfaceCount}|{rasterLayerCount}|{shapeLayerCount}|{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
             "{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
             "{rawTextOverlapRaster}|{rasterTextKnockoutCount}|{rasterCoveredTextBlockCount}|"
             "{visualMae}|{visualDiff30Ratio}|{dslValid}|{failures}|".format(
@@ -471,6 +476,9 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
                 height=row.get("height", 0),
                 ocrTextCount=row.get("ocrTextCount", 0),
                 textLayerCount=row.get("textLayerCount", 0),
+                mediaOwnedTextBlockCount=row.get("mediaOwnedTextBlockCount", 0),
+                textFitShrinkCount=row.get("textFitShrinkCount", 0),
+                darkControlSurfaceCount=row.get("darkControlSurfaceCount", 0),
                 rasterLayerCount=row.get("rasterLayerCount", 0),
                 shapeLayerCount=row.get("shapeLayerCount", 0),
                 controlSurfaceShapeLayerCount=row.get("controlSurfaceShapeLayerCount", 0),
