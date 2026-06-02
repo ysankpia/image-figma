@@ -192,6 +192,61 @@ def test_semantic_tags_do_not_mutate_visible_layer_fields(tmp_path: Path) -> Non
     assert layer_stack["layers"][1]["semanticTags"][0]["authority"] == "hint"
 
 
+def test_low_confidence_model_control_does_not_change_visible_layers(tmp_path: Path) -> None:
+    image_path, ocr_path = write_plain_text_fixture(tmp_path)
+    baseline = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "baseline")
+    baseline_stack = json.loads(baseline.layer_stack_path.read_text(encoding="utf-8"))
+    model_path = write_model_evidence(tmp_path, "TextButton", {"x": 32, "y": 36, "width": 112, "height": 36}, confidence=0.42)
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert visible_signature(layer_stack) == visible_signature(baseline_stack)
+    assert layer_stack["diagnostics"]["modelControlAcceptedCount"] == 0
+    assert layer_stack["diagnostics"]["modelControlRejectedReasons"]["below_control_trigger_confidence"] == 1
+
+
+def test_high_confidence_model_control_still_requires_physical_gate(tmp_path: Path) -> None:
+    image_path, ocr_path = write_plain_text_fixture(tmp_path)
+    model_path = write_model_evidence(tmp_path, "TextButton", {"x": 32, "y": 36, "width": 112, "height": 36}, confidence=0.91)
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    assert layer_stack["diagnostics"]["modelControlSearchWindowCount"] == 1
+    assert layer_stack["diagnostics"]["modelControlAcceptedCount"] == 0
+    assert not [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("reason") == "model_assisted_control_surface"
+    ]
+
+
+def test_valid_model_control_emits_shape_and_keeps_text_above(tmp_path: Path) -> None:
+    image_path, ocr_path = write_model_control_fixture(tmp_path)
+    model_path = write_model_evidence(
+        tmp_path,
+        "TextButton",
+        {"x": 50, "y": 42, "width": 140, "height": 40},
+        confidence=0.88,
+        canvas={"width": 400, "height": 300},
+    )
+
+    result = run_pipeline(image_path=image_path, ocr_path=ocr_path, out_dir=tmp_path / "model", model_evidence_path=model_path)
+    layer_stack = json.loads(result.layer_stack_path.read_text(encoding="utf-8"))
+
+    model_shapes = [
+        layer
+        for layer in layer_stack["layers"]
+        if layer["type"] == "shape" and layer.get("reason") == "model_assisted_control_surface"
+    ]
+    text_layers = [layer for layer in layer_stack["layers"] if layer["type"] == "text"]
+    assert model_shapes
+    assert layer_stack["diagnostics"]["modelControlAcceptedCount"] >= 1
+    assert all(text_layers[0]["z"] > shape["z"] for shape in model_shapes)
+    assert layer_stack["semanticEvidence"]["diagnostics"]["modelOwnershipDecisionCount"] >= 1
+
+
 def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:
     image_path = tmp_path / "button.png"
     image = Image.new("RGB", (240, 120), "white")
@@ -220,13 +275,75 @@ def write_button_fixture(tmp_path: Path) -> tuple[Path, Path]:
     return image_path, ocr_path
 
 
-def write_model_evidence(tmp_path: Path, class_name: str, bbox: dict[str, int], confidence: float = 0.9) -> Path:
+def write_plain_text_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    image_path = tmp_path / "plain_text.png"
+    image = Image.new("RGB", (240, 120), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((64, 52), "OK", fill=(20, 20, 20))
+    image.save(image_path)
+
+    ocr_path = tmp_path / "plain_text.ocr_blocks.v1.json"
+    ocr_path.write_text(
+        json.dumps(
+            {
+                "version": "ocr_blocks.v1",
+                "blocks": [
+                    {
+                        "id": "text_0001",
+                        "text": "OK",
+                        "bbox": {"x": 64, "y": 52, "width": 18, "height": 12},
+                        "confidence": 1.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return image_path, ocr_path
+
+
+def write_model_control_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    image_path = tmp_path / "model_control.png"
+    image = Image.new("RGB", (400, 300), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((50, 42, 190, 82), radius=18, fill=(245, 180, 40))
+    draw.text((92, 53), "OK", fill=(20, 20, 20))
+    image.save(image_path)
+
+    ocr_path = tmp_path / "model_control.ocr_blocks.v1.json"
+    ocr_path.write_text(
+        json.dumps(
+            {
+                "version": "ocr_blocks.v1",
+                "blocks": [
+                    {
+                        "id": "text_0001",
+                        "text": "OK",
+                        "bbox": {"x": 92, "y": 53, "width": 18, "height": 12},
+                        "confidence": 1.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return image_path, ocr_path
+
+
+def write_model_evidence(
+    tmp_path: Path,
+    class_name: str,
+    bbox: dict[str, int],
+    confidence: float = 0.9,
+    canvas: dict[str, int] | None = None,
+) -> Path:
     path = tmp_path / f"{class_name}.model_evidence.v1.json"
+    canvas = canvas or {"width": 240, "height": 120}
     path.write_text(
         json.dumps(
             {
                 "version": "model_evidence.v1",
-                "canvas": {"width": 240, "height": 120},
+                "canvas": canvas,
                 "detections": [
                     {
                         "id": "det_0001",

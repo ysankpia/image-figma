@@ -30,7 +30,8 @@ from .evidence import compute_tile_maps
 from .layers import build_layer_stack
 from .masks import build_text_knockout_mask, build_text_mask
 from .media_text import assign_media_owned_text_blocks
-from .model_evidence import apply_model_evidence
+from .model_control import detect_model_assisted_control_surfaces
+from .model_evidence import apply_model_evidence, load_model_evidence_context
 from .ocr import load_ocr_blocks
 from .ownership import build_raster_ownership
 from .previews import (
@@ -57,6 +58,8 @@ class PipelineOptions:
     shape_min_area: int = 1200
     surface_min_area: int = 2400
     max_text_overlap: float = 0.24
+    enable_model_control_refinement: bool = True
+    enable_model_media_refinement: bool = True
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,10 @@ def run_pipeline(
 
     image = Image.open(image_path).convert("RGB")
     rgb = np.asarray(image)
+    model_context = load_model_evidence_context(
+        resolved_model_evidence,
+        {"width": image.width, "height": image.height},
+    )
     ocr_blocks = load_ocr_blocks(resolved_ocr, image.width, image.height, options.ocr_min_confidence)
     text_mask = build_text_mask(image.width, image.height, ocr_blocks, options.text_padding)
     text_knockout_mask = build_text_knockout_mask(rgb, ocr_blocks)
@@ -163,6 +170,21 @@ def run_pipeline(
         ocr_blocks=ocr_blocks,
         text_mask=text_knockout_mask,
     )
+    model_ownership_decisions: list[dict[str, Any]] = []
+    model_control_diagnostics: dict[str, Any] = {}
+    if options.enable_model_control_refinement and model_context is not None:
+        model_control_result = detect_model_assisted_control_surfaces(
+            detections=model_context.detections,
+            rgb=rgb,
+            ocr_blocks=ocr_blocks,
+            text_mask=text_knockout_mask,
+        )
+        ocr_control_candidates = merge_surface_and_shape_candidates(
+            model_control_result.candidates,
+            ocr_control_candidates,
+        )
+        model_ownership_decisions.extend(model_control_result.decisions)
+        model_control_diagnostics.update(model_control_result.diagnostics)
     shape_candidates = merge_surface_and_shape_candidates(
         background_plate_candidates + surface_candidates,
         shape_candidates,
@@ -247,11 +269,14 @@ def run_pipeline(
     )
     if ocr_diagnostics:
         layer_stack.setdefault("diagnostics", {}).update(ocr_diagnostics)
+    if model_control_diagnostics:
+        layer_stack.setdefault("diagnostics", {}).update(model_control_diagnostics)
     semantic_evidence_path = apply_model_evidence(
         layer_stack,
         resolved_model_evidence,
         ocr_blocks,
         out_dir / "semantic_evidence.v1.json",
+        ownership_decisions=model_ownership_decisions,
     )
 
     layer_stack_path = out_dir / "layer_stack.v1.json"

@@ -677,7 +677,11 @@ def is_edge_like_control_fragment(box: BBox, control: BBox) -> bool:
 
 
 def control_shape_candidates(shape_candidates: list[Candidate]) -> list[Candidate]:
-    return [item for item in shape_candidates if item.reason in {"ocr_anchored_control_surface", "editable_control_surface_from_raster"}]
+    return [
+        item
+        for item in shape_candidates
+        if item.reason in {"ocr_anchored_control_surface", "editable_control_surface_from_raster", "model_assisted_control_surface"}
+    ]
 
 
 def extract_control_foreground_residuals(

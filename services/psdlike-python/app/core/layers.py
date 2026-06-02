@@ -103,8 +103,13 @@ def build_layer_stack(
     missing_assets = sum(1 for item in layers if item["type"] == "raster" and not item.get("asset"))
     surface_shapes = sum(1 for item in shape_candidates if item.reason == "background_surface_band")
     background_plates = sum(1 for item in shape_candidates if item.reason == "inferred_background_plate_from_surface_bands")
-    control_surfaces = sum(1 for item in shape_candidates if item.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface"})
+    control_surfaces = sum(
+        1
+        for item in shape_candidates
+        if item.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface", "model_assisted_control_surface"}
+    )
     ocr_control_surfaces = sum(1 for item in shape_candidates if item.reason == "ocr_anchored_control_surface")
+    model_control_surfaces = sum(1 for item in shape_candidates if item.reason == "model_assisted_control_surface")
     control_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_raster_suppressed")
     control_residual_suppressed = sum(1 for item in rejected if item.get("reason", "").startswith("control_residual_"))
     text_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "text_owned_raster_suppressed")
@@ -137,6 +142,7 @@ def build_layer_stack(
             "backgroundPlateLayerCount": background_plates,
             "controlSurfaceShapeLayerCount": control_surfaces,
             "ocrAnchoredControlSurfaceCount": ocr_control_surfaces,
+            "modelAssistedControlSurfaceCount": model_control_surfaces,
             "controlOwnedRasterSuppressedCount": control_owned_raster_suppressed,
             "controlResidualSuppressedCount": control_residual_suppressed,
             "textOwnedRasterSuppressedCount": text_owned_raster_suppressed,

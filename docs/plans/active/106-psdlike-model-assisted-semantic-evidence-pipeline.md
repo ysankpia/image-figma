@@ -1,6 +1,6 @@
 # 106 PSD-like Model-Assisted Semantic Evidence Pipeline
 
-- 状态：active，106A implemented；106B/106C/106D deferred
+- 状态：active，106A implemented；106B/106C/106D executing in order
 - 创建日期：2026-06-02
 - 负责人：Codex
 
@@ -186,7 +186,7 @@ model bbox
 
 ## Stage Plan
 
-本计划当前只执行 106A。106B/106C/106D 作为后续研究项暂缓，不作为 107 插件/可用产品路径的前置条件。
+本计划当前按顺序执行 106B、106C、106D。106A 的 metadata-only 合同保持不变；106B/106C 只允许把模型证据作为局部物理重搜窗口，106D 只增加审计 artifact。
 
 ### Stage 106A: Semantic Evidence Ingestion
 
@@ -225,7 +225,7 @@ YOLO bbox 不生成 asset
 
 ### Stage 106B: Control Local Re-Search
 
-状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
+状态：implementing。
 
 目标：
 
@@ -260,6 +260,14 @@ not high-texture image
 does not consume OCR text pixels
 ```
 
+实现边界：
+
+```text
+低置信度 detection 只进 semantic/audit，不改变 visible layer。
+高置信度 detection 只扩大局部搜索候选，不跳过物理 gate。
+小文字大按钮不能直接复用 OCR-anchor 的 area-ratio gate；model-window gate 复用 fill/ring/padding/texture/text-contrast primitive。
+```
+
 禁止：
 
 ```text
@@ -290,7 +298,7 @@ case_0085_fcd7ad45fe
 
 ### Stage 106C: Media/Icon Local Re-Search
 
-状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
+状态：pending after 106B。
 
 目标：
 
@@ -351,7 +359,7 @@ case_0016_29094ac707
 
 ### Stage 106D: Semantic Evidence Audit Layer
 
-状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
+状态：pending after 106C。
 
 目标：
 
@@ -399,23 +407,40 @@ load image / OCR
 
 106A 禁止模型证据影响 candidates、ownership、assets、inpaint 或任何 visible layer 字段。
 
-106B/106C 若后续恢复，模型证据接入点才允许前移到 ownership planner 之前：
+106B/106C 当前执行时，模型证据被拆成 early context 和 late annotation：
 
 ```text
 load image / OCR
 -> physical evidence
 -> raster / shape / control candidates
--> optional model_evidence ingestion
--> semantic matching
+-> early model_evidence context
 -> optional local physical re-search
 -> ownership planner
 -> assets
 -> layer stack
+-> late semantic matching / tags / audit
 -> DSL
 -> previews / reports
 ```
 
 不允许模型证据绕过 ownership planner。
+
+106B/106C 的固定顺序：
+
+```text
+1. existing physical candidates
+2. existing OCR anchored control surfaces
+3. 106B model-assisted control search
+4. merge shape/control candidates
+5. promote complex/control surfaces
+6. suppress control-owned raster
+7. 106C model-assisted media refinement
+8. suppress text-owned raster fragments
+9. assign media-owned text blocks
+10. ownership/assets/layer_stack
+11. late semanticTags + audit reports
+12. DSL/previews/reports
+```
 
 ## 106A Validation Evidence
 

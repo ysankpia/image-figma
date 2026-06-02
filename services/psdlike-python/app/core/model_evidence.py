@@ -47,11 +47,29 @@ class ModelDetection:
         return payload
 
 
+@dataclass(frozen=True)
+class ModelEvidenceContext:
+    source_path: Path
+    detections: list[ModelDetection]
+
+
+def load_model_evidence_context(model_evidence_path: Path | None, canvas: dict[str, Any]) -> ModelEvidenceContext | None:
+    if model_evidence_path is None:
+        return None
+    try:
+        payload = json.loads(model_evidence_path.read_text(encoding="utf-8"))
+        detections = normalize_model_evidence(payload, canvas)
+    except Exception:
+        return None
+    return ModelEvidenceContext(source_path=model_evidence_path, detections=detections)
+
+
 def apply_model_evidence(
     layer_stack: dict[str, Any],
     model_evidence_path: Path | None,
     ocr_blocks: list[OCRBlock],
     output_path: Path,
+    ownership_decisions: list[dict[str, Any]] | None = None,
 ) -> Path | None:
     if model_evidence_path is None:
         return None
@@ -73,6 +91,7 @@ def apply_model_evidence(
         layers=layer_stack.get("layers", []),
         ocr_blocks=ocr_blocks,
         source_path=model_evidence_path,
+        ownership_decisions=ownership_decisions or [],
     )
     attach_semantic_tags(layer_stack.get("layers", []), result["layerTags"])
     summary = result["summary"]
@@ -134,6 +153,7 @@ def match_model_evidence(
     layers: list[dict[str, Any]],
     ocr_blocks: list[OCRBlock],
     source_path: Path,
+    ownership_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     layer_tags: dict[str, list[dict[str, Any]]] = {}
     matches: list[dict[str, Any]] = []
@@ -176,6 +196,8 @@ def match_model_evidence(
 
     semantic_tag_count = sum(len(tags) for tags in layer_tags.values())
     class_counts = Counter(det.class_name for det in detections)
+    ownership_decisions = ownership_decisions or []
+    ownership_counts = Counter(str(item.get("decision", "")) for item in ownership_decisions)
     summary = {
         "version": "semantic_evidence_summary.v1",
         "source": str(source_path),
@@ -187,10 +209,12 @@ def match_model_evidence(
             "modelStructureDetectionCount": sum(1 for det in detections if det.class_name in STRUCTURE_CLASSES),
             "semanticTagCount": semantic_tag_count,
             "modelOcrOverlapRiskCount": ocr_risk_count,
+            "modelOwnershipDecisionCount": len(ownership_decisions),
             "modelEvidenceIgnoredReason": "",
         },
         "classCounts": dict(sorted(class_counts.items())),
         "decisionCounts": dict(sorted(decisions.items())),
+        "ownershipDecisionCounts": dict(sorted(ownership_counts.items())),
     }
     artifact = {
         "version": "semantic_evidence.v1",
@@ -199,6 +223,7 @@ def match_model_evidence(
         "detections": [det.to_dict() for det in detections],
         "matches": matches,
         "layerTags": layer_tags,
+        "ownershipDecisions": ownership_decisions,
     }
     return {"summary": summary, "artifact": artifact, "layerTags": layer_tags}
 
