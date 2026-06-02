@@ -13,12 +13,14 @@ from tools.psd_like_layer_decomposition_experiment import (
     build_shape_candidates,
     build_surface_candidates,
     build_text_mask,
+    detect_ocr_anchored_control_surfaces,
     color_distance,
     compute_tile_maps,
     crop_raster_assets,
     estimate_inpaint_fill_for_candidate_text,
     estimate_text_background_for_box,
     estimate_background_color,
+    exported_rejections,
     build_raster_ownership,
     infer_background_plate_candidates,
     infer_control_corner_radius,
@@ -26,6 +28,8 @@ from tools.psd_like_layer_decomposition_experiment import (
     promote_control_surfaces,
     promote_complex_shape_regions,
     sample_text_color,
+    suppress_control_owned_rasters,
+    suppress_text_owned_raster_fragments,
     write_preview_html,
     write_preview_report,
     write_draft_preview_png,
@@ -472,6 +476,237 @@ def test_high_texture_text_region_does_not_promote_to_control_shape():
     assert rasters == [raster]
     assert shapes == []
     assert decisions == []
+
+
+def test_ocr_anchored_yellow_button_creates_shape_without_button_raster(tmp_path: Path):
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    image = Image.new("RGB", (180, 100), (245, 245, 245))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((40, 30, 140, 64), radius=12, fill=(246, 196, 42))
+    draw.rectangle((68, 40, 112, 54), fill=(20, 20, 20))
+    rgb = np.asarray(image)
+    block = OCRBlock(id="text_0001", text="确认支付", bbox=BBox(68, 38, 44, 18), confidence=0.99)
+    text_mask = build_text_mask(180, 100, [block], padding=0)
+    raster = Candidate(
+        id="raster_button",
+        kind="raster",
+        bbox=BBox(40, 30, 100, 34),
+        score=0.88,
+        scores={"texture": 0.12, "entropy": 0.16, "dominant": 0.82, "textOverlap": 0.10},
+        reason="button_like_raster",
+    )
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+    suppression = suppress_control_owned_rasters([raster], controls)
+    assets = crop_raster_assets(image, suppression.rasters, tmp_path, text_mask=text_mask, ocr_blocks=[block], rgb=rgb)
+    ownership = build_raster_ownership(suppression.rasters, [block], text_mask)
+    stack = build_layer_stack(
+        image_path=tmp_path / "source.png",
+        ocr_path=None,
+        image=image,
+        rgb=rgb,
+        ocr_blocks=[block],
+        raster_candidates=suppression.rasters,
+        shape_candidates=controls,
+        asset_refs=assets,
+        ownership=ownership,
+        rejected=suppression.suppressed,
+        thresholds={"maxTextOverlap": 0.2},
+    )
+
+    assert len(controls) == 1
+    assert controls[0].reason == "ocr_anchored_control_surface"
+    assert suppression.rasters == []
+    assert suppression.suppressed[0]["reason"] == "control_surface_owned_background"
+    assert stack["diagnostics"]["ocrAnchoredControlSurfaceCount"] == 1
+    assert stack["diagnostics"]["controlOwnedRasterSuppressedCount"] == 1
+    assert stack["diagnostics"]["shapeAssetCount"] == 0
+    assert [layer["type"] for layer in stack["layers"]] == ["shape", "text"]
+    assert stack["layers"][0]["style"]["fill"].lower() == "#f6c42a"
+    assert stack["layers"][0]["z"] >= 10000
+    assert stack["layers"][1]["z"] >= 30000
+    assert not list((tmp_path / "assets").glob("*.png")) if (tmp_path / "assets").exists() else True
+
+
+def test_ocr_anchored_short_text_wide_pill_recovers_surface_width():
+    image = Image.new("RGB", (260, 120), (248, 248, 248))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((32, 36, 220, 76), radius=20, fill=(80, 146, 76))
+    draw.rectangle((104, 48, 148, 64), fill=(255, 255, 255))
+    rgb = np.asarray(image)
+    block = OCRBlock(id="text_0001", text="GO", bbox=BBox(104, 46, 44, 20), confidence=0.99)
+    text_mask = build_text_mask(260, 120, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls
+    assert controls[0].bbox.width >= 110
+    assert controls[0].scores["outerRingDelta"] >= 18
+
+
+def test_ocr_anchored_plain_text_does_not_create_control_surface():
+    rgb = np.full((120, 180, 3), 248, dtype=np.uint8)
+    rgb[42:58, 70:118] = (20, 20, 20)
+    block = OCRBlock(id="text_0001", text="Plain", bbox=BBox(70, 40, 48, 20), confidence=0.99)
+    text_mask = build_text_mask(180, 120, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls == []
+
+
+def test_ocr_anchored_textured_photo_text_does_not_create_control_surface():
+    rgb = np.full((140, 220, 3), 245, dtype=np.uint8)
+    for y in range(30, 100):
+        for x in range(30, 190):
+            value = 40 if (x + y) % 2 == 0 else 220
+            rgb[y, x] = (value, 90, 255 - value)
+    rgb[58:74, 84:136] = (255, 255, 255)
+    block = OCRBlock(id="text_0001", text="Photo", bbox=BBox(84, 56, 52, 20), confidence=0.99)
+    text_mask = build_text_mask(220, 140, [block], padding=0)
+
+    controls, _ = detect_ocr_anchored_control_surfaces(rgb, [block], text_mask)
+
+    assert controls == []
+
+
+def test_control_owned_raster_keeps_inner_icon_but_suppresses_edge_fragment():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    control = Candidate(
+        id="control",
+        kind="shape",
+        bbox=BBox(40, 30, 120, 40),
+        score=0.8,
+        scores={"fillR": 240.0, "fillG": 180.0, "fillB": 40.0},
+        reason="ocr_anchored_control_surface",
+    )
+    edge = Candidate(
+        id="edge",
+        kind="raster",
+        bbox=BBox(42, 32, 14, 8),
+        score=0.6,
+        scores={},
+        reason="control_foreground_residual",
+    )
+    icon = Candidate(
+        id="icon",
+        kind="raster",
+        bbox=BBox(76, 42, 14, 14),
+        score=0.7,
+        scores={},
+        reason="control_foreground_residual",
+    )
+
+    result = suppress_control_owned_rasters([edge, icon], [control])
+
+    assert result.rasters == [icon]
+    assert result.suppressed[0]["id"] == "edge"
+    assert result.suppressed[0]["reason"] == "control_residual_edge_fragment"
+    assert result.residual_suppressed_count == 1
+
+
+def test_control_owned_raster_does_not_suppress_large_parent_region():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    control = Candidate(
+        id="control",
+        kind="shape",
+        bbox=BBox(280, 160, 120, 40),
+        score=0.8,
+        scores={"fillR": 240.0, "fillG": 180.0, "fillB": 40.0},
+        reason="ocr_anchored_control_surface",
+    )
+    parent_raster = Candidate(
+        id="parent_raster",
+        kind="raster",
+        bbox=BBox(220, 120, 260, 180),
+        score=0.7,
+        scores={},
+        reason="high_texture_region",
+    )
+    button_raster = Candidate(
+        id="button_raster",
+        kind="raster",
+        bbox=BBox(278, 158, 124, 44),
+        score=0.7,
+        scores={},
+        reason="button_like_raster",
+    )
+
+    result = suppress_control_owned_rasters([parent_raster, button_raster], [control])
+
+    assert result.rasters == [parent_raster]
+    assert [item["id"] for item in result.suppressed] == ["button_raster"]
+    assert result.suppressed[0]["reason"] == "control_surface_owned_background"
+
+
+def test_exported_rejections_keep_control_ownership_decisions_when_truncated():
+    rejected = [{"kind": "shape", "reason": "too_small", "id": f"shape_{index:04d}"} for index in range(205)]
+    rejected.append(
+        {
+            "kind": "control_owned_raster_suppressed",
+            "id": "button_raster",
+            "reason": "control_surface_owned_background",
+        }
+    )
+    rejected.append(
+        {
+            "kind": "text_owned_raster_suppressed",
+            "id": "text_fragment",
+            "reason": "text_owned_thin_fragment",
+        }
+    )
+
+    exported = exported_rejections(rejected, limit=200)
+
+    assert len(exported) == 200
+    assert exported[0]["kind"] == "control_owned_raster_suppressed"
+    assert exported[0]["id"] == "button_raster"
+    assert exported[1]["kind"] == "text_owned_raster_suppressed"
+    assert exported[1]["id"] == "text_fragment"
+
+
+def test_text_owned_raster_suppresses_thin_text_fragment():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    block = OCRBlock(id="text_0001", text="Total", bbox=BBox(40, 40, 96, 20), confidence=0.99)
+    text_mask = build_text_mask(220, 120, [block], padding=0)
+    fragment = Candidate(
+        id="text_stroke_fragment",
+        kind="raster",
+        bbox=BBox(56, 48, 72, 8),
+        score=0.7,
+        scores={"textOverlap": 0.5, "texture": 0.9, "edge": 0.7},
+        reason="foreground_object_on_surface",
+    )
+
+    kept, suppressed = suppress_text_owned_raster_fragments([fragment], [block], text_mask)
+
+    assert kept == []
+    assert suppressed[0]["id"] == "text_stroke_fragment"
+    assert suppressed[0]["reason"] == "text_owned_thin_fragment"
+
+
+def test_text_owned_raster_keeps_large_parent_region_with_text():
+    from tools.psd_like_layer_decomposition_experiment import Candidate
+
+    block = OCRBlock(id="text_0001", text="Banner", bbox=BBox(90, 80, 120, 28), confidence=0.99)
+    text_mask = build_text_mask(360, 220, [block], padding=0)
+    parent = Candidate(
+        id="parent_photo",
+        kind="raster",
+        bbox=BBox(40, 40, 280, 140),
+        score=0.8,
+        scores={"textOverlap": 0.04, "texture": 0.8, "edge": 0.6},
+        reason="high_texture_with_internal_text",
+    )
+
+    kept, suppressed = suppress_text_owned_raster_fragments([parent], [block], text_mask)
+
+    assert kept == [parent]
+    assert suppressed == []
 
 
 def test_complex_shape_region_promotes_to_single_raster():

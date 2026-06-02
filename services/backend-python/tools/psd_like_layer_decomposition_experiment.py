@@ -59,6 +59,13 @@ class Candidate:
     reason: str
 
 
+@dataclass(frozen=True)
+class ControlSuppressionResult:
+    rasters: list[Candidate]
+    suppressed: list[dict[str, Any]]
+    residual_suppressed_count: int
+
+
 def clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
 
@@ -897,6 +904,434 @@ def promote_control_surfaces(
     return merged_rasters, merged_shapes, decisions
 
 
+def detect_ocr_anchored_control_surfaces(
+    rgb: np.ndarray,
+    ocr_blocks: list[OCRBlock],
+    text_mask: np.ndarray,
+) -> tuple[list[Candidate], list[dict[str, Any]]]:
+    height, width, _ = rgb.shape
+    page_area = width * height
+    candidates: list[Candidate] = []
+    rejected: list[dict[str, Any]] = []
+
+    for index, block in enumerate(ocr_blocks, start=1):
+        if block.bbox.area <= 0 or block.bbox.width < 4 or block.bbox.height < 6:
+            continue
+        best: tuple[float, Candidate] | None = None
+        for box in control_surface_search_boxes(block.bbox, width, height):
+            candidate = Candidate(
+                id=f"ocr_control_{index:04d}",
+                kind="shape",
+                bbox=box,
+                score=0.78,
+                scores={},
+                reason="ocr_anchored_control_surface",
+            )
+            accepted, scores, reason = score_ocr_anchored_control_surface(
+                rgb=rgb,
+                candidate=candidate,
+                block=block,
+                text_mask=text_mask,
+                page_area=page_area,
+            )
+            if not accepted:
+                if reason in {"high_texture", "missing_outer_ring", "not_enough_padding"}:
+                    rejected.append(
+                        {
+                            "kind": "ocr_control_surface",
+                            "id": candidate.id,
+                            "bbox": box.to_dict(),
+                            "reason": reason,
+                            "sourceTextBlockId": block.id,
+                        }
+                    )
+                continue
+            scored = Candidate(
+                id=candidate.id,
+                kind="shape",
+                bbox=box,
+                score=float(scores["score"]),
+                scores=scores,
+                reason="ocr_anchored_control_surface",
+            )
+            rank = float(scores["score"]) - (box.area / max(1, page_area)) * 0.20
+            if best is None or rank > best[0] or (rank == best[0] and box.area < best[1].bbox.area):
+                best = (rank, scored)
+        if best is not None:
+            candidates.append(best[1])
+
+    return merge_control_surfaces(candidates), rejected[:80]
+
+
+def control_surface_search_boxes(text_box: BBox, width: int, height: int) -> list[BBox]:
+    pad_x_values = sorted(
+        {
+            max(6, round(text_box.height * 0.65)),
+            max(8, round(text_box.height * 1.00)),
+            max(10, round(text_box.width * 0.18)),
+            max(12, round(text_box.width * 0.30)),
+            max(14, round(text_box.width * 0.55)),
+            max(14, round(text_box.width * 0.65)),
+            max(16, round(text_box.width * 0.80)),
+            max(18, round(text_box.width * 1.10)),
+            max(20, round(text_box.width * 1.55)),
+            max(22, round(text_box.width * 2.00)),
+        }
+    )
+    pad_y_values = sorted(
+        {
+            max(4, round(text_box.height * 0.35)),
+            max(4, round(text_box.height * 0.45)),
+            max(5, round(text_box.height * 0.55)),
+            max(6, round(text_box.height * 0.85)),
+        }
+    )
+    boxes: list[BBox] = []
+    seen: set[tuple[int, int, int, int]] = set()
+    for pad_x in pad_x_values:
+        for pad_y in pad_y_values:
+            box = clamp_box(
+                BBox(
+                    text_box.x - pad_x,
+                    text_box.y - pad_y,
+                    text_box.width + pad_x * 2,
+                    text_box.height + pad_y * 2,
+                ),
+                width,
+                height,
+            )
+            if box is None:
+                continue
+            key = (box.x, box.y, box.width, box.height)
+            if key in seen:
+                continue
+            seen.add(key)
+            boxes.append(box)
+    return boxes
+
+
+def score_ocr_anchored_control_surface(
+    rgb: np.ndarray,
+    candidate: Candidate,
+    block: OCRBlock,
+    text_mask: np.ndarray,
+    page_area: int,
+) -> tuple[bool, dict[str, float], str]:
+    box = candidate.bbox
+    if block.bbox.area <= 0 or box.area <= 0:
+        return False, {}, "empty"
+    text_containment = intersection_area(box, block.bbox) / block.bbox.area
+    if text_containment < 0.90:
+        return False, {}, "text_not_contained"
+    area_ratio = box.area / block.bbox.area
+    if area_ratio < 1.18 or area_ratio > 12.0:
+        return False, {}, "bad_area_ratio"
+    if box.area > max(12_000, page_area * 0.08) or box.width < 24 or box.height < 14:
+        return False, {}, "bad_size"
+    aspect = box.width / max(1, box.height)
+    if aspect < 1.10 or aspect > 14.0:
+        return False, {}, "bad_aspect"
+    if box.height > max(96, block.bbox.height * 5):
+        return False, {}, "too_tall"
+
+    left_pad = block.bbox.x - box.x
+    right_pad = box.x2 - block.bbox.x2
+    top_pad = block.bbox.y - box.y
+    bottom_pad = box.y2 - block.bbox.y2
+    if min(left_pad, right_pad, top_pad, bottom_pad) < -1:
+        return False, {}, "not_enough_padding"
+    if left_pad + right_pad < max(8, int(box.width * 0.10)):
+        return False, {}, "not_enough_padding"
+    if top_pad + bottom_pad < max(5, int(box.height * 0.10)):
+        return False, {}, "not_enough_padding"
+
+    fill, fill_coverage, close_coverage = control_surface_fill(rgb, candidate, text_mask)
+    texture, entropy, edge_density = control_surface_local_complexity(rgb, box, text_mask)
+    if texture > 42.0 or entropy > 0.70 or edge_density > 0.20:
+        return False, {}, "high_texture"
+    if fill_coverage < 0.30 and close_coverage < 0.58:
+        return False, {}, "unstable_fill"
+
+    ring_delta = control_surface_outer_ring_delta(rgb, box, fill)
+    if ring_delta is None:
+        return False, {}, "missing_outer_ring"
+    if ring_delta < 18.0:
+        return False, {}, "weak_outer_boundary"
+
+    text_contrast = control_text_contrast(rgb, [block], fill)
+    if text_contrast < 34.0:
+        return False, {}, "low_text_contrast"
+
+    score = (
+        0.42
+        + min(0.22, close_coverage * 0.18)
+        + min(0.16, ring_delta / 260.0)
+        + min(0.14, text_contrast / 520.0)
+        + min(0.08, aspect / 140.0)
+        - min(0.12, texture / 800.0)
+    )
+    scores = {
+        "score": round(float(max(0.72, min(0.94, score))), 4),
+        "controlSurface": 1.0,
+        "ocrAnchoredControlSurface": 1.0,
+        "textContainment": round(float(text_containment), 4),
+        "areaRatio": round(float(area_ratio), 4),
+        "aspect": round(float(aspect), 4),
+        "fillCoverage": round(float(fill_coverage), 4),
+        "closeFillCoverage": round(float(close_coverage), 4),
+        "outerRingDelta": round(float(ring_delta), 4),
+        "textContrast": round(float(text_contrast), 4),
+        "texture": round(float(texture / 255.0), 4),
+        "entropy": round(float(entropy), 4),
+        "edge": round(float(edge_density), 4),
+        "fillR": float(fill[0]),
+        "fillG": float(fill[1]),
+        "fillB": float(fill[2]),
+    }
+    return True, scores, ""
+
+
+def control_surface_local_complexity(rgb: np.ndarray, box: BBox, text_mask: np.ndarray) -> tuple[float, float, float]:
+    crop = rgb[box.y : box.y2, box.x : box.x2]
+    if crop.size == 0:
+        return 999.0, 1.0, 1.0
+    local_text = text_mask[box.y : box.y2, box.x : box.x2]
+    if local_text.shape != crop.shape[:2]:
+        local_text = np.zeros(crop.shape[:2], dtype=bool)
+    pixels = crop[~binary_dilate(local_text, iterations=1)]
+    if pixels.shape[0] < max(12, crop.shape[0] * crop.shape[1] // 8):
+        pixels = crop.reshape(-1, 3)
+    texture = float(np.mean(np.std(pixels.astype(np.float32), axis=0))) if pixels.size else 999.0
+    quantized = np.clip(pixels.astype(np.int16) // 24, 0, 10)
+    codes = quantized[:, 0] * 121 + quantized[:, 1] * 11 + quantized[:, 2]
+    _, counts = np.unique(codes, return_counts=True)
+    prob = counts.astype(np.float32) / max(1, int(counts.sum()))
+    entropy = float(-(prob * np.log2(prob)).sum() / max(1.0, math.log2(max(2, len(counts)))))
+
+    gray = crop.mean(axis=2).astype(np.float32)
+    gx = np.abs(np.diff(gray, axis=1)).mean() if gray.shape[1] > 1 else 0.0
+    gy = np.abs(np.diff(gray, axis=0)).mean() if gray.shape[0] > 1 else 0.0
+    edge_density = float((gx + gy) / 255.0)
+    return texture, entropy, edge_density
+
+
+def control_surface_outer_ring_delta(rgb: np.ndarray, box: BBox, fill: np.ndarray) -> float | None:
+    height, width, _ = rgb.shape
+    pad = max(2, min(5, box.height // 8))
+    if box.x - pad < 0 or box.y - pad < 0 or box.x2 + pad > width or box.y2 + pad > height:
+        return None
+    strips = [
+        rgb[box.y - pad : box.y, box.x : box.x2],
+        rgb[box.y2 : box.y2 + pad, box.x : box.x2],
+        rgb[box.y : box.y2, box.x - pad : box.x],
+        rgb[box.y : box.y2, box.x2 : box.x2 + pad],
+    ]
+    deltas: list[float] = []
+    for strip in strips:
+        if strip.size == 0:
+            return None
+        color = dominant_cluster_color(strip.reshape(-1, 3).astype(np.uint8), bucket_size=24)
+        deltas.append(color_distance(color, fill))
+    return float(min(deltas))
+
+
+def merge_control_surfaces(candidates: list[Candidate]) -> list[Candidate]:
+    accepted: list[Candidate] = []
+    for candidate in sorted(candidates, key=lambda item: (-item.score, item.bbox.area, item.bbox.y, item.bbox.x)):
+        if any(iou(candidate.bbox, kept.bbox) >= 0.66 or ioa(candidate.bbox, kept.bbox) >= 0.92 for kept in accepted):
+            continue
+        accepted.append(candidate)
+    return sorted(accepted, key=lambda item: (item.bbox.y, item.bbox.x, item.id))
+
+
+def suppress_control_owned_rasters(raster_candidates: list[Candidate], control_shapes: list[Candidate]) -> ControlSuppressionResult:
+    if not control_shapes:
+        return ControlSuppressionResult(rasters=raster_candidates, suppressed=[], residual_suppressed_count=0)
+    kept: list[Candidate] = []
+    suppressed: list[dict[str, Any]] = []
+    residual_suppressed_count = 0
+    for raster in raster_candidates:
+        owner = best_control_owner(raster, control_shapes)
+        if owner is None:
+            kept.append(raster)
+            continue
+        reason = classify_control_owned_raster(raster, owner)
+        if reason == "":
+            kept.append(raster)
+            continue
+        if raster.reason == "control_foreground_residual":
+            residual_suppressed_count += 1
+        suppressed.append(
+            {
+                "kind": "control_owned_raster_suppressed",
+                "id": raster.id,
+                "bbox": raster.bbox.to_dict(),
+                "reason": reason,
+                "controlSurfaceId": owner.id,
+                "controlSurfaceReason": owner.reason,
+                "controlSurfaceBBox": owner.bbox.to_dict(),
+                "ioaRasterInControl": round(ioa(raster.bbox, owner.bbox), 4),
+                "ioaControlInRaster": round(ioa(owner.bbox, raster.bbox), 4),
+                "iou": round(iou(raster.bbox, owner.bbox), 4),
+            }
+        )
+    return ControlSuppressionResult(rasters=kept, suppressed=suppressed, residual_suppressed_count=residual_suppressed_count)
+
+
+def suppress_text_owned_raster_fragments(
+    raster_candidates: list[Candidate],
+    ocr_blocks: list[OCRBlock],
+    text_mask: np.ndarray,
+) -> tuple[list[Candidate], list[dict[str, Any]]]:
+    kept: list[Candidate] = []
+    suppressed: list[dict[str, Any]] = []
+    for raster in raster_candidates:
+        reason, block = classify_text_owned_raster_fragment(raster, ocr_blocks, text_mask)
+        if reason == "":
+            kept.append(raster)
+            continue
+        suppressed.append(
+            {
+                "kind": "text_owned_raster_suppressed",
+                "id": raster.id,
+                "bbox": raster.bbox.to_dict(),
+                "reason": reason,
+                "sourceTextBlockId": block.id if block else "",
+                "sourceTextBBox": block.bbox.to_dict() if block else {},
+                "textMaskRatio": round(text_mask_ratio(raster.bbox, text_mask), 4),
+                "textOverlapScore": round(float(raster.scores.get("textOverlap", 0.0)), 4),
+            }
+        )
+    return kept, suppressed
+
+
+def classify_text_owned_raster_fragment(
+    raster: Candidate,
+    ocr_blocks: list[OCRBlock],
+    text_mask: np.ndarray,
+) -> tuple[str, OCRBlock | None]:
+    if not text_mask.size or raster.bbox.area <= 0:
+        return "", None
+    if raster.reason not in {"foreground_object_on_surface", "high_texture_with_internal_text", "high_texture_low_text_overlap"}:
+        return "", None
+    longest_side = max(raster.bbox.width, raster.bbox.height)
+    shortest_side = min(raster.bbox.width, raster.bbox.height)
+    if raster.bbox.area > 4096 or longest_side > 160:
+        return "", None
+
+    mask_ratio = text_mask_ratio(raster.bbox, text_mask)
+    score_overlap = float(raster.scores.get("textOverlap", 0.0))
+    thin_fragment = shortest_side <= 10 and longest_side <= 160 and mask_ratio >= 0.18
+    compact_text_chip = raster.bbox.area <= 2304 and mask_ratio >= 0.26
+    if not thin_fragment and not compact_text_chip and score_overlap < 0.34:
+        return "", None
+
+    owner = best_text_owner(raster.bbox, ocr_blocks)
+    if owner is None:
+        return "", None
+    owner_coverage = intersection_area(raster.bbox, owner.bbox) / max(1, owner.bbox.area)
+    raster_coverage = ioa(raster.bbox, owner.bbox)
+    if thin_fragment and (raster_coverage >= 0.25 or owner_coverage >= 0.20):
+        return "text_owned_thin_fragment", owner
+    if compact_text_chip and (raster_coverage >= 0.35 or owner_coverage >= 0.22):
+        return "text_owned_compact_fragment", owner
+    if score_overlap >= 0.45 and raster_coverage >= 0.28:
+        return "text_owned_high_overlap_fragment", owner
+    return "", None
+
+
+def text_mask_ratio(box: BBox, text_mask: np.ndarray) -> float:
+    if not text_mask.size or box.area <= 0:
+        return 0.0
+    height, width = text_mask.shape
+    clamped = clamp_box(box, width, height)
+    if clamped is None or clamped.area <= 0:
+        return 0.0
+    return float(text_mask[clamped.y : clamped.y2, clamped.x : clamped.x2].mean())
+
+
+def best_text_owner(box: BBox, ocr_blocks: list[OCRBlock]) -> OCRBlock | None:
+    best: tuple[float, OCRBlock] | None = None
+    for block in ocr_blocks:
+        overlap = intersection_area(box, block.bbox)
+        if overlap <= 0:
+            continue
+        score = max(overlap / max(1, box.area), overlap / max(1, block.bbox.area))
+        if best is None or score > best[0]:
+            best = (score, block)
+    return best[1] if best is not None else None
+
+
+def best_control_owner(raster: Candidate, control_shapes: list[Candidate]) -> Candidate | None:
+    best: tuple[float, Candidate] | None = None
+    for shape in control_shapes:
+        raster_in_control = ioa(raster.bbox, shape.bbox)
+        control_in_raster = ioa(shape.bbox, raster.bbox)
+        overlap = iou(raster.bbox, shape.bbox)
+        score = max(raster_in_control, control_in_raster, overlap)
+        if score <= 0:
+            continue
+        if best is None or score > best[0]:
+            best = (score, shape)
+    return best[1] if best is not None else None
+
+
+def classify_control_owned_raster(raster: Candidate, control: Candidate) -> str:
+    raster_in_control = ioa(raster.bbox, control.bbox)
+    control_in_raster = ioa(control.bbox, raster.bbox)
+    overlap = iou(raster.bbox, control.bbox)
+    if raster.reason == "control_foreground_residual":
+        if raster_in_control >= 0.72 and is_edge_like_control_fragment(raster.bbox, control.bbox):
+            return "control_residual_edge_fragment"
+        if raster_in_control >= 0.90 and raster.bbox.area < max(96, control.bbox.area * 0.035):
+            return "control_residual_tiny_fragment"
+        return ""
+    if overlap >= 0.55:
+        return "control_surface_owned_background"
+    if is_control_sized_background_raster(raster.bbox, control.bbox, raster_in_control, control_in_raster):
+        return "control_surface_owned_background"
+    if raster_in_control >= 0.72 and raster.bbox.area <= control.bbox.area * 0.20 and is_edge_like_control_fragment(raster.bbox, control.bbox):
+        return "control_surface_edge_fragment"
+    return ""
+
+
+def is_control_sized_background_raster(
+    raster: BBox,
+    control: BBox,
+    raster_in_control: float,
+    control_in_raster: float,
+) -> bool:
+    if raster.area <= 0 or control.area <= 0:
+        return False
+    area_ratio = min(raster.area, control.area) / max(raster.area, control.area)
+    width_ratio = min(raster.width, control.width) / max(raster.width, control.width)
+    height_ratio = min(raster.height, control.height) / max(raster.height, control.height)
+    comparable = area_ratio >= 0.38 and width_ratio >= 0.55 and height_ratio >= 0.55
+    if control_in_raster >= 0.90 and comparable:
+        return True
+    if raster_in_control >= 0.90 and comparable and raster.area >= control.area * 0.28:
+        return True
+    return False
+
+
+def is_edge_like_control_fragment(box: BBox, control: BBox) -> bool:
+    margin = max(3, min(control.width, control.height) // 5)
+    return box.x <= control.x + margin or box.y <= control.y + margin or box.x2 >= control.x2 - margin or box.y2 >= control.y2 - margin
+
+
+def control_shape_candidates(shape_candidates: list[Candidate]) -> list[Candidate]:
+    return [item for item in shape_candidates if item.reason in {"ocr_anchored_control_surface", "editable_control_surface_from_raster"}]
+
+
+def exported_rejections(rejected: list[dict[str, Any]], limit: int = 200) -> list[dict[str, Any]]:
+    if len(rejected) <= limit:
+        return rejected
+    priority_kinds = {"control_owned_raster_suppressed", "text_owned_raster_suppressed"}
+    priority = [item for item in rejected if item.get("kind") in priority_kinds]
+    remaining = [item for item in rejected if item.get("kind") not in priority_kinds]
+    return (priority + remaining)[:limit]
+
+
 def extract_control_foreground_residuals(
     rgb: np.ndarray,
     candidate: Candidate,
@@ -1152,7 +1587,7 @@ def promote_complex_shape_regions(
     decisions: list[dict[str, Any]] = []
 
     for shape in shape_candidates:
-        if shape.reason == "background_surface_band":
+        if shape.reason in {"background_surface_band", "ocr_anchored_control_surface", "editable_control_surface_from_raster"}:
             remaining_shapes.append(shape)
             continue
         contained = [item for item in raster_candidates if ioa(item.bbox, shape.bbox) >= 0.92]
@@ -1487,7 +1922,7 @@ def median_fill(rgb: np.ndarray, box: BBox) -> str:
 
 
 def shape_fill(rgb: np.ndarray, shape: Candidate) -> str:
-    if shape.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands", "editable_control_surface_from_raster"}:
+    if shape.reason in {"background_surface_band", "inferred_background_plate_from_surface_bands", "editable_control_surface_from_raster", "ocr_anchored_control_surface"}:
         return color_hex(
             np.array(
                 [
@@ -1503,7 +1938,7 @@ def shape_fill(rgb: np.ndarray, shape: Candidate) -> str:
 
 def shape_style(rgb: np.ndarray, shape: Candidate) -> dict[str, Any]:
     style: dict[str, Any] = {"fill": shape_fill(rgb, shape)}
-    if shape.reason == "editable_control_surface_from_raster":
+    if shape.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface"}:
         radius = infer_control_corner_radius(rgb, shape)
         if radius > 0:
             style["cornerRadius"] = radius
@@ -1640,11 +2075,11 @@ def build_layer_stack(
 
     for index, shape in enumerate(shape_candidates, start=1):
         if shape.reason == "inferred_background_plate_from_surface_bands":
-            z = 50 + index
+            z = 10000 + index
         elif shape.reason == "background_surface_band":
-            z = 100 + index
+            z = 11000 + index
         else:
-            z = 1000 + index
+            z = 12000 + index
         layers.append(
             {
                 "id": f"shape_{index:04d}",
@@ -1663,7 +2098,7 @@ def build_layer_stack(
                 "id": f"raster_{index:04d}",
                 "type": "raster",
                 "bbox": raster.bbox.to_dict(),
-                "z": 2000 + index,
+                "z": 20000 + index,
                 "asset": asset_refs.get(raster.id, ""),
                 "scores": raster.scores,
                 "ownership": ownership.get(raster.id, {}),
@@ -1677,7 +2112,7 @@ def build_layer_stack(
                 "id": block.id or f"text_{index:04d}",
                 "type": "text",
                 "bbox": block.bbox.to_dict(),
-                "z": 3000 + index,
+                "z": 30000 + index,
                 "text": block.text,
                 "confidence": round(block.confidence, 4),
                 "reason": "ocr_authority",
@@ -1694,7 +2129,12 @@ def build_layer_stack(
     missing_assets = sum(1 for item in layers if item["type"] == "raster" and not item.get("asset"))
     surface_shapes = sum(1 for item in shape_candidates if item.reason == "background_surface_band")
     background_plates = sum(1 for item in shape_candidates if item.reason == "inferred_background_plate_from_surface_bands")
-    control_surfaces = sum(1 for item in shape_candidates if item.reason == "editable_control_surface_from_raster")
+    control_surfaces = sum(1 for item in shape_candidates if item.reason in {"editable_control_surface_from_raster", "ocr_anchored_control_surface"})
+    ocr_control_surfaces = sum(1 for item in shape_candidates if item.reason == "ocr_anchored_control_surface")
+    control_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "control_owned_raster_suppressed")
+    control_residual_suppressed = sum(1 for item in rejected if item.get("reason", "").startswith("control_residual_"))
+    text_owned_raster_suppressed = sum(1 for item in rejected if item.get("kind") == "text_owned_raster_suppressed")
+    shape_asset_count = sum(1 for item in layers if item["type"] == "shape" and item.get("asset"))
     page_background = color_hex(estimate_background_color(rgb))
 
     return {
@@ -1712,6 +2152,11 @@ def build_layer_stack(
             "surfaceShapeLayerCount": surface_shapes,
             "backgroundPlateLayerCount": background_plates,
             "controlSurfaceShapeLayerCount": control_surfaces,
+            "ocrAnchoredControlSurfaceCount": ocr_control_surfaces,
+            "controlOwnedRasterSuppressedCount": control_owned_raster_suppressed,
+            "controlResidualSuppressedCount": control_residual_suppressed,
+            "textOwnedRasterSuppressedCount": text_owned_raster_suppressed,
+            "shapeAssetCount": shape_asset_count,
             "pageBackground": page_background,
             "rejectedCandidateCount": len(rejected),
             "fullPageVisibleRaster": full_page_raster,
@@ -1724,7 +2169,7 @@ def build_layer_stack(
             "pageArea": page_area,
         },
         "thresholds": thresholds,
-        "rejected": rejected[:200],
+        "rejected": exported_rejections(rejected),
     }
 
 
@@ -1946,6 +2391,7 @@ def write_preview_report(output_path: Path, dsl: dict[str, Any], layer_stack: di
         f"- visible text overlap: {diagnostics['textOverlapRaster']}",
         f"- raw text overlap: {diagnostics['rawTextOverlapRaster']}",
         f"- raster text knockout: {diagnostics['rasterTextKnockoutCount']}",
+        f"- text-owned raster suppressed: {diagnostics.get('textOwnedRasterSuppressedCount', 0)}",
         f"- full page visible raster: {diagnostics['fullPageVisibleRaster']}",
         f"- tiny raster fragments: {diagnostics['tinyRasterFragments']}",
         "",
@@ -2119,6 +2565,7 @@ def write_diagnostics(output_path: Path, layer_stack: dict[str, Any]) -> None:
         f"- text overlap raster: {diagnostics['textOverlapRaster']}",
         f"- raw text overlap raster: {diagnostics['rawTextOverlapRaster']}",
         f"- raster text knockout: {diagnostics['rasterTextKnockoutCount']}",
+        f"- text-owned raster suppressed: {diagnostics.get('textOwnedRasterSuppressedCount', 0)}",
         f"- raster covered text blocks: {diagnostics['rasterCoveredTextBlockCount']}",
         f"- missing assets: {diagnostics['missingAssetCount']}",
         "",
@@ -2244,7 +2691,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_text_overlap=args.max_text_overlap,
     )
     raster_candidates = nms_candidates(raster_candidates + foreground_candidates, overlap_threshold=0.48)
+    ocr_control_candidates, ocr_control_rejected = detect_ocr_anchored_control_surfaces(
+        rgb=rgb,
+        ocr_blocks=ocr_blocks,
+        text_mask=text_knockout_mask,
+    )
     shape_candidates = merge_surface_and_shape_candidates(background_plate_candidates + surface_candidates, shape_candidates)
+    shape_candidates = merge_surface_and_shape_candidates(ocr_control_candidates, shape_candidates)
     raster_candidates, shape_candidates, promotion_decisions = promote_complex_shape_regions(
         raster_candidates,
         shape_candidates,
@@ -2257,6 +2710,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         rgb=rgb,
     )
     promotion_decisions.extend(control_decisions)
+    control_suppression = suppress_control_owned_rasters(
+        raster_candidates,
+        control_shape_candidates(shape_candidates),
+    )
+    raster_candidates = control_suppression.rasters
+    promotion_decisions.extend(control_suppression.suppressed)
+    raster_candidates, text_owned_suppressed = suppress_text_owned_raster_fragments(
+        raster_candidates,
+        ocr_blocks,
+        text_knockout_mask,
+    )
+    promotion_decisions.extend(text_owned_suppressed)
 
     ownership = build_raster_ownership(raster_candidates, ocr_blocks, text_knockout_mask)
     asset_refs = crop_raster_assets(
@@ -2287,7 +2752,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         shape_candidates=shape_candidates,
         asset_refs=asset_refs,
         ownership=ownership,
-        rejected=raster_rejected + shape_rejected + surface_rejected + foreground_rejected + promotion_decisions,
+        rejected=raster_rejected + shape_rejected + surface_rejected + foreground_rejected + ocr_control_rejected + promotion_decisions,
         thresholds=thresholds,
     )
 

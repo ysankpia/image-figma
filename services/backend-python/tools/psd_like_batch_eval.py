@@ -226,6 +226,12 @@ def run_case(case: InputCase, out_dir: Path, config: Any, args: argparse.Namespa
             "rasterLayerCount": diagnostics.get("rasterLayerCount", 0),
             "shapeLayerCount": diagnostics.get("shapeLayerCount", 0),
             "surfaceShapeLayerCount": diagnostics.get("surfaceShapeLayerCount", 0),
+            "controlSurfaceShapeLayerCount": diagnostics.get("controlSurfaceShapeLayerCount", 0),
+            "ocrAnchoredControlSurfaceCount": diagnostics.get("ocrAnchoredControlSurfaceCount", 0),
+            "controlOwnedRasterSuppressedCount": diagnostics.get("controlOwnedRasterSuppressedCount", 0),
+            "controlResidualSuppressedCount": diagnostics.get("controlResidualSuppressedCount", 0),
+            "textOwnedRasterSuppressedCount": diagnostics.get("textOwnedRasterSuppressedCount", 0),
+            "shapeAssetCount": diagnostics.get("shapeAssetCount", 0),
             "foregroundObjectCount": count_reason(layer_stack, "foreground_object_on_surface"),
             "assetCount": count_assets(dsl_path),
             "missingAssetCount": diagnostics.get("missingAssetCount", 0),
@@ -234,6 +240,7 @@ def run_case(case: InputCase, out_dir: Path, config: Any, args: argparse.Namespa
             "textOverlapRaster": diagnostics.get("textOverlapRaster", 0),
             "rawTextOverlapRaster": diagnostics.get("rawTextOverlapRaster", 0),
             "rasterTextKnockoutCount": diagnostics.get("rasterTextKnockoutCount", 0),
+            "rasterCoveredTextBlockCount": diagnostics.get("rasterCoveredTextBlockCount", 0),
             "rejectedCandidateCount": diagnostics.get("rejectedCandidateCount", 0),
             "dslValid": dsl_valid,
             "dslErrorCount": len(dsl_errors),
@@ -379,6 +386,8 @@ def classify_failures(row: dict[str, Any], args: argparse.Namespace) -> list[str
         failures.append("FULL_PAGE_BACKING")
     if int(row.get("missingAssetCount", 0)) > 0:
         failures.append("MISSING_ASSET")
+    if int(row.get("shapeAssetCount", 0)) > 0:
+        failures.append("SHAPE_ASSET")
     if int(row.get("textOverlapRaster", 0)) > 0:
         failures.append("TEXT_DUPLICATED")
     if int(row.get("rasterLayerCount", 0)) > args.max_rasters:
@@ -447,14 +456,16 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
         f"- failed cases: {sum(1 for row in rows if row.get('failureTypes'))}",
         f"- failure types: `{json.dumps(count_failure_types(rows), ensure_ascii=False)}`",
         "",
-        "| case | size | ocr | text | raster | shape | surface | fg | assets | rawOverlap | knockout | visualMae | diff30 | dsl | failures |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| case | size | ocr | text | raster | shape | ctrl | ocrCtrl | ctrlSup | txtSup | surface | fg | assets | rawOverlap | knockout | coveredText | visualMae | diff30 | dsl | failures |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         lines.append(
             "|{case}|{width}x{height}|{ocrTextCount}|{textLayerCount}|{rasterLayerCount}|"
-            "{shapeLayerCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
-            "{rawTextOverlapRaster}|{rasterTextKnockoutCount}|{visualMae}|{visualDiff30Ratio}|{dslValid}|{failures}|".format(
+            "{shapeLayerCount}|{controlSurfaceShapeLayerCount}|{ocrAnchoredControlSurfaceCount}|{controlOwnedRasterSuppressedCount}|"
+            "{textOwnedRasterSuppressedCount}|{surfaceShapeLayerCount}|{foregroundObjectCount}|{assetCount}|"
+            "{rawTextOverlapRaster}|{rasterTextKnockoutCount}|{rasterCoveredTextBlockCount}|"
+            "{visualMae}|{visualDiff30Ratio}|{dslValid}|{failures}|".format(
                 case=row.get("case", ""),
                 width=row.get("width", 0),
                 height=row.get("height", 0),
@@ -462,11 +473,16 @@ def write_summary_md(path: Path, rows: list[dict[str, Any]]) -> None:
                 textLayerCount=row.get("textLayerCount", 0),
                 rasterLayerCount=row.get("rasterLayerCount", 0),
                 shapeLayerCount=row.get("shapeLayerCount", 0),
+                controlSurfaceShapeLayerCount=row.get("controlSurfaceShapeLayerCount", 0),
+                ocrAnchoredControlSurfaceCount=row.get("ocrAnchoredControlSurfaceCount", 0),
+                controlOwnedRasterSuppressedCount=row.get("controlOwnedRasterSuppressedCount", 0),
+                textOwnedRasterSuppressedCount=row.get("textOwnedRasterSuppressedCount", 0),
                 surfaceShapeLayerCount=row.get("surfaceShapeLayerCount", 0),
                 foregroundObjectCount=row.get("foregroundObjectCount", 0),
                 assetCount=row.get("assetCount", 0),
                 rawTextOverlapRaster=row.get("rawTextOverlapRaster", 0),
                 rasterTextKnockoutCount=row.get("rasterTextKnockoutCount", 0),
+                rasterCoveredTextBlockCount=row.get("rasterCoveredTextBlockCount", 0),
                 visualMae=row.get("visualMae", 0),
                 visualDiff30Ratio=row.get("visualDiff30Ratio", 0),
                 dslValid=row.get("dslValid", False),
