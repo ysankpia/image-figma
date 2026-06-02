@@ -1,6 +1,6 @@
 import type { DraftRuntimeDSL } from "@image-figma/dsl-schema";
 
-export const API_BASE_URL = "http://localhost:8010/api";
+export const API_BASE_URL = "http://localhost:8000/api";
 
 export interface DraftDiagnostics {
   ocrProvider?: string;

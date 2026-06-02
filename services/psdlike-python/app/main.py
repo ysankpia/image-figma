@@ -8,7 +8,7 @@ from .api import router
 app = FastAPI(title="PSD-like Python Draft Service", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://www.figma.com", "http://localhost:8010", "http://127.0.0.1:8010"],
+    allow_origins=["https://www.figma.com", "http://localhost:8000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
