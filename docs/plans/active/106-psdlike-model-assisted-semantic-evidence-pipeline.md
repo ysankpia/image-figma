@@ -1,6 +1,6 @@
 # 106 PSD-like Model-Assisted Semantic Evidence Pipeline
 
-- 状态：active
+- 状态：active，106A implemented；106B/106C/106D deferred
 - 创建日期：2026-06-02
 - 负责人：Codex
 
@@ -186,6 +186,8 @@ model bbox
 
 ## Stage Plan
 
+本计划当前只执行 106A。106B/106C/106D 作为后续研究项暂缓，不作为 107 插件/可用产品路径的前置条件。
+
 ### Stage 106A: Semantic Evidence Ingestion
 
 目标：
@@ -222,6 +224,8 @@ YOLO bbox 不生成 asset
 ```
 
 ### Stage 106B: Control Local Re-Search
+
+状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
 
 目标：
 
@@ -286,6 +290,8 @@ case_0085_fcd7ad45fe
 
 ### Stage 106C: Media/Icon Local Re-Search
 
+状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
+
 目标：
 
 ```text
@@ -345,6 +351,8 @@ case_0016_29094ac707
 
 ### Stage 106D: Semantic Evidence Audit Layer
 
+状态：deferred。106A 验证通过后先转 107 插件/产品化路径，本阶段不继续实现。
+
 目标：
 
 ```text
@@ -374,7 +382,24 @@ model_ownership_decisions.v1.json
 
 ## Pipeline Position
 
-模型证据接入点应位于物理候选产生之后、ownership planner 之前：
+106A 的模型证据接入点位于 final physical layer stack 生成之后、写 artifacts 之前：
+
+```text
+load image / OCR
+-> physical evidence
+-> raster / shape / control candidates
+-> ownership planner
+-> assets
+-> final physical layer stack
+-> optional model_evidence ingestion
+-> semanticTags / semanticEvidence diagnostics
+-> DSL
+-> previews / reports
+```
+
+106A 禁止模型证据影响 candidates、ownership、assets、inpaint 或任何 visible layer 字段。
+
+106B/106C 若后续恢复，模型证据接入点才允许前移到 ownership planner 之前：
 
 ```text
 load image / OCR
@@ -391,6 +416,69 @@ load image / OCR
 ```
 
 不允许模型证据绕过 ownership planner。
+
+## 106A Validation Evidence
+
+实现范围：
+
+```text
+services/psdlike-python/app/core/model_evidence.py
+services/psdlike-python/app/core/pipeline.py
+services/psdlike-python/app/core/dsl.py
+services/psdlike-python/app/core/reports.py
+services/psdlike-python/app/api.py
+services/psdlike-python/tools/run_one.py
+services/psdlike-python/tools/batch_eval.py
+services/psdlike-python/tests/test_core_pipeline.py
+```
+
+验证命令：
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/psdlike-python
+python -m py_compile $(find app tools -name '*.py' | sort)
+uv run pytest -q
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --out /Users/luhui/Downloads/psdlike_106a_nomodel_eval_10_final \
+  --limit 10
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --model-evidence-root /Users/luhui/Downloads/psdlike_model_evidence_eval_all \
+  --out /Users/luhui/Downloads/psdlike_106a_model_metadata_eval_10_final \
+  --limit 10
+uv run python tools/batch_eval.py \
+  --manifest /Users/luhui/Downloads/psd_like_v1_baseline_audit_dark_control_eval/input_manifest.v1.json \
+  --ocr-cache-dir /Users/luhui/Downloads/psd_like_ocr_cache_test \
+  --model-evidence-root /Users/luhui/Downloads/psdlike_model_evidence_eval_all \
+  --out /Users/luhui/Downloads/psdlike_106a_model_metadata_eval_all_final \
+  --limit 0
+```
+
+结果：
+
+```text
+py_compile pass
+pytest: 10 passed
+10-case no-model: 10/10 pass
+10-case model metadata: 10/10 pass
+10-case visible diffs between no-model and model: 0
+86-case model metadata: 86/86 pass
+DSL valid: 86/86
+missingAssetTotal: 0
+shapeAssetTotal: 0
+fullPageVisibleRasterTotal: 0
+semanticTagTotal: 2583
+modelDetectionTotal: 8866
+modelControlDetectionTotal: 531
+modelMediaDetectionTotal: 3134
+modelOcrOverlapRiskTotal: 297
+ignoredCount: 0
+visible diffs vs /Users/luhui/Downloads/psdlike_python_service_eval_all: 0
+FastAPI smoke: POST /api/draft-preview with modelEvidence completed; /dsl and /preview returned 200
+```
 
 ## Validation Plan
 

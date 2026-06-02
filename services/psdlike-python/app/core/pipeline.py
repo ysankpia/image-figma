@@ -30,6 +30,7 @@ from .evidence import compute_tile_maps
 from .layers import build_layer_stack
 from .masks import build_text_knockout_mask, build_text_mask
 from .media_text import assign_media_owned_text_blocks
+from .model_evidence import apply_model_evidence
 from .ocr import load_ocr_blocks
 from .ownership import build_raster_ownership
 from .previews import (
@@ -66,6 +67,7 @@ class PipelineResult:
     dsl_path: Path
     preview_html_path: Path
     diagnostics_path: Path
+    semantic_evidence_path: Path | None
     asset_count: int
     diagnostics: dict[str, Any]
 
@@ -77,6 +79,7 @@ def run_pipeline(
     allow_missing_ocr: bool = True,
     options: PipelineOptions = PipelineOptions(),
     task_id: str = "local",
+    model_evidence_path: Path | None = None,
 ) -> PipelineResult:
     wire_runtime_namespace()
 
@@ -91,6 +94,11 @@ def run_pipeline(
             resolved_ocr = candidate
         elif not allow_missing_ocr:
             raise FileNotFoundError(f"OCR artifact not found: {candidate}")
+    resolved_model_evidence: Path | None = None
+    if model_evidence_path is not None:
+        candidate = model_evidence_path.expanduser().resolve()
+        if candidate.exists():
+            resolved_model_evidence = candidate
 
     image = Image.open(image_path).convert("RGB")
     rgb = np.asarray(image)
@@ -234,6 +242,12 @@ def run_pipeline(
         media_owned_text_ids=media_owned_text_ids,
         media_owned_text_decisions=media_owned_text_decisions,
     )
+    semantic_evidence_path = apply_model_evidence(
+        layer_stack,
+        resolved_model_evidence,
+        ocr_blocks,
+        out_dir / "semantic_evidence.v1.json",
+    )
 
     layer_stack_path = out_dir / "layer_stack.v1.json"
     layer_stack_path.write_text(json.dumps(layer_stack, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -275,6 +289,7 @@ def run_pipeline(
         dsl_path=dsl_path,
         preview_html_path=out_dir / "preview.html",
         diagnostics_path=diagnostics_path,
+        semantic_evidence_path=semantic_evidence_path,
         asset_count=asset_count,
         diagnostics=diagnostics,
     )

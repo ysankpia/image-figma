@@ -40,9 +40,30 @@ def write_diagnostics(output_path: Path, layer_stack: dict[str, Any]) -> None:
         f"- raster covered text blocks: {diagnostics['rasterCoveredTextBlockCount']}",
         f"- missing assets: {diagnostics['missingAssetCount']}",
         "",
-        "## Rejection Reasons",
-        "",
     ]
+    semantic = layer_stack.get("semanticEvidence")
+    if semantic:
+        lines.extend(
+            [
+                "## Model Semantic Evidence",
+                "",
+                f"- present: {diagnostics.get('modelEvidencePresent', False)}",
+                f"- detections: {diagnostics.get('modelDetectionCount', 0)}",
+                f"- control detections: {diagnostics.get('modelControlDetectionCount', 0)}",
+                f"- media detections: {diagnostics.get('modelMediaDetectionCount', 0)}",
+                f"- structure detections: {diagnostics.get('modelStructureDetectionCount', 0)}",
+                f"- semantic tags: {diagnostics.get('semanticTagCount', 0)}",
+                f"- OCR overlap risks: {diagnostics.get('modelOcrOverlapRiskCount', 0)}",
+                f"- ignored reason: `{diagnostics.get('modelEvidenceIgnoredReason', '')}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Rejection Reasons",
+            "",
+        ]
+    )
     counts: dict[str, int] = {}
     for item in layer_stack.get("rejected", []):
         key = f"{item.get('kind')}:{item.get('reason')}"
@@ -92,4 +113,8 @@ def write_ownership_report(output_path: Path, layer_stack: dict[str, Any]) -> No
         ],
         "textCoverage": coverage_by_text,
     }
+    if layer_stack.get("semanticEvidence"):
+        report["diagnostics"]["semanticTagCount"] = layer_stack["diagnostics"].get("semanticTagCount", 0)
+        report["diagnostics"]["modelOcrOverlapRiskCount"] = layer_stack["diagnostics"].get("modelOcrOverlapRiskCount", 0)
+        report["semanticEvidence"] = layer_stack["semanticEvidence"]
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

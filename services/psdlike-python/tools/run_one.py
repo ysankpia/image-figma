@@ -16,6 +16,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run clean PSD-like Python pipeline on one image.")
     parser.add_argument("--image", required=True)
     parser.add_argument("--ocr", default="")
+    parser.add_argument("--model-evidence", default="")
     parser.add_argument("--out", required=True)
     parser.add_argument("--allow-missing-ocr", action="store_true", default=True)
     parser.add_argument("--tile-size", type=int, default=8)
@@ -26,6 +27,7 @@ def main() -> None:
         out_dir=Path(args.out),
         allow_missing_ocr=args.allow_missing_ocr,
         options=PipelineOptions(tile_size=args.tile_size),
+        model_evidence_path=Path(args.model_evidence) if args.model_evidence else None,
     )
     d = result.diagnostics
     print(

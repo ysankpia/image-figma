@@ -33,6 +33,8 @@ def build_draft_runtime_dsl(layer_stack: dict[str, Any], rgb: np.ndarray) -> dic
                 "reason": layer.get("reason", ""),
             },
         }
+        if layer.get("semanticTags"):
+            node["meta"]["semanticTags"] = layer["semanticTags"]
 
         if layer_type == "raster":
             asset_id = f"asset_{layer['id']}"
@@ -65,7 +67,7 @@ def build_draft_runtime_dsl(layer_stack: dict[str, Any], rgb: np.ndarray) -> dic
 
     canvas = layer_stack["canvas"]
     background = str(layer_stack.get("pageBackground") or color_hex(estimate_background_color(rgb)))
-    return {
+    payload = {
         "version": "1.0",
         "kind": "draft_runtime",
         "taskId": "psd_like_experiment",
@@ -89,6 +91,9 @@ def build_draft_runtime_dsl(layer_stack: dict[str, Any], rgb: np.ndarray) -> dic
             "diagnostics": layer_stack.get("diagnostics", {}),
         },
     }
+    if layer_stack.get("semanticEvidence"):
+        payload["meta"]["semanticEvidence"] = layer_stack["semanticEvidence"]
+    return payload
 
 
 def layer_name(layer: dict[str, Any]) -> str:

@@ -15,23 +15,29 @@ router = APIRouter()
 async def create_draft_preview(
     image: UploadFile = File(...),
     ocr: UploadFile | None = File(default=None),
+    model_evidence: UploadFile | None = File(default=None, alias="modelEvidence"),
     allow_missing_ocr: bool = Query(default=True, alias="allowMissingOcr"),
 ) -> JSONResponse:
     task_id = new_task_id()
     root = create_task_dirs(task_id)
     image_path = root / "input.png"
     ocr_path: Path | None = None
+    model_evidence_path: Path | None = None
     try:
         save_upload(image_path, await image.read())
         if ocr is not None:
             ocr_path = root / "input.ocr_blocks.v1.json"
             save_upload(ocr_path, await ocr.read())
+        if model_evidence is not None:
+            model_evidence_path = root / "input.model_evidence.v1.json"
+            save_upload(model_evidence_path, await model_evidence.read())
         result = run_pipeline(
             image_path=image_path,
             ocr_path=ocr_path,
             out_dir=compile_dir(task_id),
             allow_missing_ocr=allow_missing_ocr,
             task_id=task_id,
+            model_evidence_path=model_evidence_path,
         )
     except Exception as exc:  # noqa: BLE001 - API writes error artifact for user visibility.
         write_error(task_id, exc)
