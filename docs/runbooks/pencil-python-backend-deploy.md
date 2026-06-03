@@ -216,17 +216,19 @@ curl -sS http://127.0.0.1:8100/api/ready
 
 ```bash
 cd /opt/pencil-python-backend/services/pencil-python-backend
-make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
+make server-smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-server-smoke
 ```
 
 必须看到：
 
 ```text
+health=ok
 ready=ready
 boundarySource=psdlike
 status=completed
 badRefs=0
 missingRefs=0
+serverSmoke=ok
 ```
 
 For actual non-frontend upload/download automation, use:
@@ -281,4 +283,4 @@ make preflight-strict
 make acceptance IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-local-acceptance
 ```
 
-`make acceptance` 会临时启动本地服务，依次执行 preflight、HTTP smoke 和 upload/download 验证，然后关闭服务。服务已经由 systemd 启动时，继续用 `make smoke` 验证运行中的实例。
+`make acceptance` 会临时启动本地服务，依次执行 preflight、HTTP smoke 和 upload/download 验证，然后关闭服务。服务已经由 systemd 启动时，继续用 `make server-smoke` 验证运行中的实例。

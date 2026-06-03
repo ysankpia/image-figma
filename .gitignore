@@ -36,6 +36,7 @@ backend/tmp/
 services/backend-go/storage/
 services/backend-go/tmp/
 services/backend-go/bin/
+services/pencil-python-backend/storage/
 services/psdlike-python/storage/
 *.sqlite
 *.sqlite3

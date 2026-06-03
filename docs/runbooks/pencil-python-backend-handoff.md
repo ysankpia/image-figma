@@ -3,7 +3,7 @@
 Last full HTTP acceptance evidence baseline:
 
 ```text
-409ad9c docs: add pencil backend handoff
+c37433f feat: add pencil backend readiness endpoint
 ```
 
 This handoff records the current operational path for Pencil `.pen` / `project.zip` delivery. It intentionally does not cover visual algorithm experiments, YOLO integration, `services/pencil-go`, or Figma plugin changes.
@@ -198,17 +198,19 @@ After systemd starts:
 
 ```bash
 cd /opt/pencil-python-backend/services/pencil-python-backend
-make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
+make server-smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-server-smoke
 ```
 
 Passing output must include:
 
 ```text
+health=ok
 ready=ready
 boundarySource=psdlike
 status=completed
 badRefs=0
 missingRefs=0
+serverSmoke=ok
 ```
 
 ## Do Not Change During Deployment

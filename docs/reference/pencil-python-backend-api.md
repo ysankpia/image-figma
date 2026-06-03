@@ -412,7 +412,7 @@ Deployment must pass:
 ```bash
 cd services/pencil-python-backend
 uv run python scripts/preflight.py
-uv run python scripts/http_smoke.py \
+uv run python scripts/server_smoke.py \
   --base-url http://127.0.0.1:8100 \
   --image /absolute/path/to/sample.png \
   --out /tmp/pencil-http-smoke
@@ -421,11 +421,13 @@ uv run python scripts/http_smoke.py \
 Required output signals:
 
 ```text
+health=ok
+ready=ready
 boundarySource=psdlike
 status=completed
 badRefs=0
 missingRefs=0
-ok
+serverSmoke=ok
 ```
 
 ## HTTP Client CLI

@@ -148,6 +148,17 @@ make smoke \
 `/api/health` 只证明进程活着；`make smoke` 会额外检查 `/api/ready`，确认 storage、PSD-like runner、
 `m29extract` 需求和 runtime imports 可用后才上传图片。
 
+验证已经运行中的本机或服务器实例：
+
+```bash
+make server-smoke \
+  BASE_URL=http://127.0.0.1:8100 \
+  IMAGE=/absolute/path/to/sample.png \
+  OUT=/Volumes/WorkDrive/pencil-exports/server-smoke
+```
+
+`server-smoke` 不启动服务。它只检查 live `/api/health`、`/api/ready`，再调用 HTTP 导出 smoke。
+
 HTTP caller CLI:
 
 ```bash

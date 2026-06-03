@@ -7,6 +7,7 @@ def test_select_files_keeps_deploy_sources_and_drops_local_artifacts() -> None:
     files = [
         "services/pencil-python-backend/app/main.py",
         "services/pencil-python-backend/app/readiness.py",
+        "services/pencil-python-backend/scripts/server_smoke.py",
         "services/pencil-python-backend/.venv/lib/python/site.py",
         "services/pencil-python-backend/storage/tasks/task.json",
         "services/psdlike-python/tools/run_one.py",
@@ -31,5 +32,6 @@ def test_select_files_keeps_deploy_sources_and_drops_local_artifacts() -> None:
         "services/backend-go/internal/m29/pipeline/pipeline.go",
         "services/pencil-python-backend/app/main.py",
         "services/pencil-python-backend/app/readiness.py",
+        "services/pencil-python-backend/scripts/server_smoke.py",
         "services/psdlike-python/tools/run_one.py",
     ]
