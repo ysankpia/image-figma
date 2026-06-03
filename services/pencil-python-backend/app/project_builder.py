@@ -11,6 +11,7 @@ from PIL import Image
 
 from .config import Settings
 from .exporter.single_page import SinglePageExportOptions, export_single_page
+from .hybrid_boundary import build_hybrid_boundary_artifact
 from .jsonio import read_json, write_json
 from .m29_runner import run_m29extract
 from .psdlike_adapter import adapt_psdlike_to_pencil_evidence
@@ -129,6 +130,31 @@ def build_boundary_artifact(
         artifact_dir = page_work / "psdlike_pencil_evidence"
         adapt_psdlike_to_pencil_evidence(psdlike_dir, artifact_dir)
         return artifact_dir
+    if request.boundary_source == "hybrid":
+        psdlike_dir = page_work / "psdlike"
+        run_psdlike(
+            image_path=page_input.path,
+            output_dir=psdlike_dir,
+            ocr_provider=provider,
+            psdlike_root=settings.psdlike_root,
+            tile_size=settings.psdlike_tile_size,
+        )
+        m29_dir = page_work / "m29_fallback"
+        run_m29extract(
+            image_path=page_input.path,
+            output_dir=m29_dir,
+            m29extract_path=settings.m29extract_path,
+            ocr_provider="none",
+        )
+        hybrid_dir = page_work / "hybrid_boundary"
+        build_hybrid_boundary_artifact(
+            psdlike_dir=psdlike_dir,
+            m29_dir=m29_dir,
+            output_dir=hybrid_dir,
+        )
+        artifact_dir = page_work / "hybrid_pencil_evidence"
+        adapt_psdlike_to_pencil_evidence(hybrid_dir, artifact_dir)
+        return artifact_dir
     raise ValueError(f"unsupported boundary source: {request.boundary_source}")
 
 
@@ -203,15 +229,25 @@ def build_mode_project(
             "exportMode": mode,
         }
         page_asset_dir = assets_root / namespace
-        rewrite_children(frame.get("children") or [], namespace, single_mode_dir, page_asset_dir)
+        asset_prefix = f"{safe_slug(mode, 'mode')}__{namespace}"
+        rewritten_assets = rewrite_children(frame.get("children") or [], namespace, asset_prefix, single_mode_dir, page_asset_dir)
         frames.append(frame)
+        rewritten_asset_by_original_url = {
+            item["originalUrl"]: item["url"]
+            for item in rewritten_assets
+        }
         for asset in result.mode_manifests[mode].get("assets", []):
-            mode_assets.append({"page": namespace, **asset})
+            updated_asset = {"page": namespace, **asset}
+            original_url = asset.get("url")
+            if isinstance(original_url, str) and original_url in rewritten_asset_by_original_url:
+                updated_asset["url"] = rewritten_asset_by_original_url[original_url]
+            mode_assets.append(updated_asset)
 
     document = {
         "version": "2.11",
         "children": frames,
     }
+    validate_project_pen_contract(document, mode_root)
     write_json(mode_root / "design.pen", document)
     write_json(mode_root / "manifest.json", {"mode": mode, "pageCount": len(frames), "assets": mode_assets})
     return {
@@ -223,7 +259,87 @@ def build_mode_project(
     }
 
 
-def rewrite_children(children: list[dict[str, Any]], namespace: str, single_mode_dir: Path, page_asset_dir: Path) -> None:
+def validate_project_pen_contract(document: dict[str, Any], mode_root: Path) -> None:
+    ids: set[str] = set()
+    image_urls_by_basename: dict[str, str] = {}
+
+    def visit(node: dict[str, Any]) -> None:
+        node_id = node.get("id")
+        if isinstance(node_id, str):
+            if node_id in ids:
+                raise ValueError(f"duplicate .pen node id: {node_id}")
+            ids.add(node_id)
+
+        if "strokeWidth" in node:
+            raise ValueError(f"Pencil contract violation: strokeWidth on node {node_id}")
+        stroke = node.get("stroke")
+        if stroke is not None and not is_valid_pencil_stroke(stroke):
+            raise ValueError(f"Pencil contract violation: invalid stroke on node {node_id}")
+
+        fill = node.get("fill")
+        if isinstance(fill, dict) and fill.get("type") == "image":
+            validate_project_image_fill(fill, mode_root, image_urls_by_basename, node_id)
+
+        for child in node.get("children") or []:
+            if isinstance(child, dict):
+                visit(child)
+
+    for child in document.get("children") or []:
+        if isinstance(child, dict):
+            visit(child)
+
+
+def is_valid_pencil_stroke(stroke: Any) -> bool:
+    if not isinstance(stroke, dict):
+        return False
+    if "fill" not in stroke or "thickness" not in stroke:
+        return False
+    thickness = stroke.get("thickness")
+    if isinstance(thickness, dict):
+        return all(isinstance(value, int | float) for value in thickness.values())
+    return isinstance(thickness, int | float)
+
+
+def validate_project_image_fill(
+    fill: dict[str, Any],
+    mode_root: Path,
+    image_urls_by_basename: dict[str, str],
+    node_id: Any,
+) -> None:
+    url = fill.get("url")
+    if fill.get("enabled") is not True:
+        raise ValueError(f"Pencil contract violation: image fill must set enabled=true on node {node_id}")
+    if not isinstance(url, str) or not url:
+        raise ValueError(f"Pencil contract violation: missing image url on node {node_id}")
+    if "://" in url or url.startswith("/"):
+        raise ValueError(f"Pencil contract violation: non-portable image url {url!r} on node {node_id}")
+    if url.startswith("../") or "/../" in url:
+        raise ValueError(f"Pencil contract violation: escaping image url {url!r} on node {node_id}")
+    forbidden_fragments = ("source.png", "raw-crops", "masks/", "debug/")
+    if any(fragment in url for fragment in forbidden_fragments):
+        raise ValueError(f"Pencil contract violation: debug/raw image url {url!r} on node {node_id}")
+    if not url.startswith("./assets/visible/"):
+        raise ValueError(f"Pencil contract violation: image url outside visible assets {url!r} on node {node_id}")
+
+    basename = Path(url).name
+    previous_url = image_urls_by_basename.get(basename)
+    if previous_url is not None and previous_url != url:
+        raise ValueError(f"Pencil contract violation: duplicate visible asset basename {basename!r}")
+    image_urls_by_basename[basename] = url
+
+    image_path = mode_root / url.removeprefix("./")
+    if not image_path.exists():
+        raise ValueError(f"Pencil contract violation: missing visible asset {url!r} on node {node_id}")
+
+
+def rewrite_children(
+    children: list[dict[str, Any]],
+    namespace: str,
+    asset_prefix: str,
+    single_mode_dir: Path,
+    page_asset_dir: Path,
+) -> list[dict[str, str]]:
+    rewritten_assets: list[dict[str, str]] = []
     for child in children:
         child["id"] = f"{namespace}__{child['id']}"
         metadata = child.get("metadata") or {}
@@ -234,11 +350,16 @@ def rewrite_children(children: list[dict[str, Any]], namespace: str, single_mode
             source_path = single_mode_dir / source_rel
             if source_path.exists():
                 page_asset_dir.mkdir(parents=True, exist_ok=True)
-                target_path = page_asset_dir / source_path.name
+                target_name = f"{asset_prefix}__{source_path.name}"
+                target_path = page_asset_dir / target_name
                 shutil.copy2(source_path, target_path)
-                fill["url"] = f"./assets/visible/{namespace}/{source_path.name}"
+                original_url = fill["url"]
+                fill["url"] = f"./assets/visible/{namespace}/{target_name}"
+                fill["enabled"] = True
+                rewritten_assets.append({"originalUrl": original_url, "url": fill["url"]})
         if isinstance(child.get("children"), list):
-            rewrite_children(child["children"], namespace, single_mode_dir, page_asset_dir)
+            rewritten_assets.extend(rewrite_children(child["children"], namespace, asset_prefix, single_mode_dir, page_asset_dir))
+    return rewritten_assets
 
 
 def namespace_metadata(metadata: dict[str, Any], namespace: str) -> dict[str, Any]:

@@ -7,8 +7,8 @@ from typing import Literal
 
 Mode = Literal["clean-editable", "visual-fidelity", "visual-ocr", "all"]
 EXPORT_MODES: tuple[str, ...] = ("clean-editable", "visual-fidelity", "visual-ocr")
-BoundarySource = Literal["m29", "psdlike"]
-BOUNDARY_SOURCES: tuple[str, ...] = ("m29", "psdlike")
+BoundarySource = Literal["m29", "psdlike", "hybrid"]
+BOUNDARY_SOURCES: tuple[str, ...] = ("m29", "psdlike", "hybrid")
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 

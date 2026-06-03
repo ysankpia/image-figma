@@ -327,6 +327,41 @@ def fit_font_size(text: str, bbox: dict[str, float], font_family: str) -> float:
     return round(float(best), 2)
 
 
+def expanded_text_bounds(
+    bbox: dict[str, float],
+    canvas: dict[str, Any],
+    font_size: float,
+    script: str,
+) -> dict[str, float]:
+    x = float(bbox["x"])
+    y = float(bbox["y"])
+    width = float(bbox["width"])
+    height = float(bbox["height"])
+    canvas_width = float(canvas.get("width") or x + width)
+    canvas_height = float(canvas.get("height") or y + height)
+    right_pad = max(2.0, font_size * (0.40 if script in {"cjk", "mixed"} else 0.20))
+    vertical_pad = max(2.0, font_size * 0.22)
+    expanded_x = x
+    expanded_y = y - vertical_pad
+    expanded_width = width + right_pad
+    expanded_height = height + vertical_pad * 2
+
+    if expanded_y < 0:
+        expanded_height += expanded_y
+        expanded_y = 0.0
+    if expanded_x + expanded_width > canvas_width:
+        expanded_width = max(1.0, canvas_width - expanded_x)
+    if expanded_y + expanded_height > canvas_height:
+        expanded_height = max(1.0, canvas_height - expanded_y)
+
+    return {
+        "x": round(expanded_x, 2),
+        "y": round(expanded_y, 2),
+        "width": round(max(1.0, expanded_width), 2),
+        "height": round(max(1.0, expanded_height), 2),
+    }
+
+
 def area_of(bbox: dict[str, float]) -> float:
     return max(0.0, float(bbox["width"])) * max(0.0, float(bbox["height"]))
 
@@ -695,7 +730,12 @@ def art_text_rejection_reason(primitive: Primitive) -> str | None:
     return None
 
 
-def make_text_node(layer: dict[str, Any], primitive: Primitive, paths: ExportPaths) -> dict[str, Any]:
+def make_text_node(
+    layer: dict[str, Any],
+    primitive: Primitive,
+    paths: ExportPaths,
+    canvas: dict[str, Any],
+) -> dict[str, Any]:
     text = primitive.text.strip()
     bbox = layer["bbox"]
     candidates = font_candidates_for_text(text)
@@ -704,15 +744,16 @@ def make_text_node(layer: dict[str, Any], primitive: Primitive, paths: ExportPat
     color, color_source, color_score = sample_text_color(asset_path(paths, primitive.crop_ref))
     font_weight = infer_font_weight(text, bbox)
     script = "mixed" if has_cjk(text) and has_latin_or_digit(text) else ("cjk" if has_cjk(text) else "latin")
+    safe_bbox = expanded_text_bounds(bbox, canvas, font_size, script)
 
     return {
         "id": f"text_{primitive.id}",
         "type": "text",
         "name": f"{primitive.id} editable text",
-        "x": bbox["x"],
-        "y": bbox["y"],
-        "width": bbox["width"],
-        "height": bbox["height"],
+        "x": safe_bbox["x"],
+        "y": safe_bbox["y"],
+        "width": safe_bbox["width"],
+        "height": safe_bbox["height"],
         "content": text,
         "textGrowth": "fixed-width-height",
         # system-ui previews consistently in Pencil across macOS/Windows. Figma importers should use metadata.fontCandidates.
@@ -737,6 +778,9 @@ def make_text_node(layer: dict[str, Any], primitive: Primitive, paths: ExportPat
             "measurementFontFamily": measure_family,
             "fontSize": font_size,
             "fontWeight": font_weight,
+            "originalBBox": bbox,
+            "safeBBox": safe_bbox,
+            "safeBoundsPolicy": "pencil_text_safe_bounds.v1",
             "colorSource": color_source,
             "colorScore": round(float(color_score), 4),
             "z": layer["z"],
@@ -1033,7 +1077,7 @@ def make_image_node(layer: dict[str, Any], asset_url: str, asset_metadata: dict[
         "y": bbox["y"],
         "width": bbox["width"],
         "height": bbox["height"],
-        "fill": {"type": "image", "url": asset_url, "mode": "stretch"},
+        "fill": {"type": "image", "enabled": True, "url": asset_url, "mode": "stretch"},
         "metadata": metadata,
     }
 
@@ -1065,8 +1109,11 @@ def make_shape_node(layer: dict[str, Any]) -> dict[str, Any]:
         node["cornerRadius"] = radius
     stroke = style.get("stroke")
     if isinstance(stroke, dict) and stroke.get("color"):
-        node["stroke"] = stroke.get("color")
-        node["strokeWidth"] = stroke.get("width", 1)
+        node["stroke"] = {
+            "align": stroke.get("align", "inside"),
+            "thickness": stroke.get("width", stroke.get("thickness", 1)),
+            "fill": stroke.get("color"),
+        }
     return node
 
 
@@ -1080,7 +1127,7 @@ def make_debug_image_node(layer: dict[str, Any]) -> dict[str, Any]:
         "y": bbox["y"],
         "width": bbox["width"],
         "height": bbox["height"],
-        "fill": {"type": "image", "url": layer["fillImage"].replace("./assets/crops/", "./assets/raw-crops/"), "mode": "stretch"},
+        "fill": {"type": "image", "enabled": True, "url": layer["fillImage"].replace("./assets/crops/", "./assets/raw-crops/"), "mode": "stretch"},
         "metadata": {
             "type": "m29_debug_raw_crop",
             "primitiveId": layer["sourcePrimitiveId"],
@@ -1195,7 +1242,7 @@ def build_production_document(
 
     for layer, primitive in editable_text_layers:
         counts[layer["role"]] += 1
-        children.append(make_text_node(layer, primitive, paths))
+        children.append(make_text_node(layer, primitive, paths, canvas))
         text_nodes += 1
 
     children.sort(key=lambda node: int((node.get("metadata") or {}).get("z", 0)))
@@ -1289,7 +1336,7 @@ def build_debug_document(
             "width": image["width"],
             "height": image["height"],
             "opacity": 0.16,
-            "fill": {"type": "image", "url": "./assets/source.png", "mode": "stretch"},
+            "fill": {"type": "image", "enabled": True, "url": "./assets/source.png", "mode": "stretch"},
             "metadata": {"type": "m29_debug_reference_image"},
         }
     ]

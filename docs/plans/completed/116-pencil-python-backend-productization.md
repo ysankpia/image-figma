@@ -34,17 +34,21 @@ uv run python -m app.cli.export_project --input ./screens --out ./out --mode all
 Output:
 
 ```text
-project.zip
-  manifest.json
-  clean-editable/design.pen
-  clean-editable/assets/visible/page_0001/*.png
-  visual-fidelity/design.pen
-  visual-fidelity/assets/visible/page_0001/*.png
-  visual-ocr/design.pen
-  visual-ocr/assets/visible/page_0001/*.png
-  debug/pages/page_0001/*
-  debug/report.md
+  project.zip
+    manifest.json
+    clean-editable/design.pen
+    clean-editable/assets/visible/page_0001/clean-editable__page_0001__*.png
+    visual-fidelity/design.pen
+    visual-fidelity/assets/visible/page_0001/visual-fidelity__page_0001__*.png
+    visual-ocr/design.pen
+    visual-ocr/assets/visible/page_0001/visual-ocr__page_0001__*.png
+    debug/pages/page_0001/*
+    debug/report.md
 ```
+
+Project-level visible asset filenames are mode- and page-namespaced, not only directories.
+This keeps every image basename unique across a multi-page, multi-mode project package, which is required
+for importers that fall back from relative paths to filename lookup.
 
 Mode semantics:
 

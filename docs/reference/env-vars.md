@@ -26,7 +26,7 @@
 | `PENCIL_BACKEND_ADDR` | Python Pencil project server 监听地址 | `127.0.0.1:8100` | 否 |
 | `PENCIL_BACKEND_STORAGE_ROOT` | Python Pencil project server 存储根目录 | `./storage` | 否 |
 | `PENCIL_BACKEND_M29EXTRACT` | 本地 `m29extract` 可执行文件路径 | 自动查找 `m29extract`/`../backend-go/bin/m29extract` | 部署时建议显式配置 |
-| `PENCIL_BACKEND_PSDLIKE_ROOT` | PSD-like Python 服务目录；`boundarySource=psdlike` 时作为子进程运行 | 自动查找 `services/psdlike-python` | `boundarySource=psdlike` 且默认路径不存在时需要 |
+| `PENCIL_BACKEND_PSDLIKE_ROOT` | PSD-like Python 服务目录；`boundarySource=psdlike` 或 `hybrid` 时作为子进程运行 | 自动查找 `services/psdlike-python` | `boundarySource=psdlike/hybrid` 且默认路径不存在时需要 |
 | `PENCIL_BACKEND_PSDLIKE_TILE_SIZE` | PSD-like tile map 尺寸 | `8` | 否 |
 | `PENCIL_BACKEND_MAX_UPLOAD_BYTES` | Python Pencil project server 单图片上传大小上限 | `10485760` | 否 |
 | `PENCIL_BACKEND_MAX_FILES` | Python Pencil project server 单项目最大图片数 | `20` | 否 |
@@ -139,7 +139,7 @@ GET /api/pencil/projects/{taskId}/download.zip
 
 The project server returns a downloadable ZIP containing `clean-editable`, `visual-fidelity`, and `visual-ocr` `.pen` packages when `mode=all`.
 
-For lower-fragment Pencil assets, send `boundarySource=psdlike` in `POST /api/pencil/projects` or use CLI `--boundary-source psdlike`. The default remains `m29`.
+For lower-fragment Pencil assets, send `boundarySource=psdlike` in `POST /api/pencil/projects` or use CLI `--boundary-source psdlike`. If PSD-like misses small local objects, use `boundarySource=hybrid`; it keeps PSD-like as the primary boundary source and uses M29 only for low-coverage fallback objects. The default remains `m29`.
 
 `m29extract` should be built from the Go backend and used as a local executable:
 

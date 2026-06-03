@@ -30,15 +30,27 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
     (output_dir / "crops").mkdir(exist_ok=True)
     (output_dir / "masks").mkdir(exist_ok=True)
     source_path = ensure_source_png(psdlike_dir, output_dir)
+    source_diagnostics = layer_stack.get("diagnostics") or {}
+    boundary_source = str(source_diagnostics.get("boundarySource") or "psdlike")
 
     primitives: list[dict[str, Any]] = []
     replay_layers: list[dict[str, Any]] = []
-    for index, layer in enumerate(sorted(layer_stack.get("layers") or [], key=lambda item: item.get("z", 0)), start=1):
+    source_layers = list(layer_stack.get("layers") or [])
+    for index, layer in enumerate(sorted(source_layers, key=lambda item: item.get("z", 0)), start=1):
         layer_type = str(layer.get("type") or "")
         if layer_type == "raster":
-            primitive, replay = adapt_raster_layer(layer, psdlike_dir, output_dir, index, width, height)
+            primitive, replay = adapt_raster_layer(
+                layer,
+                psdlike_dir,
+                output_dir,
+                index,
+                width,
+                height,
+                source_path,
+                source_layers,
+            )
         elif layer_type == "shape":
-            primitive, replay = adapt_shape_layer(layer, output_dir, index, width, height)
+            primitive, replay = adapt_shape_layer(layer, source_path, output_dir, index, width, height)
         elif layer_type == "text":
             primitive, replay = adapt_text_layer(layer, source_path, output_dir, index, width, height)
         else:
@@ -59,11 +71,13 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
         },
         "diagnostics": {
             "pageBackground": layer_stack.get("pageBackground") or (layer_stack.get("diagnostics") or {}).get("pageBackground") or "#FFFFFF",
-            "boundarySource": "psdlike",
+            "boundarySource": boundary_source,
             "psdlikeLayerCount": len(layer_stack.get("layers") or []),
             "psdlikeRasterLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "raster"),
             "psdlikeShapeLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "shape"),
             "psdlikeTextLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "text"),
+            "hybridFallbackLayerCount": source_diagnostics.get("hybridFallbackLayerCount", 0),
+            "hybridFallbackPolicy": source_diagnostics.get("hybridFallbackPolicy"),
         },
         "primitives": primitives,
     }
@@ -72,13 +86,13 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
         "version": "1.0",
         "source": "generated_from_psdlike_layer_stack",
         "policy": {
-            "mode": "psdlike_boundary_replay",
+            "mode": f"{boundary_source}_boundary_replay",
             "generatedBy": "psdlike_adapter.adapt_psdlike_to_pencil_evidence",
         },
         "layers": replay_layers,
         "summary": {
             "layerCount": len(replay_layers),
-            "boundarySource": "psdlike",
+            "boundarySource": boundary_source,
         },
     }
     write_json(output_dir / "m29_physical_evidence.v1.json", evidence)
@@ -122,6 +136,8 @@ def adapt_raster_layer(
     index: int,
     canvas_width: int,
     canvas_height: int,
+    source_png: Path,
+    source_layers: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     primitive_id = f"psd_raster_{index:04d}"
     bbox = normalize_bbox(layer["bbox"])
@@ -130,7 +146,26 @@ def adapt_raster_layer(
         raise PSDLikeAdapterError(f"Missing PSD-like raster asset for {layer.get('id')}: {source_asset}")
     crop_ref = f"crops/{primitive_id}.png"
     mask_ref = f"masks/{primitive_id}.png"
-    shutil.copy2(source_asset, output_dir / crop_ref)
+    repair = repair_raster_layer_bounds(
+        layer=layer,
+        source_png=source_png,
+        bbox=bbox,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        source_layers=source_layers,
+    )
+    compile_hints: dict[str, Any] = {}
+    if repair is None:
+        shutil.copy2(source_asset, output_dir / crop_ref)
+    else:
+        bbox = repair["bbox"]
+        repair["image"].save(output_dir / crop_ref)
+        compile_hints["rasterBoundaryRepair"] = {
+            "policy": "source_connected_component.v1",
+            "originalBBox": repair["originalBBox"],
+            "repairedBBox": bbox,
+            "reason": repair["reason"],
+        }
     write_rect_mask(output_dir / mask_ref, canvas_width, canvas_height, bbox)
     primitive = {
         "id": primitive_id,
@@ -144,14 +179,207 @@ def adapt_raster_layer(
             "reason": layer.get("reason"),
         },
         "measurements": layer.get("scores") or {},
-        "compileHints": {},
+        "compileHints": compile_hints,
     }
     replay = base_replay_layer(layer, primitive_id, "image_region", bbox, crop_ref, mask_ref)
     return primitive, replay
 
 
+def repair_raster_layer_bounds(
+    *,
+    layer: dict[str, Any],
+    source_png: Path,
+    bbox: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+    source_layers: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not should_try_raster_boundary_repair(layer, bbox, canvas_width, canvas_height):
+        return None
+    if not source_png.exists():
+        return None
+
+    padding = raster_boundary_search_padding(bbox)
+    window = expand_bbox(bbox, padding, canvas_width, canvas_height)
+    with Image.open(source_png) as image:
+        source = image.convert("RGBA")
+        local = source.crop((window["x"], window["y"], window["x"] + window["width"], window["y"] + window["height"]))
+        arr = np.asarray(local.convert("RGB"), dtype=np.int16)
+
+    if arr.size == 0:
+        return None
+
+    background = estimate_edge_background(arr)
+    delta = np.linalg.norm(arr - background.reshape(1, 1, 3), axis=2)
+    foreground = delta >= foreground_delta_threshold(delta)
+    seed_box = {
+        "x": bbox["x"] - window["x"],
+        "y": bbox["y"] - window["y"],
+        "width": bbox["width"],
+        "height": bbox["height"],
+    }
+    component = connected_component_touching_seed(foreground, seed_box)
+    if component is None:
+        return None
+
+    component_bbox = mask_bbox(component)
+    if component_bbox is None:
+        return None
+    repaired = {
+        "x": window["x"] + component_bbox["x"],
+        "y": window["y"] + component_bbox["y"],
+        "width": component_bbox["width"],
+        "height": component_bbox["height"],
+    }
+    repaired = expand_bbox(repaired, 2, canvas_width, canvas_height)
+    if not valid_repaired_raster_bbox(original=bbox, repaired=repaired, canvas_width=canvas_width, canvas_height=canvas_height):
+        return None
+    if overlaps_text_layer(repaired, source_layers):
+        return None
+
+    with Image.open(source_png) as image:
+        source = image.convert("RGBA")
+        crop = source.crop((repaired["x"], repaired["y"], repaired["x"] + repaired["width"], repaired["y"] + repaired["height"]))
+    return {
+        "bbox": repaired,
+        "image": crop,
+        "originalBBox": bbox,
+        "reason": "foreground_pixels_continue_outside_psdlike_raster_bbox",
+    }
+
+
+def should_try_raster_boundary_repair(
+    layer: dict[str, Any],
+    bbox: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> bool:
+    reason = str(layer.get("reason") or "")
+    if "background" in reason or "container" in reason:
+        return False
+    area = bbox["width"] * bbox["height"]
+    canvas_area = max(1, canvas_width * canvas_height)
+    if area < 120 or area > min(42_000, max(4_000, int(canvas_area * 0.04))):
+        return False
+    if bbox["width"] > max(96, canvas_width * 0.45):
+        return False
+    if bbox["height"] > max(64, canvas_height * 0.18):
+        return False
+    return True
+
+
+def raster_boundary_search_padding(bbox: dict[str, int]) -> int:
+    side = max(bbox["width"], bbox["height"])
+    return max(12, min(96, int(round(side * 0.85))))
+
+
+def foreground_delta_threshold(delta: np.ndarray) -> float:
+    if delta.size == 0:
+        return 32.0
+    edge_values = np.concatenate(
+        [
+            delta[0, :].reshape(-1),
+            delta[-1, :].reshape(-1),
+            delta[:, 0].reshape(-1),
+            delta[:, -1].reshape(-1),
+        ],
+        axis=0,
+    )
+    edge_noise = float(np.percentile(edge_values, 95)) if edge_values.size else 0.0
+    return max(28.0, min(64.0, edge_noise * 1.8))
+
+
+def connected_component_touching_seed(mask: np.ndarray, seed_box: dict[str, int]) -> np.ndarray | None:
+    height, width = mask.shape[:2]
+    x1 = max(0, seed_box["x"])
+    y1 = max(0, seed_box["y"])
+    x2 = min(width, seed_box["x"] + seed_box["width"])
+    y2 = min(height, seed_box["y"] + seed_box["height"])
+    if x1 >= x2 or y1 >= y2:
+        return None
+    seed = mask[y1:y2, x1:x2]
+    if int(seed.sum()) < max(6, int(seed.size * 0.02)):
+        return None
+
+    visited = np.zeros(mask.shape, dtype=bool)
+    component = np.zeros(mask.shape, dtype=bool)
+    seed_points = np.argwhere(seed)
+    stack = [(int(x1 + point[1]), int(y1 + point[0])) for point in seed_points]
+    while stack:
+        x, y = stack.pop()
+        if x < 0 or y < 0 or x >= width or y >= height:
+            continue
+        if visited[y, x] or not mask[y, x]:
+            continue
+        visited[y, x] = True
+        component[y, x] = True
+        for ny in (y - 1, y, y + 1):
+            for nx in (x - 1, x, x + 1):
+                if nx == x and ny == y:
+                    continue
+                if 0 <= nx < width and 0 <= ny < height and not visited[ny, nx] and mask[ny, nx]:
+                    stack.append((nx, ny))
+    if not component.any():
+        return None
+    return component
+
+
+def mask_bbox(mask: np.ndarray) -> dict[str, int] | None:
+    ys, xs = np.where(mask)
+    if xs.size == 0 or ys.size == 0:
+        return None
+    x1 = int(xs.min())
+    y1 = int(ys.min())
+    x2 = int(xs.max()) + 1
+    y2 = int(ys.max()) + 1
+    return {"x": x1, "y": y1, "width": x2 - x1, "height": y2 - y1}
+
+
+def valid_repaired_raster_bbox(
+    *,
+    original: dict[str, int],
+    repaired: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> bool:
+    growth_left = original["x"] - repaired["x"]
+    growth_top = original["y"] - repaired["y"]
+    growth_right = (repaired["x"] + repaired["width"]) - (original["x"] + original["width"])
+    growth_bottom = (repaired["y"] + repaired["height"]) - (original["y"] + original["height"])
+    if max(growth_left, growth_top, growth_right, growth_bottom) < 4:
+        return False
+    original_area = max(1, original["width"] * original["height"])
+    repaired_area = repaired["width"] * repaired["height"]
+    canvas_area = max(1, canvas_width * canvas_height)
+    if repaired_area < original_area or repaired_area > original_area * 5.0:
+        return False
+    if repaired_area > min(60_000, max(8_000, int(canvas_area * 0.055))):
+        return False
+    if repaired["width"] > max(original["width"] * 2.8, 160):
+        return False
+    if repaired["height"] > max(original["height"] * 3.0, 160):
+        return False
+    return True
+
+
+def overlaps_text_layer(bbox: dict[str, int], source_layers: list[dict[str, Any]]) -> bool:
+    bbox_area = max(1, bbox["width"] * bbox["height"])
+    for layer in source_layers:
+        if layer.get("type") != "text":
+            continue
+        text_bbox = normalize_bbox(layer.get("bbox") or {})
+        overlap = intersection_area(bbox, text_bbox)
+        if overlap <= 0:
+            continue
+        text_area = max(1, text_bbox["width"] * text_bbox["height"])
+        if overlap / bbox_area >= 0.08 or overlap / text_area >= 0.25:
+            return True
+    return False
+
+
 def adapt_shape_layer(
     layer: dict[str, Any],
+    source_png: Path,
     output_dir: Path,
     index: int,
     canvas_width: int,
@@ -163,12 +391,32 @@ def adapt_shape_layer(
     mask_ref = f"masks/{primitive_id}.png"
     style = layer.get("style") or {}
     fill = str(style.get("fill") or "#FFFFFF")
-    image = Image.new("RGBA", (bbox["width"], bbox["height"]), css_to_rgba(fill))
-    image.save(output_dir / crop_ref)
-    write_text_mask(output_dir / mask_ref, output_dir / crop_ref, canvas_width, canvas_height, bbox)
+    editable_shape = should_emit_editable_shape(layer, bbox, canvas_width, canvas_height)
+    if editable_shape:
+        image = Image.new("RGBA", (bbox["width"], bbox["height"]), css_to_rgba(fill))
+        image.save(output_dir / crop_ref)
+        write_text_mask(output_dir / mask_ref, output_dir / crop_ref, canvas_width, canvas_height, bbox)
+        primitive_type = "surface_region"
+        compile_hints: dict[str, Any] = {}
+    else:
+        with Image.open(source_png) as source:
+            source.convert("RGBA").crop(
+                (
+                    bbox["x"],
+                    bbox["y"],
+                    bbox["x"] + bbox["width"],
+                    bbox["y"] + bbox["height"],
+                )
+            ).save(output_dir / crop_ref)
+        write_rect_mask(output_dir / mask_ref, canvas_width, canvas_height, bbox)
+        primitive_type = "image_region"
+        compile_hints = {
+            "shapeFallbackMode": "source_raster_crop",
+            "shapeFallbackReason": "non_container_shape_requires_mask",
+        }
     primitive = {
         "id": primitive_id,
-        "primitiveType": "surface_region",
+        "primitiveType": primitive_type,
         "bbox": bbox,
         "maskRef": mask_ref,
         "cropRef": crop_ref,
@@ -179,14 +427,43 @@ def adapt_shape_layer(
             "style": style,
         },
         "measurements": layer.get("scores") or {},
-        "compileHints": {},
+        "compileHints": compile_hints,
     }
-    replay = {
-        **base_replay_layer(layer, primitive_id, "surface_region", bbox, crop_ref, mask_ref),
-        "editableMode": "shape",
-        "shapeStyle": style,
-    }
+    replay = base_replay_layer(layer, primitive_id, primitive_type, bbox, crop_ref, mask_ref)
+    if editable_shape:
+        replay = {
+            **replay,
+            "editableMode": "shape",
+            "shapeStyle": style,
+        }
     return primitive, replay
+
+
+def should_emit_editable_shape(
+    layer: dict[str, Any],
+    bbox: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> bool:
+    reason = str(layer.get("reason") or "")
+    if reason in {"background_surface_band", "local_container_surface"}:
+        return True
+
+    width = bbox["width"]
+    height = bbox["height"]
+    canvas_area = max(1, canvas_width * canvas_height)
+    area_ratio = (width * height) / canvas_area
+    width_ratio = width / max(1, canvas_width)
+    height_ratio = height / max(1, canvas_height)
+    aspect = width / max(1, height)
+
+    if area_ratio >= 0.08 and (aspect >= 1.8 or aspect <= 0.56):
+        return True
+    if width_ratio >= 0.30 and height >= 32 and aspect >= 1.8:
+        return True
+    if height_ratio >= 0.12 and width >= 32 and aspect <= 0.56:
+        return True
+    return False
 
 
 def adapt_text_layer(
@@ -260,6 +537,22 @@ def normalize_bbox(raw: dict[str, Any]) -> dict[str, int]:
     width = max(1, int(round(float(raw.get("width") or 0))))
     height = max(1, int(round(float(raw.get("height") or 0))))
     return {"x": x, "y": y, "width": width, "height": height}
+
+
+def expand_bbox(bbox: dict[str, int], px: int, canvas_width: int, canvas_height: int) -> dict[str, int]:
+    x1 = max(0, bbox["x"] - px)
+    y1 = max(0, bbox["y"] - px)
+    x2 = min(canvas_width, bbox["x"] + bbox["width"] + px)
+    y2 = min(canvas_height, bbox["y"] + bbox["height"] + px)
+    return {"x": x1, "y": y1, "width": max(1, x2 - x1), "height": max(1, y2 - y1)}
+
+
+def intersection_area(a: dict[str, int], b: dict[str, int]) -> int:
+    x1 = max(a["x"], b["x"])
+    y1 = max(a["y"], b["y"])
+    x2 = min(a["x"] + a["width"], b["x"] + b["width"])
+    y2 = min(a["y"] + a["height"], b["y"] + b["height"])
+    return max(0, x2 - x1) * max(0, y2 - y1)
 
 
 def write_rect_mask(path: Path, canvas_width: int, canvas_height: int, bbox: dict[str, int]) -> None:
@@ -344,6 +637,7 @@ def copy_psdlike_debug(psdlike_dir: Path, target_dir: Path) -> None:
         "raster_heatmap.png",
         "shape_heatmap.png",
         "ownership_report.v1.json",
+        "hybrid_boundary_report.v1.json",
         "diagnostics.md",
         "input.ocr_blocks.v1.json",
         "psdlike.stdout.txt",

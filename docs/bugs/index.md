@@ -15,6 +15,8 @@
 
 ## 最近 Resolved Bugs
 
+- [019-pencil-psdlike-raster-icon-truncation.md](resolved/019-pencil-psdlike-raster-icon-truncation.md)
+- [018-pencil-textlayer-cjk-clipping.md](resolved/018-pencil-textlayer-cjk-clipping.md)
 - [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)
 - [015-bottom-tab-selected-icon-stays-non-ocr-foreground.md](resolved/015-bottom-tab-selected-icon-stays-non-ocr-foreground.md)
 - [014-fragmented-internal-icon-fails-transparent-asset-gate.md](resolved/014-fragmented-internal-icon-fails-transparent-asset-gate.md)
