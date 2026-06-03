@@ -139,6 +139,8 @@ GET /api/pencil/projects/{taskId}/manifest
 GET /api/pencil/projects/{taskId}/download.zip
 ```
 
+Caller contract: [pencil-python-backend-api.md](pencil-python-backend-api.md).
+
 The project server returns a downloadable ZIP containing `clean-editable`, `visual-fidelity`, and `visual-ocr` `.pen` packages when `mode=all`.
 
 For lower-fragment Pencil assets, the default Pencil boundary source is `psdlike`. Override it with `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=m29|psdlike|hybrid`, send `boundarySource` in `POST /api/pencil/projects`, or use CLI `--boundary-source ...`. If PSD-like misses small local objects, use `boundarySource=hybrid`; it keeps PSD-like as the primary boundary source and uses M29 only for low-coverage fallback objects.

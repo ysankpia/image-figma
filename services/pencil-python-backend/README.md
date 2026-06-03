@@ -111,6 +111,8 @@ GET  /api/pencil/projects/{taskId}/manifest
 GET  /api/pencil/projects/{taskId}/download.zip
 ```
 
+调用方合同见 [../../docs/reference/pencil-python-backend-api.md](../../docs/reference/pencil-python-backend-api.md)。
+
 `POST /api/pencil/projects` 使用 `multipart/form-data`：
 
 ```text

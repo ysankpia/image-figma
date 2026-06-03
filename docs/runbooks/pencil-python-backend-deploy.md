@@ -2,6 +2,8 @@
 
 这个服务是当前 Pencil `.pen` / `project.zip` 交付入口。它不替代 Go Draft runtime，也不需要 Figma 插件改动。
 
+HTTP 调用方合同见 [../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md)。
+
 生产默认链路：
 
 ```text
