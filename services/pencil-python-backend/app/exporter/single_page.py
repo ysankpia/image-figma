@@ -72,6 +72,9 @@ class Primitive:
     crop_ref: str
     mask_ref: str | None
     text: str
+    source: dict[str, Any]
+    measurements: dict[str, Any]
+    compile_hints: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -603,7 +606,7 @@ def copy_used_crop_to_visible_assets(
     output_name = f"{primitive_id}.png"
     output_path = paths.production_assets_dir / output_name
 
-    if enable_text_knockout:
+    if enable_text_knockout and layer.get("role") not in {"art_text_region", "visual_text_region", "text_region"}:
         text_mask = build_text_mask_for_layer(paths, layer["bbox"], text_primitives)
         if text_mask is not None:
             cleaned = erase_masked_pixels(Image.open(source_path), text_mask)
@@ -665,6 +668,9 @@ def load_primitives(evidence: dict[str, Any]) -> dict[str, Primitive]:
             crop_ref=item["cropRef"],
             mask_ref=item.get("maskRef"),
             text=source.get("text") or "",
+            source=source,
+            measurements=item.get("measurements") or {},
+            compile_hints=item.get("compileHints") or {},
         )
     return primitives
 
@@ -763,6 +769,363 @@ def art_text_rejection_reason(primitive: Primitive) -> str | None:
     return None
 
 
+VISUAL_TEXT_OWNER_ROLES = {"image_region", "unknown_region", "symbol_region", "art_text_region"}
+
+
+def primitive_for_layer(layer: dict[str, Any], primitives: dict[str, Primitive]) -> Primitive | None:
+    return primitives.get(str(layer.get("sourcePrimitiveId") or ""))
+
+
+def layer_complexity(layer: dict[str, Any], primitives: dict[str, Primitive]) -> float:
+    primitive = primitive_for_layer(layer, primitives)
+    measurements = primitive.measurements if primitive else {}
+    texture = float(measurements.get("texture") or 0.0)
+    edge = float(measurements.get("edge") or 0.0)
+    entropy = float(measurements.get("entropy") or 0.0)
+    unique = float(measurements.get("unique") or 0.0)
+    return max(texture, edge * 1.15, entropy * 0.80, unique * 0.70)
+
+
+def layer_reason(layer: dict[str, Any], primitives: dict[str, Primitive]) -> str:
+    primitive = primitive_for_layer(layer, primitives)
+    if primitive:
+        return str(primitive.source.get("reason") or "")
+    return str(layer.get("reason") or "")
+
+
+def is_promo_or_price_text(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text)
+    if not compact:
+        return False
+    if re.search(r"[¥￥$€£]\s*\d", compact):
+        return True
+    if re.search(r"\d+(?:\.\d+)?\s*折", compact):
+        return True
+    if re.search(r"满\s*\d+.*(?:减|用|使用|券)", compact):
+        return True
+    if re.search(r"(?:到手价|活动价|券后价|优惠券|立减|促销|特惠|秒杀)", compact):
+        return True
+    if compact in {"折"}:
+        return True
+    return False
+
+
+def promo_text_rejection_reason(primitive: Primitive, canvas: dict[str, int]) -> str | None:
+    text = primitive.text.strip()
+    if not is_promo_or_price_text(text):
+        return None
+    bbox = primitive.bbox
+    height = float(bbox["height"])
+    area = area_of(bbox)
+    canvas_area = max(1.0, float(canvas["width"]) * float(canvas["height"]))
+
+    # Price/promo typography in screenshots is commonly designed as a graphic
+    # artifact. Preserve only display-sized cases; small table/dashboard values
+    # should remain normal editable OCR text.
+    if height >= 24 or area >= canvas_area * 0.0025:
+        return "promo_display_text_preserved_as_raster"
+    return None
+
+
+def looks_like_simple_control_owner(
+    owner: dict[str, Any],
+    text_bbox: dict[str, float],
+    primitives: dict[str, Primitive],
+    canvas: dict[str, int],
+) -> bool:
+    bbox = owner["bbox"]
+    width = float(bbox["width"])
+    height = float(bbox["height"])
+    aspect = width / max(1.0, height)
+    canvas_area = max(1.0, float(canvas["width"]) * float(canvas["height"]))
+    area_ratio = area_of(bbox) / canvas_area
+    complexity = layer_complexity(owner, primitives)
+    text_ratio = area_of(text_bbox) / max(1.0, area_of(bbox))
+
+    if height <= 84 and 1.8 <= aspect <= 12.0 and area_ratio <= 0.10 and complexity < 0.58:
+        return True
+    if text_ratio >= 0.42 and height <= 96 and complexity < 0.48:
+        return True
+    return False
+
+
+def can_visual_text_owner(
+    owner: dict[str, Any],
+    text_layer: dict[str, Any],
+    primitives: dict[str, Primitive],
+    canvas: dict[str, int],
+) -> bool:
+    if owner is text_layer:
+        return False
+    if owner.get("role") not in VISUAL_TEXT_OWNER_ROLES:
+        return False
+    if owner.get("editableMode") == "shape":
+        return False
+    if is_canvas_like_crop(owner, canvas):
+        return False
+
+    owner_bbox = owner["bbox"]
+    text_bbox = text_layer["bbox"]
+    owner_area = area_of(owner_bbox)
+    text_area = area_of(text_bbox)
+    if owner_area <= 0 or text_area <= 0:
+        return False
+    if owner_area < text_area * 1.55:
+        return False
+    if ioa(text_bbox, owner_bbox) < 0.70:
+        return False
+
+    canvas_area = max(1.0, float(canvas["width"]) * float(canvas["height"]))
+    area_ratio = owner_area / canvas_area
+    complexity = layer_complexity(owner, primitives)
+    reason = layer_reason(owner, primitives)
+
+    if area_ratio > 0.55:
+        return False
+    if area_ratio > 0.28 and complexity < 0.42:
+        return False
+    if looks_like_simple_control_owner(owner, text_bbox, primitives, canvas):
+        return False
+
+    complex_reason = any(
+        token in reason
+        for token in (
+            "high_texture",
+            "complex_visual",
+            "foreground_object",
+            "source_raster",
+            "low_texture_solid_region",
+            "m29_low_coverage_fallback_object",
+        )
+    )
+    if owner.get("role") in {"symbol_region", "art_text_region"}:
+        return area_ratio <= 0.18 or complexity >= 0.38 or complex_reason
+    if owner.get("role") in {"image_region", "unknown_region"}:
+        return complexity >= 0.32 or complex_reason or area_ratio <= 0.08
+    return False
+
+
+def visual_text_rejection_decision(
+    layer: dict[str, Any],
+    primitive: Primitive,
+    layers: list[dict[str, Any]],
+    primitives: dict[str, Primitive],
+    canvas: dict[str, int],
+) -> dict[str, Any] | None:
+    owners = [
+        candidate
+        for candidate in layers
+        if can_visual_text_owner(candidate, layer, primitives, canvas)
+    ]
+    if owners:
+        owner = min(
+            owners,
+            key=lambda item: (
+                area_of(item["bbox"]),
+                -layer_complexity(item, primitives),
+                str(item.get("id", "")),
+            ),
+        )
+        return {
+            "reason": "text_inside_raster_owner",
+            "ownerPrimitiveId": owner.get("sourcePrimitiveId"),
+            "ownerRole": owner.get("role"),
+            "ownerBBox": owner.get("bbox"),
+            "ownerComplexity": round(float(layer_complexity(owner, primitives)), 4),
+            "ownerReason": layer_reason(owner, primitives),
+        }
+
+    promo_reason = promo_text_rejection_reason(primitive, canvas)
+    if promo_reason:
+        return {"reason": promo_reason}
+    return None
+
+
+def bbox_union(boxes: list[dict[str, float]]) -> dict[str, float]:
+    x1 = min(float(box["x"]) for box in boxes)
+    y1 = min(float(box["y"]) for box in boxes)
+    x2 = max(float(box["x"]) + float(box["width"]) for box in boxes)
+    y2 = max(float(box["y"]) + float(box["height"]) for box in boxes)
+    return {"x": x1, "y": y1, "width": x2 - x1, "height": y2 - y1}
+
+
+def expanded_bbox_for_overlap(bbox: dict[str, float], px: float) -> dict[str, float]:
+    return {
+        "x": float(bbox["x"]) - px,
+        "y": float(bbox["y"]) - px,
+        "width": float(bbox["width"]) + px * 2,
+        "height": float(bbox["height"]) + px * 2,
+    }
+
+
+def text_cluster_token(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def is_price_or_discount_seed(text: str) -> bool:
+    compact = text_cluster_token(text)
+    if not compact:
+        return False
+    if is_promo_or_price_text(compact):
+        return True
+    if re.fullmatch(r"\d+(?:\.\d+)?", compact):
+        return True
+    if compact in {"折", "券", "减"}:
+        return True
+    return False
+
+
+def is_promo_cluster_signal(text: str) -> bool:
+    compact = text_cluster_token(text)
+    if not compact:
+        return False
+    if is_promo_or_price_text(compact):
+        return True
+    if re.search(r"(?:满|使用|领取|入会|详情|活动|时间|赠|加赠|享|直播|备注|暗号)", compact):
+        return True
+    return False
+
+
+def can_join_visual_text_cluster(primitive: Primitive) -> bool:
+    text = primitive.text
+    return is_price_or_discount_seed(text) or is_promo_cluster_signal(text)
+
+
+def bbox_gap(a: dict[str, float], b: dict[str, float]) -> tuple[float, float]:
+    ax1 = float(a["x"])
+    ay1 = float(a["y"])
+    ax2 = ax1 + float(a["width"])
+    ay2 = ay1 + float(a["height"])
+    bx1 = float(b["x"])
+    by1 = float(b["y"])
+    bx2 = bx1 + float(b["width"])
+    by2 = by1 + float(b["height"])
+    horizontal = max(0.0, max(ax1, bx1) - min(ax2, bx2))
+    vertical = max(0.0, max(ay1, by1) - min(ay2, by2))
+    return horizontal, vertical
+
+
+def same_text_cluster_band(a: dict[str, float], b: dict[str, float]) -> bool:
+    expanded_a = expanded_bbox_for_overlap(a, max(4.0, min(float(a["height"]), float(b["height"])) * 0.35))
+    if intersection_area(expanded_a, b) > 0:
+        return True
+    _, vertical_gap = bbox_gap(a, b)
+    max_height = max(float(a["height"]), float(b["height"]))
+    min_height = min(float(a["height"]), float(b["height"]))
+    if vertical_gap <= max(4.0, min_height * 0.55):
+        return True
+    return vertical_gap <= max_height * 0.25
+
+
+def text_layers_are_cluster_neighbors(
+    a: tuple[dict[str, Any], Primitive],
+    b: tuple[dict[str, Any], Primitive],
+    canvas: dict[str, int],
+) -> bool:
+    layer_a, primitive_a = a
+    layer_b, primitive_b = b
+    bbox_a = layer_a["bbox"]
+    bbox_b = layer_b["bbox"]
+    if not same_text_cluster_band(bbox_a, bbox_b):
+        return False
+
+    horizontal_gap, vertical_gap = bbox_gap(bbox_a, bbox_b)
+    height = max(float(bbox_a["height"]), float(bbox_b["height"]))
+    width = max(float(bbox_a["width"]), float(bbox_b["width"]))
+    short_side = max(1.0, float(min(canvas["width"], canvas["height"])))
+    max_horizontal_gap = max(10.0, min(short_side * 0.10, height * 2.8, width * 1.4))
+    max_vertical_gap = max(6.0, height * 0.85)
+    if horizontal_gap <= max_horizontal_gap and vertical_gap <= max_vertical_gap:
+        return True
+
+    combined = text_cluster_token(primitive_a.text) + text_cluster_token(primitive_b.text)
+    if is_promo_cluster_signal(combined) and horizontal_gap <= max_horizontal_gap * 1.6 and vertical_gap <= max_vertical_gap:
+        return True
+    return False
+
+
+def cluster_is_layout_bar(cluster: list[tuple[dict[str, Any], Primitive]], canvas: dict[str, int]) -> bool:
+    union = bbox_union([layer["bbox"] for layer, _ in cluster])
+    width_ratio = float(union["width"]) / max(1.0, float(canvas["width"]))
+    height_ratio = float(union["height"]) / max(1.0, float(canvas["height"]))
+    if width_ratio > 0.70 and height_ratio < 0.10:
+        return True
+    if height_ratio > 0.42 and width_ratio < 0.12:
+        return True
+    return False
+
+
+def build_visual_text_cluster_decisions(
+    text_items: list[tuple[dict[str, Any], Primitive]],
+    single_decisions: dict[str, dict[str, Any]],
+    canvas: dict[str, int],
+) -> dict[str, dict[str, Any]]:
+    if not text_items:
+        return {}
+
+    neighbors: dict[str, set[str]] = {primitive.id: set() for _, primitive in text_items}
+    by_id = {primitive.id: (layer, primitive) for layer, primitive in text_items}
+    for index, item in enumerate(text_items):
+        for other in text_items[index + 1 :]:
+            if not (can_join_visual_text_cluster(item[1]) and can_join_visual_text_cluster(other[1])):
+                continue
+            if text_layers_are_cluster_neighbors(item, other, canvas):
+                neighbors[item[1].id].add(other[1].id)
+                neighbors[other[1].id].add(item[1].id)
+
+    decisions: dict[str, dict[str, Any]] = {}
+    seen: set[str] = set()
+    for _, primitive in text_items:
+        if primitive.id in seen:
+            continue
+        stack = [primitive.id]
+        component_ids: list[str] = []
+        seen.add(primitive.id)
+        while stack:
+            current = stack.pop()
+            component_ids.append(current)
+            for neighbor in neighbors[current]:
+                if neighbor not in seen:
+                    seen.add(neighbor)
+                    stack.append(neighbor)
+
+        component = [by_id[item_id] for item_id in component_ids]
+        seed_ids = {
+            item_id
+            for item_id in component_ids
+            if item_id in single_decisions or is_price_or_discount_seed(by_id[item_id][1].text)
+        }
+        if not seed_ids:
+            continue
+        if len(component) == 1 and component_ids[0] not in single_decisions:
+            continue
+        if len(component) >= 4 and cluster_is_layout_bar(component, canvas):
+            continue
+
+        cluster_text = "".join(text_cluster_token(item[1].text) for item in component)
+        promo_cluster = is_promo_cluster_signal(cluster_text) or any(
+            is_price_or_discount_seed(by_id[item_id][1].text) for item_id in component_ids
+        )
+        if not promo_cluster and not any(item_id in single_decisions for item_id in component_ids):
+            continue
+        cluster_bbox = bbox_union([layer["bbox"] for layer, _ in component])
+        cluster_id = "visual_text_cluster__" + "__".join(sorted(component_ids))
+        for item_id in component_ids:
+            existing = single_decisions.get(item_id, {})
+            if not existing and not promo_cluster:
+                continue
+            decisions[item_id] = {
+                **existing,
+                "reason": existing.get("reason") or "promo_text_cluster_preserved_as_raster",
+                "clusterId": cluster_id,
+                "clusterPrimitiveIds": sorted(component_ids),
+                "clusterBBox": cluster_bbox,
+                "clusterText": cluster_text,
+                "clusterPolicy": "visual_text_cluster.v1",
+            }
+    return decisions
+
+
 def make_text_node(
     layer: dict[str, Any],
     primitive: Primitive,
@@ -842,7 +1205,7 @@ def crop_owner_priority(layer: dict[str, Any]) -> int:
         return 50
     if role == "unknown_region":
         return 45
-    if role == "art_text_region":
+    if role in {"art_text_region", "visual_text_region"}:
         return 40
     if role == "symbol_region":
         return 30
@@ -877,7 +1240,7 @@ def component_parent_area_limit(parent: dict[str, Any], canvas_area: float) -> f
         return canvas_area * 0.55
     if role in {"surface_region", "unknown_region"}:
         return canvas_area * 0.32
-    if role == "art_text_region":
+    if role in {"art_text_region", "visual_text_region"}:
         return canvas_area * 0.24
     if role == "symbol_region":
         return canvas_area * 0.18
@@ -1055,7 +1418,7 @@ def dedupe_editable_crop_layers(layers: list[dict[str, Any]]) -> tuple[list[dict
             # A small lower fragment nested inside an upper visual crop is usually a
             # duplicate extraction artifact. Preserve explicit art text crops.
             if (
-                layer.get("role") != "art_text_region"
+                layer.get("role") not in {"art_text_region", "visual_text_region"}
                 and area <= area_of(existing_bbox) * 0.45
                 and layer_in_existing >= 0.72
             ):
@@ -1201,6 +1564,25 @@ def build_production_document(
     editable_shape_layers: list[dict[str, Any]] = []
     crop_layers: list[dict[str, Any]] = []
     text_decisions: list[dict[str, Any]] = []
+    text_items = [
+        (layer, primitive)
+        for layer in layers
+        if layer.get("role") == "text_region"
+        and (primitive := primitives.get(layer["sourcePrimitiveId"])) is not None
+        and primitive.text.strip()
+    ]
+    single_visual_text_decisions: dict[str, dict[str, Any]] = {}
+    visual_text_decisions: dict[str, dict[str, Any]] = {}
+    if enable_art_text_gate and mode.visible_ocr_text:
+        for layer, primitive in text_items:
+            decision = visual_text_rejection_decision(layer, primitive, layers, primitives, canvas)
+            if decision:
+                single_visual_text_decisions[primitive.id] = decision
+        visual_text_decisions = build_visual_text_cluster_decisions(
+            text_items,
+            single_visual_text_decisions,
+            canvas,
+        )
 
     for layer in layers:
         if layer.get("editableMode") == "shape":
@@ -1222,6 +1604,18 @@ def build_production_document(
                     "text": primitive.text,
                     "decision": "crop",
                     "reason": art_reason,
+                }
+            )
+            continue
+        visual_text_decision = visual_text_decisions.get(primitive.id)
+        if visual_text_decision:
+            crop_layers.append(make_text_crop_layer(layer, primitive, role="visual_text_region"))
+            text_decisions.append(
+                {
+                    "primitiveId": primitive.id,
+                    "text": primitive.text,
+                    "decision": "crop",
+                    **visual_text_decision,
                 }
             )
             continue
@@ -1349,6 +1743,17 @@ def build_production_document(
         "textKnockoutCropNodes": knockout_nodes,
         "sourceFallbackNodes": source_fallback_nodes,
         "artTextCropNodes": sum(1 for item in text_decisions if str(item.get("reason", "")).startswith("large_")),
+        "visualTextCropNodes": sum(
+            1
+            for item in text_decisions
+            if item["decision"] in {"crop", "crop_and_visible_ocr"}
+            and str(item.get("reason", ""))
+            in {
+                "text_inside_raster_owner",
+                "promo_display_text_preserved_as_raster",
+                "promo_text_cluster_preserved_as_raster",
+            }
+        ),
         "cropTextNodes": sum(
             1
             for item in text_decisions

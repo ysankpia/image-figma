@@ -209,6 +209,43 @@ def test_single_page_empty_transparent_evidence_falls_back_to_source_raster(tmp_
             assert image.getchannel("A").getextrema()[0] < 255
 
 
+def test_visual_text_inside_local_raster_stays_raster_owned(tmp_path: Path) -> None:
+    evidence_dir = write_fake_visual_text_evidence(tmp_path / "visual_text")
+    export_dir = tmp_path / "single"
+
+    export_single_page(
+        SinglePageExportOptions(
+            input_dir=evidence_dir,
+            out=export_dir,
+            name="Visual Text Unit",
+            mode="all",
+            include_debug_pen=True,
+        )
+    )
+
+    for mode_dir in ("production", "visual-ocr"):
+        manifest = read_json(export_dir / mode_dir / "manifest.json")
+        design = read_json(export_dir / mode_dir / "design.pen")
+        decisions = {item["primitiveId"]: item for item in manifest["textDecisions"]}
+
+        assert decisions["prim_price"]["decision"] == "crop"
+        assert decisions["prim_price"]["reason"] == "text_inside_raster_owner"
+        assert decisions["prim_price"]["ownerPrimitiveId"] == "prim_media"
+        assert decisions["prim_digit"]["decision"] == "crop"
+        assert decisions["prim_digit"]["reason"] == "promo_text_cluster_preserved_as_raster"
+        assert decisions["prim_digit"]["clusterId"] == decisions["prim_discount"]["clusterId"]
+        assert decisions["prim_coupon"]["clusterId"] == decisions["prim_discount"]["clusterId"]
+        assert manifest["visualTextCropNodes"] == 4
+        assert manifest["textNodes"] == 0
+        assert manifest["textKnockoutCropNodes"] == 0
+        assert "¥518.5" not in json.dumps(design, ensure_ascii=False)
+        assert "\"9\"" not in json.dumps(design, ensure_ascii=False)
+
+    visual_fidelity_manifest = read_json(export_dir / "visual-fidelity" / "manifest.json")
+    assert visual_fidelity_manifest["textNodes"] == 0
+    assert visual_fidelity_manifest["cropTextNodes"] == 4
+
+
 def test_psdlike_adapter_rasterizes_small_mask_required_shapes(tmp_path: Path) -> None:
     psdlike_dir = write_fake_small_shape_output(tmp_path / "small_shape")
     evidence_dir = tmp_path / "evidence"
@@ -417,6 +454,177 @@ def write_empty_transparent_evidence(path: Path) -> Path:
         "schema": "m29.pencil.replay.v1",
         "layers": [],
         "summary": {"layerCount": 0, "boundarySource": "psdlike"},
+    }
+    (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
+    (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")
+    return path
+
+
+def write_fake_visual_text_evidence(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "crops").mkdir()
+    (path / "masks").mkdir()
+    image = Image.new("RGB", (240, 160), "#f8fafc")
+    draw = ImageDraw.Draw(image)
+    for y in range(24, 124):
+        for x in range(24, 204):
+            value = 48 if (x // 7 + y // 5) % 2 else 208
+            image.putpixel((x, y), (value, 60, 220 - value // 2))
+    draw.rounded_rectangle((54, 62, 154, 92), radius=6, fill="#a7051a")
+    draw.rounded_rectangle((54, 96, 174, 126), radius=6, fill="#a7051a")
+    draw.text((64, 68), "¥518.5", fill="#ffffff")
+    draw.text((64, 101), "9", fill="#ffffff")
+    draw.text((84, 101), "折", fill="#ffffff")
+    draw.text((112, 103), "满298使用", fill="#ffffff")
+    image.save(path / "source.png")
+    media_bbox = {"x": 24, "y": 24, "width": 180, "height": 70}
+    price_bbox = {"x": 60, "y": 64, "width": 92, "height": 24}
+    digit_bbox = {"x": 60, "y": 98, "width": 20, "height": 24}
+    discount_bbox = {"x": 82, "y": 99, "width": 24, "height": 23}
+    coupon_bbox = {"x": 110, "y": 101, "width": 58, "height": 20}
+    for primitive_id, bbox in (
+        ("prim_media", media_bbox),
+        ("prim_price", price_bbox),
+        ("prim_digit", digit_bbox),
+        ("prim_discount", discount_bbox),
+        ("prim_coupon", coupon_bbox),
+    ):
+        image.crop((bbox["x"], bbox["y"], bbox["x"] + bbox["width"], bbox["y"] + bbox["height"])).save(
+            path / "crops" / f"{primitive_id}.png"
+        )
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rectangle(
+            (
+                bbox["x"],
+                bbox["y"],
+                bbox["x"] + bbox["width"] - 1,
+                bbox["y"] + bbox["height"] - 1,
+            ),
+            fill=255,
+        )
+        mask.save(path / "masks" / f"{primitive_id}.png")
+    evidence = {
+        "schemaName": "M29PhysicalEvidence",
+        "version": "1.0",
+        "generator": {"name": "fake", "mode": "visual-text-test"},
+        "image": {"width": 240, "height": 160, "sourceRef": "source.png"},
+        "ocr": {"provided": True, "blockCount": 1},
+        "primitives": [
+            {
+                "id": "prim_media",
+                "primitiveType": "image_region",
+                "bbox": media_bbox,
+                "maskRef": "masks/prim_media.png",
+                "cropRef": "crops/prim_media.png",
+                "source": {"kind": "pixel", "reason": "high_texture_with_internal_text"},
+                "measurements": {"texture": 0.78, "edge": 0.64, "entropy": 0.72, "unique": 0.52},
+                "compileHints": {},
+            },
+            {
+                "id": "prim_price",
+                "primitiveType": "text_region",
+                "bbox": price_bbox,
+                "maskRef": "masks/prim_price.png",
+                "cropRef": "crops/prim_price.png",
+                "source": {"kind": "ocr", "ocrBlockId": "ocr_price", "text": "¥518.5", "confidence": 0.99},
+                "measurements": {},
+                "compileHints": {},
+            },
+            {
+                "id": "prim_digit",
+                "primitiveType": "text_region",
+                "bbox": digit_bbox,
+                "maskRef": "masks/prim_digit.png",
+                "cropRef": "crops/prim_digit.png",
+                "source": {"kind": "ocr", "ocrBlockId": "ocr_digit", "text": "9", "confidence": 0.99},
+                "measurements": {},
+                "compileHints": {},
+            },
+            {
+                "id": "prim_discount",
+                "primitiveType": "text_region",
+                "bbox": discount_bbox,
+                "maskRef": "masks/prim_discount.png",
+                "cropRef": "crops/prim_discount.png",
+                "source": {"kind": "ocr", "ocrBlockId": "ocr_discount", "text": "折", "confidence": 0.99},
+                "measurements": {},
+                "compileHints": {},
+            },
+            {
+                "id": "prim_coupon",
+                "primitiveType": "text_region",
+                "bbox": coupon_bbox,
+                "maskRef": "masks/prim_coupon.png",
+                "cropRef": "crops/prim_coupon.png",
+                "source": {"kind": "ocr", "ocrBlockId": "ocr_coupon", "text": "满298使用", "confidence": 0.99},
+                "measurements": {},
+                "compileHints": {},
+            },
+        ],
+        "physicalRelations": [],
+        "assets": [],
+        "diagnostics": {"pageBackground": "#f8fafc"},
+    }
+    replay = {
+        "schema": "m29.pencil.replay.v1",
+        "layers": [
+            {
+                "id": "prim_media",
+                "sourcePrimitiveId": "prim_media",
+                "role": "image_region",
+                "nodeType": "rectangle",
+                "bbox": media_bbox,
+                "fillImage": "./assets/crops/prim_media.png",
+                "maskImage": "./assets/masks/prim_media.png",
+                "editableMode": "raster_crop",
+                "z": 100,
+            },
+            {
+                "id": "prim_price",
+                "sourcePrimitiveId": "prim_price",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": price_bbox,
+                "fillImage": "./assets/crops/prim_price.png",
+                "maskImage": "./assets/masks/prim_price.png",
+                "editableMode": "raster_crop",
+                "z": 200,
+            },
+            {
+                "id": "prim_digit",
+                "sourcePrimitiveId": "prim_digit",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": digit_bbox,
+                "fillImage": "./assets/crops/prim_digit.png",
+                "maskImage": "./assets/masks/prim_digit.png",
+                "editableMode": "raster_crop",
+                "z": 210,
+            },
+            {
+                "id": "prim_discount",
+                "sourcePrimitiveId": "prim_discount",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": discount_bbox,
+                "fillImage": "./assets/crops/prim_discount.png",
+                "maskImage": "./assets/masks/prim_discount.png",
+                "editableMode": "raster_crop",
+                "z": 220,
+            },
+            {
+                "id": "prim_coupon",
+                "sourcePrimitiveId": "prim_coupon",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": coupon_bbox,
+                "fillImage": "./assets/crops/prim_coupon.png",
+                "maskImage": "./assets/masks/prim_coupon.png",
+                "editableMode": "raster_crop",
+                "z": 230,
+            },
+        ],
+        "summary": {"layerCount": 5},
     }
     (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
     (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")

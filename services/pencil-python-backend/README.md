@@ -69,9 +69,9 @@ stroke 使用 Pencil 原生对象格式 `{"align":"inside","thickness":1,"fill":
 三种模式的产品语义：
 
 ```text
-clean-editable   清理可编辑版：启用 OCR TextLayer、文字 knockout、组件级 crop 去重。
+clean-editable   清理可编辑版：普通 UI OCR 生成 TextLayer 并 knockout；媒体/促销/视觉文字保留为 raster，组件级 crop 去重。
 visual-fidelity  纯视觉保真版：不显示 OCR TextLayer，不 knockout，文字保留在 bitmap crop 里。
-visual-ocr       视觉友好 OCR 版：启用 OCR TextLayer，普通文字 bitmap crop 不再可见，并对重叠底图 crop 做文字 knockout，避免叠字。
+visual-ocr       视觉友好 OCR 版：普通 UI OCR 生成 TextLayer 并 knockout；媒体/促销/视觉文字保留为 raster，避免海报/商品图文字被擦。
 ```
 
 ## HTTP Server

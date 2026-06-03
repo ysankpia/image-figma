@@ -417,6 +417,7 @@ def build_project_manifest(
                         "textNodes": result.mode_manifests[mode].get("textNodes", 0),
                         "cropNodes": result.mode_manifests[mode].get("cropNodes", 0),
                         "cropTextNodes": result.mode_manifests[mode].get("cropTextNodes", 0),
+                        "visualTextCropNodes": result.mode_manifests[mode].get("visualTextCropNodes", 0),
                         "textKnockoutCropNodes": result.mode_manifests[mode].get("textKnockoutCropNodes", 0),
                         "suppressedInternalCropNodes": result.mode_manifests[mode].get("suppressedInternalCropNodes", 0),
                         "sourceFallbackNodes": result.mode_manifests[mode].get("sourceFallbackNodes", 0),
@@ -452,15 +453,15 @@ def write_debug_report(path: Path, manifest: dict[str, Any]) -> None:
         "",
         "## Pages",
         "",
-        "| page | original | size | mode | text | text crops | crops | knockout | suppressed | source fallback |",
-        "|---|---|---:|---|---:|---:|---:|---:|---:|---:|",
+        "| page | original | size | mode | text | text crops | visual text crops | crops | knockout | suppressed | source fallback |",
+        "|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for page in manifest["pages"]:
         size = f"{page['width']}x{page['height']}"
         for mode, stats in page["modes"].items():
             lines.append(
                 f"| {page['namespace']} | {page['originalName']} | {size} | {mode} | "
-                f"{stats['textNodes']} | {stats['cropTextNodes']} | {stats['cropNodes']} | "
+                f"{stats['textNodes']} | {stats['cropTextNodes']} | {stats.get('visualTextCropNodes', 0)} | {stats['cropNodes']} | "
                 f"{stats['textKnockoutCropNodes']} | {stats['suppressedInternalCropNodes']} | "
                 f"{stats.get('sourceFallbackNodes', 0)} |"
             )
