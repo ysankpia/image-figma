@@ -47,11 +47,50 @@ sudo mkdir -p /opt/pencil-python-backend /data/pencil-python-backend /etc/pencil
 sudo chown -R pencil:pencil /opt/pencil-python-backend /data/pencil-python-backend
 ```
 
-把仓库放到：
+把代码放到服务器有两种方式。
+
+方式 A：服务器直接 checkout 完整仓库：
 
 ```text
 /opt/pencil-python-backend
 ```
+
+方式 B：本机生成最小部署源码包，再上传服务器：
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/pencil-python-backend
+make bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
+```
+
+上传：
+
+```bash
+scp /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle/pencil-python-backend-deploy.tar.gz \
+  root@SERVER:/tmp/
+```
+
+解包：
+
+```bash
+sudo tar -xzf /tmp/pencil-python-backend-deploy.tar.gz -C /opt
+sudo rsync -a --delete /opt/pencil-python-backend-deploy/ /opt/pencil-python-backend/
+sudo chown -R pencil:pencil /opt/pencil-python-backend
+```
+
+这个 bundle 只包含当前 Pencil 交付链路需要的 git-tracked 源码：
+
+```text
+services/pencil-python-backend
+services/psdlike-python
+services/backend-go/cmd/m29extract
+services/backend-go/internal/m29
+docs/reference/pencil-python-backend-api.md
+docs/reference/env-vars.md
+docs/runbooks/pencil-python-backend-deploy.md
+```
+
+它不会包含 `.venv`、storage、cache、debug 输出、实验产物或本机忽略的
+`services/backend-go/bin/m29extract`。因此服务器上仍需要安装依赖并编译 `m29extract`。
 
 安装依赖：
 

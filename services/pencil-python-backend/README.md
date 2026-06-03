@@ -162,6 +162,40 @@ make acceptance \
   OUT=/Volumes/WorkDrive/pencil-exports/local-acceptance
 ```
 
+## Deploy Bundle
+
+生成干净的服务器源码包：
+
+```bash
+cd services/pencil-python-backend
+make bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
+```
+
+输出：
+
+```text
+/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle/
+  pencil-python-backend-deploy/
+  pencil-python-backend-deploy.tar.gz
+  bundle-manifest.json
+```
+
+bundle 只包含当前部署链路需要的 git-tracked 源码和文档：
+
+```text
+services/pencil-python-backend
+services/psdlike-python
+services/backend-go/cmd/m29extract
+services/backend-go/internal/m29
+docs/reference/pencil-python-backend-api.md
+docs/reference/env-vars.md
+docs/runbooks/pencil-python-backend-deploy.md
+```
+
+它不会打包 `.venv`、storage、cache、debug 输出、实验产物或本地忽略的
+`services/backend-go/bin/m29extract`。服务器解包后仍需要运行 `uv sync` 并编译
+`m29extract`。完整部署步骤见 [../../docs/runbooks/pencil-python-backend-deploy.md](../../docs/runbooks/pencil-python-backend-deploy.md)。
+
 ## Environment
 
 ```text

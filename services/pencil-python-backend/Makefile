@@ -10,8 +10,9 @@ IMAGE ?=
 OUT ?= /tmp/pencil-http-output
 PROJECT_NAME ?= Pencil HTTP Project
 MODE ?= all
+BUNDLE_OUT ?= /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
 
-.PHONY: install-local check preflight preflight-strict serve smoke upload-http acceptance
+.PHONY: install-local check preflight preflight-strict serve smoke upload-http acceptance bundle
 install-local:
 	mkdir -p "$(BIN_DIR)"
 	printf '%s\n' '#!/bin/sh' \
@@ -45,3 +46,6 @@ upload-http:
 acceptance:
 	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/sample.png is required" >&2; exit 2)
 	uv run python scripts/local_acceptance.py --host "$(HOST)" --port "$(PORT)" --image "$(IMAGE)" --out "$(OUT)" --project-name "$(PROJECT_NAME)"
+
+bundle:
+	uv run python scripts/build_deploy_bundle.py --out "$(BUNDLE_OUT)" --force
