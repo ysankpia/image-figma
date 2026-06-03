@@ -141,6 +141,23 @@ The project server returns a downloadable ZIP containing `clean-editable`, `visu
 
 For lower-fragment Pencil assets, send `boundarySource=psdlike` in `POST /api/pencil/projects` or use CLI `--boundary-source psdlike`. If PSD-like misses small local objects, use `boundarySource=hybrid`; it keeps PSD-like as the primary boundary source and uses M29 only for low-coverage fallback objects. The default remains `m29`.
 
+For repeatable offline audits, run PSD-like batch first and then reuse those artifacts from the Pencil CLI:
+
+```bash
+cd services/pencil-python-backend
+uv run python -m app.cli.export_project \
+  --manifest /Volumes/WorkDrive/pencil-exports/psdlike-batch/input_manifest.v1.json \
+  --out /Volumes/WorkDrive/pencil-exports/pencil-from-psdlike-batch \
+  --project-name "Pencil From PSD-like Batch" \
+  --mode all \
+  --columns auto \
+  --boundary-source psdlike \
+  --psdlike-artifacts-root /Volumes/WorkDrive/pencil-exports/psdlike-batch \
+  --include-debug
+```
+
+`--psdlike-artifacts-root` is a CLI/local workflow parameter, not an HTTP upload parameter, because it points at a server-local directory.
+
 `m29extract` should be built from the Go backend and used as a local executable:
 
 ```bash

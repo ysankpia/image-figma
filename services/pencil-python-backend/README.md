@@ -45,6 +45,22 @@ pencil-export \
   --include-debug
 ```
 
+如果已经先用 `services/psdlike-python/tools/batch_eval.py` 跑过一批图，可以复用该批 artifacts，避免 Pencil 包装阶段再次 OCR / decomposition：
+
+```bash
+pencil-export \
+  --manifest /Volumes/WorkDrive/pencil-exports/psdlike-batch/input_manifest.v1.json \
+  --out /Volumes/WorkDrive/pencil-exports/project-a \
+  --project-name "Project A" \
+  --mode all \
+  --columns auto \
+  --boundary-source psdlike \
+  --psdlike-artifacts-root /Volumes/WorkDrive/pencil-exports/psdlike-batch \
+  --include-debug
+```
+
+`--psdlike-artifacts-root` 是本地 CLI/离线审计入口。HTTP 上传接口不接收这个服务器本地路径参数。
+
 输出：
 
 ```text

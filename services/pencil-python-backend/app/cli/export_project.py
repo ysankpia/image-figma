@@ -20,6 +20,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-debug", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--ocr-provider", default=None)
     parser.add_argument("--boundary-source", choices=BOUNDARY_SOURCES, default="m29")
+    parser.add_argument(
+        "--psdlike-artifacts-root",
+        type=Path,
+        default=None,
+        help="Reuse an existing PSD-like batch output root instead of rerunning PSD-like.",
+    )
     return parser.parse_args()
 
 
@@ -39,6 +45,9 @@ def main() -> None:
             include_debug=args.include_debug,
             ocr_provider=args.ocr_provider,
             boundary_source=args.boundary_source,
+            psdlike_artifacts_root=args.psdlike_artifacts_root.expanduser().resolve()
+            if args.psdlike_artifacts_root
+            else None,
         ),
         settings,
     )

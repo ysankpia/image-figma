@@ -29,6 +29,7 @@ class ExportRequest:
     include_debug: bool = True
     ocr_provider: str | None = None
     boundary_source: BoundarySource = "m29"
+    psdlike_artifacts_root: Path | None = None
 
 
 @dataclass(frozen=True)

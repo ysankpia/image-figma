@@ -27,6 +27,7 @@ class TaskManager:
         include_debug: bool,
         ocr_provider: str | None,
         boundary_source: str,
+        psdlike_artifacts_root: Path | None = None,
     ) -> None:
         self.executor.submit(
             self._run,
@@ -38,6 +39,7 @@ class TaskManager:
             include_debug=include_debug,
             ocr_provider=ocr_provider,
             boundary_source=boundary_source,
+            psdlike_artifacts_root=psdlike_artifacts_root,
         )
 
     def _run(
@@ -51,6 +53,7 @@ class TaskManager:
         include_debug: bool,
         ocr_provider: str | None,
         boundary_source: str,
+        psdlike_artifacts_root: Path | None,
     ) -> None:
         try:
             self.storage.patch_status(
@@ -70,6 +73,7 @@ class TaskManager:
                     include_debug=include_debug,
                     ocr_provider=ocr_provider,
                     boundary_source=boundary_source,  # type: ignore[arg-type]
+                    psdlike_artifacts_root=psdlike_artifacts_root,
                 ),
                 self.settings,
             )

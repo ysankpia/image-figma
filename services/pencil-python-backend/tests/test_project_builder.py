@@ -11,7 +11,7 @@ from app.exporter.single_page import SinglePageExportOptions, export_single_page
 from app.hybrid_boundary import build_hybrid_boundary_artifact
 from app.jsonio import read_json
 from app.psdlike_adapter import adapt_psdlike_to_pencil_evidence
-from app.project_builder import export_project
+from app.project_builder import export_project, file_sha256
 from app.types import ExportRequest, PageInput
 
 
@@ -126,6 +126,58 @@ def test_project_builder_exports_three_mode_project_zip(tmp_path: Path) -> None:
     assert "visual-fidelity/design.pen" in names
     assert "visual-ocr/design.pen" in names
     assert "debug/report.md" in names
+
+
+def test_project_builder_reuses_existing_psdlike_batch_artifact(tmp_path: Path) -> None:
+    image = write_image(tmp_path / "screen.png", (120, 80), "#f5f7fb")
+    psdlike_root = tmp_path / "psdlike_batch"
+    case_dir = write_fake_psdlike_output(psdlike_root / "case_0001_cached")
+    input_manifest = {
+        "version": "psdlike_python_service_input_manifest.v1",
+        "cases": [
+            {
+                "caseId": "case_0001_cached",
+                "sourcePath": str(image),
+                "sha256": file_sha256(image),
+            }
+        ],
+    }
+    (psdlike_root / "input_manifest.v1.json").write_text(json.dumps(input_manifest), encoding="utf-8")
+    out_dir = tmp_path / "out"
+
+    manifest = export_project(
+        ExportRequest(
+            inputs=[PageInput(id="page_0001", path=image, original_name=image.name)],
+            out_dir=out_dir,
+            project_name="Reuse PSD-like",
+            mode="visual-ocr",
+            columns="1",
+            include_debug=True,
+            ocr_provider="none",
+            boundary_source="psdlike",
+            psdlike_artifacts_root=psdlike_root,
+        ),
+        settings=Settings(
+            addr="127.0.0.1:0",
+            storage_root=tmp_path / "storage",
+            m29extract_path=None,
+            psdlike_root=tmp_path / "missing_psdlike_runner",
+            psdlike_tile_size=8,
+            max_upload_bytes=1024 * 1024,
+            max_files=20,
+            max_workers=1,
+            cors_allow_origins=["*"],
+            ocr_provider="none",
+        ),
+    )
+
+    assert manifest["boundarySource"] == "psdlike"
+    assert manifest["psdlikeArtifactsRoot"] == str(psdlike_root)
+    assert (out_dir / "project.zip").exists()
+    assert (out_dir / "work" / "page_0001" / "psdlike" / "layer_stack.v1.json").exists()
+    assert read_json(out_dir / "work" / "page_0001" / "psdlike" / "layer_stack.v1.json") == read_json(case_dir / "layer_stack.v1.json")
+    design = read_json(out_dir / "visual-ocr" / "design.pen")
+    assert any(node.get("type") == "text" and node.get("content") == "测试" for node in collect_nodes(design["children"]))
 
 
 def test_psdlike_adapter_exports_shapes_as_editable_and_rasters_as_assets(tmp_path: Path) -> None:

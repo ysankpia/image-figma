@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -120,25 +121,33 @@ def build_boundary_artifact(
         return m29_dir
     if request.boundary_source == "psdlike":
         psdlike_dir = page_work / "psdlike"
-        run_psdlike(
-            image_path=page_input.path,
-            output_dir=psdlike_dir,
-            ocr_provider=provider,
-            psdlike_root=settings.psdlike_root,
-            tile_size=settings.psdlike_tile_size,
-        )
+        cached_psdlike_dir = find_psdlike_artifact(request.psdlike_artifacts_root, page_input)
+        if cached_psdlike_dir is not None:
+            shutil.copytree(cached_psdlike_dir, psdlike_dir, dirs_exist_ok=True)
+        else:
+            run_psdlike(
+                image_path=page_input.path,
+                output_dir=psdlike_dir,
+                ocr_provider=provider,
+                psdlike_root=settings.psdlike_root,
+                tile_size=settings.psdlike_tile_size,
+            )
         artifact_dir = page_work / "psdlike_pencil_evidence"
         adapt_psdlike_to_pencil_evidence(psdlike_dir, artifact_dir)
         return artifact_dir
     if request.boundary_source == "hybrid":
         psdlike_dir = page_work / "psdlike"
-        run_psdlike(
-            image_path=page_input.path,
-            output_dir=psdlike_dir,
-            ocr_provider=provider,
-            psdlike_root=settings.psdlike_root,
-            tile_size=settings.psdlike_tile_size,
-        )
+        cached_psdlike_dir = find_psdlike_artifact(request.psdlike_artifacts_root, page_input)
+        if cached_psdlike_dir is not None:
+            shutil.copytree(cached_psdlike_dir, psdlike_dir, dirs_exist_ok=True)
+        else:
+            run_psdlike(
+                image_path=page_input.path,
+                output_dir=psdlike_dir,
+                ocr_provider=provider,
+                psdlike_root=settings.psdlike_root,
+                tile_size=settings.psdlike_tile_size,
+            )
         m29_dir = page_work / "m29_fallback"
         run_m29extract(
             image_path=page_input.path,
@@ -156,6 +165,57 @@ def build_boundary_artifact(
         adapt_psdlike_to_pencil_evidence(hybrid_dir, artifact_dir)
         return artifact_dir
     raise ValueError(f"unsupported boundary source: {request.boundary_source}")
+
+
+def find_psdlike_artifact(root: Path | None, page_input: PageInput) -> Path | None:
+    if root is None:
+        return None
+    root = root.expanduser().resolve()
+    if not root.exists():
+        raise FileNotFoundError(f"PSD-like artifacts root not found: {root}")
+
+    candidates: list[Path] = []
+    manifest_path = root / "input_manifest.v1.json"
+    if manifest_path.exists():
+        data = read_json(manifest_path)
+        input_sha = file_sha256(page_input.path)
+        input_path = page_input.path.expanduser().resolve()
+        for item in data.get("cases") or []:
+            case_id = item.get("caseId")
+            if not isinstance(case_id, str) or not case_id:
+                continue
+            source_path = item.get("sourcePath")
+            duplicate_paths = item.get("duplicatePaths") if isinstance(item.get("duplicatePaths"), list) else []
+            manifest_paths = [source_path, *duplicate_paths]
+            path_match = any(
+                isinstance(value, str) and Path(value).expanduser().resolve() == input_path
+                for value in manifest_paths
+            )
+            sha_match = item.get("sha256") == input_sha
+            if path_match or sha_match:
+                candidates.append(root / case_id)
+
+    direct = root / page_input.id
+    if direct.exists():
+        candidates.append(direct)
+    for child in sorted(root.iterdir()):
+        if child.is_dir() and child.name.endswith(page_input.path.stem):
+            candidates.append(child)
+
+    for candidate in candidates:
+        if (candidate / "layer_stack.v1.json").exists():
+            return candidate
+    if candidates:
+        raise FileNotFoundError(f"Matched PSD-like artifact has no layer_stack.v1.json: {candidates[0]}")
+    raise FileNotFoundError(f"No PSD-like artifact found for {page_input.path} in {root}")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def selected_modes(mode: str) -> list[str]:
@@ -433,6 +493,7 @@ def build_project_manifest(
         "pageCount": len(page_results),
         "modes": modes,
         "boundarySource": request.boundary_source,
+        "psdlikeArtifactsRoot": str(request.psdlike_artifacts_root) if request.psdlike_artifacts_root else None,
         "columns": layout["columns"],
         "includeDebug": request.include_debug,
         "pages": pages,
