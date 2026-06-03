@@ -328,6 +328,43 @@ def test_low_texture_cta_text_stays_editable(tmp_path: Path) -> None:
     assert visual_fidelity_manifest["cropTextNodes"] == 1
 
 
+def test_textured_promo_card_text_stays_raster_owned_after_cta_gate(tmp_path: Path) -> None:
+    evidence_dir = write_fake_textured_promo_card_text_evidence(tmp_path / "promo_card_text")
+    export_dir = tmp_path / "single"
+
+    export_single_page(
+        SinglePageExportOptions(
+            input_dir=evidence_dir,
+            out=export_dir,
+            name="Textured Promo Card Text Unit",
+            mode="all",
+            include_debug_pen=True,
+        )
+    )
+
+    for mode_dir in ("production", "visual-ocr"):
+        manifest = read_json(export_dir / mode_dir / "manifest.json")
+        design = read_json(export_dir / mode_dir / "design.pen")
+        decisions = {item["primitiveId"]: item for item in manifest["textDecisions"]}
+
+        assert decisions["prim_promo_text_a"]["decision"] == "crop"
+        assert decisions["prim_promo_text_a"]["reason"] == "text_inside_raster_owner"
+        assert decisions["prim_promo_text_a"]["ownerPrimitiveId"] == "prim_promo_card"
+        assert decisions["prim_promo_text_a"]["ownerComplexity"] >= 0.48
+        assert decisions["prim_promo_text_b"]["decision"] == "crop"
+        assert decisions["prim_promo_text_b"]["reason"] == "text_inside_raster_owner"
+        assert decisions["prim_promo_text_b"]["ownerPrimitiveId"] == "prim_promo_card"
+        assert manifest["textNodes"] == 0
+        assert manifest["visualTextCropNodes"] == 2
+        assert manifest["textKnockoutCropNodes"] == 0
+        assert "买赠套装" not in json.dumps(design, ensure_ascii=False)
+        assert "会员专享" not in json.dumps(design, ensure_ascii=False)
+
+    visual_fidelity_manifest = read_json(export_dir / "visual-fidelity" / "manifest.json")
+    assert visual_fidelity_manifest["textNodes"] == 0
+    assert visual_fidelity_manifest["cropTextNodes"] == 2
+
+
 def test_psdlike_adapter_rasterizes_small_mask_required_shapes(tmp_path: Path) -> None:
     psdlike_dir = write_fake_small_shape_output(tmp_path / "small_shape")
     evidence_dir = tmp_path / "evidence"
@@ -819,6 +856,152 @@ def write_fake_cta_text_evidence(path: Path) -> Path:
             },
         ],
         "summary": {"layerCount": 2},
+    }
+    (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
+    (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")
+    return path
+
+
+def write_fake_textured_promo_card_text_evidence(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "crops").mkdir()
+    (path / "masks").mkdir()
+    image = Image.new("RGB", (941, 1672), "#fdfefe")
+    draw = ImageDraw.Draw(image)
+    for y in range(192, 280):
+        for x in range(600, 776):
+            r = 228 + ((x + y) % 17)
+            g = 172 + ((x // 3 + y // 5) % 24)
+            b = 190 + ((x // 7 + y // 2) % 20)
+            image.putpixel((x, y), (min(r, 255), min(g, 255), min(b, 255)))
+    draw.rounded_rectangle((600, 192, 776, 280), radius=8, outline="#bf6275", width=2)
+    draw.text((620, 211), "买赠套装", fill="#7a1230")
+    draw.text((626, 245), "会员专享", fill="#7a1230")
+    image.save(path / "source.png")
+    card_bbox = {"x": 600, "y": 192, "width": 176, "height": 88}
+    text_a_bbox = {"x": 620, "y": 211, "width": 92, "height": 24}
+    text_b_bbox = {"x": 626, "y": 245, "width": 88, "height": 24}
+    for primitive_id, bbox in (
+        ("prim_promo_card", card_bbox),
+        ("prim_promo_text_a", text_a_bbox),
+        ("prim_promo_text_b", text_b_bbox),
+    ):
+        image.crop((bbox["x"], bbox["y"], bbox["x"] + bbox["width"], bbox["y"] + bbox["height"])).save(
+            path / "crops" / f"{primitive_id}.png"
+        )
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rectangle(
+            (
+                bbox["x"],
+                bbox["y"],
+                bbox["x"] + bbox["width"] - 1,
+                bbox["y"] + bbox["height"] - 1,
+            ),
+            fill=255,
+        )
+        mask.save(path / "masks" / f"{primitive_id}.png")
+    evidence = {
+        "schemaName": "M29PhysicalEvidence",
+        "version": "1.0",
+        "generator": {"name": "fake", "mode": "textured-promo-card-text-test"},
+        "image": {"width": 941, "height": 1672, "sourceRef": "source.png"},
+        "ocr": {"provided": True, "blockCount": 2},
+        "primitives": [
+            {
+                "id": "prim_promo_card",
+                "primitiveType": "image_region",
+                "bbox": card_bbox,
+                "maskRef": "masks/prim_promo_card.png",
+                "cropRef": "crops/prim_promo_card.png",
+                "source": {"kind": "pixel", "reason": "low_texture_solid_region"},
+                "measurements": {
+                    "texture": 0.4686,
+                    "edge": 0.4606,
+                    "entropy": 0.3423,
+                    "unique": 0.2474,
+                    "dominant": 0.6233,
+                    "textOverlap": 0.3047,
+                    "raster": 0.2369,
+                    "shape": 0.3507,
+                },
+                "compileHints": {
+                    "shapeFallbackMode": "source_raster_crop",
+                    "shapeFallbackReason": "non_container_shape_requires_mask",
+                },
+            },
+            {
+                "id": "prim_promo_text_a",
+                "primitiveType": "text_region",
+                "bbox": text_a_bbox,
+                "maskRef": "masks/prim_promo_text_a.png",
+                "cropRef": "crops/prim_promo_text_a.png",
+                "source": {
+                    "kind": "ocr",
+                    "ocrBlockId": "ocr_promo_text_a",
+                    "text": "买赠套装",
+                    "confidence": 0.99,
+                },
+                "measurements": {},
+                "compileHints": {},
+            },
+            {
+                "id": "prim_promo_text_b",
+                "primitiveType": "text_region",
+                "bbox": text_b_bbox,
+                "maskRef": "masks/prim_promo_text_b.png",
+                "cropRef": "crops/prim_promo_text_b.png",
+                "source": {
+                    "kind": "ocr",
+                    "ocrBlockId": "ocr_promo_text_b",
+                    "text": "会员专享",
+                    "confidence": 0.99,
+                },
+                "measurements": {},
+                "compileHints": {},
+            },
+        ],
+        "physicalRelations": [],
+        "assets": [],
+        "diagnostics": {"pageBackground": "#fdfefe"},
+    }
+    replay = {
+        "schema": "m29.pencil.replay.v1",
+        "layers": [
+            {
+                "id": "prim_promo_card",
+                "sourcePrimitiveId": "prim_promo_card",
+                "role": "image_region",
+                "nodeType": "rectangle",
+                "bbox": card_bbox,
+                "fillImage": "./assets/crops/prim_promo_card.png",
+                "maskImage": "./assets/masks/prim_promo_card.png",
+                "editableMode": "raster_crop",
+                "z": 100,
+            },
+            {
+                "id": "prim_promo_text_a",
+                "sourcePrimitiveId": "prim_promo_text_a",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": text_a_bbox,
+                "fillImage": "./assets/crops/prim_promo_text_a.png",
+                "maskImage": "./assets/masks/prim_promo_text_a.png",
+                "editableMode": "raster_crop",
+                "z": 200,
+            },
+            {
+                "id": "prim_promo_text_b",
+                "sourcePrimitiveId": "prim_promo_text_b",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": text_b_bbox,
+                "fillImage": "./assets/crops/prim_promo_text_b.png",
+                "maskImage": "./assets/masks/prim_promo_text_b.png",
+                "editableMode": "raster_crop",
+                "z": 210,
+            },
+        ],
+        "summary": {"layerCount": 3},
     }
     (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
     (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")

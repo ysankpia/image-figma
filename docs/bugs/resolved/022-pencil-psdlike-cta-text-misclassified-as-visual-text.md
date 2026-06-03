@@ -154,3 +154,70 @@ Pencil CLI preview:
 ## Prevention Notes
 
 不要把所有包含 OCR 文本的 `image_region` 都当成媒体 owner。低纹理、横向、局部、按钮比例的 owner 更可能是普通 UI control surface；它内部的短标签应优先进入 editable TextLayer。视觉文字保护规则必须继续只保护复杂媒体、商品图、海报和促销显示文字。
+
+## Follow-up Boundary Tightening
+
+2026-06-04 的后续真实样本回归发现，单纯把 88px 高的横向 owner 纳入简单控件，会误伤商品/促销图中的视觉文字。真实反例是局部促销卡：
+
+```text
+bbox=176x88
+complexity=0.5297
+ownerReason=low_texture_solid_region
+shapeFallbackMode=source_raster_crop
+```
+
+该区域虽然高度和宽高比接近 CTA，但纹理/边缘复杂度明显高于普通纯色控件；其内部 OCR 文字应继续由 raster owner 保留，不能提升为 TextLayer。
+
+补充修复把自适应高控件 gate 收窄为：
+
+```text
+height > 84px 时，只有 complexity < 0.48 才能按 simple control 放行。
+height <= 84px 的原低复杂度控件 gate 保持不变。
+```
+
+这个规则仍只依赖 bbox、画布尺度、纹理/边缘/熵/unique 复杂度，不依赖文案、坐标、文件名、页面或品牌。
+
+补充回归保护：
+
+```bash
+cd services/pencil-python-backend
+uv run pytest -q \
+  tests/test_project_builder.py::test_low_texture_cta_text_stays_editable \
+  tests/test_project_builder.py::test_visual_text_inside_local_raster_stays_raster_owned \
+  tests/test_project_builder.py::test_textured_promo_card_text_stays_raster_owned_after_cta_gate
+```
+
+结果：
+
+```text
+3 passed
+```
+
+真实 page0007 回归：
+
+```text
+/Volumes/WorkDrive/pencil-exports/visual-text-cluster-page0007-cta-boundary-fix-20260604
+```
+
+关键结果：
+
+```text
+clean-editable: textNodes=8 cropTextNodes=13 visualTextCropNodes=13 textKnockoutCropNodes=0
+visual-ocr:     textNodes=8 cropTextNodes=13 visualTextCropNodes=13 textKnockoutCropNodes=0
+psd_text_0024 / psd_text_0025: crop, reason=text_inside_raster_owner, ownerComplexity=0.5297
+```
+
+兼职 CTA 回归：
+
+```text
+/Volumes/WorkDrive/pencil-exports/pencil-jianzhi-psdlike-reuse-cta-boundary-fix-20260604
+```
+
+关键结果：
+
+```text
+clean-editable contains 查看提交记录 = True
+visual-ocr contains 查看提交记录 = True
+visual-fidelity contains 查看提交记录 = False
+psd_text_0051: editable_text, reason=normal_ocr_text
+```

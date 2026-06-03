@@ -844,8 +844,13 @@ def looks_like_simple_control_owner(
     short_side = min(float(canvas["width"]), float(canvas["height"]))
     control_height_limit = max(84.0, min(112.0, short_side * 0.12))
 
-    if height <= control_height_limit and 1.8 <= aspect <= 12.0 and area_ratio <= 0.10 and complexity < 0.58:
-        return True
+    if height <= control_height_limit and 1.8 <= aspect <= 12.0 and area_ratio <= 0.10:
+        # The adaptive height band admits real tall CTA buttons, but only low-complexity
+        # surfaces should bypass visual-text ownership. Textured promo/product cards can
+        # have the same height and aspect, yet their internal text belongs to the raster.
+        if height > 84.0:
+            return complexity < 0.48
+        return complexity < 0.58
     if text_ratio >= 0.42 and height <= 96 and complexity < 0.48:
         return True
     return False
