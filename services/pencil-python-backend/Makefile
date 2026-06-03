@@ -11,7 +11,7 @@ OUT ?= /tmp/pencil-http-output
 PROJECT_NAME ?= Pencil HTTP Project
 MODE ?= all
 
-.PHONY: install-local check preflight preflight-strict serve smoke upload-http
+.PHONY: install-local check preflight preflight-strict serve smoke upload-http acceptance
 install-local:
 	mkdir -p "$(BIN_DIR)"
 	printf '%s\n' '#!/bin/sh' \
@@ -41,3 +41,7 @@ smoke:
 upload-http:
 	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/image-or-dir is required" >&2; exit 2)
 	uv run python scripts/upload_project.py --base-url "$(BASE_URL)" --input "$(IMAGE)" --out "$(OUT)" --project-name "$(PROJECT_NAME)" --mode "$(MODE)"
+
+acceptance:
+	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/sample.png is required" >&2; exit 2)
+	uv run python scripts/local_acceptance.py --host "$(HOST)" --port "$(PORT)" --image "$(IMAGE)" --out "$(OUT)" --project-name "$(PROJECT_NAME)"

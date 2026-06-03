@@ -192,5 +192,7 @@ badRefs / missingRefs          -> backend export contract bug，不能在 Figma 
 cd /opt/pencil-python-backend/services/pencil-python-backend
 make check
 make preflight-strict
-make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
+make acceptance IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-local-acceptance
 ```
+
+`make acceptance` 会临时启动本地服务，依次执行 preflight、HTTP smoke 和 upload/download 验证，然后关闭服务。服务已经由 systemd 启动时，继续用 `make smoke` 验证运行中的实例。

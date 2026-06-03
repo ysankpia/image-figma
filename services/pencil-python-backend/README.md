@@ -154,6 +154,14 @@ make upload-http \
   MODE=all
 ```
 
+One-command local acceptance:
+
+```bash
+make acceptance \
+  IMAGE=/absolute/path/to/sample.png \
+  OUT=/Volumes/WorkDrive/pencil-exports/local-acceptance
+```
+
 ## Environment
 
 ```text

@@ -116,3 +116,4 @@
 - [Pencil Export Codex Skill Refresh](126-pencil-export-codex-skill-refresh.md) — `completed`
 - [Pencil Backend HTTP Client CLI](127-pencil-backend-http-client-cli.md) — `completed`
 - [Pencil Backend Makefile Ops](128-pencil-backend-makefile-ops.md) — `completed`
+- [Pencil Backend Local Acceptance](129-pencil-backend-local-acceptance.md) — `completed`
