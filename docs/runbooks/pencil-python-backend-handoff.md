@@ -1,9 +1,9 @@
 # Pencil Python Backend Handoff
 
-Last verified commit:
+Last full HTTP acceptance evidence baseline:
 
 ```text
-92f0c4d chore: add pencil deploy bundle http acceptance
+409ad9c docs: add pencil backend handoff
 ```
 
 This handoff records the current operational path for Pencil `.pen` / `project.zip` delivery. It intentionally does not cover visual algorithm experiments, YOLO integration, `services/pencil-go`, or Figma plugin changes.
@@ -124,8 +124,8 @@ downloaded ZIP has badRefs=0 and missingRefs=0 for all modes
 The current verified local bundle evidence is:
 
 ```text
-/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-http-20260604/pencil-python-backend-deploy.tar.gz
-/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-http-20260604/bundle-manifest.json
+/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/pencil-python-backend-deploy.tar.gz
+/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/bundle-manifest.json
 ```
 
 ## Server Deployment
@@ -214,4 +214,3 @@ YOLO/M29 visual heuristics
 clean-editable OCR ownership rules
 asset clustering rules
 ```
-

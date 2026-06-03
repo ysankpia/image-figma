@@ -26,6 +26,7 @@ INCLUDE_FILES = {
     "docs/reference/env-vars.md",
     "docs/reference/pencil-python-backend-api.md",
     "docs/runbooks/pencil-python-backend-deploy.md",
+    "docs/runbooks/pencil-python-backend-handoff.md",
 }
 
 FORBIDDEN_PARTS = {
@@ -210,4 +211,3 @@ def git_output(command: list[str]) -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

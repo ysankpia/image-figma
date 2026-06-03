@@ -17,16 +17,17 @@ def test_select_files_keeps_deploy_sources_and_drops_local_artifacts() -> None:
         "services/backend-go/internal/draft/compile/compile.go",
         "docs/reference/pencil-python-backend-api.md",
         "docs/runbooks/pencil-python-backend-deploy.md",
+        "docs/runbooks/pencil-python-backend-handoff.md",
         "figma-plugin/src/main.ts",
     ]
 
     assert select_files(files) == [
         "docs/reference/pencil-python-backend-api.md",
         "docs/runbooks/pencil-python-backend-deploy.md",
+        "docs/runbooks/pencil-python-backend-handoff.md",
         "services/backend-go/cmd/m29extract/main.go",
         "services/backend-go/go.mod",
         "services/backend-go/internal/m29/pipeline/pipeline.go",
         "services/pencil-python-backend/app/main.py",
         "services/psdlike-python/tools/run_one.py",
     ]
-
