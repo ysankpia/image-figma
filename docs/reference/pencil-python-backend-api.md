@@ -43,6 +43,7 @@ Callers must treat non-2xx HTTP status as failure and show `detail` when present
 
 ```text
 GET  /api/health
+GET  /api/ready
 POST /api/pencil/projects
 GET  /api/pencil/projects/{taskId}
 GET  /api/pencil/projects/{taskId}/manifest
@@ -65,6 +66,53 @@ Success:
   }
 }
 ```
+
+`/api/health` is a liveness check. It only proves the FastAPI process is responding.
+
+## Readiness
+
+```text
+GET /api/ready
+```
+
+`/api/ready` is the deployment readiness check. It validates runtime imports, writable storage, PSD-like runner path, default boundary source, `m29extract` when required, and OCR configuration visibility.
+
+Ready response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "ready",
+    "ready": true,
+    "checks": [
+      {"name": "runtimeImports", "ok": true, "detail": "fastapi,uvicorn,multipart,PIL,numpy,pydantic,requests"},
+      {"name": "storageRoot", "ok": true, "detail": "/data/pencil-python-backend"},
+      {"name": "psdlikeRunner", "ok": true, "detail": "/opt/pencil-python-backend/services/psdlike-python/tools/run_one.py"},
+      {"name": "defaultBoundarySource", "ok": true, "detail": "psdlike"},
+      {"name": "m29extract", "ok": true, "detail": "/opt/pencil-python-backend/services/backend-go/bin/m29extract"},
+      {"name": "ocr", "ok": true, "detail": "none"}
+    ]
+  }
+}
+```
+
+Not ready returns HTTP `503`:
+
+```json
+{
+  "success": false,
+  "data": {
+    "status": "not_ready",
+    "ready": false,
+    "checks": [
+      {"name": "psdlikeRunner", "ok": false, "detail": "missing /opt/pencil-python-backend/services/psdlike-python/tools/run_one.py"}
+    ]
+  }
+}
+```
+
+Callers and smoke scripts should check `/api/ready` before creating projects.
 
 ## Create Project
 

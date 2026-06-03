@@ -11,7 +11,7 @@ from zipfile import ZipFile
 
 import requests
 
-from http_smoke import ALL_MODES, check_design_refs, content_type_for
+from http_smoke import ALL_MODES, assert_ready, check_design_refs, content_type_for
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
@@ -54,6 +54,7 @@ def main() -> int:
     health = requests.get(f"{base_url}/api/health", timeout=10)
     health.raise_for_status()
     print(f"health={health.json()['data']['status']}")
+    assert_ready(base_url)
 
     files = []
     handles = []

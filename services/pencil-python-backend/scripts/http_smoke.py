@@ -49,6 +49,7 @@ def main() -> int:
     health = requests.get(f"{base_url}/api/health", timeout=10)
     health.raise_for_status()
     print(f"health={health.json()['data']['status']}")
+    assert_ready(base_url)
 
     with image_path.open("rb") as handle:
         response = requests.post(
@@ -128,6 +129,19 @@ def wait_for_completion(base_url: str, task_id: str, timeout_seconds: float, pol
             raise AssertionError(json.dumps(data, ensure_ascii=False, indent=2))
         time.sleep(poll_seconds)
     raise TimeoutError(f"task did not complete within {timeout_seconds} seconds: {task_id}")
+
+
+def assert_ready(base_url: str) -> dict[str, Any]:
+    response = requests.get(f"{base_url}/api/ready", timeout=10)
+    try:
+        body = response.json()
+    except Exception:
+        body = {"raw": response.text}
+    if response.status_code != 200:
+        raise AssertionError(json.dumps(body, ensure_ascii=False, indent=2))
+    data = body["data"]
+    print(f"ready={data['status']}")
+    return data
 
 
 def check_design_refs(root: Path, mode: str) -> tuple[int, int, int]:

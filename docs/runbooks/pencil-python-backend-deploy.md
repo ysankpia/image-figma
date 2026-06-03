@@ -207,6 +207,7 @@ sudo -u pencil env $(grep -v '^#' /etc/pencil-python-backend/pencil-python-backe
   uv run python scripts/preflight.py --require-m29
 systemctl status pencil-python-backend --no-pager
 curl -sS http://127.0.0.1:8100/api/health
+curl -sS http://127.0.0.1:8100/api/ready
 ```
 
 ## Smoke
@@ -221,6 +222,7 @@ make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
 必须看到：
 
 ```text
+ready=ready
 boundarySource=psdlike
 status=completed
 badRefs=0

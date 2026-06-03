@@ -8,6 +8,7 @@ from PIL import Image
 
 from app.config import Settings, parse_boundary_source
 from app.main import create_app
+from app.readiness import ocr_check
 from app.state import state
 from app.storage import TaskStorage
 from app.tasks import TaskManager
@@ -20,6 +21,72 @@ def test_health() -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "ok"
+
+
+def test_ready_reports_ok_when_dependencies_are_available(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="psdlike")
+    write_fake_psdlike(tmp_path)
+
+    client = TestClient(create_app())
+    response = client.get("/api/ready")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["ready"] is True
+    checks = {check["name"]: check for check in body["data"]["checks"]}
+    assert checks["psdlikeRunner"]["ok"] is True
+    assert checks["defaultBoundarySource"]["detail"] == "psdlike"
+
+
+def test_ready_reports_503_when_dependencies_are_missing(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="psdlike")
+
+    client = TestClient(create_app())
+    response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["success"] is False
+    assert body["data"]["ready"] is False
+    checks = {check["name"]: check for check in body["data"]["checks"]}
+    assert checks["psdlikeRunner"]["ok"] is False
+    assert "missing" in checks["psdlikeRunner"]["detail"]
+
+
+def test_ready_requires_m29_when_default_boundary_source_needs_it(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="hybrid", missing_m29extract=True)
+    write_fake_psdlike(tmp_path)
+
+    client = TestClient(create_app())
+    response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    checks = {check["name"]: check for check in response.json()["data"]["checks"]}
+    assert checks["m29extract"]["ok"] is False
+
+
+def test_ocr_check_can_require_baidu_token(tmp_path: Path, monkeypatch) -> None:
+    configure_state(tmp_path)
+    state.settings = Settings(
+        addr=state.settings.addr,
+        storage_root=state.settings.storage_root,
+        m29extract_path=state.settings.m29extract_path,
+        psdlike_root=state.settings.psdlike_root,
+        psdlike_tile_size=state.settings.psdlike_tile_size,
+        default_boundary_source=state.settings.default_boundary_source,
+        max_upload_bytes=state.settings.max_upload_bytes,
+        max_files=state.settings.max_files,
+        max_workers=state.settings.max_workers,
+        cors_allow_origins=state.settings.cors_allow_origins,
+        ocr_provider="baidu_ppocrv5",
+    )
+    monkeypatch.delenv("BAIDU_PADDLE_OCR_TOKEN", raising=False)
+
+    assert ocr_check(state.settings)["ok"] is True
+    strict = ocr_check(state.settings, require_baidu_token=True)
+    assert strict["ok"] is False
+    assert "BAIDU_PADDLE_OCR_TOKEN" in strict["detail"]
 
 
 def test_project_api_upload_and_download(tmp_path: Path) -> None:
@@ -91,11 +158,17 @@ def test_parse_boundary_source_rejects_unknown_value() -> None:
         raise AssertionError("expected ValueError")
 
 
-def configure_state(tmp_path: Path, *, default_boundary_source: str = "m29") -> None:
+def configure_state(
+    tmp_path: Path,
+    *,
+    default_boundary_source: str = "m29",
+    missing_m29extract: bool = False,
+) -> None:
+    m29extract_path = None if missing_m29extract else write_fake_m29extract(tmp_path)
     settings = Settings(
         addr="127.0.0.1:0",
         storage_root=tmp_path / "storage",
-        m29extract_path=write_fake_m29extract(tmp_path),
+        m29extract_path=m29extract_path,
         psdlike_root=tmp_path / "psdlike",
         psdlike_tile_size=8,
         default_boundary_source=parse_boundary_source(default_boundary_source),
@@ -108,6 +181,15 @@ def configure_state(tmp_path: Path, *, default_boundary_source: str = "m29") -> 
     state.settings = settings
     state.storage = TaskStorage(settings.storage_root)
     state.tasks = TaskManager(state.storage, settings)
+
+
+def write_fake_psdlike(tmp_path: Path) -> Path:
+    root = tmp_path / "psdlike"
+    tools = root / "tools"
+    tools.mkdir(parents=True)
+    (tools / "run_one.py").write_text("print('ok')\n", encoding="utf-8")
+    (root / "pyproject.toml").write_text("[project]\nname='fake-psdlike'\n", encoding="utf-8")
+    return root
 
 
 def wait_for_completion(client: TestClient, task_id: str) -> dict[str, object]:

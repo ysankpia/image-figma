@@ -125,3 +125,4 @@
 - [Pencil Backend Product Handoff](135-pencil-backend-product-handoff.md) — `completed`
 - [Pencil Handoff In Deploy Bundle](136-pencil-handoff-in-deploy-bundle.md) — `completed`
 - [Pencil Deploy Bundle Release Integrity](137-pencil-deploy-bundle-release-integrity.md) — `completed`
+- [Pencil Backend Readiness Endpoint](138-pencil-backend-readiness-endpoint.md) — `completed`

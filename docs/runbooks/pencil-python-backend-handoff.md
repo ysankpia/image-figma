@@ -204,6 +204,7 @@ make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
 Passing output must include:
 
 ```text
+ready=ready
 boundarySource=psdlike
 status=completed
 badRefs=0

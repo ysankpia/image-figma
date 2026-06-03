@@ -105,6 +105,7 @@ Endpoints：
 
 ```text
 GET  /api/health
+GET  /api/ready
 POST /api/pencil/projects
 GET  /api/pencil/projects/{taskId}
 GET  /api/pencil/projects/{taskId}/manifest
@@ -143,6 +144,9 @@ make smoke \
   IMAGE=/absolute/path/to/sample.png \
   OUT=/Volumes/WorkDrive/pencil-exports/http-smoke
 ```
+
+`/api/health` 只证明进程活着；`make smoke` 会额外检查 `/api/ready`，确认 storage、PSD-like runner、
+`m29extract` 需求和 runtime imports 可用后才上传图片。
 
 HTTP caller CLI:
 
