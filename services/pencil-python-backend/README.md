@@ -145,6 +145,17 @@ uv run python scripts/http_smoke.py \
   --out /Volumes/WorkDrive/pencil-exports/http-smoke
 ```
 
+HTTP caller CLI:
+
+```bash
+uv run python scripts/upload_project.py \
+  --base-url http://127.0.0.1:8100 \
+  --input /absolute/path/to/screens \
+  --out /Volumes/WorkDrive/pencil-exports/http-project \
+  --project-name "HTTP Project" \
+  --mode all
+```
+
 ## Environment
 
 ```text

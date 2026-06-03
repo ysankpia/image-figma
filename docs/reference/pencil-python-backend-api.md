@@ -379,3 +379,19 @@ badRefs=0
 missingRefs=0
 ok
 ```
+
+## HTTP Client CLI
+
+For non-frontend automation, use the repository caller CLI instead of hand-writing curl:
+
+```bash
+cd services/pencil-python-backend
+uv run python scripts/upload_project.py \
+  --base-url http://127.0.0.1:8100 \
+  --input /absolute/path/to/screens \
+  --out /Volumes/WorkDrive/pencil-exports/http-project \
+  --project-name "HTTP Project" \
+  --mode all
+```
+
+By default it omits `boundarySource`, polls until completion, downloads `project.zip`, writes `manifest.json`, and verifies `.pen` visible image refs.

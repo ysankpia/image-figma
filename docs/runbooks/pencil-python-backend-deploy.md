@@ -146,6 +146,17 @@ badRefs=0
 missingRefs=0
 ```
 
+For actual non-frontend upload/download automation, use:
+
+```bash
+uv run python scripts/upload_project.py \
+  --base-url http://127.0.0.1:8100 \
+  --input /absolute/path/to/screens \
+  --out /tmp/pencil-http-project \
+  --project-name "HTTP Project" \
+  --mode all
+```
+
 ## nginx
 
 如果要对外暴露，建议 nginx 只反代内网 uvicorn：

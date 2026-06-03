@@ -114,3 +114,4 @@
 - [Pencil Backend Deploy Preflight](124-pencil-backend-deploy-preflight.md) — `completed`
 - [Pencil Backend Caller API Contract](125-pencil-backend-caller-api-contract.md) — `completed`
 - [Pencil Export Codex Skill Refresh](126-pencil-export-codex-skill-refresh.md) — `completed`
+- [Pencil Backend HTTP Client CLI](127-pencil-backend-http-client-cli.md) — `completed`
