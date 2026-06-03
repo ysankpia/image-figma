@@ -11,8 +11,9 @@ OUT ?= /tmp/pencil-http-output
 PROJECT_NAME ?= Pencil HTTP Project
 MODE ?= all
 BUNDLE_OUT ?= /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
+BUNDLE_ARCHIVE ?= $(BUNDLE_OUT)/pencil-python-backend-deploy.tar.gz
 
-.PHONY: install-local check preflight preflight-strict serve smoke upload-http acceptance bundle
+.PHONY: install-local check preflight preflight-strict serve smoke upload-http acceptance bundle verify-bundle
 install-local:
 	mkdir -p "$(BIN_DIR)"
 	printf '%s\n' '#!/bin/sh' \
@@ -49,3 +50,6 @@ acceptance:
 
 bundle:
 	uv run python scripts/build_deploy_bundle.py --out "$(BUNDLE_OUT)" --force
+
+verify-bundle: bundle
+	uv run python scripts/verify_deploy_bundle.py --archive "$(BUNDLE_ARCHIVE)"

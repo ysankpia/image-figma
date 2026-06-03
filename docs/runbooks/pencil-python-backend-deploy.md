@@ -60,7 +60,11 @@ sudo chown -R pencil:pencil /opt/pencil-python-backend /data/pencil-python-backe
 ```bash
 cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/pencil-python-backend
 make bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
+make verify-bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
 ```
+
+`make verify-bundle` 会重新构建 bundle，在临时目录解包，检查源码树不含 runtime artifact，安装两个 Python
+服务依赖，编译 `m29extract`，并运行 Pencil backend preflight。它通过后再上传。
 
 上传：
 

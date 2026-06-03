@@ -120,3 +120,4 @@
 - [Pencil Local Acceptance Port Guard](130-pencil-local-acceptance-port-guard.md) — `completed`
 - [Pencil Backend Deploy Bundle](131-pencil-backend-deploy-bundle.md) — `completed`
 - [Pencil systemd uv PATH hardening](132-pencil-systemd-uv-path-hardening.md) — `completed`
+- [Pencil Deploy Bundle Unpack Verification](133-pencil-deploy-bundle-unpack-verification.md) — `completed`

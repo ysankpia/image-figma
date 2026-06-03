@@ -171,6 +171,16 @@ cd services/pencil-python-backend
 make bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
 ```
 
+上传服务器前做解包验证：
+
+```bash
+make verify-bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
+```
+
+`verify-bundle` 会重新构建 bundle，在临时目录解包，确认源码树不含 runtime artifact，安装两个 Python
+服务依赖，编译 `m29extract`，并运行 Pencil backend preflight。它验证的是部署包落地后的可运行性，不只是
+tar 文件存在。
+
 输出：
 
 ```text
