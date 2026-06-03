@@ -6,7 +6,7 @@ from time import sleep
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.config import Settings
+from app.config import Settings, parse_boundary_source
 from app.main import create_app
 from app.state import state
 from app.storage import TaskStorage
@@ -31,7 +31,13 @@ def test_project_api_upload_and_download(tmp_path: Path) -> None:
     with image_path.open("rb") as handle:
         response = client.post(
             "/api/pencil/projects",
-            data={"projectName": "API Project", "mode": "visual-fidelity", "columns": "1", "includeDebug": "true"},
+            data={
+                "projectName": "API Project",
+                "mode": "visual-fidelity",
+                "columns": "1",
+                "includeDebug": "true",
+                "boundarySource": "m29",
+            },
             files=[("files[]", ("input.png", handle, "image/png"))],
         )
     assert response.status_code == 200
@@ -50,13 +56,49 @@ def test_project_api_upload_and_download(tmp_path: Path) -> None:
     assert download_response.content[:2] == b"PK"
 
 
-def configure_state(tmp_path: Path) -> None:
+def test_project_api_uses_configured_default_boundary_source(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="m29")
+    image_path = tmp_path / "input.png"
+    Image.new("RGB", (64, 48), "#ffffff").save(image_path)
+
+    client = TestClient(create_app())
+    with image_path.open("rb") as handle:
+        response = client.post(
+            "/api/pencil/projects",
+            data={"projectName": "Default Boundary", "mode": "visual-fidelity", "columns": "1"},
+            files=[("files[]", ("input.png", handle, "image/png"))],
+        )
+    assert response.status_code == 200
+    assert response.json()["data"]["boundarySource"] == "m29"
+    task_id = response.json()["data"]["taskId"]
+
+    status = wait_for_completion(client, task_id)
+    assert status["boundarySource"] == "m29"
+
+
+def test_parse_boundary_source_accepts_supported_values() -> None:
+    assert parse_boundary_source("psdlike") == "psdlike"
+    assert parse_boundary_source("M29") == "m29"
+    assert parse_boundary_source(" hybrid ") == "hybrid"
+
+
+def test_parse_boundary_source_rejects_unknown_value() -> None:
+    try:
+        parse_boundary_source("bad")
+    except ValueError as error:
+        assert "unsupported boundarySource" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def configure_state(tmp_path: Path, *, default_boundary_source: str = "m29") -> None:
     settings = Settings(
         addr="127.0.0.1:0",
         storage_root=tmp_path / "storage",
         m29extract_path=write_fake_m29extract(tmp_path),
         psdlike_root=tmp_path / "psdlike",
         psdlike_tile_size=8,
+        default_boundary_source=parse_boundary_source(default_boundary_source),
         max_upload_bytes=1024 * 1024,
         max_files=20,
         max_workers=1,

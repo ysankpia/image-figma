@@ -4,6 +4,9 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
+
+from .types import BOUNDARY_SOURCES, BoundarySource
 
 
 _LOCAL_ENV_LOADED = False
@@ -16,6 +19,7 @@ class Settings:
     m29extract_path: Path | None
     psdlike_root: Path
     psdlike_tile_size: int
+    default_boundary_source: BoundarySource
     max_upload_bytes: int
     max_files: int
     max_workers: int
@@ -34,6 +38,10 @@ def get_settings() -> Settings:
         m29extract_path=resolve_m29extract_path(os.getenv("PENCIL_BACKEND_M29EXTRACT")),
         psdlike_root=resolve_psdlike_root(os.getenv("PENCIL_BACKEND_PSDLIKE_ROOT")),
         psdlike_tile_size=max(1, int(os.getenv("PENCIL_BACKEND_PSDLIKE_TILE_SIZE", "8"))),
+        default_boundary_source=parse_boundary_source(
+            os.getenv("PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE", "psdlike"),
+            name="PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE",
+        ),
         max_upload_bytes=int(os.getenv("PENCIL_BACKEND_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
         max_files=int(os.getenv("PENCIL_BACKEND_MAX_FILES", "20")),
         max_workers=max(1, int(os.getenv("PENCIL_BACKEND_MAX_WORKERS", "1"))),
@@ -53,6 +61,14 @@ def resolve_m29extract_path(configured: str | None) -> Path | None:
     if local.exists():
         return local.resolve()
     return None
+
+
+def parse_boundary_source(value: str, *, name: str = "boundarySource") -> BoundarySource:
+    normalized = value.strip().lower()
+    if normalized not in BOUNDARY_SOURCES:
+        allowed = ", ".join(BOUNDARY_SOURCES)
+        raise ValueError(f"unsupported {name}: {value}; expected one of {allowed}")
+    return cast(BoundarySource, normalized)
 
 
 def resolve_psdlike_root(configured: str | None) -> Path:

@@ -10,7 +10,7 @@
 -> project.zip
 ```
 
-`services/pencil-go` 不作为当前产品交付路径。这里复用已验证的 Python exporter 行为。默认 `boundarySource=m29` 保持旧链路；当 M29 资产碎片过多时，用 `boundarySource=psdlike` 走 PSD-like 粗粒度对象边界。`boundarySource=hybrid` 以 PSD-like 为主，只用 M29 补 PSD-like 低覆盖的局部对象，不会把原始 M29 primitive 全量倒进输出。
+`services/pencil-go` 不作为当前产品交付路径。这里复用已验证的 Python exporter 行为。默认 `boundarySource=psdlike`，走 PSD-like 粗粒度对象边界以降低资产碎片；`boundarySource=m29` 仍可显式使用旧链路；`boundarySource=hybrid` 以 PSD-like 为主，只用 M29 补 PSD-like 低覆盖的局部对象，不会把原始 M29 primitive 全量倒进输出。
 
 ## Local CLI
 
@@ -35,6 +35,7 @@ pencil-export --help
 
 ```bash
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
 pencil-export \
   --input /path/to/image-or-dir \
   --out /Volumes/WorkDrive/pencil-exports/project-a \
@@ -95,6 +96,7 @@ visual-ocr       视觉友好 OCR 版：普通 UI OCR 生成 TextLayer 并 knock
 ```bash
 cd services/pencil-python-backend
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
 OCR_PROVIDER=baidu_ppocrv5 \
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
 ```
@@ -129,6 +131,8 @@ psdlike  PSD-like 粗粒度边界，asset 更少，适合干净交付。
 hybrid   PSD-like 主边界 + M29 低覆盖局部对象兜底，适合 PSD-like 漏小对象时使用。
 ```
 
+如果请求不传 `boundarySource`，服务使用 `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE`；默认值是 `psdlike`。
+
 ## Environment
 
 ```text
@@ -137,6 +141,7 @@ PENCIL_BACKEND_STORAGE_ROOT=./storage
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract
 PENCIL_BACKEND_PSDLIKE_ROOT=../psdlike-python
 PENCIL_BACKEND_PSDLIKE_TILE_SIZE=8
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike
 PENCIL_BACKEND_MAX_FILES=20
 PENCIL_BACKEND_MAX_UPLOAD_BYTES=10485760
 PENCIL_BACKEND_MAX_WORKERS=1

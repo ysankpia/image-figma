@@ -33,6 +33,7 @@ def test_project_builder_exports_three_mode_project_zip(tmp_path: Path) -> None:
             columns="2",
             include_debug=True,
             ocr_provider="none",
+            boundary_source="m29",
         ),
         settings=Settings(
             addr="127.0.0.1:0",
@@ -40,6 +41,7 @@ def test_project_builder_exports_three_mode_project_zip(tmp_path: Path) -> None:
             m29extract_path=fake_m29extract,
             psdlike_root=tmp_path / "psdlike",
             psdlike_tile_size=8,
+            default_boundary_source="m29",
             max_upload_bytes=1024 * 1024,
             max_files=20,
             max_workers=1,
@@ -163,6 +165,7 @@ def test_project_builder_reuses_existing_psdlike_batch_artifact(tmp_path: Path) 
             m29extract_path=None,
             psdlike_root=tmp_path / "missing_psdlike_runner",
             psdlike_tile_size=8,
+            default_boundary_source="psdlike",
             max_upload_bytes=1024 * 1024,
             max_files=20,
             max_workers=1,

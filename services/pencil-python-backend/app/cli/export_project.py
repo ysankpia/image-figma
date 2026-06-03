@@ -19,7 +19,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--columns", default="auto")
     parser.add_argument("--include-debug", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--ocr-provider", default=None)
-    parser.add_argument("--boundary-source", choices=BOUNDARY_SOURCES, default="m29")
+    parser.add_argument(
+        "--boundary-source",
+        choices=BOUNDARY_SOURCES,
+        default=None,
+        help="Boundary source. Defaults to PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE.",
+    )
     parser.add_argument(
         "--psdlike-artifacts-root",
         type=Path,
@@ -35,6 +40,7 @@ def main() -> None:
     if not inputs:
         raise SystemExit("no input images found")
     settings = get_settings()
+    boundary_source = args.boundary_source or settings.default_boundary_source
     manifest = export_project(
         ExportRequest(
             inputs=inputs,
@@ -44,7 +50,7 @@ def main() -> None:
             columns=args.columns,
             include_debug=args.include_debug,
             ocr_provider=args.ocr_provider,
-            boundary_source=args.boundary_source,
+            boundary_source=boundary_source,
             psdlike_artifacts_root=args.psdlike_artifacts_root.expanduser().resolve()
             if args.psdlike_artifacts_root
             else None,

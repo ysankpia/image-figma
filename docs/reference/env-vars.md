@@ -28,6 +28,7 @@
 | `PENCIL_BACKEND_M29EXTRACT` | 本地 `m29extract` 可执行文件路径 | 自动查找 `m29extract`/`../backend-go/bin/m29extract` | 部署时建议显式配置 |
 | `PENCIL_BACKEND_PSDLIKE_ROOT` | PSD-like Python 服务目录；`boundarySource=psdlike` 或 `hybrid` 时作为子进程运行 | 自动查找 `services/psdlike-python` | `boundarySource=psdlike/hybrid` 且默认路径不存在时需要 |
 | `PENCIL_BACKEND_PSDLIKE_TILE_SIZE` | PSD-like tile map 尺寸 | `8` | 否 |
+| `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE` | Python Pencil project server 在请求/CLI 未显式指定 `boundarySource` 时使用的边界源 | `psdlike` | 否 |
 | `PENCIL_BACKEND_MAX_UPLOAD_BYTES` | Python Pencil project server 单图片上传大小上限 | `10485760` | 否 |
 | `PENCIL_BACKEND_MAX_FILES` | Python Pencil project server 单项目最大图片数 | `20` | 否 |
 | `PENCIL_BACKEND_MAX_WORKERS` | Python Pencil project server 后台导出并发数；部署低内存机器建议保持 `1` | `1` | 否 |
@@ -122,6 +123,7 @@ Current Pencil delivery route:
 cd services/pencil-python-backend
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
 PENCIL_BACKEND_PSDLIKE_ROOT=../psdlike-python \
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
 PENCIL_BACKEND_ADDR=127.0.0.1:8100 \
 PENCIL_BACKEND_MAX_WORKERS=1 \
 OCR_PROVIDER=baidu_ppocrv5 \
@@ -139,7 +141,7 @@ GET /api/pencil/projects/{taskId}/download.zip
 
 The project server returns a downloadable ZIP containing `clean-editable`, `visual-fidelity`, and `visual-ocr` `.pen` packages when `mode=all`.
 
-For lower-fragment Pencil assets, send `boundarySource=psdlike` in `POST /api/pencil/projects` or use CLI `--boundary-source psdlike`. If PSD-like misses small local objects, use `boundarySource=hybrid`; it keeps PSD-like as the primary boundary source and uses M29 only for low-coverage fallback objects. The default remains `m29`.
+For lower-fragment Pencil assets, the default Pencil boundary source is `psdlike`. Override it with `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=m29|psdlike|hybrid`, send `boundarySource` in `POST /api/pencil/projects`, or use CLI `--boundary-source ...`. If PSD-like misses small local objects, use `boundarySource=hybrid`; it keeps PSD-like as the primary boundary source and uses M29 only for low-coverage fallback objects.
 
 For repeatable offline audits, run PSD-like batch first and then reuse those artifacts from the Pencil CLI:
 

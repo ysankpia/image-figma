@@ -28,7 +28,7 @@ class ExportRequest:
     columns: str = "auto"
     include_debug: bool = True
     ocr_provider: str | None = None
-    boundary_source: BoundarySource = "m29"
+    boundary_source: BoundarySource = "psdlike"
     psdlike_artifacts_root: Path | None = None
 
 

@@ -6,9 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from ..config import parse_boundary_source
 from ..jsonio import read_json
 from ..state import state
-from ..types import BOUNDARY_SOURCES, EXPORT_MODES, IMAGE_EXTENSIONS, PageInput
+from ..types import EXPORT_MODES, IMAGE_EXTENSIONS, PageInput
 from ..utils import safe_slug
 
 
@@ -23,12 +24,16 @@ async def create_project(
     columns: Annotated[str, Form()] = "auto",
     includeDebug: Annotated[bool, Form()] = True,
     ocrProvider: Annotated[str | None, Form()] = None,
-    boundarySource: Annotated[str, Form()] = "m29",
+    boundarySource: Annotated[str | None, Form()] = None,
 ) -> dict[str, object]:
     if mode != "all" and mode not in EXPORT_MODES:
         raise HTTPException(status_code=400, detail=f"unsupported mode: {mode}")
-    if boundarySource not in BOUNDARY_SOURCES:
-        raise HTTPException(status_code=400, detail=f"unsupported boundarySource: {boundarySource}")
+    try:
+        selected_boundary_source = (
+            parse_boundary_source(boundarySource) if boundarySource else state.settings.default_boundary_source
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     if columns != "auto":
         try:
             if int(columns) <= 0:
@@ -65,7 +70,7 @@ async def create_project(
         mode=mode,
         columns=columns,
         includeDebug=includeDebug,
-        boundarySource=boundarySource,
+        boundarySource=selected_boundary_source,
         inputCount=len(inputs),
     )
     state.tasks.submit(
@@ -76,9 +81,12 @@ async def create_project(
         columns=columns,
         include_debug=includeDebug,
         ocr_provider=ocrProvider,
-        boundary_source=boundarySource,
+        boundary_source=selected_boundary_source,
     )
-    return {"success": True, "data": {"taskId": paths.task_id, "status": "queued", "boundarySource": boundarySource}}
+    return {
+        "success": True,
+        "data": {"taskId": paths.task_id, "status": "queued", "boundarySource": selected_boundary_source},
+    }
 
 
 @router.get("/{task_id}")
