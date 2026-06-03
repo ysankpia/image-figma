@@ -15,6 +15,7 @@
 
 ## 最近 Resolved Bugs
 
+- [022-pencil-psdlike-cta-text-misclassified-as-visual-text.md](resolved/022-pencil-psdlike-cta-text-misclassified-as-visual-text.md)
 - [021-pencil-ocr-visual-text-knockout-overreach.md](resolved/021-pencil-ocr-visual-text-knockout-overreach.md)
 - [020-pencil-empty-transparent-page-becomes-black-frame.md](resolved/020-pencil-empty-transparent-page-becomes-black-frame.md)
 - [019-pencil-psdlike-raster-icon-truncation.md](resolved/019-pencil-psdlike-raster-icon-truncation.md)

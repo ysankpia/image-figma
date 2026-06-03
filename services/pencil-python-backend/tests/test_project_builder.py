@@ -298,6 +298,36 @@ def test_visual_text_inside_local_raster_stays_raster_owned(tmp_path: Path) -> N
     assert visual_fidelity_manifest["cropTextNodes"] == 4
 
 
+def test_low_texture_cta_text_stays_editable(tmp_path: Path) -> None:
+    evidence_dir = write_fake_cta_text_evidence(tmp_path / "cta_text")
+    export_dir = tmp_path / "single"
+
+    export_single_page(
+        SinglePageExportOptions(
+            input_dir=evidence_dir,
+            out=export_dir,
+            name="CTA Text Unit",
+            mode="all",
+            include_debug_pen=True,
+        )
+    )
+
+    for mode_dir in ("production", "visual-ocr"):
+        manifest = read_json(export_dir / mode_dir / "manifest.json")
+        design = read_json(export_dir / mode_dir / "design.pen")
+        decisions = {item["primitiveId"]: item for item in manifest["textDecisions"]}
+
+        assert decisions["prim_cta_text"]["decision"] == "editable_text"
+        assert decisions["prim_cta_text"]["reason"] == "normal_ocr_text"
+        assert manifest["textNodes"] == 1
+        assert manifest["visualTextCropNodes"] == 0
+        assert "查看提交记录" in json.dumps(design, ensure_ascii=False)
+
+    visual_fidelity_manifest = read_json(export_dir / "visual-fidelity" / "manifest.json")
+    assert visual_fidelity_manifest["textNodes"] == 0
+    assert visual_fidelity_manifest["cropTextNodes"] == 1
+
+
 def test_psdlike_adapter_rasterizes_small_mask_required_shapes(tmp_path: Path) -> None:
     psdlike_dir = write_fake_small_shape_output(tmp_path / "small_shape")
     evidence_dir = tmp_path / "evidence"
@@ -677,6 +707,118 @@ def write_fake_visual_text_evidence(path: Path) -> Path:
             },
         ],
         "summary": {"layerCount": 5},
+    }
+    (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
+    (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")
+    return path
+
+
+def write_fake_cta_text_evidence(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "crops").mkdir()
+    (path / "masks").mkdir()
+    image = Image.new("RGB", (941, 1672), "#fdfefe")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((448, 1416, 872, 1504), radius=10, fill="#1673fd")
+    draw.text((581, 1442), "查看提交记录", fill="#f7fbff")
+    image.save(path / "source.png")
+    cta_bbox = {"x": 448, "y": 1416, "width": 424, "height": 88}
+    text_bbox = {"x": 581, "y": 1442, "width": 182, "height": 35}
+    for primitive_id, bbox in (("prim_cta", cta_bbox), ("prim_cta_text", text_bbox)):
+        image.crop((bbox["x"], bbox["y"], bbox["x"] + bbox["width"], bbox["y"] + bbox["height"])).save(
+            path / "crops" / f"{primitive_id}.png"
+        )
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rectangle(
+            (
+                bbox["x"],
+                bbox["y"],
+                bbox["x"] + bbox["width"] - 1,
+                bbox["y"] + bbox["height"] - 1,
+            ),
+            fill=255,
+        )
+        mask.save(path / "masks" / f"{primitive_id}.png")
+    evidence = {
+        "schemaName": "M29PhysicalEvidence",
+        "version": "1.0",
+        "generator": {"name": "fake", "mode": "cta-text-test"},
+        "image": {"width": 941, "height": 1672, "sourceRef": "source.png"},
+        "ocr": {"provided": True, "blockCount": 1},
+        "primitives": [
+            {
+                "id": "prim_cta",
+                "primitiveType": "image_region",
+                "bbox": cta_bbox,
+                "maskRef": "masks/prim_cta.png",
+                "cropRef": "crops/prim_cta.png",
+                "source": {"kind": "pixel", "reason": "foreground_object_on_surface"},
+                "measurements": {
+                    "texture": 0.3334,
+                    "edge": 0.2323,
+                    "entropy": 0.1714,
+                    "unique": 0.0772,
+                    "dominant": 0.8403,
+                    "textOverlap": 0.2066,
+                    "raster": 0.1514,
+                    "shape": 0.5663,
+                    "foregroundObject": 0.5501,
+                },
+                "compileHints": {},
+            },
+            {
+                "id": "prim_cta_text",
+                "primitiveType": "text_region",
+                "bbox": text_bbox,
+                "maskRef": "masks/prim_cta_text.png",
+                "cropRef": "crops/prim_cta_text.png",
+                "source": {
+                    "kind": "ocr",
+                    "ocrBlockId": "ocr_cta",
+                    "text": "查看提交记录",
+                    "confidence": 0.9995,
+                },
+                "measurements": {
+                    "fontSize": 28,
+                    "lineHeight": 32,
+                    "textOwnerRole": "container_surface",
+                    "textOwnerReason": "low_texture_solid_region",
+                    "textColorBackground": "#1673fd",
+                },
+                "compileHints": {},
+            },
+        ],
+        "physicalRelations": [],
+        "assets": [],
+        "diagnostics": {"pageBackground": "#fdfefe"},
+    }
+    replay = {
+        "schema": "m29.pencil.replay.v1",
+        "layers": [
+            {
+                "id": "prim_cta",
+                "sourcePrimitiveId": "prim_cta",
+                "role": "image_region",
+                "nodeType": "rectangle",
+                "bbox": cta_bbox,
+                "fillImage": "./assets/crops/prim_cta.png",
+                "maskImage": "./assets/masks/prim_cta.png",
+                "editableMode": "raster_crop",
+                "z": 100,
+            },
+            {
+                "id": "prim_cta_text",
+                "sourcePrimitiveId": "prim_cta_text",
+                "role": "text_region",
+                "nodeType": "rectangle",
+                "bbox": text_bbox,
+                "fillImage": "./assets/crops/prim_cta_text.png",
+                "maskImage": "./assets/masks/prim_cta_text.png",
+                "editableMode": "raster_crop",
+                "z": 200,
+            },
+        ],
+        "summary": {"layerCount": 2},
     }
     (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
     (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")

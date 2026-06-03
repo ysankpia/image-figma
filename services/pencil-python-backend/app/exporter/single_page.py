@@ -841,8 +841,10 @@ def looks_like_simple_control_owner(
     area_ratio = area_of(bbox) / canvas_area
     complexity = layer_complexity(owner, primitives)
     text_ratio = area_of(text_bbox) / max(1.0, area_of(bbox))
+    short_side = min(float(canvas["width"]), float(canvas["height"]))
+    control_height_limit = max(84.0, min(112.0, short_side * 0.12))
 
-    if height <= 84 and 1.8 <= aspect <= 12.0 and area_ratio <= 0.10 and complexity < 0.58:
+    if height <= control_height_limit and 1.8 <= aspect <= 12.0 and area_ratio <= 0.10 and complexity < 0.58:
         return True
     if text_ratio >= 0.42 and height <= 96 and complexity < 0.48:
         return True
