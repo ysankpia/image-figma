@@ -92,7 +92,22 @@ docs/runbooks/pencil-python-backend-deploy.md
 它不会包含 `.venv`、storage、cache、debug 输出、实验产物或本机忽略的
 `services/backend-go/bin/m29extract`。因此服务器上仍需要安装依赖并编译 `m29extract`。
 
-安装依赖：
+安装运行时工具，并确认 `pencil` 用户能找到 `uv`：
+
+```bash
+sudo -u pencil sh -lc 'command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh'
+sudo -u pencil sh -lc 'command -v uv && uv --version'
+```
+
+systemd 模板会设置：
+
+```text
+PATH=/home/pencil/.local/bin:/usr/local/bin:/usr/bin:/bin
+```
+
+所以 `uv` 可以装在 `pencil` 用户的 home 目录，也可以装在 `/usr/local/bin`。
+
+安装 Python 依赖：
 
 ```bash
 cd /opt/pencil-python-backend/services/pencil-python-backend
