@@ -55,6 +55,8 @@ def configure_state(tmp_path: Path) -> None:
         addr="127.0.0.1:0",
         storage_root=tmp_path / "storage",
         m29extract_path=write_fake_m29extract(tmp_path),
+        psdlike_root=tmp_path / "psdlike",
+        psdlike_tile_size=8,
         max_upload_bytes=1024 * 1024,
         max_files=20,
         max_workers=1,

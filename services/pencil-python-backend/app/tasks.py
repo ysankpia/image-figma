@@ -26,6 +26,7 @@ class TaskManager:
         columns: str,
         include_debug: bool,
         ocr_provider: str | None,
+        boundary_source: str,
     ) -> None:
         self.executor.submit(
             self._run,
@@ -36,6 +37,7 @@ class TaskManager:
             columns=columns,
             include_debug=include_debug,
             ocr_provider=ocr_provider,
+            boundary_source=boundary_source,
         )
 
     def _run(
@@ -48,9 +50,16 @@ class TaskManager:
         columns: str,
         include_debug: bool,
         ocr_provider: str | None,
+        boundary_source: str,
     ) -> None:
         try:
-            self.storage.patch_status(paths, status="running", pageCount=len(inputs), modes=selected_mode_list(mode))
+            self.storage.patch_status(
+                paths,
+                status="running",
+                pageCount=len(inputs),
+                modes=selected_mode_list(mode),
+                boundarySource=boundary_source,
+            )
             manifest = export_project(
                 ExportRequest(
                     inputs=inputs,
@@ -60,6 +69,7 @@ class TaskManager:
                     columns=columns,
                     include_debug=include_debug,
                     ocr_provider=ocr_provider,
+                    boundary_source=boundary_source,  # type: ignore[arg-type]
                 ),
                 self.settings,
             )
@@ -68,6 +78,7 @@ class TaskManager:
                 status="completed",
                 pageCount=manifest["pageCount"],
                 modes=manifest["modes"],
+                boundarySource=manifest.get("boundarySource", boundary_source),
                 warnings=manifest.get("warnings", []),
                 downloadUrl=f"/api/pencil/projects/{paths.task_id}/download.zip",
                 manifestPath=str(paths.output / "manifest.json"),

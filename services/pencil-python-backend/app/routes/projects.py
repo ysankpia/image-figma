@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 from ..jsonio import read_json
 from ..state import state
-from ..types import EXPORT_MODES, IMAGE_EXTENSIONS, PageInput
+from ..types import BOUNDARY_SOURCES, EXPORT_MODES, IMAGE_EXTENSIONS, PageInput
 from ..utils import safe_slug
 
 
@@ -23,9 +23,12 @@ async def create_project(
     columns: Annotated[str, Form()] = "auto",
     includeDebug: Annotated[bool, Form()] = True,
     ocrProvider: Annotated[str | None, Form()] = None,
+    boundarySource: Annotated[str, Form()] = "m29",
 ) -> dict[str, object]:
     if mode != "all" and mode not in EXPORT_MODES:
         raise HTTPException(status_code=400, detail=f"unsupported mode: {mode}")
+    if boundarySource not in BOUNDARY_SOURCES:
+        raise HTTPException(status_code=400, detail=f"unsupported boundarySource: {boundarySource}")
     if columns != "auto":
         try:
             if int(columns) <= 0:
@@ -62,6 +65,7 @@ async def create_project(
         mode=mode,
         columns=columns,
         includeDebug=includeDebug,
+        boundarySource=boundarySource,
         inputCount=len(inputs),
     )
     state.tasks.submit(
@@ -72,8 +76,9 @@ async def create_project(
         columns=columns,
         include_debug=includeDebug,
         ocr_provider=ocrProvider,
+        boundary_source=boundarySource,
     )
-    return {"success": True, "data": {"taskId": paths.task_id, "status": "queued"}}
+    return {"success": True, "data": {"taskId": paths.task_id, "status": "queued", "boundarySource": boundarySource}}
 
 
 @router.get("/{task_id}")
@@ -121,6 +126,7 @@ def public_status(status: dict[str, object]) -> dict[str, object]:
         "projectName",
         "pageCount",
         "modes",
+        "boundarySource",
         "downloadUrl",
         "warnings",
         "error",

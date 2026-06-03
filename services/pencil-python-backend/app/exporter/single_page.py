@@ -1038,6 +1038,38 @@ def make_image_node(layer: dict[str, Any], asset_url: str, asset_metadata: dict[
     }
 
 
+def make_shape_node(layer: dict[str, Any]) -> dict[str, Any]:
+    bbox = layer["bbox"]
+    style = layer.get("shapeStyle") or {}
+    fill = style.get("fill") or "#FFFFFF"
+    node: dict[str, Any] = {
+        "id": f"node_{layer['id']}",
+        "type": "rectangle",
+        "name": f"{layer['id']} editable shape",
+        "x": bbox["x"],
+        "y": bbox["y"],
+        "width": bbox["width"],
+        "height": bbox["height"],
+        "fill": fill,
+        "metadata": {
+            "type": "psdlike_editable_shape",
+            "primitiveId": layer["sourcePrimitiveId"],
+            "primitiveType": layer["role"],
+            "sourceLayerId": layer.get("sourceLayerId"),
+            "editableMode": "shape",
+            "z": layer["z"],
+        },
+    }
+    radius = style.get("cornerRadius") or style.get("radius")
+    if radius is not None:
+        node["cornerRadius"] = radius
+    stroke = style.get("stroke")
+    if isinstance(stroke, dict) and stroke.get("color"):
+        node["stroke"] = stroke.get("color")
+        node["strokeWidth"] = stroke.get("width", 1)
+    return node
+
+
 def make_debug_image_node(layer: dict[str, Any]) -> dict[str, Any]:
     bbox = layer["bbox"]
     return {
@@ -1076,10 +1108,14 @@ def build_production_document(
     layers = sorted(replay["layers"], key=lambda item: item.get("z", 0))
     editable_text_layers: list[tuple[dict[str, Any], Primitive]] = []
     editable_text_primitives: list[Primitive] = []
+    editable_shape_layers: list[dict[str, Any]] = []
     crop_layers: list[dict[str, Any]] = []
     text_decisions: list[dict[str, Any]] = []
 
     for layer in layers:
+        if layer.get("editableMode") == "shape":
+            editable_shape_layers.append(layer)
+            continue
         primitive = primitives.get(layer["sourcePrimitiveId"])
         if layer.get("role") != "text_region":
             crop_layers.append(layer)
@@ -1127,7 +1163,13 @@ def build_production_document(
     clean_assets: list[dict[str, Any]] = []
     text_nodes = 0
     crop_nodes = 0
+    shape_nodes = 0
     knockout_nodes = 0
+
+    for layer in sorted(editable_shape_layers, key=lambda item: item.get("z", 0)):
+        counts[layer["role"]] += 1
+        children.append(make_shape_node(layer))
+        shape_nodes += 1
 
     for layer in sorted(crop_layers, key=lambda item: item.get("z", 0)):
         role = layer["role"]
@@ -1194,6 +1236,7 @@ def build_production_document(
         "counts": dict(counts),
         "textNodes": text_nodes,
         "cropNodes": crop_nodes,
+        "shapeNodes": shape_nodes,
         "textKnockoutCropNodes": knockout_nodes,
         "artTextCropNodes": sum(1 for item in text_decisions if str(item.get("reason", "")).startswith("large_")),
         "cropTextNodes": sum(
@@ -1223,6 +1266,7 @@ def build_production_document(
             "referencesRawCrops": False,
             "referencesMasks": False,
             "referencesTextRegionCrops": mode.crop_text_regions,
+            "rendersEditableShapes": shape_nodes > 0,
         },
     }
     return document, manifest

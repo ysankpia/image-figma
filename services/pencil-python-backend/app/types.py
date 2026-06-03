@@ -7,6 +7,8 @@ from typing import Literal
 
 Mode = Literal["clean-editable", "visual-fidelity", "visual-ocr", "all"]
 EXPORT_MODES: tuple[str, ...] = ("clean-editable", "visual-fidelity", "visual-ocr")
+BoundarySource = Literal["m29", "psdlike"]
+BOUNDARY_SOURCES: tuple[str, ...] = ("m29", "psdlike")
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
@@ -26,6 +28,7 @@ class ExportRequest:
     columns: str = "auto"
     include_debug: bool = True
     ocr_provider: str | None = None
+    boundary_source: BoundarySource = "m29"
 
 
 @dataclass(frozen=True)

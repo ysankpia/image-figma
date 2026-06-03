@@ -4,13 +4,13 @@
 
 ```text
 1..N images
--> local m29extract executable
+-> boundary source: m29extract or PSD-like layer decomposition
 -> Python Pencil exporter
 -> clean-editable / visual-fidelity / visual-ocr
 -> project.zip
 ```
 
-`services/pencil-go` 不作为当前产品交付路径。这里复用已验证的 Python exporter 行为，`m29extract` 只作为本地可执行文件提供物理证据。
+`services/pencil-go` 不作为当前产品交付路径。这里复用已验证的 Python exporter 行为。默认 `boundarySource=m29` 保持旧链路；当 M29 资产碎片过多时，用 `boundarySource=psdlike` 走 PSD-like 粗粒度对象边界。
 
 ## Local CLI
 
@@ -41,6 +41,7 @@ pencil-export \
   --project-name "Project A" \
   --mode all \
   --columns auto \
+  --boundary-source psdlike \
   --include-debug
 ```
 
@@ -91,6 +92,7 @@ mode          all | clean-editable | visual-fidelity | visual-ocr
 columns       auto | integer
 includeDebug  true | false
 ocrProvider   optional
+boundarySource m29 | psdlike
 ```
 
 ## Environment
@@ -99,6 +101,8 @@ ocrProvider   optional
 PENCIL_BACKEND_ADDR=127.0.0.1:8100
 PENCIL_BACKEND_STORAGE_ROOT=./storage
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract
+PENCIL_BACKEND_PSDLIKE_ROOT=../psdlike-python
+PENCIL_BACKEND_PSDLIKE_TILE_SIZE=8
 PENCIL_BACKEND_MAX_FILES=20
 PENCIL_BACKEND_MAX_UPLOAD_BYTES=10485760
 PENCIL_BACKEND_MAX_WORKERS=1
@@ -108,13 +112,14 @@ BAIDU_PADDLE_OCR_TOKEN=...
 
 ## Deploy Notes
 
-这个服务不在本机跑大模型。常驻进程主要是 FastAPI/uvicorn；单次导出会启动本地 `m29extract` 并用 Pillow/numpy 处理图片 crop 和文字 knockout。内存峰值跟图片尺寸、单项目图片数、并发任务数相关。
+这个服务不在本机跑大模型。常驻进程主要是 FastAPI/uvicorn；单次导出会启动本地 `m29extract` 或 PSD-like Python 子进程，并用 Pillow/numpy 处理图片 crop 和文字 knockout。内存峰值跟图片尺寸、单项目图片数、并发任务数相关。
 
 推荐首发部署：
 
 ```text
 Python 3.12 + uv
 local m29extract executable
+local PSD-like Python service directory when using boundarySource=psdlike
 uvicorn bound to 127.0.0.1:8100
 systemd service
 nginx reverse proxy if exposing HTTP

@@ -13,6 +13,8 @@ from .config import Settings
 from .exporter.single_page import SinglePageExportOptions, export_single_page
 from .jsonio import read_json, write_json
 from .m29_runner import run_m29extract
+from .psdlike_adapter import adapt_psdlike_to_pencil_evidence
+from .psdlike_runner import run_psdlike
 from .types import EXPORT_MODES, ExportRequest, PageInput
 from .utils import mode_dir_name, safe_slug
 
@@ -26,6 +28,7 @@ class PageExportResult:
     artifact_dir: Path
     single_export_dir: Path
     mode_manifests: dict[str, dict[str, Any]]
+    boundary_source: str
 
 
 def export_project(request: ExportRequest, settings: Settings) -> dict[str, Any]:
@@ -40,17 +43,16 @@ def export_project(request: ExportRequest, settings: Settings) -> dict[str, Any]
     for index, page_input in enumerate(request.inputs, start=1):
         namespace = f"page_{index:04d}"
         page_work = work_dir / namespace
-        m29_dir = page_work / "m29"
-        run_m29extract(
-            image_path=page_input.path,
-            output_dir=m29_dir,
-            m29extract_path=settings.m29extract_path,
-            ocr_provider=request.ocr_provider if request.ocr_provider is not None else settings.ocr_provider,
+        artifact_dir = build_boundary_artifact(
+            page_input=page_input,
+            page_work=page_work,
+            request=request,
+            settings=settings,
         )
         single_export_dir = page_work / "single_page_export"
         export_single_page(
             SinglePageExportOptions(
-                input_dir=m29_dir,
+                input_dir=artifact_dir,
                 out=single_export_dir,
                 name=f"{request.project_name} {namespace}",
                 mode=request.mode,
@@ -64,16 +66,17 @@ def export_project(request: ExportRequest, settings: Settings) -> dict[str, Any]
         with Image.open(page_input.path) as image:
             source_size = (image.width, image.height)
         if request.include_debug:
-            copy_page_debug(m29_dir, debug_pages_dir / namespace)
+            copy_page_debug(artifact_dir, debug_pages_dir / namespace)
         page_results.append(
             PageExportResult(
                 page_index=index,
                 page_namespace=namespace,
                 input=page_input,
                 source_size=source_size,
-                artifact_dir=m29_dir,
+                artifact_dir=artifact_dir,
                 single_export_dir=single_export_dir,
                 mode_manifests=mode_manifests,
+                boundary_source=request.boundary_source,
             )
         )
 
@@ -95,6 +98,38 @@ def export_project(request: ExportRequest, settings: Settings) -> dict[str, Any]
     manifest["zipPath"] = str(zip_path)
     write_json(request.out_dir / "manifest.json", manifest)
     return manifest
+
+
+def build_boundary_artifact(
+    *,
+    page_input: PageInput,
+    page_work: Path,
+    request: ExportRequest,
+    settings: Settings,
+) -> Path:
+    provider = request.ocr_provider if request.ocr_provider is not None else settings.ocr_provider
+    if request.boundary_source == "m29":
+        m29_dir = page_work / "m29"
+        run_m29extract(
+            image_path=page_input.path,
+            output_dir=m29_dir,
+            m29extract_path=settings.m29extract_path,
+            ocr_provider=provider,
+        )
+        return m29_dir
+    if request.boundary_source == "psdlike":
+        psdlike_dir = page_work / "psdlike"
+        run_psdlike(
+            image_path=page_input.path,
+            output_dir=psdlike_dir,
+            ocr_provider=provider,
+            psdlike_root=settings.psdlike_root,
+            tile_size=settings.psdlike_tile_size,
+        )
+        artifact_dir = page_work / "psdlike_pencil_evidence"
+        adapt_psdlike_to_pencil_evidence(psdlike_dir, artifact_dir)
+        return artifact_dir
+    raise ValueError(f"unsupported boundary source: {request.boundary_source}")
 
 
 def selected_modes(mode: str) -> list[str]:
@@ -217,7 +252,16 @@ def namespace_metadata(metadata: dict[str, Any], namespace: str) -> dict[str, An
 
 def copy_page_debug(m29_dir: Path, target_dir: Path) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("m29_physical_evidence.v1.json", "ocr.json", "debug_overlay.png", "preview_sheet.png", "m29extract.stdout.txt", "m29extract.stderr.txt", "source.png"):
+    for name in (
+        "m29_physical_evidence.v1.json",
+        "m29-pencil-replay.v1.json",
+        "ocr.json",
+        "debug_overlay.png",
+        "preview_sheet.png",
+        "m29extract.stdout.txt",
+        "m29extract.stderr.txt",
+        "source.png",
+    ):
         source = m29_dir / name
         if source.exists():
             shutil.copy2(source, target_dir / name)
@@ -225,6 +269,9 @@ def copy_page_debug(m29_dir: Path, target_dir: Path) -> None:
         source_dir = m29_dir / dirname
         if source_dir.exists():
             shutil.copytree(source_dir, target_dir / dirname, dirs_exist_ok=True)
+    psdlike_debug = m29_dir / "psdlike_debug"
+    if psdlike_debug.exists():
+        shutil.copytree(psdlike_debug, target_dir / "psdlike_debug", dirs_exist_ok=True)
 
 
 def build_project_manifest(
@@ -243,6 +290,7 @@ def build_project_manifest(
                 "originalName": result.input.original_name,
                 "width": result.source_size[0],
                 "height": result.source_size[1],
+                "boundarySource": result.boundary_source,
                 "modes": {
                     mode: {
                         "textNodes": result.mode_manifests[mode].get("textNodes", 0),
@@ -261,6 +309,7 @@ def build_project_manifest(
         "createdAt": datetime.now(UTC).isoformat(),
         "pageCount": len(page_results),
         "modes": modes,
+        "boundarySource": request.boundary_source,
         "columns": layout["columns"],
         "includeDebug": request.include_debug,
         "pages": pages,
@@ -276,6 +325,7 @@ def write_debug_report(path: Path, manifest: dict[str, Any]) -> None:
         f"- project: {manifest['projectName']}",
         f"- pages: {manifest['pageCount']}",
         f"- modes: {', '.join(manifest['modes'])}",
+        f"- boundary source: {manifest.get('boundarySource', 'm29')}",
         f"- columns: {manifest['columns']}",
         "",
         "## Pages",

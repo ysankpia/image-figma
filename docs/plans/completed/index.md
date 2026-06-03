@@ -105,3 +105,4 @@
 - [PSD-like Visible Container Surface Ownership](110-psdlike-visible-container-surface-ownership.md) — `completed`
 - [PSD-like Web Surface Profile Validation](111-psdlike-web-surface-profile-validation.md) — `completed`
 - [Pencil Python Backend Productization](116-pencil-python-backend-productization.md) — `completed`
+- [Pencil PSD-like Boundary Source Integration](117-pencil-psdlike-boundary-source.md) — `completed`

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ..config import get_settings
 from ..project_builder import discover_inputs, export_project
-from ..types import ExportRequest
+from ..types import BOUNDARY_SOURCES, ExportRequest
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--columns", default="auto")
     parser.add_argument("--include-debug", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--ocr-provider", default=None)
+    parser.add_argument("--boundary-source", choices=BOUNDARY_SOURCES, default="m29")
     return parser.parse_args()
 
 
@@ -37,6 +38,7 @@ def main() -> None:
             columns=args.columns,
             include_debug=args.include_debug,
             ocr_provider=args.ocr_provider,
+            boundary_source=args.boundary_source,
         ),
         settings,
     )

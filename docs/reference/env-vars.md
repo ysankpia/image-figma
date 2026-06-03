@@ -26,6 +26,8 @@
 | `PENCIL_BACKEND_ADDR` | Python Pencil project server 监听地址 | `127.0.0.1:8100` | 否 |
 | `PENCIL_BACKEND_STORAGE_ROOT` | Python Pencil project server 存储根目录 | `./storage` | 否 |
 | `PENCIL_BACKEND_M29EXTRACT` | 本地 `m29extract` 可执行文件路径 | 自动查找 `m29extract`/`../backend-go/bin/m29extract` | 部署时建议显式配置 |
+| `PENCIL_BACKEND_PSDLIKE_ROOT` | PSD-like Python 服务目录；`boundarySource=psdlike` 时作为子进程运行 | 自动查找 `services/psdlike-python` | `boundarySource=psdlike` 且默认路径不存在时需要 |
+| `PENCIL_BACKEND_PSDLIKE_TILE_SIZE` | PSD-like tile map 尺寸 | `8` | 否 |
 | `PENCIL_BACKEND_MAX_UPLOAD_BYTES` | Python Pencil project server 单图片上传大小上限 | `10485760` | 否 |
 | `PENCIL_BACKEND_MAX_FILES` | Python Pencil project server 单项目最大图片数 | `20` | 否 |
 | `PENCIL_BACKEND_MAX_WORKERS` | Python Pencil project server 后台导出并发数；部署低内存机器建议保持 `1` | `1` | 否 |
@@ -119,6 +121,7 @@ Current Pencil delivery route:
 ```bash
 cd services/pencil-python-backend
 PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_BACKEND_PSDLIKE_ROOT=../psdlike-python \
 PENCIL_BACKEND_ADDR=127.0.0.1:8100 \
 PENCIL_BACKEND_MAX_WORKERS=1 \
 OCR_PROVIDER=baidu_ppocrv5 \
@@ -135,6 +138,8 @@ GET /api/pencil/projects/{taskId}/download.zip
 ```
 
 The project server returns a downloadable ZIP containing `clean-editable`, `visual-fidelity`, and `visual-ocr` `.pen` packages when `mode=all`.
+
+For lower-fragment Pencil assets, send `boundarySource=psdlike` in `POST /api/pencil/projects` or use CLI `--boundary-source psdlike`. The default remains `m29`.
 
 `m29extract` should be built from the Go backend and used as a local executable:
 

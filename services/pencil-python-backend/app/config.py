@@ -14,6 +14,8 @@ class Settings:
     addr: str
     storage_root: Path
     m29extract_path: Path | None
+    psdlike_root: Path
+    psdlike_tile_size: int
     max_upload_bytes: int
     max_files: int
     max_workers: int
@@ -30,6 +32,8 @@ def get_settings() -> Settings:
         addr=os.getenv("PENCIL_BACKEND_ADDR", "127.0.0.1:8100"),
         storage_root=storage_root,
         m29extract_path=resolve_m29extract_path(os.getenv("PENCIL_BACKEND_M29EXTRACT")),
+        psdlike_root=resolve_psdlike_root(os.getenv("PENCIL_BACKEND_PSDLIKE_ROOT")),
+        psdlike_tile_size=max(1, int(os.getenv("PENCIL_BACKEND_PSDLIKE_TILE_SIZE", "8"))),
         max_upload_bytes=int(os.getenv("PENCIL_BACKEND_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
         max_files=int(os.getenv("PENCIL_BACKEND_MAX_FILES", "20")),
         max_workers=max(1, int(os.getenv("PENCIL_BACKEND_MAX_WORKERS", "1"))),
@@ -49,6 +53,13 @@ def resolve_m29extract_path(configured: str | None) -> Path | None:
     if local.exists():
         return local.resolve()
     return None
+
+
+def resolve_psdlike_root(configured: str | None) -> Path:
+    if configured and configured.strip():
+        return Path(configured).expanduser().resolve()
+    repo_root = Path(__file__).resolve().parents[3]
+    return (repo_root / "services" / "psdlike-python").resolve()
 
 
 def load_local_env_file(path: Path) -> None:
