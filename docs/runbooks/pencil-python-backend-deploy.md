@@ -76,12 +76,28 @@ make verify-bundle \
 
 这会在临时解包目录里启动服务、上传样图、下载 ZIP，并检查三种模式 `.pen` 的可见 asset refs。
 
+记录本机 bundle hash：
+
+```bash
+cat /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle/release-summary.md
+shasum -a 256 /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle/pencil-python-backend-deploy.tar.gz
+```
+
 上传：
 
 ```bash
 scp /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle/pencil-python-backend-deploy.tar.gz \
   root@SERVER:/tmp/
 ```
+
+上传后在服务器核对 hash：
+
+```bash
+cd /tmp
+sha256sum pencil-python-backend-deploy.tar.gz
+```
+
+输出必须和本机 `release-summary.md` / `bundle-manifest.json` 里的 `archiveSha256` 一致。
 
 解包：
 

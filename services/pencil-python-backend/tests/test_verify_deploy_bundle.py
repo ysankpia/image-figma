@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
+import json
 import socket
+from pathlib import Path
 
 import pytest
 
-from scripts.verify_deploy_bundle import assert_clean_bundle_tree, assert_port_free
+from scripts.verify_deploy_bundle import assert_clean_bundle_tree, assert_port_free, sha256_file, verify_archive_hash
 
 
 def test_assert_clean_bundle_tree_rejects_runtime_artifacts(tmp_path: Path) -> None:
@@ -33,3 +34,26 @@ def test_assert_port_free_rejects_bound_port() -> None:
 
         with pytest.raises(RuntimeError, match="port already in use"):
             assert_port_free("127.0.0.1", port)
+
+
+def test_verify_archive_hash_accepts_matching_manifest(tmp_path: Path) -> None:
+    archive = tmp_path / "pencil-python-backend-deploy.tar.gz"
+    archive.write_bytes(b"deploy bundle")
+    (tmp_path / "bundle-manifest.json").write_text(
+        json.dumps({"archiveSha256": sha256_file(archive)}),
+        encoding="utf-8",
+    )
+
+    verify_archive_hash(archive)
+
+
+def test_verify_archive_hash_rejects_mismatch(tmp_path: Path) -> None:
+    archive = tmp_path / "pencil-python-backend-deploy.tar.gz"
+    archive.write_bytes(b"deploy bundle")
+    (tmp_path / "bundle-manifest.json").write_text(
+        json.dumps({"archiveSha256": "0" * 64}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="archive sha256 mismatch"):
+        verify_archive_hash(archive)

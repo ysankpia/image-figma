@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import signal
 import shutil
@@ -60,6 +62,7 @@ def main() -> int:
     if not archive_path.exists():
         print(f"archive missing: {archive_path}", file=sys.stderr)
         return 2
+    verify_archive_hash(archive_path)
     acceptance_image = args.acceptance_image.expanduser().resolve() if args.acceptance_image else None
     if acceptance_image and not acceptance_image.exists():
         print(f"acceptance image missing: {acceptance_image}", file=sys.stderr)
@@ -149,6 +152,30 @@ def extract_archive(archive_path: Path, work_dir: Path) -> Path:
 def require_file(path: Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
+
+
+def verify_archive_hash(archive_path: Path) -> None:
+    manifest_path = archive_path.parent / "bundle-manifest.json"
+    if not manifest_path.exists():
+        print("archiveSha256=skip manifest missing", flush=True)
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    expected = manifest.get("archiveSha256")
+    if not isinstance(expected, str) or not expected:
+        print("archiveSha256=skip manifest has no archiveSha256", flush=True)
+        return
+    actual = sha256_file(archive_path)
+    if actual != expected:
+        raise RuntimeError(f"archive sha256 mismatch: actual={actual} expected={expected}")
+    print(f"archiveSha256=ok {actual}", flush=True)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def assert_clean_bundle_tree(root: Path) -> None:

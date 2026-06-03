@@ -126,6 +126,13 @@ The current verified local bundle evidence is:
 ```text
 /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/pencil-python-backend-deploy.tar.gz
 /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/bundle-manifest.json
+/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/release-summary.md
+```
+
+Before and after upload, compare the archive hash with `archiveSha256` in `release-summary.md`:
+
+```bash
+shasum -a 256 /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle-final-20260604/pencil-python-backend-deploy.tar.gz
 ```
 
 ## Server Deployment

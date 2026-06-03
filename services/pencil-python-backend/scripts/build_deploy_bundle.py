@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -70,6 +71,7 @@ def main() -> int:
     staging_dir = out_dir / args.name
     archive_path = out_dir / f"{args.name}.tar.gz"
     manifest_path = out_dir / "bundle-manifest.json"
+    summary_path = out_dir / "release-summary.md"
 
     if not is_git_repo():
         print(f"not a git repository: {REPO_ROOT}", file=sys.stderr)
@@ -94,12 +96,16 @@ def main() -> int:
         copy_file(rel_path, staging_dir)
 
     create_archive(staging_dir, archive_path)
-    manifest = build_manifest(args.name, staging_dir, archive_path, files)
+    archive_sha256 = sha256_file(archive_path)
+    manifest = build_manifest(args.name, staging_dir, archive_path, archive_sha256, files)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    summary_path.write_text(build_release_summary(manifest), encoding="utf-8")
 
     print(f"staging={staging_dir}")
     print(f"archive={archive_path} bytes={archive_path.stat().st_size}")
+    print(f"archiveSha256={archive_sha256}")
     print(f"manifest={manifest_path}")
+    print(f"summary={summary_path}")
     print(f"files={len(files)}")
     return 0
 
@@ -163,7 +169,21 @@ def create_archive(staging_dir: Path, archive_path: Path) -> None:
         archive.add(staging_dir, arcname=staging_dir.name)
 
 
-def build_manifest(bundle_name: str, staging_dir: Path, archive_path: Path, files: list[str]) -> dict[str, object]:
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_manifest(
+    bundle_name: str,
+    staging_dir: Path,
+    archive_path: Path,
+    archive_sha256: str,
+    files: list[str],
+) -> dict[str, object]:
     commit = git_output(["git", "rev-parse", "HEAD"])
     short_commit = git_output(["git", "rev-parse", "--short", "HEAD"])
     return {
@@ -175,6 +195,7 @@ def build_manifest(bundle_name: str, staging_dir: Path, archive_path: Path, file
         "gitShortCommit": short_commit,
         "stagingDir": str(staging_dir),
         "archivePath": str(archive_path),
+        "archiveSha256": archive_sha256,
         "fileCount": len(files),
         "includedRoots": [
             "services/pencil-python-backend",
@@ -193,6 +214,36 @@ def build_manifest(bundle_name: str, staging_dir: Path, archive_path: Path, file
         ],
         "files": files,
     }
+
+
+def build_release_summary(manifest: dict[str, object]) -> str:
+    steps = manifest["serverBuildSteps"]
+    if not isinstance(steps, list):
+        raise TypeError("serverBuildSteps must be a list")
+    step_text = "\n".join(f"- `{step}`" for step in steps)
+    return f"""# Pencil Python Backend Deploy Bundle
+
+```text
+bundleName={manifest["bundleName"]}
+gitShortCommit={manifest["gitShortCommit"]}
+fileCount={manifest["fileCount"]}
+archivePath={manifest["archivePath"]}
+archiveSha256={manifest["archiveSha256"]}
+```
+
+## Verify After Upload
+
+```bash
+sha256sum pencil-python-backend-deploy.tar.gz
+shasum -a 256 pencil-python-backend-deploy.tar.gz
+```
+
+Use either command depending on the server OS. The hash must match `archiveSha256` above.
+
+## Server Build Steps
+
+{step_text}
+"""
 
 
 def git_output(command: list[str]) -> str:

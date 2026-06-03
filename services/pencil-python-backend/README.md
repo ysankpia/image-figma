@@ -198,7 +198,12 @@ make verify-bundle \
   pencil-python-backend-deploy/
   pencil-python-backend-deploy.tar.gz
   bundle-manifest.json
+  release-summary.md
 ```
+
+`bundle-manifest.json` 和 `release-summary.md` 会记录 `archiveSha256`。上传服务器后用
+`sha256sum pencil-python-backend-deploy.tar.gz` 或
+`shasum -a 256 pencil-python-backend-deploy.tar.gz` 核对 hash，必须和 `archiveSha256` 一致。
 
 bundle 只包含当前部署链路需要的 git-tracked 源码和文档：
 
