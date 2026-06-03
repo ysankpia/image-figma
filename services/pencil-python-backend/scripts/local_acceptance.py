@@ -47,7 +47,7 @@ def main() -> int:
         stderr=subprocess.STDOUT,
     )
     try:
-        wait_for_health(f"http://{args.host}:{args.port}", args.timeout_seconds)
+        wait_for_health(f"http://{args.host}:{args.port}", args.timeout_seconds, server)
         run(
             [
                 sys.executable,
@@ -91,13 +91,19 @@ def run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> None:
     subprocess.run(cmd, cwd=cwd, env=env, check=True)
 
 
-def wait_for_health(base_url: str, timeout_seconds: float) -> None:
+def wait_for_health(base_url: str, timeout_seconds: float, server: subprocess.Popen[str]) -> None:
     deadline = time.monotonic() + timeout_seconds
     last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if server.poll() is not None:
+            dump_server_output(server)
+            raise RuntimeError(f"server exited before readiness: code={server.returncode}")
         try:
             response = requests.get(f"{base_url}/api/health", timeout=1)
             response.raise_for_status()
+            if server.poll() is not None:
+                dump_server_output(server)
+                raise RuntimeError(f"server exited during readiness check: code={server.returncode}")
             print("server=ready", flush=True)
             return
         except Exception as error:

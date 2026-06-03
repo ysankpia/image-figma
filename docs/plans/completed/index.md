@@ -117,3 +117,4 @@
 - [Pencil Backend HTTP Client CLI](127-pencil-backend-http-client-cli.md) — `completed`
 - [Pencil Backend Makefile Ops](128-pencil-backend-makefile-ops.md) — `completed`
 - [Pencil Backend Local Acceptance](129-pencil-backend-local-acceptance.md) — `completed`
+- [Pencil Local Acceptance Port Guard](130-pencil-local-acceptance-port-guard.md) — `completed`
