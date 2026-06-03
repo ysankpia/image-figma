@@ -2,4 +2,5 @@ go 1.22
 
 use (
 	./services/backend-go
+	./services/pencil-go
 )

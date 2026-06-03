@@ -1,0 +1,24 @@
+[project]
+name = "pencil-python-backend"
+version = "0.1.0"
+description = "Deployable Python backend for M29 to Pencil project ZIP exports."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.124.0",
+  "uvicorn>=0.38.0",
+  "python-multipart>=0.0.20",
+  "pillow>=11.0.0",
+  "numpy>=2.0.0",
+  "pydantic>=2.12.0",
+  "requests>=2.34.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28.0",
+  "pytest>=9.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

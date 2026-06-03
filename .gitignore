@@ -35,6 +35,7 @@ backend/storage/
 backend/tmp/
 services/backend-go/storage/
 services/backend-go/tmp/
+services/backend-go/bin/
 services/psdlike-python/storage/
 *.sqlite
 *.sqlite3
@@ -49,3 +50,5 @@ figma-plugin/dist/
 figma-plugin/build/
 repomix-output.xml
 services/backend-python/storage/
+
+runs

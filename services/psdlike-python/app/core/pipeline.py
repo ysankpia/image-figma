@@ -16,6 +16,7 @@ from .candidates import (
     build_surface_candidates,
     nms_candidates,
     promote_complex_shape_regions,
+    split_vertical_media_stack_rasters,
 )
 from .colors import estimate_background_color
 from .controls import (
@@ -207,6 +208,11 @@ def run_pipeline(
         max_text_overlap=options.max_text_overlap,
     )
     raster_candidates = nms_candidates(raster_candidates + foreground_candidates, overlap_threshold=0.48)
+    raster_candidates, vertical_media_split_decisions = split_vertical_media_stack_rasters(
+        rgb=rgb,
+        raster_candidates=raster_candidates,
+        text_mask=text_knockout_mask,
+    )
 
     ocr_control_candidates, ocr_control_rejected = detect_ocr_anchored_control_surfaces(
         rgb=rgb,
@@ -243,6 +249,7 @@ def run_pipeline(
         raster_candidates,
         shape_candidates,
     )
+    promotion_decisions.extend(vertical_media_split_decisions)
     raster_candidates, shape_candidates, control_decisions = promote_control_surfaces(
         raster_candidates,
         shape_candidates,

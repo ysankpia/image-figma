@@ -23,6 +23,17 @@
 | `DRAFT_SERVER_STORAGE_ROOT` | Go Draft server 存储根目录 | `./storage/draft_server` | 否 |
 | `DRAFT_SERVER_MAX_UPLOAD_BYTES` | Go Draft server PNG 上传大小上限 | `10485760` | 否 |
 | `DRAFT_SERVER_VISION_ENABLED` | 上传后是否在线运行 vision detector/review | `false` | 否 |
+| `PENCIL_BACKEND_ADDR` | Python Pencil project server 监听地址 | `127.0.0.1:8100` | 否 |
+| `PENCIL_BACKEND_STORAGE_ROOT` | Python Pencil project server 存储根目录 | `./storage` | 否 |
+| `PENCIL_BACKEND_M29EXTRACT` | 本地 `m29extract` 可执行文件路径 | 自动查找 `m29extract`/`../backend-go/bin/m29extract` | 部署时建议显式配置 |
+| `PENCIL_BACKEND_MAX_UPLOAD_BYTES` | Python Pencil project server 单图片上传大小上限 | `10485760` | 否 |
+| `PENCIL_BACKEND_MAX_FILES` | Python Pencil project server 单项目最大图片数 | `20` | 否 |
+| `PENCIL_BACKEND_MAX_WORKERS` | Python Pencil project server 后台导出并发数；部署低内存机器建议保持 `1` | `1` | 否 |
+| `PENCIL_BACKEND_CORS_ALLOW_ORIGINS` | Python Pencil project server CORS origins，逗号分隔 | `*` | 否 |
+| `PENCIL_SERVER_ADDR` | Go Pencil project server 监听地址，已被 Python Pencil backend 取代 | `127.0.0.1:8100` | legacy |
+| `PENCIL_SERVER_STORAGE_ROOT` | Go Pencil project server 存储根目录，已被 Python Pencil backend 取代 | `./storage/pencil_server` | legacy |
+| `PENCIL_SERVER_MAX_UPLOAD_BYTES` | Go Pencil project server 单 PNG 上传大小上限，已被 Python Pencil backend 取代 | `10485760` | legacy |
+| `PENCIL_SERVER_MAX_FILES` | Go Pencil project server 单项目最大 PNG 数，已被 Python Pencil backend 取代 | `20` | legacy |
 | `VISION_PROVIDER` | 视觉 provider 类型 | `openai-compatible` | 仅运行 vision 时需要 |
 | `VISION_WIRE_API` | OpenAI-compatible wire API，支持 `responses`、`chat.completions` | `responses` | 仅运行 vision 时需要 |
 | `VISION_BASE_URL` | OpenAI-compatible base URL，可换供应商 | `https://api.openai.com` | 仅运行 vision 时需要 |
@@ -100,6 +111,60 @@ GET /api/draft-preview/{taskId}
 GET /api/draft-preview/{taskId}/dsl
 GET /api/draft-preview/{taskId}/assets/{assetId}.png
 ```
+
+## Pencil Python Project Server
+
+Current Pencil delivery route:
+
+```bash
+cd services/pencil-python-backend
+PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_BACKEND_ADDR=127.0.0.1:8100 \
+PENCIL_BACKEND_MAX_WORKERS=1 \
+OCR_PROVIDER=baidu_ppocrv5 \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
+```
+
+Pencil project endpoints:
+
+```text
+POST /api/pencil/projects
+GET /api/pencil/projects/{taskId}
+GET /api/pencil/projects/{taskId}/manifest
+GET /api/pencil/projects/{taskId}/download.zip
+```
+
+The project server returns a downloadable ZIP containing `clean-editable`, `visual-fidelity`, and `visual-ocr` `.pen` packages when `mode=all`.
+
+`m29extract` should be built from the Go backend and used as a local executable:
+
+```bash
+cd services/backend-go
+mkdir -p bin
+go build -o bin/m29extract ./cmd/m29extract
+```
+
+## Legacy Go Pencil Project Server
+
+Local run:
+
+```bash
+cd services/pencil-go
+PENCIL_SERVER_ADDR=127.0.0.1:8100 \
+OCR_PROVIDER=baidu_ppocrv5 \
+go run ./cmd/pencilserver
+```
+
+Pencil project endpoints:
+
+```text
+POST /api/pencil/projects
+GET /api/pencil/projects/{taskId}
+GET /api/pencil/projects/{taskId}/manifest
+GET /api/pencil/projects/{taskId}/download.zip
+```
+
+This Go Pencil server is retained as a superseded experiment. Do not use it as the current product delivery route.
 
 ## Vision Provider
 

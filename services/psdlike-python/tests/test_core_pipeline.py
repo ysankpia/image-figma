@@ -15,6 +15,7 @@ from app.core.runtime import wire_runtime_namespace
 from app.core.schema import BBox, Candidate, OCRBlock, intersection_area, ioa, iou
 from app.core.style import TextStyleContext, sample_text_color_with_diagnostics
 from app.core.controls import build_control_profile, suppress_container_parent_shapes, suppress_control_owned_shapes
+from app.core.candidates import split_vertical_media_stack_rasters
 
 
 def test_bbox_geometry() -> None:
@@ -663,6 +664,58 @@ def test_container_parent_shape_is_suppressed_by_sibling_surfaces() -> None:
     assert suppressed[0]["kind"] == "container_parent_shape_suppressed"
     assert suppressed[0]["reason"] == "container_children_own_surface"
     assert suppressed[0]["childSurfaceCount"] == 3
+
+
+def test_vertical_media_stack_raster_is_split_into_items() -> None:
+    image = Image.new("RGB", (180, 720), "white")
+    draw = ImageDraw.Draw(image)
+    colors = [(180, 210, 172), (214, 160, 88), (164, 198, 214)]
+    for index, color in enumerate(colors):
+        top = 32 + index * 220
+        draw.rounded_rectangle((32, top, 148, top + 170), radius=12, fill=color)
+        for step in range(0, 116, 8):
+            draw.line((34 + step, top + 2, 148, top + 170 - step), fill=(max(0, color[0] - 50), max(0, color[1] - 35), max(0, color[2] - 25)), width=2)
+
+    rgb = np.asarray(image)
+    text_mask = np.zeros((720, 180), dtype=bool)
+    parent = Candidate(
+        "parent",
+        "raster",
+        BBox(32, 32, 116, 610),
+        0.7,
+        {"textOverlap": 0.0, "texture": 0.18, "edge": 0.16},
+        "foreground_object_on_surface",
+    )
+
+    kept, decisions = split_vertical_media_stack_rasters(rgb, [parent], text_mask)
+
+    assert [item.reason for item in kept] == ["vertical_media_stack_item", "vertical_media_stack_item", "vertical_media_stack_item"]
+    assert all(item.bbox.width == parent.bbox.width for item in kept)
+    assert [item.bbox.y for item in kept] == sorted(item.bbox.y for item in kept)
+    assert decisions[0]["kind"] == "vertical_media_stack_parent_suppressed"
+    assert decisions[0]["reason"] == "vertical_media_stack_split"
+
+
+def test_single_tall_media_raster_is_not_split_without_gutters() -> None:
+    image = Image.new("RGB", (180, 620), (164, 190, 172))
+    draw = ImageDraw.Draw(image)
+    for y in range(0, 620, 10):
+        draw.line((0, y, 180, min(619, y + 90)), fill=(90 + y % 80, 130, 118), width=3)
+    rgb = np.asarray(image)
+    text_mask = np.zeros((620, 180), dtype=bool)
+    poster = Candidate(
+        "poster",
+        "raster",
+        BBox(32, 24, 116, 560),
+        0.7,
+        {"textOverlap": 0.0, "texture": 0.20, "edge": 0.18},
+        "foreground_object_on_surface",
+    )
+
+    kept, decisions = split_vertical_media_stack_rasters(rgb, [poster], text_mask)
+
+    assert kept == [poster]
+    assert decisions == []
 
 
 def test_multi_text_sibling_cards_materialize_as_container_surfaces(tmp_path: Path) -> None:
