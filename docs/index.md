@@ -48,6 +48,7 @@ Figma Plugin
 - 做 Go 后端：读 [architecture/runtime.md](architecture/runtime.md)、[engineering/current-code-map.md](engineering/current-code-map.md) 和当前 active plan。
 - 做视觉模型接入：读 [architecture/vision-provider.md](architecture/vision-provider.md) 和 [reference/env-vars.md](reference/env-vars.md)。
 - 做 M29 物理证据：读 [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)。
+- 做 Pencil `.pen` 项目导出或部署：读 [engineering/current-code-map.md](engineering/current-code-map.md)、[reference/env-vars.md](reference/env-vars.md) 和 [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)。
 - 做插件/Renderer：读 [architecture/plugin-rendering.md](architecture/plugin-rendering.md)、[architecture/dsl.md](architecture/dsl.md) 和 [engineering/validation.md](engineering/validation.md)。
 - 做 bug 修复：读 [bugs/index.md](bugs/index.md)、相关 bug record 和 [engineering/validation.md](engineering/validation.md)。
 - 做历史对比：读 [reference/codia-samples/](reference/codia-samples/) 和 `internal/eval/codia`，不要把 eval 数据接入 generation。
@@ -102,3 +103,8 @@ Figma Plugin
 - 术语表：[reference/glossary.md](reference/glossary.md)
 - Codia golden samples：[reference/codia-samples/](reference/codia-samples/)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
+
+## Runbooks
+
+- [runbooks/local-setup.md](runbooks/local-setup.md)
+- [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)

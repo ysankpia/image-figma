@@ -18,14 +18,23 @@ Figma Plugin
 
 ## Pencil Project Export Surface
 
-`services/pencil-python-backend` is the current Pencil project package export route. It is separate from the Draft runtime mainline and does not import the renderer/plugin/Draft packages. It uses the already-validated Python Pencil exporter and calls `m29extract` as a local executable for physical evidence.
+`services/pencil-python-backend` is the current Pencil project package export route. It is separate from the Draft runtime mainline and does not import the renderer/plugin/Draft packages. It uses the already-validated Python Pencil exporter. The default HTTP/CLI boundary source is `psdlike`; explicit `m29` and `hybrid` remain available.
 
 ```text
 1..N PNG
--> local m29extract executable
+-> PSD-like boundary source by default
 -> Python Pencil exporter
 -> project ZIP builder
 -> clean-editable / visual-fidelity / visual-ocr .pen ZIP
+```
+
+Operational files:
+
+```text
+services/pencil-python-backend/deploy/pencil-python-backend.env.example
+services/pencil-python-backend/deploy/pencil-python-backend.service
+services/pencil-python-backend/scripts/http_smoke.py
+docs/runbooks/pencil-python-backend-deploy.md
 ```
 
 `services/pencil-go` is retained as a superseded experiment and should not be extended as the current product delivery path.

@@ -133,6 +133,15 @@ hybrid   PSD-like 主边界 + M29 低覆盖局部对象兜底，适合 PSD-like 
 
 如果请求不传 `boundarySource`，服务使用 `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE`；默认值是 `psdlike`。
 
+HTTP smoke：
+
+```bash
+uv run python scripts/http_smoke.py \
+  --base-url http://127.0.0.1:8100 \
+  --image /absolute/path/to/sample.png \
+  --out /Volumes/WorkDrive/pencil-exports/http-smoke
+```
+
 ## Environment
 
 ```text
@@ -172,3 +181,5 @@ PENCIL_BACKEND_MAX_WORKERS=1
 2 GB RAM: 个人自用、单 worker、10 MB upload limit 的合理起点。
 4 GB RAM: 更稳，适合一次项目多图或偶发并发。
 ```
+
+服务器部署细节见 [../../docs/runbooks/pencil-python-backend-deploy.md](../../docs/runbooks/pencil-python-backend-deploy.md)。模板文件在 [deploy/](deploy/)。

@@ -1,0 +1,19 @@
+[Unit]
+Description=Pencil Python Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pencil
+Group=pencil
+WorkingDirectory=/opt/pencil-python-backend/services/pencil-python-backend
+EnvironmentFile=/etc/pencil-python-backend/pencil-python-backend.env
+ExecStart=/usr/local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
