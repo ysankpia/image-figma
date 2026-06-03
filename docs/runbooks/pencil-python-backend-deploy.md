@@ -131,10 +131,7 @@ curl -sS http://127.0.0.1:8100/api/health
 
 ```bash
 cd /opt/pencil-python-backend/services/pencil-python-backend
-uv run python scripts/http_smoke.py \
-  --base-url http://127.0.0.1:8100 \
-  --image /absolute/path/to/sample.png \
-  --out /tmp/pencil-http-smoke
+make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
 ```
 
 必须看到：
@@ -149,12 +146,11 @@ missingRefs=0
 For actual non-frontend upload/download automation, use:
 
 ```bash
-uv run python scripts/upload_project.py \
-  --base-url http://127.0.0.1:8100 \
-  --input /absolute/path/to/screens \
-  --out /tmp/pencil-http-project \
-  --project-name "HTTP Project" \
-  --mode all
+make upload-http \
+  IMAGE=/absolute/path/to/screens \
+  OUT=/tmp/pencil-http-project \
+  PROJECT_NAME="HTTP Project" \
+  MODE=all
 ```
 
 ## nginx
@@ -194,8 +190,7 @@ badRefs / missingRefs          -> backend export contract bug，不能在 Figma 
 
 ```bash
 cd /opt/pencil-python-backend/services/pencil-python-backend
-uv run python -m py_compile $(find app tests -name '*.py' | sort)
-uv run pytest -q
-uv run python scripts/preflight.py --require-m29
-uv run python scripts/http_smoke.py --base-url http://127.0.0.1:8100 --image /absolute/path/to/sample.png --out /tmp/pencil-http-smoke
+make check
+make preflight-strict
+make smoke IMAGE=/absolute/path/to/sample.png OUT=/tmp/pencil-http-smoke
 ```

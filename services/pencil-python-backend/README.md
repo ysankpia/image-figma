@@ -138,22 +138,20 @@ hybrid   PSD-like 主边界 + M29 低覆盖局部对象兜底，适合 PSD-like 
 HTTP smoke：
 
 ```bash
-uv run python scripts/preflight.py
-uv run python scripts/http_smoke.py \
-  --base-url http://127.0.0.1:8100 \
-  --image /absolute/path/to/sample.png \
-  --out /Volumes/WorkDrive/pencil-exports/http-smoke
+make preflight
+make smoke \
+  IMAGE=/absolute/path/to/sample.png \
+  OUT=/Volumes/WorkDrive/pencil-exports/http-smoke
 ```
 
 HTTP caller CLI:
 
 ```bash
-uv run python scripts/upload_project.py \
-  --base-url http://127.0.0.1:8100 \
-  --input /absolute/path/to/screens \
-  --out /Volumes/WorkDrive/pencil-exports/http-project \
-  --project-name "HTTP Project" \
-  --mode all
+make upload-http \
+  IMAGE=/absolute/path/to/screens \
+  OUT=/Volumes/WorkDrive/pencil-exports/http-project \
+  PROJECT_NAME="HTTP Project" \
+  MODE=all
 ```
 
 ## Environment
