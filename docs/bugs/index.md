@@ -15,6 +15,7 @@
 
 ## 最近 Resolved Bugs
 
+- [020-pencil-empty-transparent-page-becomes-black-frame.md](resolved/020-pencil-empty-transparent-page-becomes-black-frame.md)
 - [019-pencil-psdlike-raster-icon-truncation.md](resolved/019-pencil-psdlike-raster-icon-truncation.md)
 - [018-pencil-textlayer-cjk-clipping.md](resolved/018-pencil-textlayer-cjk-clipping.md)
 - [016-media-contained-long-control-label-preserved-as-raster.md](resolved/016-media-contained-long-control-label-preserved-as-raster.md)

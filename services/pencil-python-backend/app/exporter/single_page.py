@@ -621,6 +621,39 @@ def copy_used_crop_to_visible_assets(
     return f"./assets/visible/{output_name}", metadata
 
 
+def source_image_path(paths: ExportPaths) -> Path:
+    direct = paths.input_dir / "source.png"
+    if direct.exists():
+        return direct
+    asset_source = paths.input_dir / "assets" / "source.png"
+    if asset_source.exists():
+        return asset_source
+    raise FileNotFoundError(f"Missing source image in evidence directory: {paths.input_dir}")
+
+
+def has_alpha_pixels(image_path: Path) -> bool:
+    with Image.open(image_path) as image:
+        if image.mode in ("RGBA", "LA"):
+            alpha = image.getchannel("A")
+            return alpha.getextrema()[0] < 255
+        if image.mode == "P" and "transparency" in image.info:
+            return True
+    return False
+
+
+def copy_source_to_visible_asset(paths: ExportPaths) -> tuple[str, dict[str, Any]]:
+    source = source_image_path(paths)
+    output_name = "source_full.png"
+    output_path = paths.production_assets_dir / output_name
+    with Image.open(source) as image:
+        image.save(output_path)
+    return f"./assets/visible/{output_name}", {
+        "visibleAssetSource": "source_full_raster",
+        "fallbackPolicy": "empty_evidence_source_raster.v1",
+        "sourceHasAlpha": has_alpha_pixels(source),
+    }
+
+
 def load_primitives(evidence: dict[str, Any]) -> dict[str, Primitive]:
     primitives: dict[str, Primitive] = {}
     for item in evidence.get("primitives") or []:
@@ -1063,7 +1096,7 @@ def make_image_node(layer: dict[str, Any], asset_url: str, asset_metadata: dict[
     bbox = layer["bbox"]
     metadata = {
         "type": "m29_visible_crop",
-        "primitiveId": layer["sourcePrimitiveId"],
+        "primitiveId": layer.get("sourcePrimitiveId"),
         "primitiveType": layer["role"],
         "editableMode": "raster_crop",
         "z": layer["z"],
@@ -1079,6 +1112,16 @@ def make_image_node(layer: dict[str, Any], asset_url: str, asset_metadata: dict[
         "height": bbox["height"],
         "fill": {"type": "image", "enabled": True, "url": asset_url, "mode": "stretch"},
         "metadata": metadata,
+    }
+
+
+def make_source_fallback_layer(image: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": "source_full",
+        "sourcePrimitiveId": "source_full",
+        "role": "source_full_raster",
+        "bbox": {"x": 0, "y": 0, "width": int(image["width"]), "height": int(image["height"])},
+        "z": 0,
     }
 
 
@@ -1212,6 +1255,7 @@ def build_production_document(
     crop_nodes = 0
     shape_nodes = 0
     knockout_nodes = 0
+    source_fallback_nodes = 0
 
     for layer in sorted(editable_shape_layers, key=lambda item: item.get("z", 0)):
         counts[layer["role"]] += 1
@@ -1245,7 +1289,24 @@ def build_production_document(
         children.append(make_text_node(layer, primitive, paths, canvas))
         text_nodes += 1
 
+    if not children:
+        layer = make_source_fallback_layer(image)
+        asset_url, asset_metadata = copy_source_to_visible_asset(paths)
+        counts[layer["role"]] += 1
+        children.append(make_image_node(layer, asset_url, asset_metadata))
+        crop_nodes += 1
+        source_fallback_nodes += 1
+        clean_assets.append(
+            {
+                "primitiveId": layer["sourcePrimitiveId"],
+                "role": layer["role"],
+                "url": asset_url,
+                **asset_metadata,
+            }
+        )
+
     children.sort(key=lambda node: int((node.get("metadata") or {}).get("z", 0)))
+    frame_fill = "#FFFFFF" if source_fallback_nodes else page_fill
 
     document = {
         "version": PEN_VERSION,
@@ -1259,13 +1320,14 @@ def build_production_document(
                 "width": image["width"],
                 "height": image["height"],
                 "layout": "none",
-                "fill": page_fill,
+                "fill": frame_fill,
                 "clip": False,
                 "metadata": {
                     "type": "m29_pencil_production_page",
                     "source": "m29_physical_evidence",
                     "exportMode": mode.name,
                     "rawSourceVisible": False,
+                    "sourceFallback": bool(source_fallback_nodes),
                 },
                 "children": children,
             }
@@ -1285,6 +1347,7 @@ def build_production_document(
         "cropNodes": crop_nodes,
         "shapeNodes": shape_nodes,
         "textKnockoutCropNodes": knockout_nodes,
+        "sourceFallbackNodes": source_fallback_nodes,
         "artTextCropNodes": sum(1 for item in text_decisions if str(item.get("reason", "")).startswith("large_")),
         "cropTextNodes": sum(
             1
@@ -1465,6 +1528,7 @@ def export_package(args: argparse.Namespace) -> dict[str, Any]:
             "cropTextNodes": manifest["cropTextNodes"],
             "suppressedDuplicateCropNodes": manifest["suppressedDuplicateCropNodes"],
             "suppressedInternalCropNodes": manifest["suppressedInternalCropNodes"],
+            "sourceFallbackNodes": manifest["sourceFallbackNodes"],
             "assetCount": len(manifest["assets"]),
         }
         result = {

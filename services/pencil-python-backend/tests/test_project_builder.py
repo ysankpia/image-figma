@@ -169,6 +169,46 @@ def test_psdlike_adapter_exports_shapes_as_editable_and_rasters_as_assets(tmp_pa
     assert "strokeWidth" not in shape_node
 
 
+def test_single_page_empty_transparent_evidence_falls_back_to_source_raster(tmp_path: Path) -> None:
+    evidence_dir = write_empty_transparent_evidence(tmp_path / "transparent")
+    export_dir = tmp_path / "single"
+
+    export_single_page(
+        SinglePageExportOptions(
+            input_dir=evidence_dir,
+            out=export_dir,
+            name="Transparent Unit",
+            mode="all",
+            include_debug_pen=True,
+        )
+    )
+
+    for mode_dir in ("production", "visual-fidelity", "visual-ocr"):
+        manifest = read_json(export_dir / mode_dir / "manifest.json")
+        design = read_json(export_dir / mode_dir / "design.pen")
+        frame = design["children"][0]
+        assert frame["fill"] == "#FFFFFF"
+        assert frame["metadata"]["sourceFallback"] is True
+        assert manifest["sourceFallbackNodes"] == 1
+        assert manifest["cropNodes"] == 1
+        assert len(manifest["assets"]) == 1
+        assert manifest["assets"][0]["visibleAssetSource"] == "source_full_raster"
+        assert manifest["assets"][0]["sourceHasAlpha"] is True
+        assert "source.png" not in json.dumps(design)
+
+        nodes = collect_nodes(design["children"])
+        image_node = next(node for node in nodes if (node.get("metadata") or {}).get("visibleAssetSource") == "source_full_raster")
+        fill = image_node["fill"]
+        assert fill["enabled"] is True
+        assert fill["url"] == "./assets/visible/source_full.png"
+        asset_path = export_dir / mode_dir / fill["url"].removeprefix("./")
+        assert asset_path.exists()
+        with Image.open(asset_path) as image:
+            assert image.mode == "RGBA"
+            assert image.size == (28, 28)
+            assert image.getchannel("A").getextrema()[0] < 255
+
+
 def test_psdlike_adapter_rasterizes_small_mask_required_shapes(tmp_path: Path) -> None:
     psdlike_dir = write_fake_small_shape_output(tmp_path / "small_shape")
     evidence_dir = tmp_path / "evidence"
@@ -353,6 +393,33 @@ def write_fake_psdlike_output(path: Path) -> Path:
         "diagnostics": {"pageBackground": "#f5f7fb"},
     }
     (path / "layer_stack.v1.json").write_text(json.dumps(layer_stack), encoding="utf-8")
+    return path
+
+
+def write_empty_transparent_evidence(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGBA", (28, 28), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((7, 7, 20, 20), radius=3, fill=(36, 204, 148, 255))
+    image.save(path / "source.png")
+    evidence = {
+        "schemaName": "M29PhysicalEvidence",
+        "version": "1.0",
+        "generator": {"name": "fake", "mode": "empty-transparent-test"},
+        "image": {"width": 28, "height": 28, "sourceRef": "source.png"},
+        "ocr": {"provided": False, "blockCount": 0},
+        "primitives": [],
+        "physicalRelations": [],
+        "assets": [],
+        "diagnostics": {"pageBackground": "#000000", "boundarySource": "psdlike"},
+    }
+    replay = {
+        "schema": "m29.pencil.replay.v1",
+        "layers": [],
+        "summary": {"layerCount": 0, "boundarySource": "psdlike"},
+    }
+    (path / "m29_physical_evidence.v1.json").write_text(json.dumps(evidence), encoding="utf-8")
+    (path / "m29-pencil-replay.v1.json").write_text(json.dumps(replay), encoding="utf-8")
     return path
 
 
