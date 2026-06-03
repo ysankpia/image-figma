@@ -52,4 +52,8 @@ bundle:
 	uv run python scripts/build_deploy_bundle.py --out "$(BUNDLE_OUT)" --force
 
 verify-bundle: bundle
-	uv run python scripts/verify_deploy_bundle.py --archive "$(BUNDLE_ARCHIVE)"
+	@if [ -n "$(IMAGE)" ]; then \
+		uv run python scripts/verify_deploy_bundle.py --archive "$(BUNDLE_ARCHIVE)" --acceptance-image "$(IMAGE)"; \
+	else \
+		uv run python scripts/verify_deploy_bundle.py --archive "$(BUNDLE_ARCHIVE)"; \
+	fi

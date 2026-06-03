@@ -66,6 +66,16 @@ make verify-bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-b
 `make verify-bundle` 会重新构建 bundle，在临时目录解包，检查源码树不含 runtime artifact，安装两个 Python
 服务依赖，编译 `m29extract`，并运行 Pencil backend preflight。它通过后再上传。
 
+如果要在上传前验证解包后的 HTTP 导出链路，传入一张样图：
+
+```bash
+make verify-bundle \
+  BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle \
+  IMAGE=/absolute/path/to/sample.png
+```
+
+这会在临时解包目录里启动服务、上传样图、下载 ZIP，并检查三种模式 `.pen` 的可见 asset refs。
+
 上传：
 
 ```bash

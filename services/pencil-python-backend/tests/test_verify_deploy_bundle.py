@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import socket
 
 import pytest
 
-from scripts.verify_deploy_bundle import assert_clean_bundle_tree
+from scripts.verify_deploy_bundle import assert_clean_bundle_tree, assert_port_free
 
 
 def test_assert_clean_bundle_tree_rejects_runtime_artifacts(tmp_path: Path) -> None:
@@ -23,3 +24,12 @@ def test_assert_clean_bundle_tree_accepts_required_sources(tmp_path: Path) -> No
 
     assert_clean_bundle_tree(tmp_path)
 
+
+def test_assert_port_free_rejects_bound_port() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = str(sock.getsockname()[1])
+
+        with pytest.raises(RuntimeError, match="port already in use"):
+            assert_port_free("127.0.0.1", port)

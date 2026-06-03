@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 from typing import Sequence
+
+import requests
 
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +43,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip uv sync in unpacked Python services.",
     )
+    parser.add_argument(
+        "--acceptance-image",
+        type=Path,
+        help="Optional image for HTTP smoke against the unpacked bundle service.",
+    )
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default="8110")
+    parser.add_argument("--timeout-seconds", type=float, default=30.0)
     return parser.parse_args()
 
 
@@ -46,6 +59,10 @@ def main() -> int:
     archive_path = args.archive.expanduser().resolve()
     if not archive_path.exists():
         print(f"archive missing: {archive_path}", file=sys.stderr)
+        return 2
+    acceptance_image = args.acceptance_image.expanduser().resolve() if args.acceptance_image else None
+    if acceptance_image and not acceptance_image.exists():
+        print(f"acceptance image missing: {acceptance_image}", file=sys.stderr)
         return 2
 
     cleanup = False
@@ -87,6 +104,7 @@ def main() -> int:
         env.update(
             {
                 "PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE": "psdlike",
+                "PENCIL_BACKEND_ADDR": f"{args.host}:{args.port}",
                 "PENCIL_BACKEND_STORAGE_ROOT": str(work_dir / "storage"),
                 "PENCIL_BACKEND_PSDLIKE_ROOT": str(unpacked_root / "services/psdlike-python"),
                 "PENCIL_BACKEND_M29EXTRACT": str(backend_go / "bin/m29extract"),
@@ -95,6 +113,16 @@ def main() -> int:
             }
         )
         run(["uv", "run", "python", "scripts/preflight.py", "--require-m29"], cwd=unpacked_root / "services/pencil-python-backend", env=env)
+        if acceptance_image:
+            run_http_acceptance(
+                service_root=unpacked_root / "services/pencil-python-backend",
+                image=acceptance_image,
+                out_dir=work_dir / "http-acceptance",
+                host=args.host,
+                port=args.port,
+                timeout_seconds=args.timeout_seconds,
+                env=env,
+            )
         print("deployBundleVerification=ok")
         return 0
     finally:
@@ -145,6 +173,99 @@ def clean_command_env() -> dict[str, str]:
     env = os.environ.copy()
     env.pop("VIRTUAL_ENV", None)
     return env
+
+
+def run_http_acceptance(
+    *,
+    service_root: Path,
+    image: Path,
+    out_dir: Path,
+    host: str,
+    port: str,
+    timeout_seconds: float,
+    env: dict[str, str],
+) -> None:
+    assert_port_free(host, port)
+    server = subprocess.Popen(
+        ["uv", "run", "uvicorn", "app.main:app", "--host", host, "--port", port],
+        cwd=service_root,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        wait_for_health(f"http://{host}:{port}", timeout_seconds, server)
+        run(
+            [
+                "uv",
+                "run",
+                "python",
+                "scripts/http_smoke.py",
+                "--base-url",
+                f"http://{host}:{port}",
+                "--image",
+                str(image),
+                "--out",
+                str(out_dir),
+                "--project-name",
+                "Deploy Bundle HTTP Acceptance",
+            ],
+            cwd=service_root,
+            env=env,
+        )
+        print("httpAcceptance=ok")
+    finally:
+        stop_server(server)
+
+
+def assert_port_free(host: str, port: str) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.25)
+        if sock.connect_ex((host, int(port))) == 0:
+            raise RuntimeError(f"port already in use: {host}:{port}")
+
+
+def wait_for_health(base_url: str, timeout_seconds: float, server: subprocess.Popen[str]) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        if server.poll() is not None:
+            dump_server_output(server)
+            raise RuntimeError(f"server exited before readiness: code={server.returncode}")
+        try:
+            response = requests.get(f"{base_url}/api/health", timeout=1)
+            response.raise_for_status()
+            if server.poll() is not None:
+                dump_server_output(server)
+                raise RuntimeError(f"server exited during readiness check: code={server.returncode}")
+            print("server=ready", flush=True)
+            return
+        except Exception as error:
+            last_error = error
+            time.sleep(0.25)
+    raise TimeoutError(f"server did not become ready: {last_error}")
+
+
+def stop_server(server: subprocess.Popen[str]) -> None:
+    if server.poll() is not None:
+        dump_server_output(server)
+        return
+    server.send_signal(signal.SIGINT)
+    try:
+        server.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        server.kill()
+        server.wait(timeout=5)
+    dump_server_output(server)
+
+
+def dump_server_output(server: subprocess.Popen[str]) -> None:
+    if server.stdout is None:
+        return
+    output = server.stdout.read()
+    if output:
+        print(output, end="")
 
 
 def run(cmd: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:

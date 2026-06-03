@@ -121,3 +121,4 @@
 - [Pencil Backend Deploy Bundle](131-pencil-backend-deploy-bundle.md) — `completed`
 - [Pencil systemd uv PATH hardening](132-pencil-systemd-uv-path-hardening.md) — `completed`
 - [Pencil Deploy Bundle Unpack Verification](133-pencil-deploy-bundle-unpack-verification.md) — `completed`
+- [Pencil Deploy Bundle HTTP Acceptance](134-pencil-deploy-bundle-http-acceptance.md) — `completed`

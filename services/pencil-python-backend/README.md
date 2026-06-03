@@ -181,6 +181,16 @@ make verify-bundle BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-b
 服务依赖，编译 `m29extract`，并运行 Pencil backend preflight。它验证的是部署包落地后的可运行性，不只是
 tar 文件存在。
 
+如果要同时验证解包后的 HTTP 导出链路，传入一张样图：
+
+```bash
+make verify-bundle \
+  BUNDLE_OUT=/Volumes/WorkDrive/pencil-exports/pencil-backend-bundle \
+  IMAGE=/absolute/path/to/sample.png
+```
+
+这会在解包目录里临时启动 Pencil backend，上传样图，下载 ZIP，并检查三种模式 `.pen` 的可见 asset refs。
+
 输出：
 
 ```text
