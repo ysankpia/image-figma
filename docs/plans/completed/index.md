@@ -111,3 +111,4 @@
 - [Pencil PSD-like Raster Boundary Repair](121-pencil-psdlike-raster-boundary-repair.md) — `completed`
 - [Pencil Default PSD-like Boundary Source](122-pencil-default-psdlike-boundary-source.md) — `completed`
 - [Pencil Backend Deploy Runbook And Smoke](123-pencil-backend-deploy-runbook-smoke.md) — `completed`
+- [Pencil Backend Deploy Preflight](124-pencil-backend-deploy-preflight.md) — `completed`

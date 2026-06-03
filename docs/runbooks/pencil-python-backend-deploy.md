@@ -116,6 +116,9 @@ sudo systemctl enable --now pencil-python-backend
 检查：
 
 ```bash
+cd /opt/pencil-python-backend/services/pencil-python-backend
+sudo -u pencil env $(grep -v '^#' /etc/pencil-python-backend/pencil-python-backend.env | xargs) \
+  uv run python scripts/preflight.py --require-m29
 systemctl status pencil-python-backend --no-pager
 curl -sS http://127.0.0.1:8100/api/health
 ```
@@ -180,5 +183,6 @@ badRefs / missingRefs          -> backend export contract bug，不能在 Figma 
 cd /opt/pencil-python-backend/services/pencil-python-backend
 uv run python -m py_compile $(find app tests -name '*.py' | sort)
 uv run pytest -q
+uv run python scripts/preflight.py --require-m29
 uv run python scripts/http_smoke.py --base-url http://127.0.0.1:8100 --image /absolute/path/to/sample.png --out /tmp/pencil-http-smoke
 ```

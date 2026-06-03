@@ -9,6 +9,7 @@ User=pencil
 Group=pencil
 WorkingDirectory=/opt/pencil-python-backend/services/pencil-python-backend
 EnvironmentFile=/etc/pencil-python-backend/pencil-python-backend.env
+ExecStartPre=/usr/local/bin/uv run python scripts/preflight.py
 ExecStart=/usr/local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
 Restart=on-failure
 RestartSec=3
