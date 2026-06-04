@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
+from io import BytesIO
 from pathlib import Path
 from time import sleep
-from io import BytesIO
 from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
@@ -165,8 +166,10 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
 
     review = client.get(f"/api/pencil/slice-projects/{project_id}/review")
     assert review.status_code == 200
-    assert "Pencil Assisted Slice Review" in review.text
+    assert "Pencil Assisted Slice Workbench" in review.text
     assert "resizeBox" in review.text
+    assert "fitToScreen" in review.text
+    assert "filteredCandidates" in review.text
 
     project_response = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert project_response.status_code == 200
@@ -224,6 +227,15 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     with ZipFile(zip_path) as archive:
         names = set(archive.namelist())
         selected_zip_bytes = archive.read("selected-assets.zip")
+        for mode in ("clean-editable", "visual-fidelity", "visual-ocr"):
+            design = json.loads(archive.read(f"{mode}/design.pen"))
+            serialized = json.dumps(design)
+            for banned in ("source.png", "raw-crops", "masks/", "debug/", "../"):
+                assert banned not in serialized
+            for url in collect_image_urls(design["children"]):
+                assert url.startswith("./assets/visible/")
+                assert not Path(url).is_absolute()
+                assert f"{mode}/{url.removeprefix('./')}" in names
     assert "manifest.json" in names
     assert "selected-assets.zip" in names
     assert "clean-editable/design.pen" in names
@@ -234,6 +246,19 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
         selected_names = set(selected_archive.namelist())
     assert "manifest.json" in selected_names
     assert len([name for name in selected_names if name.startswith("page_0001/") and name.endswith(".png")]) == 1
+
+
+def test_slice_project_new_page_returns_upload_workbench_html(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="m29")
+    client = TestClient(create_app())
+
+    response = client.get("/api/pencil/slice-projects/new")
+
+    assert response.status_code == 200
+    assert "Pencil Slice Review" in response.text
+    assert 'name="files[]"' in response.text
+    assert "boundarySource" in response.text
+    assert "/api/pencil/slice-projects" in response.text
 
 
 def test_slice_project_api_accepts_three_images(tmp_path: Path) -> None:
@@ -262,6 +287,34 @@ def test_slice_project_api_accepts_three_images(tmp_path: Path) -> None:
     assert [page["pageId"] for page in candidates["pages"]] == ["page_0001", "page_0002", "page_0003"]
     manual = client.get(f"/api/pencil/slice-projects/{project_id}/manual-slices").json()["data"]
     assert [page["pageId"] for page in manual["pages"]] == ["page_0001", "page_0002", "page_0003"]
+
+
+def test_slice_project_rejects_zero_selected_export(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="m29")
+    image_path = tmp_path / "slice-input.png"
+    Image.new("RGB", (64, 48), "#ffffff").save(image_path)
+
+    client = TestClient(create_app())
+    with image_path.open("rb") as handle:
+        response = client.post(
+            "/api/pencil/slice-projects",
+            data={"projectName": "Slice Empty", "boundarySource": "m29"},
+            files=[("files[]", ("slice-input.png", handle, "image/png"))],
+        )
+    project_id = response.json()["data"]["projectId"]
+    manual_slices = {
+        "schema": "pencil.manual_slices.v1",
+        "projectName": "Slice Empty",
+        "pages": [{"pageId": "page_0001", "slices": []}],
+    }
+
+    put_response = client.put(f"/api/pencil/slice-projects/{project_id}/manual-slices", json=manual_slices)
+    assert put_response.status_code == 200
+    assert put_response.json()["data"]["selectedSliceCount"] == 0
+
+    export_response = client.post(f"/api/pencil/slice-projects/{project_id}/export")
+    assert export_response.status_code == 409
+    assert "no selected slices" in export_response.json()["detail"]
 
 
 def test_slice_project_rejects_out_of_bounds_manual_slice(tmp_path: Path) -> None:
@@ -391,3 +444,15 @@ def wait_for_completion(client: TestClient, task_id: str) -> dict[str, object]:
             return data
         sleep(0.05)
     raise AssertionError("task did not complete")
+
+
+def collect_image_urls(nodes: list[dict[str, object]]) -> list[str]:
+    urls: list[str] = []
+    for node in nodes:
+        fill = node.get("fill")
+        if isinstance(fill, dict) and fill.get("type") == "image":
+            urls.append(str(fill.get("url") or ""))
+        children = node.get("children")
+        if isinstance(children, list):
+            urls.extend(collect_image_urls(children))
+    return urls

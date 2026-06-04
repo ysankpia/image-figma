@@ -53,6 +53,7 @@ GET  /api/pencil/projects/{taskId}/download.zip
 Assisted slice review uses a separate synchronous project API:
 
 ```text
+GET  /api/pencil/slice-projects/new
 POST /api/pencil/slice-projects
 GET  /api/pencil/slice-projects/{projectId}
 GET  /api/pencil/slice-projects/{projectId}/review
@@ -349,6 +350,14 @@ For customer delivery, prefer `mode=all` so the ZIP contains all three fallback 
 
 The assisted slice API is for cases where fully automatic ownership is not reliable enough. The server generates candidates, the user confirms or draws slices in a Canvas review page, and `manual_slices.v1.json` becomes the export truth source. M29, PSD-like, OCR, and foreground audit evidence only produce candidates; they do not decide final visible assets.
 
+### Browser Upload Entry
+
+```text
+GET /api/pencil/slice-projects/new
+```
+
+Returns a plain HTML upload page. It lets a browser user select one or more images, set `projectName`, choose `boundarySource`, toggle `includeDebug`, create a slice project, and redirect to the returned review URL. This is the preferred manual entry point for local browser use.
+
 ### Create Slice Project
 
 ```text
@@ -407,7 +416,25 @@ The initial `manual_slices.v1.json` is empty so the review UI can load, but expo
 GET /api/pencil/slice-projects/{projectId}/review
 ```
 
-Returns a static HTML Canvas workbench. V1 supports page switching, candidate selection, manual box drawing, moving, resizing, deleting, renaming, saving, exporting, and downloading the resulting ZIP.
+Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, manual box drawing, moving, 8-handle resizing, deleting, renaming, keyboard save, exporting, and downloading the resulting ZIP.
+
+The review page keeps two coordinate systems separate:
+
+```text
+screen coordinates: pan/zoom/view state only
+source image coordinates: saved manual_slices bbox truth
+```
+
+Saved `manual_slices.v1.json` bboxes are always source-image coordinates, regardless of current zoom or pan.
+
+Default candidate display is tuned for slicing, not OCR proofreading:
+
+```text
+image/icon/group/shape/unknown visible
+text hidden by default
+selected slices visible
+candidate labels visible
+```
 
 ### Candidates
 
@@ -507,6 +534,12 @@ Export is valid only after `PUT /manual-slices`. Calling export before saving ma
 
 ```text
 409 manual slices must be saved before export
+```
+
+Calling export after saving an empty or fully unselected manual slice document returns:
+
+```text
+409 no selected slices to export
 ```
 
 The exporter crops selected slices from `pages/page_XXXX/source.png`, writes three `.pen` modes with slice assets placed back at exact source coordinates, and creates `selected-assets.zip`.

@@ -416,6 +416,15 @@ def validate_manual_slices(value: dict[str, Any], candidates: dict[str, Any]) ->
     return value
 
 
+def selected_slice_count(manual_slices: dict[str, Any]) -> int:
+    return sum(
+        1
+        for page in manual_slices.get("pages") or []
+        for item in page.get("slices") or []
+        if item.get("selected") is not False
+    )
+
+
 def export_manual_slice_project(
     *,
     paths: SliceProjectPaths,

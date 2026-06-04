@@ -129,3 +129,4 @@
 - [Pencil Backend Live Server Smoke](139-pencil-backend-live-server-smoke.md) — `completed`
 - [Pencil Container Foreground Ownership Repair](140-pencil-container-foreground-ownership-repair.md) — `completed`
 - [Pencil Assisted Slice Review And Export](141-pencil-assisted-slice-review-and-export.md) — `completed`
+- [Pencil Assisted Slice Review Workbench](142-pencil-assisted-slice-review-workbench.md) — `completed`
