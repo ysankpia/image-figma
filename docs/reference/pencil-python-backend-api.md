@@ -50,6 +50,19 @@ GET  /api/pencil/projects/{taskId}/manifest
 GET  /api/pencil/projects/{taskId}/download.zip
 ```
 
+Assisted slice review uses a separate synchronous project API:
+
+```text
+POST /api/pencil/slice-projects
+GET  /api/pencil/slice-projects/{projectId}
+GET  /api/pencil/slice-projects/{projectId}/review
+GET  /api/pencil/slice-projects/{projectId}/candidates
+GET  /api/pencil/slice-projects/{projectId}/manual-slices
+PUT  /api/pencil/slice-projects/{projectId}/manual-slices
+POST /api/pencil/slice-projects/{projectId}/export
+GET  /api/pencil/slice-projects/{projectId}/download.zip
+```
+
 ## Health
 
 ```text
@@ -331,6 +344,206 @@ visual-ocr
 视觉保真基础上 overlay 安全 OCR TextLayer。
 
 For customer delivery, prefer `mode=all` so the ZIP contains all three fallback choices.
+
+## Assisted Slice Review
+
+The assisted slice API is for cases where fully automatic ownership is not reliable enough. The server generates candidates, the user confirms or draws slices in a Canvas review page, and `manual_slices.v1.json` becomes the export truth source. M29, PSD-like, OCR, and foreground audit evidence only produce candidates; they do not decide final visible assets.
+
+### Create Slice Project
+
+```text
+POST /api/pencil/slice-projects
+Content-Type: multipart/form-data
+```
+
+Fields:
+
+| Field | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `files[]` or `files` | yes | none | 1..`PENCIL_BACKEND_MAX_FILES`; PNG/JPG/JPEG/WEBP only |
+| `projectName` | no | `Assisted Slice Project` | Stored in project metadata and export manifest |
+| `includeDebug` | no | `true` | Includes debug candidates/manual overlay in ZIP |
+| `ocrProvider` | no | server `OCR_PROVIDER` | Used only by candidate evidence generation |
+| `boundarySource` | no | server `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE` | `psdlike`, `m29`, or `hybrid` candidate source |
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "projectId": "slice_20260604103000_abcdef1234",
+    "status": "ready",
+    "projectName": "Assisted Slice Project",
+    "pageCount": 1,
+    "pages": [
+      {
+        "pageId": "page_0001",
+        "sourceImage": "pages/page_0001/source.png",
+        "width": 665,
+        "height": 1440
+      }
+    ],
+    "boundarySource": "psdlike",
+    "manualSlicesConfirmed": false,
+    "selectedSliceCount": 0
+  }
+}
+```
+
+Creation writes:
+
+```text
+candidates.v1.json
+manual_slices.v1.json
+source images under pages/page_XXXX/source.png
+```
+
+The initial `manual_slices.v1.json` is empty so the review UI can load, but export is blocked until the caller saves manual slices with `PUT /manual-slices`.
+
+### Review Page
+
+```text
+GET /api/pencil/slice-projects/{projectId}/review
+```
+
+Returns a static HTML Canvas workbench. V1 supports page switching, candidate selection, manual box drawing, moving, resizing, deleting, renaming, saving, exporting, and downloading the resulting ZIP.
+
+### Candidates
+
+```text
+GET /api/pencil/slice-projects/{projectId}/candidates
+```
+
+Returns `pencil.slice_candidates.v1`:
+
+```json
+{
+  "schema": "pencil.slice_candidates.v1",
+  "projectId": "slice_...",
+  "pages": [
+    {
+      "pageId": "page_0001",
+      "sourceImage": "pages/page_0001/source.png",
+      "width": 665,
+      "height": 1440,
+      "candidates": [
+        {
+          "id": "page_0001__candidate_0001",
+          "kind": "image",
+          "bbox": {"x": 40, "y": 1168, "width": 200, "height": 144},
+          "source": "psdlike",
+          "confidence": 0.72,
+          "reason": "primitive_candidate",
+          "selectedDefault": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+Candidate boxes are suggestions only. A caller should not export all candidates blindly.
+
+### Manual Slices
+
+```text
+GET /api/pencil/slice-projects/{projectId}/manual-slices
+PUT /api/pencil/slice-projects/{projectId}/manual-slices
+```
+
+`PUT` body must use `pencil.manual_slices.v1`:
+
+```json
+{
+  "schema": "pencil.manual_slices.v1",
+  "projectName": "My Project",
+  "pages": [
+    {
+      "pageId": "page_0001",
+      "slices": [
+        {
+          "id": "page_0001__slice_0001",
+          "name": "hero_asset",
+          "kind": "image",
+          "bbox": {"x": 40, "y": 1168, "width": 200, "height": 144},
+          "selected": true,
+          "exportMode": "rect",
+          "source": "candidate_confirmed",
+          "candidateIds": ["page_0001__candidate_0001"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Validation rules:
+
+```text
+schema must be pencil.manual_slices.v1
+every candidate page must be present exactly once
+slice ids must be unique
+exportMode must be rect
+bbox must be non-zero and inside source image bounds
+```
+
+After a successful `PUT`, project status includes:
+
+```json
+{
+  "manualSlicesConfirmed": true,
+  "selectedSliceCount": 1
+}
+```
+
+### Export Slice Project
+
+```text
+POST /api/pencil/slice-projects/{projectId}/export
+```
+
+Export is valid only after `PUT /manual-slices`. Calling export before saving manual slices returns:
+
+```text
+409 manual slices must be saved before export
+```
+
+The exporter crops selected slices from `pages/page_XXXX/source.png`, writes three `.pen` modes with slice assets placed back at exact source coordinates, and creates `selected-assets.zip`.
+
+Success manifest:
+
+```json
+{
+  "schema": "pencil.assisted_slice_project_manifest.v1",
+  "projectName": "My Project",
+  "pageCount": 1,
+  "modes": ["clean-editable", "visual-fidelity", "visual-ocr"],
+  "manualSlices": "manual_slices.v1.json",
+  "selectedAssetsZip": "selected-assets.zip",
+  "selectedAssetCount": 1,
+  "zip": "project.zip"
+}
+```
+
+Downloaded ZIP:
+
+```text
+manifest.json
+manual_slices.v1.json
+selected-assets.zip
+resource-kit/manifest.json
+clean-editable/design.pen
+clean-editable/assets/visible/page_0001/...
+visual-fidelity/design.pen
+visual-fidelity/assets/visible/page_0001/...
+visual-ocr/design.pen
+visual-ocr/assets/visible/page_0001/...
+debug/pages/page_0001/source.png
+debug/pages/page_0001/candidates.v1.json
+debug/pages/page_0001/manual_slices.v1.json
+debug/pages/page_0001/overlay.png
+```
 
 ## Boundary Sources
 

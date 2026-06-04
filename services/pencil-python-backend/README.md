@@ -110,6 +110,15 @@ POST /api/pencil/projects
 GET  /api/pencil/projects/{taskId}
 GET  /api/pencil/projects/{taskId}/manifest
 GET  /api/pencil/projects/{taskId}/download.zip
+
+POST /api/pencil/slice-projects
+GET  /api/pencil/slice-projects/{projectId}
+GET  /api/pencil/slice-projects/{projectId}/review
+GET  /api/pencil/slice-projects/{projectId}/candidates
+GET  /api/pencil/slice-projects/{projectId}/manual-slices
+PUT  /api/pencil/slice-projects/{projectId}/manual-slices
+POST /api/pencil/slice-projects/{projectId}/export
+GET  /api/pencil/slice-projects/{projectId}/download.zip
 ```
 
 调用方合同见 [../../docs/reference/pencil-python-backend-api.md](../../docs/reference/pencil-python-backend-api.md)。
@@ -135,6 +144,47 @@ hybrid   PSD-like 主边界 + M29 低覆盖局部对象兜底，适合 PSD-like 
 ```
 
 如果请求不传 `boundarySource`，服务使用 `PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE`；默认值是 `psdlike`。
+
+Assisted slice review 是另一条同步产品路径，用于全自动切图不稳定的复杂页面：
+
+```text
+1..N images
+-> candidates.v1.json
+-> HTML Canvas Review
+-> manual_slices.v1.json
+-> project.zip + selected-assets.zip
+```
+
+`manual_slices.v1.json` 是最终真相源。PSD-like、M29、OCR 和 foreground audit 只生成候选框；用户在 review 页面点选、画框、拖动、缩放、删除、命名并保存后，服务才允许导出。
+
+本机打开 review：
+
+```bash
+curl -F "files[]=@/absolute/path/to/screen.png" \
+  -F "projectName=Slice Review" \
+  -F "includeDebug=true" \
+  http://127.0.0.1:8100/api/pencil/slice-projects
+```
+
+返回 `reviewUrl` 后在浏览器打开：
+
+```text
+http://127.0.0.1:8100/api/pencil/slice-projects/{projectId}/review
+```
+
+导出 ZIP 包含：
+
+```text
+project.zip
+  manifest.json
+  manual_slices.v1.json
+  selected-assets.zip
+  resource-kit/manifest.json
+  clean-editable/design.pen
+  visual-fidelity/design.pen
+  visual-ocr/design.pen
+  debug/pages/page_0001/...
+```
 
 HTTP smoke：
 

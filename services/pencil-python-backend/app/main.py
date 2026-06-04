@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import health, projects
+from .routes import health, projects, slice_projects
 from .state import state
 
 
@@ -12,11 +12,12 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=state.settings.cors_allow_origins,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
         allow_headers=["*"],
     )
     app.include_router(health.router)
     app.include_router(projects.router)
+    app.include_router(slice_projects.router)
     return app
 
 
