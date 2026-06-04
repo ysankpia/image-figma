@@ -13,7 +13,7 @@ MODE ?= all
 BUNDLE_OUT ?= /Volumes/WorkDrive/pencil-exports/pencil-backend-bundle
 BUNDLE_ARCHIVE ?= $(BUNDLE_OUT)/pencil-python-backend-deploy.tar.gz
 
-.PHONY: install-local check preflight preflight-strict serve smoke server-smoke upload-http acceptance bundle verify-bundle
+.PHONY: install-local check preflight preflight-strict serve smoke server-smoke upload-http slice-acceptance acceptance bundle verify-bundle
 install-local:
 	mkdir -p "$(BIN_DIR)"
 	printf '%s\n' '#!/bin/sh' \
@@ -47,6 +47,10 @@ server-smoke:
 upload-http:
 	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/image-or-dir is required" >&2; exit 2)
 	uv run python scripts/upload_project.py --base-url "$(BASE_URL)" --input "$(IMAGE)" --out "$(OUT)" --project-name "$(PROJECT_NAME)" --mode "$(MODE)"
+
+slice-acceptance:
+	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/image-or-dir is required" >&2; exit 2)
+	uv run python scripts/slice_workspace_acceptance.py --base-url "$(BASE_URL)" --input "$(IMAGE)" --out "$(OUT)" --project-name "$(PROJECT_NAME)"
 
 acceptance:
 	@test -n "$(IMAGE)" || (echo "IMAGE=/absolute/path/to/sample.png is required" >&2; exit 2)

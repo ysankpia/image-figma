@@ -805,3 +805,33 @@ uv run python scripts/upload_project.py \
 ```
 
 By default it omits `boundarySource`, polls until completion, downloads `project.zip`, writes `manifest.json`, and verifies `.pen` visible image refs.
+
+## Assisted Slice Workspace Acceptance
+
+Use this for the synchronous assisted slice workspace path:
+
+```bash
+cd services/pencil-python-backend
+make slice-acceptance \
+  BASE_URL=http://127.0.0.1:8100 \
+  IMAGE=/absolute/path/to/image-or-dir \
+  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
+The script verifies:
+
+```text
+projectCreated=true
+pageCount>=1
+candidateCount>0
+manualSliceSaved=true
+reviewStateSaved=true
+exportPreviewGenerated=true
+projectZipExists=true
+selectedAssetsZipExists=true
+selectedAssetCount == selected PNG count
+badRefs=0
+missingRefs=0
+```
+
+It writes `acceptance_report.md` and `acceptance_report.json` under `OUT`.

@@ -138,9 +138,12 @@ class SliceProjectStorage:
                 "updatedAt": now,
                 "reviewUrl": f"/api/pencil/slice-projects/{clone_paths.project_id}/review",
                 "downloadUrl": None,
+                "selectedAssetsDownloadUrl": None,
                 "zipPath": None,
                 "selectedAssetsZipPath": None,
                 "manifestPath": None,
+                "exportPreviewPath": None,
+                "selectedAssetCount": None,
             }
         )
         write_json(clone_paths.project_json, {key: value for key, value in project.items() if value is not None})

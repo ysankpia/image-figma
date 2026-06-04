@@ -132,3 +132,4 @@
 - [Pencil Assisted Slice Review Workbench](142-pencil-assisted-slice-review-workbench.md) — `completed`
 - [Assisted Slice Workbench P0 Hardening](143-assisted-slice-workbench-p0-hardening.md) — `completed`
 - [Assisted Slice Project Workspace](144-assisted-slice-project-workspace.md) — `completed`
+- [Assisted Slice Workspace Acceptance Hardening](145-assisted-slice-workspace-acceptance-hardening.md) — `completed`

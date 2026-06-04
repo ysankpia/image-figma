@@ -266,6 +266,18 @@ make acceptance \
   OUT=/Volumes/WorkDrive/pencil-exports/local-acceptance
 ```
 
+Assisted slice workspace acceptance:
+
+```bash
+make slice-acceptance \
+  IMAGE=/absolute/path/to/image-or-dir \
+  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
+This verifies `/api/pencil/slice-projects`: project creation, candidates, `manual_slices.v1.json`,
+`review_state.v1.json`, export preview, `project.zip`, `selected-assets.zip`, selected asset counts,
+and `.pen` visible image refs. It writes `acceptance_report.md` and `acceptance_report.json` under `OUT`.
+
 ## Deploy Bundle
 
 生成干净的服务器源码包：

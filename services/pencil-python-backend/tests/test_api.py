@@ -186,6 +186,9 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     early_export = client.post(f"/api/pencil/slice-projects/{project_id}/export")
     assert early_export.status_code == 409
     assert "must be saved" in early_export.json()["detail"]
+    early_preview = client.post(f"/api/pencil/slice-projects/{project_id}/export-preview")
+    assert early_preview.status_code == 409
+    assert "no selected slices" in early_preview.json()["detail"]
 
     candidates_response = client.get(f"/api/pencil/slice-projects/{project_id}/candidates")
     assert candidates_response.status_code == 200
@@ -227,6 +230,7 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert preview_response.status_code == 200
     preview = preview_response.json()["data"]
     assert preview["assetCount"] == 1
+    assert len(preview["assets"]) == 1
     assert preview["contactSheetUrl"].endswith("/export-preview/contact-sheet.png")
     assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/contact-sheet.png").status_code == 200
     assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/index.html").status_code == 200
@@ -243,6 +247,9 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     with ZipFile(zip_path) as archive:
         names = set(archive.namelist())
         selected_zip_bytes = archive.read("selected-assets.zip")
+        selected_assets_manifest = json.loads(archive.read("resource-kit/manifest.json"))
+        assert selected_assets_manifest["assetCount"] == manifest["selectedAssetCount"]
+        assert "resource-kit/contact-sheet.png" in names
         for mode in ("clean-editable", "visual-fidelity", "visual-ocr"):
             design = json.loads(archive.read(f"{mode}/design.pen"))
             serialized = json.dumps(design)
@@ -260,8 +267,11 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
 
     with ZipFile(BytesIO(selected_zip_bytes)) as selected_archive:
         selected_names = set(selected_archive.namelist())
+        selected_manifest = json.loads(selected_archive.read("manifest.json"))
     assert "manifest.json" in selected_names
     assert len([name for name in selected_names if name.startswith("page_0001/") and name.endswith(".png")]) == 1
+    assert selected_manifest["assetCount"] == manifest["selectedAssetCount"]
+    assert "contactSheet" not in selected_manifest
 
     selected_download = client.get(f"/api/pencil/slice-projects/{project_id}/selected-assets.zip")
     assert selected_download.status_code == 200
@@ -314,13 +324,42 @@ def test_slice_project_workspace_lists_renames_clones_and_deletes(tmp_path: Path
     assert saved_state.status_code == 200
     assert saved_state.json()["data"]["rejectedCandidateCount"] == 1
     assert client.get(f"/api/pencil/slice-projects/{project_id}/review-state").json()["data"]["pages"][0]["rejectedCandidateIds"] == [candidate_id]
+    paths = state.storage.root / "slice-projects" / project_id
+    (paths / "review_state.v1.json").unlink()
+    recovered_state = client.get(f"/api/pencil/slice-projects/{project_id}/review-state")
+    assert recovered_state.status_code == 200
+    assert recovered_state.json()["data"]["schema"] == "pencil.slice_review_state.v1"
+    assert recovered_state.json()["data"]["pages"][0]["rejectedCandidateIds"] == []
 
+    manual_slices = {
+        "schema": "pencil.manual_slices.v1",
+        "projectName": "Renamed Project",
+        "pages": [
+            {
+                "pageId": "page_0001",
+                "slices": [
+                    {
+                        "id": "page_0001__slice_0001",
+                        "name": "slice_0001",
+                        "kind": "image",
+                        "bbox": {"x": 4, "y": 6, "width": 24, "height": 20},
+                        "selected": True,
+                        "exportMode": "rect",
+                    }
+                ],
+            }
+        ],
+    }
+    assert client.put(f"/api/pencil/slice-projects/{project_id}/manual-slices", json=manual_slices).status_code == 200
+    assert client.post(f"/api/pencil/slice-projects/{project_id}/export").status_code == 200
     cloned = client.post(f"/api/pencil/slice-projects/{project_id}/clone")
     assert cloned.status_code == 200
     clone_id = cloned.json()["data"]["projectId"]
     assert clone_id != project_id
     assert cloned.json()["data"]["projectName"].endswith("Copy")
     assert cloned.json()["data"]["exported"] is False
+    assert client.get(f"/api/pencil/slice-projects/{clone_id}/download.zip").status_code == 409
+    assert client.get(f"/api/pencil/slice-projects/{clone_id}/selected-assets.zip").status_code == 409
     clone_manual = client.get(f"/api/pencil/slice-projects/{clone_id}/manual-slices").json()["data"]
     assert clone_manual["projectName"].endswith("Copy")
 
