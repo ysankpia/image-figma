@@ -1,6 +1,6 @@
 # 147 Assisted Slice Workspace P0-P2
 
-Status: active
+Status: completed
 Created: 2026-06-05 04:44 +0800
 
 ## Objective
@@ -158,3 +158,127 @@ git status --short --branch
 - Any needed change would require restoring a forbidden old product route.
 - A dirty tree contains unrelated user-owned changes that cannot be isolated safely.
 - Representative acceptance exposes candidate quality issues that require a new product decision rather than P0/P1/P2 workspace hardening.
+
+## Stage Reports
+
+### Stage 1: P0 Delivery Stability
+
+Changed:
+
+- `review_state.v1.json` now preserves UI filters as workbench state.
+- Review-state autosave now uses revision tracking so fast page/filter/reject changes do not overwrite the newest state with an older in-flight save.
+- Review page restores exported `project.zip` and `selected-assets.zip` links after refresh.
+- Clone rewrites project-local metadata paths to the clone id and strips stale export outputs.
+- API tests cover persisted rejected candidates, persisted filters, recovered missing review state, and clone metadata.
+
+Validation:
+
+```text
+uv run pytest -q tests/test_api.py
+17 passed, 2 warnings
+
+make check
+34 passed, 2 warnings
+
+git diff --check
+no output
+```
+
+Commit:
+
+```text
+89f23a8 fix: harden assisted slice workspace state
+```
+
+### Stage 2: P1 Daily Review Operations
+
+Changed:
+
+- Candidate selected/rejected visual states are clearer; rejected candidates draw as muted dashed boxes when visible.
+- Batch add now acts only on currently visible selected candidates and reports how many were added.
+- Batch reject/restore reports status.
+- Selected assets panel is project-wide by default with a current-page-only toggle.
+- Selected assets search works across the project.
+- Clicking a selected asset can jump across pages and focus the slice on canvas.
+- Batch delete and batch display-name rename work across visible project-level results.
+- Cross-page bbox edits clamp against the owning page dimensions, not the currently displayed page.
+- Embedded review JavaScript is now syntax-checked in tests when Node is available.
+
+Validation:
+
+```text
+node --check /tmp/review.js
+ok
+
+uv run pytest -q tests/test_api.py
+18 passed, 2 warnings
+
+make check
+35 passed, 2 warnings
+
+git diff --check
+no output
+```
+
+Commit:
+
+```text
+d1ad64f feat: improve assisted slice daily review workflow
+```
+
+### Stage 3: P2 Verification And Handoff Polish
+
+Changed:
+
+- API docs now record the P0/P1 persisted-state and artifact-link behavior.
+- Backend README and handoff now describe project-level selected assets management, review state contents, clone/export behavior, and daily-use workflow.
+- Representative local HTTP acceptance was rerun with one complex Tencent sample and two multi-page directories.
+
+Validation:
+
+```text
+make slice-acceptance \
+  IMAGE=/Users/luhui/Downloads/figma/image/腾讯动漫_018_1440.png \
+  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance-147/tencent-comic \
+  PROJECT_NAME="Slice Acceptance 147 Tencent"
+
+result:
+sample_01_腾讯动漫_018_1440 passed
+pages=1 candidates=63 selected=3 preview=3 exported=3 pngs=3 badRefs=0 missingRefs=0
+
+uv run python scripts/slice_workspace_acceptance.py \
+  --base-url http://127.0.0.1:8100 \
+  --input "/Users/luhui/Downloads/PencilBridge_Admin_UI_XcodeDark/01_UI_Pages" \
+  --input "/Users/luhui/Downloads/dorm_selection_ui_assets 2" \
+  --out /Volumes/WorkDrive/pencil-exports/slice-acceptance-147/batch \
+  --project-name "Slice Acceptance 147 Batch"
+
+result:
+sample_01_01_UI_Pages passed
+pages=6 candidates=776 selected=18 preview=18 exported=18 pngs=18 badRefs=0 missingRefs=0
+
+sample_02_dorm_selection_ui_assets_2 passed
+pages=6 candidates=68 selected=11 preview=11 exported=11 pngs=11 badRefs=0 missingRefs=0
+
+make check
+35 passed, 2 warnings
+
+git diff --check
+no output
+```
+
+Artifacts:
+
+```text
+/Volumes/WorkDrive/pencil-exports/slice-acceptance-147/tencent-comic/acceptance_report.md
+/Volumes/WorkDrive/pencil-exports/slice-acceptance-147/tencent-comic/acceptance_report.json
+/Volumes/WorkDrive/pencil-exports/slice-acceptance-147/batch/acceptance_report.md
+/Volumes/WorkDrive/pencil-exports/slice-acceptance-147/batch/acceptance_report.json
+```
+
+## Final Acceptance
+
+- P0 completed without changing the final delivery truth source.
+- P1 completed within plain HTML + Canvas, with no React/Vue or frontend build-chain rewrite.
+- P2 completed with docs, API tests, syntax check, real acceptance reports, and ZIP/reference checks.
+- P3/P4 scope was not implemented.

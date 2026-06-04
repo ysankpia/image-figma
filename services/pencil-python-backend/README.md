@@ -51,12 +51,16 @@ http://127.0.0.1:8100/api/pencil/slice-projects/workspace
 候选框点选、框选、拒绝、恢复
 手动画框
 移动、缩放、删除、重命名 selected slices
+项目级 selected assets 搜索、跨页定位、批量删除、批量 displayName 重命名
+编辑 slice kind / tags / reviewState
 review_state.v1.json 自动保存工作台状态
 manual_slices.v1.json 作为最终导出合同
 export-preview contact sheet
 下载 project.zip
 下载 selected-assets.zip
 ```
+
+`review_state.v1.json` 保存 rejected candidates、last active page、候选/页面 filters 和 selected assets 面板的全项目/当前页视图状态。`manual_slices.v1.json` 只保存最终会导出的 selected slices；导出前会等待 pending autosave。
 
 验收当前工作台链路：
 

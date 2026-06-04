@@ -366,7 +366,9 @@ GET /api/pencil/slice-projects/workspace
 GET /api/pencil/slice-projects
 ```
 
-`/workspace` returns a plain HTML project workbench. It can create projects, list historical projects, resume review, rename, clone, delete, and download exported packages. The JSON list endpoint scans local slice-project storage and derives summary data from `project.json`, `candidates.v1.json`, `manual_slices.v1.json`, and `review_state.v1.json`; no database is required.
+`/workspace` returns a plain HTML project workbench. It can create projects, list historical projects, resume review, rename, clone, delete, and download exported packages. Exported projects show both download entries: Pencil/Figma `project.zip` and frontend `selected-assets.zip`.
+
+The JSON list endpoint scans local slice-project storage and derives summary data from `project.json`, `candidates.v1.json`, `manual_slices.v1.json`, and `review_state.v1.json`; no database is required.
 
 Project summaries include:
 
@@ -393,6 +395,8 @@ PUT    /api/pencil/slice-projects/{projectId}        rename projectName
 POST   /api/pencil/slice-projects/{projectId}/clone  clone project without exported output
 DELETE /api/pencil/slice-projects/{projectId}        delete project directory
 ```
+
+Clone keeps source pages, candidates, manual slices, and review state, but removes old export output and rewrites project-local metadata paths to the clone project id. Downloads on a clone return `409` until the clone is exported again.
 
 ### Browser Upload Entry
 
@@ -462,6 +466,8 @@ GET /api/pencil/slice-projects/{projectId}/review
 
 Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, candidate box selection, bulk candidate add/reject/restore, manual box drawing, moving, 8-handle resizing, deleting, renaming, autosave, undo/redo, keyboard save, export preview, exporting, and downloading the resulting ZIPs.
 
+The selected assets panel is project-level by default. Users can search across all pages, switch to current-page-only view, click an asset to jump to its page and focus it on the canvas, edit `displayName` / safe asset `name` / `kind` / `tags` / `reviewState`, and batch rename or delete the currently visible selected assets. Batch rename changes `displayName`; stable exported filenames remain page-namespaced `slice_0001.png`, `slice_0002.png`, etc.
+
 The review page keeps two coordinate systems separate:
 
 ```text
@@ -500,6 +506,8 @@ review_state.v1.json      workbench state: rejected candidates, filters, last ac
 manual_slices.v1.json     delivery truth: selected slices only
 ```
 
+`review_state.v1.json` also stores UI filters, including candidate kind/source/tier visibility, candidate opacity, page filters, and whether the selected-assets list is showing all pages or only the current page. This state is autosaved with revision protection so quick page/filter changes do not silently overwrite the last review-state edit.
+
 Candidate tiers are UI-only filters:
 
 ```text
@@ -511,6 +519,8 @@ rejected
 ```
 
 They are derived from candidate kind/source/confidence/reason and relative area. They do not change candidate generation and do not decide final export.
+
+Rejected candidates are drawn as muted dashed boxes when the rejected tier is visible. Selected candidate boxes are drawn distinctly from normal candidates before they are converted into manual slices.
 
 Workbench shortcuts:
 

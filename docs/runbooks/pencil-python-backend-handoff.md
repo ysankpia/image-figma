@@ -74,11 +74,23 @@ Expected workflow:
 ```text
 create project
 -> open review
--> select candidates or draw slices
+-> select candidates, box-select candidates, or draw slices
+-> manage selected assets across pages
 -> save manual_slices.v1.json
 -> generate export preview
 -> export
 -> download project.zip and selected-assets.zip
+```
+
+Daily-use notes:
+
+```text
+manual_slices.v1.json stays the only delivery truth source
+review_state.v1.json stores rejected candidates, filters, and last active page
+selected assets panel is project-wide by default and can jump across pages
+batch rename changes displayName; stable exported filenames stay page-namespaced
+after export, refreshing review still shows project.zip and selected-assets.zip links
+cloned projects keep review/manual state but remove old export output
 ```
 
 ## Assisted Slice Acceptance
