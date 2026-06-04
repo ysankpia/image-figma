@@ -178,6 +178,8 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert "bulkAddCandidates" in review.text
     assert "review-state" in review.text
     assert "previewExport" in review.text
+    assert "hydrateReviewFilters" in review.text
+    assert "syncExportLinks" in review.text
 
     project_response = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert project_response.status_code == 200
@@ -320,16 +322,30 @@ def test_slice_project_workspace_lists_renames_clones_and_deletes(tmp_path: Path
     state_doc = review_state.json()["data"]
     candidate_id = client.get(f"/api/pencil/slice-projects/{project_id}/candidates").json()["data"]["pages"][0]["candidates"][0]["id"]
     state_doc["pages"][0]["rejectedCandidateIds"] = [candidate_id]
+    state_doc["filters"] = {
+        "showCandidates": True,
+        "showSelected": True,
+        "showLabels": False,
+        "minConfidence": 0.4,
+        "candidateOpacity": 0.55,
+        "tiers": {"recommended": True, "normal": False, "noise": False, "text": False, "rejected": True},
+        "onlyTodoPages": True,
+    }
     saved_state = client.put(f"/api/pencil/slice-projects/{project_id}/review-state", json=state_doc)
     assert saved_state.status_code == 200
     assert saved_state.json()["data"]["rejectedCandidateCount"] == 1
-    assert client.get(f"/api/pencil/slice-projects/{project_id}/review-state").json()["data"]["pages"][0]["rejectedCandidateIds"] == [candidate_id]
+    persisted_state = client.get(f"/api/pencil/slice-projects/{project_id}/review-state").json()["data"]
+    assert persisted_state["pages"][0]["rejectedCandidateIds"] == [candidate_id]
+    assert persisted_state["filters"]["showLabels"] is False
+    assert persisted_state["filters"]["minConfidence"] == 0.4
+    assert persisted_state["filters"]["tiers"]["normal"] is False
     paths = state.storage.root / "slice-projects" / project_id
     (paths / "review_state.v1.json").unlink()
     recovered_state = client.get(f"/api/pencil/slice-projects/{project_id}/review-state")
     assert recovered_state.status_code == 200
     assert recovered_state.json()["data"]["schema"] == "pencil.slice_review_state.v1"
     assert recovered_state.json()["data"]["pages"][0]["rejectedCandidateIds"] == []
+    assert recovered_state.json()["data"]["filters"] == {}
 
     manual_slices = {
         "schema": "pencil.manual_slices.v1",
@@ -358,6 +374,12 @@ def test_slice_project_workspace_lists_renames_clones_and_deletes(tmp_path: Path
     assert clone_id != project_id
     assert cloned.json()["data"]["projectName"].endswith("Copy")
     assert cloned.json()["data"]["exported"] is False
+    clone_project = json.loads((state.storage.root / "slice-projects" / clone_id / "project.json").read_text(encoding="utf-8"))
+    assert clone_project["candidatesPath"].endswith(f"{clone_id}/candidates.v1.json")
+    assert clone_project["manualSlicesPath"].endswith(f"{clone_id}/manual_slices.v1.json")
+    assert clone_project["reviewStatePath"].endswith(f"{clone_id}/review_state.v1.json")
+    assert "zipPath" not in clone_project
+    assert "selectedAssetsZipPath" not in clone_project
     assert client.get(f"/api/pencil/slice-projects/{clone_id}/download.zip").status_code == 409
     assert client.get(f"/api/pencil/slice-projects/{clone_id}/selected-assets.zip").status_code == 409
     clone_manual = client.get(f"/api/pencil/slice-projects/{clone_id}/manual-slices").json()["data"]

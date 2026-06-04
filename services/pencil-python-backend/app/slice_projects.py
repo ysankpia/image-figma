@@ -143,6 +143,9 @@ class SliceProjectStorage:
                 "selectedAssetsZipPath": None,
                 "manifestPath": None,
                 "exportPreviewPath": None,
+                "candidatesPath": str(clone_paths.candidates_json),
+                "manualSlicesPath": str(clone_paths.manual_slices_json),
+                "reviewStatePath": str(clone_paths.review_state_json),
                 "selectedAssetCount": None,
             }
         )
@@ -266,6 +269,7 @@ def default_review_state(*, project_id: str, candidates: dict[str, Any]) -> dict
         "schema": REVIEW_STATE_SCHEMA,
         "projectId": project_id,
         "lastActivePageId": pages[0]["pageId"] if pages else "",
+        "filters": {},
         "pages": pages,
         "updatedAt": datetime.now(UTC).isoformat(),
     }
@@ -308,10 +312,12 @@ def validate_review_state(value: dict[str, Any], candidates: dict[str, Any]) -> 
     last_active = str(value.get("lastActivePageId") or "")
     if last_active not in candidate_pages and candidate_pages:
         last_active = next(iter(candidate_pages))
+    filters = value.get("filters") if isinstance(value.get("filters"), dict) else {}
     return {
         "schema": REVIEW_STATE_SCHEMA,
         "projectId": str(value.get("projectId") or candidates.get("projectId") or ""),
         "lastActivePageId": last_active,
+        "filters": filters,
         "pages": pages,
         "updatedAt": datetime.now(UTC).isoformat(),
     }

@@ -441,7 +441,7 @@ REVIEW_HTML = """<!doctype html>
       candidates: null, manual: null, reviewState: null, pageIndex: 0, mode: "select", image: null, activeId: null, drag: null,
       hoverCandidateId: null, hoverSliceId: null, pageImages: {}, pageSaveState: {},
       selectedCandidateIds: new Set(), assetSearch: "",
-      reviewSaveTimer: null, reviewSavePromise: null,
+      reviewSaveTimer: null, reviewSavePromise: null, reviewSaveRevision: 0, lastSavedReviewRevision: 0,
       view: { scale: 1, offsetX: 40, offsetY: 40 }, spaceDown: false,
       autosaveTimer: null, savePromise: null, saveRevision: 0, lastSavedRevision: 0,
       history: { undo: [], redo: [], limit: 50, restoring: false },
@@ -467,14 +467,17 @@ REVIEW_HTML = """<!doctype html>
       return payload.data;
     }
     async function load() {
+      state.project = await api("");
       state.candidates = await api("/candidates");
       state.manual = await api("/manual-slices");
       state.reviewState = await api("/review-state");
+      hydrateReviewFilters();
       for (const page of state.candidates.pages) state.pageSaveState[page.pageId] = "saved";
       renderFilterControls();
       const savedPage = state.candidates.pages.findIndex(page => page.pageId === state.reviewState.lastActivePageId);
       renderPages();
       await loadPage(savedPage >= 0 ? savedPage : 0);
+      syncExportLinks(state.project);
       setStatus("ready");
     }
     function currentCandidatePage() { return state.candidates.pages[state.pageIndex]; }
@@ -502,6 +505,31 @@ REVIEW_HTML = """<!doctype html>
       fitToScreen();
       renderPages();
       renderAssets();
+    }
+    function hydrateReviewFilters() {
+      const saved = state.reviewState && typeof state.reviewState.filters === "object" ? state.reviewState.filters : {};
+      mergeFilterGroup(state.filters, saved);
+    }
+    function mergeFilterGroup(target, source) {
+      if (!source || typeof source !== "object") return;
+      for (const [key, value] of Object.entries(source)) {
+        if (!(key in target)) continue;
+        if (target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) mergeFilterGroup(target[key], value);
+        else if (typeof value === typeof target[key]) target[key] = value;
+      }
+    }
+    function persistReviewFilters() {
+      state.reviewState.filters = JSON.parse(JSON.stringify(state.filters));
+      scheduleReviewStateSave();
+    }
+    function syncExportLinks(project) {
+      if (!project || !project.exported) return;
+      const link = document.getElementById("download");
+      link.href = project.downloadUrl || `/api/pencil/slice-projects/${projectId}/download.zip`;
+      link.style.display = "inline";
+      const selectedLink = document.getElementById("selectedDownload");
+      selectedLink.href = project.selectedAssetsDownloadUrl || `/api/pencil/slice-projects/${projectId}/selected-assets.zip`;
+      selectedLink.style.display = "inline";
     }
     function imageForPage(pageId) {
       if (state.pageImages[pageId]?.complete) return Promise.resolve(state.pageImages[pageId]);
@@ -943,6 +971,7 @@ REVIEW_HTML = """<!doctype html>
       renderAll();
     }
     function scheduleReviewStateSave() {
+      state.reviewSaveRevision += 1;
       clearTimeout(state.reviewSaveTimer);
       state.reviewSaveTimer = setTimeout(() => saveReviewState().catch(error => setStatus(error.message || String(error), true)), 400);
     }
@@ -955,13 +984,20 @@ REVIEW_HTML = """<!doctype html>
       if (state.reviewSavePromise) await state.reviewSavePromise;
     }
     async function saveReviewState() {
-      if (state.reviewSavePromise) return state.reviewSavePromise;
+      if (state.reviewSavePromise) {
+        await state.reviewSavePromise;
+        if (state.lastSavedReviewRevision >= state.reviewSaveRevision) return;
+      }
+      const revision = state.reviewSaveRevision;
       state.reviewSavePromise = api("/review-state", {
         method: "PUT",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify(state.reviewState)
+      }).then(() => {
+        state.lastSavedReviewRevision = Math.max(state.lastSavedReviewRevision, revision);
       }).finally(() => { state.reviewSavePromise = null; });
-      return state.reviewSavePromise;
+      await state.reviewSavePromise;
+      if (state.lastSavedReviewRevision < state.reviewSaveRevision) return saveReviewState();
     }
 
     function renderPages() {
@@ -1070,12 +1106,16 @@ REVIEW_HTML = """<!doctype html>
       document.getElementById("kindFilters").innerHTML = kindOptions.map(kind => `<label><input name="filter_kind_${kind}" type="checkbox" data-kind="${kind}" ${state.filters.kinds[kind] ? "checked" : ""} /> ${kind}</label>`).join("");
       document.getElementById("sourceFilters").innerHTML = sourceOptions.map(source => `<label><input name="filter_source_${source}" type="checkbox" data-source="${source}" ${state.filters.sources[source] ? "checked" : ""} /> ${source}</label>`).join("");
       document.getElementById("tierFilters").innerHTML = tierOptions.map(tier => `<label><input name="filter_tier_${tier}" type="checkbox" data-tier="${tier}" ${state.filters.tiers[tier] ? "checked" : ""} /> ${tier}</label>`).join("");
-      for (const input of document.querySelectorAll("[data-kind]")) input.onchange = () => { state.filters.kinds[input.dataset.kind] = input.checked; renderAll(); };
-      for (const input of document.querySelectorAll("[data-source]")) input.onchange = () => { state.filters.sources[input.dataset.source] = input.checked; renderAll(); };
-      for (const input of document.querySelectorAll("[data-tier]")) input.onchange = () => { state.filters.tiers[input.dataset.tier] = input.checked; renderAll(); };
-      for (const id of ["showCandidates", "showSelected", "showLabels"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; renderAll(); };
-      for (const id of ["onlyTodoPages", "onlySelectedPages", "onlyDensePages"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; renderPages(); };
-      document.getElementById("minConfidence").onchange = event => { state.filters.minConfidence = Number(event.target.value) || 0; renderAll(); };
+      for (const id of ["showCandidates", "showSelected", "showLabels", "onlyTodoPages", "onlySelectedPages", "onlyDensePages"]) document.getElementById(id).checked = Boolean(state.filters[id]);
+      document.getElementById("minConfidence").value = String(state.filters.minConfidence);
+      document.getElementById("candidateOpacity").value = String(state.filters.candidateOpacity);
+      for (const input of document.querySelectorAll("[data-kind]")) input.onchange = () => { state.filters.kinds[input.dataset.kind] = input.checked; persistReviewFilters(); renderAll(); };
+      for (const input of document.querySelectorAll("[data-source]")) input.onchange = () => { state.filters.sources[input.dataset.source] = input.checked; persistReviewFilters(); renderAll(); };
+      for (const input of document.querySelectorAll("[data-tier]")) input.onchange = () => { state.filters.tiers[input.dataset.tier] = input.checked; persistReviewFilters(); renderAll(); };
+      for (const id of ["showCandidates", "showSelected", "showLabels"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; persistReviewFilters(); renderAll(); };
+      for (const id of ["onlyTodoPages", "onlySelectedPages", "onlyDensePages"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; persistReviewFilters(); renderPages(); };
+      document.getElementById("minConfidence").onchange = event => { state.filters.minConfidence = Number(event.target.value) || 0; persistReviewFilters(); renderAll(); };
+      document.getElementById("candidateOpacity").onchange = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; persistReviewFilters(); renderAll(); };
       document.getElementById("candidateOpacity").oninput = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; renderAll(); };
       document.getElementById("assetSearch").oninput = event => { state.assetSearch = event.target.value || ""; renderAssets(); };
     }
@@ -1169,13 +1209,8 @@ REVIEW_HTML = """<!doctype html>
         await flushAutosave();
         await flushReviewStateSave();
         setStatus("exporting...");
-        await api("/export", { method: "POST" });
-        const link = document.getElementById("download");
-        link.href = `/api/pencil/slice-projects/${projectId}/download.zip`;
-        link.style.display = "inline";
-        const selectedLink = document.getElementById("selectedDownload");
-        selectedLink.href = `/api/pencil/slice-projects/${projectId}/selected-assets.zip`;
-        selectedLink.style.display = "inline";
+        const manifest = await api("/export", { method: "POST" });
+        syncExportLinks({ exported: true, downloadUrl: manifest.projectZipUrl, selectedAssetsDownloadUrl: manifest.selectedAssetsZipUrl });
         setStatus("exported");
       } catch (error) {
         setStatus(error.message || String(error), true);
