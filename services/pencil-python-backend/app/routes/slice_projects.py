@@ -12,15 +12,19 @@ from ..config import parse_boundary_source
 from ..jsonio import read_json, write_json
 from ..slice_projects import (
     SliceProjectStorage,
+    ensure_review_state,
     export_manual_slice_project,
     initialize_slice_project,
+    project_summary,
     selected_slice_count,
     validate_manual_slices,
+    validate_review_state,
+    write_export_preview,
 )
 from ..state import state
 from ..types import IMAGE_EXTENSIONS, PageInput
 from ..utils import safe_slug
-from .slice_project_pages import NEW_PROJECT_HTML, REVIEW_HTML
+from .slice_project_pages import NEW_PROJECT_HTML, REVIEW_HTML, WORKSPACE_HTML
 
 
 router = APIRouter(prefix="/api/pencil/slice-projects")
@@ -106,6 +110,7 @@ async def create_slice_project(
             "boundarySource": selected_boundary_source,
             "manualSlicesConfirmed": False,
             "selectedSliceCount": 0,
+            "reviewUrl": f"/api/pencil/slice-projects/{paths.project_id}/review",
         },
     }
 
@@ -115,14 +120,64 @@ def new_slice_project_page() -> HTMLResponse:
     return HTMLResponse(NEW_PROJECT_HTML)
 
 
+@router.get("/workspace")
+def workspace_page() -> HTMLResponse:
+    return HTMLResponse(WORKSPACE_HTML)
+
+
+@router.get("")
+def list_slice_projects() -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    projects = storage.list_projects()
+    return {"success": True, "data": {"projects": projects, "projectCount": len(projects)}}
+
+
 @router.get("/{project_id}")
 def get_slice_project(project_id: str) -> dict[str, object]:
     storage = SliceProjectStorage(state.storage)
     try:
-        project = storage.read_project(project_id)
+        paths = storage.paths(project_id)
+        if not paths.project_json.exists():
+            raise FileNotFoundError(project_id)
+        project = project_summary(paths)
     except FileNotFoundError as error:
         raise HTTPException(status_code=404, detail="slice project not found") from error
     return {"success": True, "data": public_project(project)}
+
+
+@router.put("/{project_id}")
+async def update_slice_project(project_id: str, request: Request) -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    try:
+        payload = await request.json()
+        project_name = str(payload.get("projectName") or "").strip()
+        if not project_name:
+            raise HTTPException(status_code=400, detail="projectName is required")
+        paths = storage.paths(project_id)
+        storage.rename_project(project_id, project_name)
+        return {"success": True, "data": public_project(project_summary(paths))}
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="slice project not found") from error
+
+
+@router.post("/{project_id}/clone")
+def clone_slice_project(project_id: str) -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    try:
+        clone_paths = storage.clone_project(project_id)
+        return {"success": True, "data": public_project(project_summary(clone_paths))}
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="slice project not found") from error
+
+
+@router.delete("/{project_id}")
+def delete_slice_project(project_id: str) -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    try:
+        storage.delete_project(project_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="slice project not found") from error
+    return {"success": True, "data": {"projectId": safe_slug(project_id, "slice_project"), "deleted": True}}
 
 
 @router.get("/{project_id}/review")
@@ -158,6 +213,35 @@ def get_manual_slices(project_id: str) -> dict[str, object]:
     if not paths.manual_slices_json.exists():
         raise HTTPException(status_code=404, detail="manual slices not found")
     return {"success": True, "data": read_json(paths.manual_slices_json)}
+
+
+@router.get("/{project_id}/review-state")
+def get_review_state(project_id: str) -> dict[str, object]:
+    paths = SliceProjectStorage(state.storage).paths(project_id)
+    if not paths.project_json.exists():
+        raise HTTPException(status_code=404, detail="slice project not found")
+    try:
+        review_state = ensure_review_state(paths)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"success": True, "data": review_state}
+
+
+@router.put("/{project_id}/review-state")
+async def put_review_state(project_id: str, request: Request) -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    paths = storage.paths(project_id)
+    if not paths.project_json.exists():
+        raise HTTPException(status_code=404, detail="slice project not found")
+    try:
+        payload = await request.json()
+        review_state = validate_review_state(payload, read_json(paths.candidates_json))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    write_json(paths.review_state_json, review_state)
+    rejected = sum(len(page.get("rejectedCandidateIds") or []) for page in review_state.get("pages") or [])
+    storage.patch_project(paths, reviewStatePath=str(paths.review_state_json), rejectedCandidateCount=rejected)
+    return {"success": True, "data": {"projectId": paths.project_id, "rejectedCandidateCount": rejected}}
 
 
 @router.put("/{project_id}/manual-slices")
@@ -206,9 +290,46 @@ def export_slice_project(project_id: str) -> dict[str, object]:
         zipPath=str(paths.output / "project.zip"),
         selectedAssetsZipPath=str(paths.output / "selected-assets.zip"),
         downloadUrl=f"/api/pencil/slice-projects/{paths.project_id}/download.zip",
+        selectedAssetsDownloadUrl=f"/api/pencil/slice-projects/{paths.project_id}/selected-assets.zip",
         selectedAssetCount=manifest["selectedAssetCount"],
     )
     return {"success": True, "data": manifest}
+
+
+@router.post("/{project_id}/export-preview")
+def export_preview(project_id: str) -> dict[str, object]:
+    storage = SliceProjectStorage(state.storage)
+    paths = storage.paths(project_id)
+    if not paths.project_json.exists():
+        raise HTTPException(status_code=404, detail="slice project not found")
+    if not paths.manual_slices_json.exists():
+        raise HTTPException(status_code=409, detail="manual slices are required before export preview")
+    try:
+        manual_slices = validate_manual_slices(read_json(paths.manual_slices_json), read_json(paths.candidates_json))
+        if selected_slice_count(manual_slices) == 0:
+            raise HTTPException(status_code=409, detail="no selected slices to preview")
+        manifest = write_export_preview(paths=paths, manual_slices=manual_slices)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    storage.patch_project(paths, exportPreviewPath=str(paths.output / "export-preview" / "manifest.json"))
+    return {"success": True, "data": manifest}
+
+
+@router.get("/{project_id}/export-preview/{name}")
+def get_export_preview_file(project_id: str, name: str) -> FileResponse:
+    paths = SliceProjectStorage(state.storage).paths(project_id)
+    requested = Path(name).name
+    if requested not in {"contact-sheet.png", "index.html"}:
+        raise HTTPException(status_code=404, detail="export preview file not found")
+    safe_name = requested
+    target = paths.output / "export-preview" / safe_name
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="export preview file not found")
+    if target.suffix.lower() == ".png":
+        return FileResponse(target, media_type="image/png")
+    if target.suffix.lower() == ".html":
+        return FileResponse(target, media_type="text/html")
+    raise HTTPException(status_code=404, detail="export preview file not found")
 
 
 @router.get("/{project_id}/download.zip")
@@ -226,6 +347,21 @@ def download_zip(project_id: str) -> FileResponse:
     return FileResponse(zip_path, media_type="application/zip", filename="project.zip")
 
 
+@router.get("/{project_id}/selected-assets.zip")
+def download_selected_assets_zip(project_id: str) -> FileResponse:
+    storage = SliceProjectStorage(state.storage)
+    try:
+        project = storage.read_project(project_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="slice project not found") from error
+    if project.get("status") != "completed":
+        raise HTTPException(status_code=409, detail="slice project is not exported")
+    zip_path = Path(str(project.get("selectedAssetsZipPath") or ""))
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail="selected assets zip not found")
+    return FileResponse(zip_path, media_type="application/zip", filename="selected-assets.zip")
+
+
 def public_project(project: dict[str, Any]) -> dict[str, Any]:
     keys = [
         "projectId",
@@ -239,7 +375,14 @@ def public_project(project: dict[str, Any]) -> dict[str, Any]:
         "downloadUrl",
         "selectedSliceCount",
         "selectedAssetCount",
+        "candidateCount",
+        "rejectedCandidateCount",
+        "completedPageCount",
+        "exported",
         "manualSlicesConfirmed",
+        "thumbnailUrl",
+        "workspaceUrl",
+        "selectedAssetsDownloadUrl",
         "error",
         "warnings",
         "createdAt",

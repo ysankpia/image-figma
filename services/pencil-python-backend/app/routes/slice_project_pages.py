@@ -88,6 +88,217 @@ NEW_PROJECT_HTML = """<!doctype html>
 """
 
 
+WORKSPACE_HTML = """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pencil Slice Workspace</title>
+  <link rel="icon" href="data:," />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #070b14; color: #e5e7eb; }
+    .shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: 100vh; }
+    aside { border-right: 1px solid #263244; background: #0f172a; padding: 20px; }
+    main { padding: 22px; min-width: 0; }
+    h1, h2, h3 { margin: 0; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 16px; margin: 22px 0 12px; }
+    h3 { font-size: 15px; margin-bottom: 8px; }
+    .muted { color: #94a3b8; font-size: 12px; line-height: 1.5; }
+    label { display: block; margin: 12px 0 6px; color: #cbd5e1; font-size: 13px; }
+    input, select, button { border: 1px solid #334155; background: #111827; color: #e5e7eb; border-radius: 6px; padding: 9px 10px; font: inherit; }
+    input, select { width: 100%; }
+    input[type="checkbox"] { width: auto; margin-right: 8px; }
+    button { cursor: pointer; }
+    button.primary { background: #16a34a; border-color: #22c55e; }
+    button.warn { background: #7f1d1d; border-color: #ef4444; }
+    button.secondary { background: #1f2937; }
+    button:disabled { opacity: .55; cursor: progress; }
+    .row { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 10px; }
+    .check { display: flex; align-items: center; margin-top: 12px; }
+    .status { min-height: 20px; margin-top: 12px; color: #93c5fd; font-size: 13px; white-space: pre-wrap; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #263244; background: #0f172a; border-radius: 8px; overflow: hidden; }
+    .card-body { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 12px; }
+    .thumb { width: 92px; height: 120px; object-fit: cover; background: #020617; border: 1px solid #334155; border-radius: 6px; }
+    .card-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .card-title strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { display: inline-flex; align-items: center; border: 1px solid #334155; border-radius: 999px; color: #cbd5e1; font-size: 11px; padding: 2px 7px; white-space: nowrap; }
+    .badge.done { border-color: #16a34a; color: #86efac; }
+    .badge.broken { border-color: #ef4444; color: #fca5a5; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+    .stat { background: #111827; border: 1px solid #263244; border-radius: 6px; padding: 7px; }
+    .stat span { display: block; color: #94a3b8; font-size: 11px; }
+    .stat strong { display: block; margin-top: 3px; font-size: 15px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px; }
+    .actions a, .actions button { text-decoration: none; color: #e5e7eb; font-size: 13px; }
+    .actions a { border: 1px solid #334155; background: #1f2937; border-radius: 6px; padding: 8px 10px; }
+    .empty { border: 1px dashed #334155; border-radius: 8px; padding: 40px; text-align: center; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <h1>Pencil Slice Workspace</h1>
+      <p class="muted">自动候选只负责提示，用户确认的 manual_slices 才是最终交付真相源。</p>
+      <h2>新建项目</h2>
+      <form id="createForm">
+        <label for="files">Images</label>
+        <input id="files" name="files[]" type="file" accept="image/png,image/jpeg,image/webp" multiple required />
+        <div class="row">
+          <div>
+            <label for="projectName">Project name</label>
+            <input id="projectName" name="projectName" value="Assisted Slice Project" />
+          </div>
+          <div>
+            <label for="boundarySource">Source</label>
+            <select id="boundarySource" name="boundarySource">
+              <option value="psdlike" selected>psdlike</option>
+              <option value="m29">m29</option>
+              <option value="hybrid">hybrid</option>
+            </select>
+          </div>
+        </div>
+        <label class="check"><input id="includeDebug" name="includeDebug" type="checkbox" checked /> include debug</label>
+        <button id="createButton" class="primary" type="submit" style="width:100%;margin-top:14px">创建并打开</button>
+      </form>
+      <div id="createStatus" class="status"></div>
+    </aside>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>项目</h1>
+          <div id="summary" class="muted">loading</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="secondary" onclick="loadProjects()">刷新</button>
+          <a class="muted" href="/api/pencil/slice-projects/new">旧上传页</a>
+        </div>
+      </div>
+      <div id="projects" class="projects"></div>
+    </main>
+  </div>
+  <script>
+    const projectsEl = document.getElementById("projects");
+    const summaryEl = document.getElementById("summary");
+    const createStatus = document.getElementById("createStatus");
+    const createButton = document.getElementById("createButton");
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+    function setCreateStatus(text, error=false) {
+      createStatus.textContent = text;
+      createStatus.style.color = error ? "#fca5a5" : "#93c5fd";
+    }
+    async function request(url, options={}) {
+      const response = await fetch(url, options);
+      let payload = null;
+      try { payload = await response.json(); } catch (_) {}
+      if (!response.ok) throw new Error((payload && payload.detail) || response.statusText);
+      return payload ? payload.data : null;
+    }
+    async function loadProjects() {
+      summaryEl.textContent = "loading";
+      try {
+        const data = await request("/api/pencil/slice-projects");
+        renderProjects(data.projects || []);
+      } catch (error) {
+        summaryEl.textContent = error.message || String(error);
+      }
+    }
+    function renderProjects(projects) {
+      summaryEl.textContent = `${projects.length} 个项目`;
+      if (!projects.length) {
+        projectsEl.innerHTML = '<div class="empty">还没有项目。上传图片后会出现在这里。</div>';
+        return;
+      }
+      projectsEl.innerHTML = projects.map(project => {
+        const statusClass = project.status === "broken" ? "broken" : project.exported ? "done" : "";
+        const thumb = project.thumbnailUrl || "";
+        const updated = project.updatedAt ? new Date(project.updatedAt).toLocaleString() : "--";
+        return `<article class="card">
+          <div class="card-body">
+            ${thumb ? `<img class="thumb" src="${thumb}" alt="">` : `<div class="thumb"></div>`}
+            <div>
+              <div class="card-title">
+                <strong title="${escapeHtml(project.projectName)}">${escapeHtml(project.projectName)}</strong>
+                <span class="badge ${statusClass}">${escapeHtml(project.status || "unknown")}</span>
+              </div>
+              <div class="muted">${escapeHtml(project.projectId)}<br>${updated}</div>
+              <div class="stats">
+                <div class="stat"><span>Pages</span><strong>${project.completedPageCount || 0}/${project.pageCount || 0}</strong></div>
+                <div class="stat"><span>Candidates</span><strong>${project.candidateCount || 0}</strong></div>
+                <div class="stat"><span>Selected</span><strong>${project.selectedSliceCount || 0}</strong></div>
+              </div>
+              <div class="muted">${project.rejectedCandidateCount || 0} rejected / ${project.exported ? "exported" : "not exported"}</div>
+            </div>
+          </div>
+          <div class="actions">
+            <a href="${project.reviewUrl || "#"}">继续处理</a>
+            ${project.exported ? `<a href="/api/pencil/slice-projects/${project.projectId}/download.zip">项目包</a><a href="/api/pencil/slice-projects/${project.projectId}/selected-assets.zip">资源包</a>` : ""}
+            <button data-project-id="${escapeAttr(project.projectId)}" data-project-name="${escapeAttr(project.projectName)}" onclick="renameProject(this.dataset.projectId, this.dataset.projectName)">重命名</button>
+            <button data-project-id="${escapeAttr(project.projectId)}" onclick="cloneProject(this.dataset.projectId)">复制</button>
+            <button class="warn" data-project-id="${escapeAttr(project.projectId)}" onclick="deleteProject(this.dataset.projectId)">删除</button>
+          </div>
+        </article>`;
+      }).join("");
+    }
+    async function renameProject(projectId, oldName) {
+      const projectName = prompt("项目名称", oldName || "Assisted Slice Project");
+      if (!projectName) return;
+      await request(`/api/pencil/slice-projects/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectName })
+      });
+      await loadProjects();
+    }
+    async function cloneProject(projectId) {
+      const data = await request(`/api/pencil/slice-projects/${projectId}/clone`, { method: "POST" });
+      window.location.href = data.reviewUrl;
+    }
+    async function deleteProject(projectId) {
+      if (!confirm(`删除项目 ${projectId}？这个操作不可恢复。`)) return;
+      await request(`/api/pencil/slice-projects/${projectId}`, { method: "DELETE" });
+      await loadProjects();
+    }
+    document.getElementById("createForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const files = document.getElementById("files").files;
+      if (!files.length) { setCreateStatus("请选择至少一张图片。", true); return; }
+      const body = new FormData();
+      for (const file of files) body.append("files[]", file);
+      body.append("projectName", document.getElementById("projectName").value || "Assisted Slice Project");
+      body.append("boundarySource", document.getElementById("boundarySource").value);
+      body.append("includeDebug", document.getElementById("includeDebug").checked ? "true" : "false");
+      createButton.disabled = true;
+      setCreateStatus("creating...");
+      try {
+        const data = await request("/api/pencil/slice-projects", { method: "POST", body });
+        window.location.href = data.reviewUrl || `/api/pencil/slice-projects/${data.projectId}/review`;
+      } catch (error) {
+        setCreateStatus(error.message || String(error), true);
+        createButton.disabled = false;
+      }
+    });
+    window.loadProjects = loadProjects;
+    window.renameProject = renameProject;
+    window.cloneProject = cloneProject;
+    window.deleteProject = deleteProject;
+    loadProjects();
+  </script>
+</body>
+</html>
+"""
+
+
 REVIEW_HTML = """<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -109,6 +320,7 @@ REVIEW_HTML = """<!doctype html>
     button.active { background: #2563eb; border-color: #3b82f6; }
     button.primary { background: #16a34a; border-color: #22c55e; }
     button.warn { background: #7f1d1d; border-color: #ef4444; }
+    button.secondary { background: #374151; border-color: #4b5563; }
     label { font-size: 12px; color: #cbd5e1; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #263244; background: #111827; }
     .canvas-wrap { overflow: hidden; position: relative; background: #020617; min-height: 0; }
@@ -138,6 +350,11 @@ REVIEW_HTML = """<!doctype html>
     .page-state.dirty { border-color: #f59e0b; color: #fcd34d; }
     .page-state.saved { border-color: #16a34a; color: #86efac; }
     .page-state.failed { border-color: #ef4444; color: #fca5a5; }
+    .bulkbar { display: grid; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #263244; padding-bottom: 12px; }
+    .search { margin-bottom: 10px; }
+    .tagline { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 6px; margin-top: 6px; }
+    .preview-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .preview-links a { color: #86efac; }
   </style>
 </head>
 <body>
@@ -150,6 +367,7 @@ REVIEW_HTML = """<!doctype html>
       <div class="toolbar">
         <button id="mode-select" class="active">选择</button>
         <button id="mode-draw">画框</button>
+        <button id="mode-candidate-box">框选候选</button>
         <button id="pan">平移</button>
         <button id="fit">适屏</button>
         <button id="zoom100">100%</button>
@@ -157,8 +375,10 @@ REVIEW_HTML = """<!doctype html>
         <button id="zoomIn">+</button>
         <button id="delete" class="warn">删除</button>
         <button id="save">保存</button>
+        <button id="previewExport">导出预览</button>
         <button id="export" class="primary">导出</button>
-        <a id="download" style="display:none;color:#86efac" href="#">下载 ZIP</a>
+        <a id="download" style="display:none;color:#86efac" href="#">项目包</a>
+        <a id="selectedDownload" style="display:none;color:#86efac" href="#">资源包</a>
         <span id="status" class="status">loading</span>
       </div>
       <div class="canvas-wrap" id="viewport">
@@ -180,8 +400,30 @@ REVIEW_HTML = """<!doctype html>
           <label>conf <input id="minConfidence" type="number" min="0" max="1" step="0.05" value="0" style="width:72px" /></label>
           <label>opacity <input id="candidateOpacity" type="range" min="0.1" max="1" step="0.05" value="0.75" /></label>
         </div>
+        <div class="filter-row" id="tierFilters"></div>
+        <div class="filter-row">
+          <label><input id="onlyTodoPages" type="checkbox" /> 未处理页</label>
+          <label><input id="onlySelectedPages" type="checkbox" /> 已选择页</label>
+          <label><input id="onlyDensePages" type="checkbox" /> 候选多</label>
+        </div>
+      </div>
+      <div class="bulkbar">
+        <h3>Candidate Batch <span id="candidateSelectionCount" class="muted"></span></h3>
+        <div class="filter-row">
+          <button class="secondary" onclick="bulkAddCandidates()">加入选中候选</button>
+          <button class="secondary" onclick="rejectSelectedCandidates()">拒绝候选</button>
+          <button class="secondary" onclick="restoreRejectedOnPage()">恢复本页拒绝</button>
+          <button class="secondary" onclick="clearCandidateSelection()">清空候选选择</button>
+        </div>
+        <div class="muted">用“框选候选”模式拖出矩形，批量选择当前可见候选。</div>
+        <div id="previewLinks" class="preview-links"></div>
       </div>
       <h3>Selected Slices <span id="selectedCount" class="muted"></span></h3>
+      <input id="assetSearch" class="search" placeholder="搜索 selected assets" />
+      <div class="filter-row" style="margin-bottom:10px">
+        <button class="secondary" onclick="bulkRenameSlices()">批量重命名</button>
+        <button class="warn" onclick="bulkDeleteVisibleSlices()">删除可见</button>
+      </div>
       <div id="assets"></div>
     </section>
   </div>
@@ -193,17 +435,22 @@ REVIEW_HTML = """<!doctype html>
     const hud = document.getElementById("hud");
     const kindOptions = ["image", "icon", "text", "shape", "group", "unknown"];
     const sourceOptions = ["psdlike", "m29", "foreground_audit", "source", "manual"];
+    const tierOptions = ["recommended", "normal", "noise", "text", "rejected"];
     const colors = { image: "#22c55e", icon: "#22c55e", text: "#ef4444", shape: "#3b82f6", group: "#f59e0b", unknown: "#eab308", full_screen: "#64748b", upper_region: "#64748b", middle_region: "#64748b", lower_region: "#64748b" };
     const state = {
-      candidates: null, manual: null, pageIndex: 0, mode: "select", image: null, activeId: null, drag: null,
+      candidates: null, manual: null, reviewState: null, pageIndex: 0, mode: "select", image: null, activeId: null, drag: null,
       hoverCandidateId: null, hoverSliceId: null, pageImages: {}, pageSaveState: {},
+      selectedCandidateIds: new Set(), assetSearch: "",
+      reviewSaveTimer: null, reviewSavePromise: null,
       view: { scale: 1, offsetX: 40, offsetY: 40 }, spaceDown: false,
       autosaveTimer: null, savePromise: null, saveRevision: 0, lastSavedRevision: 0,
       history: { undo: [], redo: [], limit: 50, restoring: false },
       filters: {
         showCandidates: true, showSelected: true, showLabels: true, minConfidence: 0, candidateOpacity: 0.75,
         kinds: { image: true, icon: true, text: false, shape: true, group: true, unknown: true },
-        sources: { psdlike: true, m29: true, foreground_audit: true, source: true, manual: true }
+        sources: { psdlike: true, m29: true, foreground_audit: true, source: true, manual: true },
+        tiers: { recommended: true, normal: true, noise: false, text: false, rejected: false },
+        onlyTodoPages: false, onlySelectedPages: false, onlyDensePages: false
       }
     };
 
@@ -222,20 +469,34 @@ REVIEW_HTML = """<!doctype html>
     async function load() {
       state.candidates = await api("/candidates");
       state.manual = await api("/manual-slices");
+      state.reviewState = await api("/review-state");
       for (const page of state.candidates.pages) state.pageSaveState[page.pageId] = "saved";
       renderFilterControls();
+      const savedPage = state.candidates.pages.findIndex(page => page.pageId === state.reviewState.lastActivePageId);
       renderPages();
-      await loadPage(0);
+      await loadPage(savedPage >= 0 ? savedPage : 0);
       setStatus("ready");
     }
     function currentCandidatePage() { return state.candidates.pages[state.pageIndex]; }
     function currentManualPage() { return state.manual.pages[state.pageIndex]; }
+    function currentReviewPage() {
+      const pageId = currentCandidatePage().pageId;
+      let page = state.reviewState.pages.find(item => item.pageId === pageId);
+      if (!page) {
+        page = { pageId, rejectedCandidateIds: [], hiddenCandidateIds: [], lastFilter: {} };
+        state.reviewState.pages.push(page);
+      }
+      return page;
+    }
     async function loadPage(index) {
       state.pageIndex = index;
       state.activeId = null;
+      state.selectedCandidateIds.clear();
       const page = currentCandidatePage();
       state.hoverCandidateId = null;
       state.hoverSliceId = null;
+      state.reviewState.lastActivePageId = page.pageId;
+      scheduleReviewStateSave();
       state.image = await imageForPage(page.pageId);
       resizeCanvas();
       fitToScreen();
@@ -302,7 +563,9 @@ REVIEW_HTML = """<!doctype html>
       if (state.image) ctx.drawImage(state.image, 0, 0);
       if (state.filters.showCandidates) {
         for (const candidate of filteredCandidates()) {
-          drawBox(candidate.bbox, colors[candidate.kind] || colors.unknown, candidate.id.split("_").pop(), candidate.id === state.hoverCandidateId, state.filters.candidateOpacity);
+          const active = candidate.id === state.hoverCandidateId || state.selectedCandidateIds.has(candidate.id);
+          const label = `${candidate.id.split("_").pop()} ${candidateTier(candidate).slice(0, 1)}`;
+          drawBox(candidate.bbox, colors[candidate.kind] || colors.unknown, label, active, state.filters.candidateOpacity);
         }
       }
       if (state.filters.showSelected) {
@@ -310,7 +573,7 @@ REVIEW_HTML = """<!doctype html>
           if (slice.selected !== false) drawBox(slice.bbox, "#ffffff", slice.name, slice.id === state.activeId || slice.id === state.hoverSliceId, slice.id === state.activeId ? 1 : .86);
         }
       }
-      if (state.drag?.draft) drawBox(state.drag.draft, "#f97316", "new", true, 1);
+      if (state.drag?.draft) drawBox(state.drag.draft, state.drag.action === "candidateBox" ? "#a78bfa" : "#f97316", state.drag.action === "candidateBox" ? "select" : "new", true, 1);
       ctx.restore();
     }
     function drawBox(b, color, label, active, alpha) {
@@ -354,11 +617,27 @@ REVIEW_HTML = """<!doctype html>
       return [...items].reverse().find(item => point.x >= item.bbox.x && point.y >= item.bbox.y && point.x <= item.bbox.x + item.bbox.width && point.y <= item.bbox.y + item.bbox.height);
     }
     function filteredCandidates() {
+      const rejected = new Set(currentReviewPage().rejectedCandidateIds || []);
       return currentCandidatePage().candidates.filter(candidate => {
         const kind = state.filters.kinds[candidate.kind] !== undefined ? candidate.kind : "unknown";
         const source = state.filters.sources[candidate.source] !== undefined ? candidate.source : "manual";
-        return state.filters.kinds[kind] && state.filters.sources[source] && Number(candidate.confidence || 0) >= state.filters.minConfidence;
+        const tier = candidateTier(candidate, rejected);
+        return state.filters.kinds[kind] && state.filters.sources[source] && state.filters.tiers[tier] && Number(candidate.confidence || 0) >= state.filters.minConfidence;
       });
+    }
+    function candidateTier(candidate, rejectedSet=null) {
+      const rejected = rejectedSet || new Set(currentReviewPage().rejectedCandidateIds || []);
+      if (rejected.has(candidate.id)) return "rejected";
+      if (candidate.kind === "text") return "text";
+      const page = currentCandidatePage();
+      const areaRatio = (candidate.bbox.width * candidate.bbox.height) / Math.max(1, page.width * page.height);
+      const reason = String(candidate.reason || "");
+      if (areaRatio > 0.62 || reason.includes("layout_region") || candidate.kind === "full_screen") return "noise";
+      if (Number(candidate.confidence || 0) >= 0.72 || candidate.source === "foreground_audit" || reason.includes("foreground")) return "recommended";
+      return "normal";
+    }
+    function boxesIntersect(a, b) {
+      return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
     }
 
     function fitToScreen() {
@@ -461,6 +740,10 @@ REVIEW_HTML = """<!doctype html>
         state.drag = { action: "draw", start: p, draft: clampBox({ x: p.x, y: p.y, width: 1, height: 1 }) };
         return;
       }
+      if (state.mode === "candidateBox") {
+        state.drag = { action: "candidateBox", start: p, draft: clampBox({ x: p.x, y: p.y, width: 1, height: 1 }) };
+        return;
+      }
       const slice = hit(currentManualPage().slices.filter(item => item.selected !== false), p);
       if (slice) {
         state.activeId = slice.id;
@@ -472,6 +755,8 @@ REVIEW_HTML = """<!doctype html>
       const candidate = hit(filteredCandidates(), p);
       if (candidate) {
         state.activeId = null;
+        if (state.selectedCandidateIds.has(candidate.id)) state.selectedCandidateIds.delete(candidate.id);
+        else state.selectedCandidateIds.add(candidate.id);
         renderAll();
         return;
       }
@@ -491,7 +776,7 @@ REVIEW_HTML = """<!doctype html>
         if (state.drag.action === "pan") {
           state.view.offsetX = state.drag.originalView.offsetX + screen.x - state.drag.startScreen.x;
           state.view.offsetY = state.drag.originalView.offsetY + screen.y - state.drag.startScreen.y;
-        } else if (state.drag.action === "draw") {
+        } else if (state.drag.action === "draw" || state.drag.action === "candidateBox") {
           const x = Math.min(state.drag.start.x, p.x), y = Math.min(state.drag.start.y, p.y);
           state.drag.draft = clampBox({ x, y, width: Math.abs(p.x - state.drag.start.x), height: Math.abs(p.y - state.drag.start.y) });
         } else {
@@ -519,6 +804,7 @@ REVIEW_HTML = """<!doctype html>
     });
     window.addEventListener("mouseup", () => {
       if (state.drag?.action === "draw" && state.drag.draft.width > 4 && state.drag.draft.height > 4) addManualSlice(state.drag.draft);
+      if (state.drag?.action === "candidateBox" && state.drag.draft.width > 4 && state.drag.draft.height > 4) selectCandidatesInBox(state.drag.draft);
       if (state.drag?.action === "move" || state.drag?.action === "resize") {
         markDirty(state.drag.pageId);
         scheduleAutosave();
@@ -555,7 +841,8 @@ REVIEW_HTML = """<!doctype html>
       mutateManual(() => {
         const page = currentManualPage();
         const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-        page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: normalizeKind(candidate.kind), bbox: clampBox({...candidate.bbox}), selected: true, exportMode: "rect", source: "candidate_confirmed", candidateIds: [candidate.id] });
+        const name = `slice_${page.slices.length + 1}`;
+        page.slices.push({ id, name, displayName: name, kind: normalizeKind(candidate.kind), tags: [], reviewState: "confirmed", bbox: clampBox({...candidate.bbox}), selected: true, exportMode: "rect", source: "candidate_confirmed", candidateIds: [candidate.id] });
         state.activeId = id;
       });
     }
@@ -563,7 +850,8 @@ REVIEW_HTML = """<!doctype html>
       mutateManual(() => {
         const page = currentManualPage();
         const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-        page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: "image", bbox: clampBox(bbox), selected: true, exportMode: "rect", source: "manual", candidateIds: [] });
+        const name = `slice_${page.slices.length + 1}`;
+        page.slices.push({ id, name, displayName: name, kind: "image", tags: [], reviewState: "confirmed", bbox: clampBox(bbox), selected: true, exportMode: "rect", source: "manual", candidateIds: [] });
         state.activeId = id;
       });
     }
@@ -592,13 +880,109 @@ REVIEW_HTML = """<!doctype html>
       mutateManual(() => { slice.bbox = moveBox(slice.bbox, dx, dy); });
     }
     function normalizeKind(kind) { return kindOptions.includes(kind) ? kind : "unknown"; }
+    function sliceDefaults(candidate, index) {
+      const page = currentManualPage();
+      const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}_${index}`;
+      return {
+        id,
+        name: `slice_${page.slices.length + index}`,
+        displayName: `slice_${page.slices.length + index}`,
+        kind: normalizeKind(candidate.kind),
+        tags: [],
+        reviewState: "confirmed",
+        bbox: clampBox({...candidate.bbox}),
+        selected: true,
+        exportMode: "rect",
+        source: "candidate_confirmed",
+        candidateIds: [candidate.id]
+      };
+    }
+    function selectCandidatesInBox(bbox) {
+      for (const candidate of filteredCandidates()) {
+        if (boxesIntersect(candidate.bbox, bbox)) state.selectedCandidateIds.add(candidate.id);
+      }
+      renderAll();
+    }
+    function selectedCandidates() {
+      return currentCandidatePage().candidates.filter(candidate => state.selectedCandidateIds.has(candidate.id));
+    }
+    function bulkAddCandidates() {
+      const candidates = selectedCandidates();
+      if (!candidates.length) return;
+      mutateManual(() => {
+        const page = currentManualPage();
+        const existingCandidateIds = new Set(page.slices.flatMap(slice => slice.candidateIds || []));
+        let added = 0;
+        for (const candidate of candidates) {
+          if (existingCandidateIds.has(candidate.id)) continue;
+          added += 1;
+          page.slices.push(sliceDefaults(candidate, added));
+        }
+        if (added) state.activeId = page.slices[page.slices.length - 1].id;
+      });
+      state.selectedCandidateIds.clear();
+      renderAll();
+    }
+    function rejectSelectedCandidates() {
+      const ids = [...state.selectedCandidateIds];
+      if (!ids.length) return;
+      const reviewPage = currentReviewPage();
+      reviewPage.rejectedCandidateIds = [...new Set([...(reviewPage.rejectedCandidateIds || []), ...ids])];
+      state.selectedCandidateIds.clear();
+      scheduleReviewStateSave();
+      renderAll();
+    }
+    function restoreRejectedOnPage() {
+      currentReviewPage().rejectedCandidateIds = [];
+      state.selectedCandidateIds.clear();
+      scheduleReviewStateSave();
+      renderAll();
+    }
+    function clearCandidateSelection() {
+      state.selectedCandidateIds.clear();
+      renderAll();
+    }
+    function scheduleReviewStateSave() {
+      clearTimeout(state.reviewSaveTimer);
+      state.reviewSaveTimer = setTimeout(() => saveReviewState().catch(error => setStatus(error.message || String(error), true)), 400);
+    }
+    async function flushReviewStateSave() {
+      if (state.reviewSaveTimer) {
+        clearTimeout(state.reviewSaveTimer);
+        state.reviewSaveTimer = null;
+        await saveReviewState();
+      }
+      if (state.reviewSavePromise) await state.reviewSavePromise;
+    }
+    async function saveReviewState() {
+      if (state.reviewSavePromise) return state.reviewSavePromise;
+      state.reviewSavePromise = api("/review-state", {
+        method: "PUT",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(state.reviewState)
+      }).finally(() => { state.reviewSavePromise = null; });
+      return state.reviewSavePromise;
+    }
 
     function renderPages() {
-      document.getElementById("pages").innerHTML = state.candidates.pages.map((page, i) => {
+      const visiblePages = state.candidates.pages
+        .map((page, i) => ({ page, i }))
+        .filter(({ page }) => {
+          const manualPage = state.manual.pages.find(item => item.pageId === page.pageId);
+          const selected = (manualPage?.slices || []).filter(item => item.selected !== false).length;
+          if (state.filters.onlyTodoPages && selected > 0) return false;
+          if (state.filters.onlySelectedPages && selected === 0) return false;
+          if (state.filters.onlyDensePages && (page.candidates || []).length < 40) return false;
+          return true;
+        });
+      document.getElementById("pages").innerHTML = visiblePages.map(({ page, i }) => {
         const manualPage = state.manual.pages.find(item => item.pageId === page.pageId);
         const count = (manualPage?.slices || []).filter(item => item.selected !== false).length;
         const saveState = state.pageSaveState[page.pageId] || "saved";
         const candidateCount = (page.candidates || []).length;
+        const reviewPage = state.reviewState.pages.find(item => item.pageId === page.pageId) || {};
+        const rejectedCount = (reviewPage.rejectedCandidateIds || []).length;
+        const pageStatus = count > 0 ? "ready" : "untouched";
         const thumb = `/api/pencil/slice-projects/${projectId}/source/${page.pageId}`;
         return `<button class="page-btn ${i === state.pageIndex ? "active" : ""}" onclick="loadPage(${i})">
           <div class="page-row">
@@ -606,8 +990,8 @@ REVIEW_HTML = """<!doctype html>
             <span class="page-meta">
               <span>${page.pageId}<span class="count">${count}</span></span>
               <span class="muted">${page.width}x${page.height}</span>
-              <span class="muted">${candidateCount} candidates / ${count} selected</span>
-              <span class="page-state ${saveState}">${saveState}</span>
+              <span class="muted">${candidateCount} candidates / ${count} selected / ${rejectedCount} rejected</span>
+              <span><span class="page-state ${saveState}">${saveState}</span> <span class="page-state ${pageStatus === "ready" ? "saved" : ""}">${pageStatus}</span></span>
             </span>
           </div>
         </button>`;
@@ -617,15 +1001,23 @@ REVIEW_HTML = """<!doctype html>
       const page = currentManualPage();
       const selectedCount = page.slices.filter(item => item.selected !== false).length;
       document.getElementById("selectedCount").textContent = `(${selectedCount})`;
-      document.getElementById("assets").innerHTML = page.slices.map(slice => `
+      const visibleSlices = visibleAssetSlices();
+      document.getElementById("assets").innerHTML = visibleSlices.map(slice => `
         <div class="asset ${slice.id === state.activeId ? "active" : ""} ${slice.selected === false ? "unselected" : ""}" onclick="focusSlice('${slice.id}')">
           <div class="asset-head">
             <canvas class="slice-thumb" data-thumb-slice-id="${slice.id}" width="84" height="64"></canvas>
             <div>
-              <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onchange="updateSlice('${slice.id}', 'name', this.value)" />
+              <input name="${slice.id}__displayName" value="${escapeHtml(slice.displayName || slice.name)}" onchange="updateSlice('${slice.id}', 'displayName', this.value)" />
+              <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onchange="updateSlice('${slice.id}', 'name', safeName(this.value))" style="margin-top:6px" />
               <div class="row">
                 <select name="${slice.id}__kind" onchange="updateSlice('${slice.id}', 'kind', this.value)">${kindOptions.map(kind => `<option value="${kind}" ${normalizeKind(slice.kind) === kind ? "selected" : ""}>${kind}</option>`).join("")}</select>
                 <label><input name="${slice.id}__selected" type="checkbox" ${slice.selected !== false ? "checked" : ""} onchange="updateSlice('${slice.id}', 'selected', this.checked)" /> selected</label>
+              </div>
+              <div class="tagline">
+                <input name="${slice.id}__tags" value="${escapeHtml((slice.tags || []).join(','))}" placeholder="tags" onchange="updateTags('${slice.id}', this.value)" />
+                <select name="${slice.id}__reviewState" onchange="updateSlice('${slice.id}', 'reviewState', this.value)">
+                  ${["confirmed", "review", "ignored"].map(value => `<option value="${value}" ${(slice.reviewState || "confirmed") === value ? "selected" : ""}>${value}</option>`).join("")}
+                </select>
               </div>
             </div>
           </div>
@@ -637,7 +1029,15 @@ REVIEW_HTML = """<!doctype html>
           </div>
           <div class="muted">${slice.source || "manual"} ${slice.candidateIds?.length ? "/ candidate" : ""} / ${slice.bbox.width}x${slice.bbox.height}</div>
         </div>`).join("");
+      document.getElementById("candidateSelectionCount").textContent = `(${state.selectedCandidateIds.size})`;
       renderSliceThumbnails();
+    }
+    function visibleAssetSlices() {
+      const needle = state.assetSearch.trim().toLowerCase();
+      return currentManualPage().slices.filter(slice => {
+        if (!needle) return true;
+        return [slice.name, slice.displayName, slice.kind, ...(slice.tags || [])].some(value => String(value || "").toLowerCase().includes(needle));
+      });
     }
     function renderSliceThumbnails() {
       const image = state.pageImages[currentCandidatePage().pageId];
@@ -669,11 +1069,15 @@ REVIEW_HTML = """<!doctype html>
     function renderFilterControls() {
       document.getElementById("kindFilters").innerHTML = kindOptions.map(kind => `<label><input name="filter_kind_${kind}" type="checkbox" data-kind="${kind}" ${state.filters.kinds[kind] ? "checked" : ""} /> ${kind}</label>`).join("");
       document.getElementById("sourceFilters").innerHTML = sourceOptions.map(source => `<label><input name="filter_source_${source}" type="checkbox" data-source="${source}" ${state.filters.sources[source] ? "checked" : ""} /> ${source}</label>`).join("");
+      document.getElementById("tierFilters").innerHTML = tierOptions.map(tier => `<label><input name="filter_tier_${tier}" type="checkbox" data-tier="${tier}" ${state.filters.tiers[tier] ? "checked" : ""} /> ${tier}</label>`).join("");
       for (const input of document.querySelectorAll("[data-kind]")) input.onchange = () => { state.filters.kinds[input.dataset.kind] = input.checked; renderAll(); };
       for (const input of document.querySelectorAll("[data-source]")) input.onchange = () => { state.filters.sources[input.dataset.source] = input.checked; renderAll(); };
+      for (const input of document.querySelectorAll("[data-tier]")) input.onchange = () => { state.filters.tiers[input.dataset.tier] = input.checked; renderAll(); };
       for (const id of ["showCandidates", "showSelected", "showLabels"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; renderAll(); };
+      for (const id of ["onlyTodoPages", "onlySelectedPages", "onlyDensePages"]) document.getElementById(id).onchange = event => { state.filters[id] = event.target.checked; renderPages(); };
       document.getElementById("minConfidence").onchange = event => { state.filters.minConfidence = Number(event.target.value) || 0; renderAll(); };
       document.getElementById("candidateOpacity").oninput = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; renderAll(); };
+      document.getElementById("assetSearch").oninput = event => { state.assetSearch = event.target.value || ""; renderAssets(); };
     }
     function updateSlice(id, key, value) {
       mutateManual(() => {
@@ -685,6 +1089,36 @@ REVIEW_HTML = """<!doctype html>
       mutateManual(() => {
         const s = currentManualPage().slices.find(x => x.id === id);
         if (s) { s.bbox[key] = Math.max(0, Number(value) || 0); s.bbox = clampBox(s.bbox); }
+      });
+    }
+    function updateTags(id, value) {
+      mutateManual(() => {
+        const s = currentManualPage().slices.find(x => x.id === id);
+        if (s) s.tags = String(value || "").split(",").map(item => safeName(item)).filter(Boolean);
+      });
+    }
+    function safeName(value) {
+      return String(value || "").replace(/[^0-9A-Za-z_-]+/g, "_").replace(/^_+|_+$/g, "") || "slice";
+    }
+    function bulkRenameSlices() {
+      const prefix = prompt("批量名称前缀", "slice");
+      if (!prefix) return;
+      const base = safeName(prefix);
+      mutateManual(() => {
+        visibleAssetSlices().forEach((slice, index) => {
+          const name = `${base}_${String(index + 1).padStart(4, "0")}`;
+          slice.name = name;
+          slice.displayName = name;
+        });
+      });
+    }
+    function bulkDeleteVisibleSlices() {
+      const ids = new Set(visibleAssetSlices().map(slice => slice.id));
+      if (!ids.size || !confirm(`删除当前可见的 ${ids.size} 个 selected assets？`)) return;
+      mutateManual(() => {
+        const page = currentManualPage();
+        page.slices = page.slices.filter(slice => !ids.has(slice.id));
+        state.activeId = null;
       });
     }
     function updateHud(point=null) {
@@ -733,18 +1167,35 @@ REVIEW_HTML = """<!doctype html>
     async function exportProject() {
       try {
         await flushAutosave();
+        await flushReviewStateSave();
         setStatus("exporting...");
         await api("/export", { method: "POST" });
         const link = document.getElementById("download");
         link.href = `/api/pencil/slice-projects/${projectId}/download.zip`;
         link.style.display = "inline";
+        const selectedLink = document.getElementById("selectedDownload");
+        selectedLink.href = `/api/pencil/slice-projects/${projectId}/selected-assets.zip`;
+        selectedLink.style.display = "inline";
         setStatus("exported");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+      }
+    }
+    async function previewExport() {
+      try {
+        await flushAutosave();
+        await flushReviewStateSave();
+        setStatus("building preview...");
+        const data = await api("/export-preview", { method: "POST" });
+        document.getElementById("previewLinks").innerHTML = `<a href="${data.previewHtmlUrl}" target="_blank">导出预览</a><a href="${data.contactSheetUrl}" target="_blank">contact sheet</a><span class="muted">${data.assetCount} assets</span>`;
+        setStatus("preview ready");
       } catch (error) {
         setStatus(error.message || String(error), true);
       }
     }
     document.getElementById("mode-select").onclick = () => setMode("select");
     document.getElementById("mode-draw").onclick = () => setMode("draw");
+    document.getElementById("mode-candidate-box").onclick = () => setMode("candidateBox");
     document.getElementById("pan").onclick = () => setMode("pan");
     document.getElementById("fit").onclick = fitToScreen;
     document.getElementById("zoom100").onclick = () => { const rect = canvas.getBoundingClientRect(); setZoom(1, { x: rect.width / 2, y: rect.height / 2 }); };
@@ -752,12 +1203,14 @@ REVIEW_HTML = """<!doctype html>
     document.getElementById("zoomIn").onclick = () => zoomBy(1.25);
     document.getElementById("delete").onclick = deleteActive;
     document.getElementById("save").onclick = () => saveManual().catch(error => setStatus(error.message || String(error), true));
+    document.getElementById("previewExport").onclick = previewExport;
     document.getElementById("export").onclick = exportProject;
     function setMode(mode) {
       state.mode = mode;
-      for (const id of ["mode-select", "mode-draw", "pan"]) document.getElementById(id).classList.remove("active");
+      for (const id of ["mode-select", "mode-draw", "mode-candidate-box", "pan"]) document.getElementById(id).classList.remove("active");
       if (mode === "select") document.getElementById("mode-select").classList.add("active");
       if (mode === "draw") document.getElementById("mode-draw").classList.add("active");
+      if (mode === "candidateBox") document.getElementById("mode-candidate-box").classList.add("active");
       if (mode === "pan") document.getElementById("pan").classList.add("active");
     }
     window.addEventListener("keydown", event => {
@@ -782,6 +1235,9 @@ REVIEW_HTML = """<!doctype html>
     window.addSliceFromCandidate = addSliceFromCandidate; window.addManualSlice = addManualSlice; window.duplicateActive = duplicateActive;
     window.undoManual = undoManual; window.redoManual = redoManual; window.flushAutosave = flushAutosave; window.pageByOffset = pageByOffset;
     window.filteredCandidates = filteredCandidates; window.currentCandidatePage = currentCandidatePage; window.currentManualPage = currentManualPage;
+    window.bulkAddCandidates = bulkAddCandidates; window.rejectSelectedCandidates = rejectSelectedCandidates; window.restoreRejectedOnPage = restoreRejectedOnPage;
+    window.clearCandidateSelection = clearCandidateSelection; window.bulkRenameSlices = bulkRenameSlices; window.bulkDeleteVisibleSlices = bulkDeleteVisibleSlices;
+    window.previewExport = previewExport; window.saveReviewState = saveReviewState; window.flushReviewStateSave = flushReviewStateSave;
     window.state = state;
     load().catch(error => setStatus(error.message || String(error), true));
   </script>

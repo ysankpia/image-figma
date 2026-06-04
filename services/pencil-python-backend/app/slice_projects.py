@@ -4,6 +4,7 @@ import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -19,6 +20,7 @@ from .utils import safe_slug
 
 SLICE_CANDIDATES_SCHEMA = "pencil.slice_candidates.v1"
 MANUAL_SLICES_SCHEMA = "pencil.manual_slices.v1"
+REVIEW_STATE_SCHEMA = "pencil.slice_review_state.v1"
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,7 @@ class SliceProjectPaths:
     project_json: Path
     candidates_json: Path
     manual_slices_json: Path
+    review_state_json: Path
 
 
 class SliceProjectStorage:
@@ -69,6 +72,7 @@ class SliceProjectStorage:
             project_json=root / "project.json",
             candidates_json=root / "candidates.v1.json",
             manual_slices_json=root / "manual_slices.v1.json",
+            review_state_json=root / "review_state.v1.json",
         )
 
     def read_project(self, project_id: str) -> dict[str, Any]:
@@ -82,6 +86,83 @@ class SliceProjectStorage:
         next_project = {**current, **updates, "updatedAt": datetime.now(UTC).isoformat()}
         write_json(paths.project_json, next_project)
         return next_project
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        projects: list[dict[str, Any]] = []
+        for root in sorted(self.root.iterdir() if self.root.exists() else [], reverse=True):
+            if not root.is_dir():
+                continue
+            paths = self.paths(root.name)
+            if not paths.project_json.exists():
+                projects.append(broken_project_summary(paths, "missing project.json"))
+                continue
+            try:
+                projects.append(project_summary(paths))
+            except Exception as error:
+                projects.append(broken_project_summary(paths, str(error)))
+        projects.sort(key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
+        return projects
+
+    def rename_project(self, project_id: str, project_name: str) -> dict[str, Any]:
+        paths = self.paths(project_id)
+        if not paths.project_json.exists():
+            raise FileNotFoundError(project_id)
+        project = self.patch_project(paths, projectName=project_name)
+        if paths.manual_slices_json.exists():
+            manual_slices = read_json(paths.manual_slices_json)
+            manual_slices["projectName"] = project_name
+            write_json(paths.manual_slices_json, manual_slices)
+        return project
+
+    def clone_project(self, project_id: str) -> SliceProjectPaths:
+        source_paths = self.paths(project_id)
+        if not source_paths.project_json.exists():
+            raise FileNotFoundError(project_id)
+        source_project = read_json(source_paths.project_json)
+        clone_name = f"{source_project.get('projectName') or 'Assisted Slice Project'} Copy"
+        clone_paths = self.create_project(clone_name)
+        if clone_paths.root.exists():
+            shutil.rmtree(clone_paths.root)
+        shutil.copytree(source_paths.root, clone_paths.root)
+        if clone_paths.output.exists():
+            shutil.rmtree(clone_paths.output)
+        clone_paths.output.mkdir(parents=True, exist_ok=True)
+        now = datetime.now(UTC).isoformat()
+        project = read_json(clone_paths.project_json)
+        project.update(
+            {
+                "projectId": clone_paths.project_id,
+                "projectName": clone_name,
+                "status": "ready",
+                "createdAt": now,
+                "updatedAt": now,
+                "reviewUrl": f"/api/pencil/slice-projects/{clone_paths.project_id}/review",
+                "downloadUrl": None,
+                "zipPath": None,
+                "selectedAssetsZipPath": None,
+                "manifestPath": None,
+            }
+        )
+        write_json(clone_paths.project_json, {key: value for key, value in project.items() if value is not None})
+        if clone_paths.candidates_json.exists():
+            candidates = read_json(clone_paths.candidates_json)
+            candidates["projectId"] = clone_paths.project_id
+            write_json(clone_paths.candidates_json, candidates)
+        if clone_paths.review_state_json.exists():
+            review_state = read_json(clone_paths.review_state_json)
+            review_state["projectId"] = clone_paths.project_id
+            write_json(clone_paths.review_state_json, review_state)
+        if clone_paths.manual_slices_json.exists():
+            manual_slices = read_json(clone_paths.manual_slices_json)
+            manual_slices["projectName"] = clone_name
+            write_json(clone_paths.manual_slices_json, manual_slices)
+        return clone_paths
+
+    def delete_project(self, project_id: str) -> None:
+        paths = self.paths(project_id)
+        if not paths.project_json.exists():
+            raise FileNotFoundError(project_id)
+        shutil.rmtree(paths.root)
 
 
 def initialize_slice_project(
@@ -141,6 +222,7 @@ def initialize_slice_project(
     public_pages = [{key: value for key, value in page.items() if key != "artifactDir"} for page in pages]
     write_json(paths.candidates_json, candidates)
     write_json(paths.manual_slices_json, default_manual_slices(project_name=project_name, pages=public_pages))
+    write_json(paths.review_state_json, default_review_state(project_id=paths.project_id, candidates=candidates))
     return {
         "projectId": paths.project_id,
         "projectName": project_name,
@@ -163,6 +245,170 @@ def build_slice_candidates(*, project_id: str, pages: list[dict[str, Any]]) -> d
             }
             for page in pages
         ],
+    }
+
+
+def default_review_state(*, project_id: str, candidates: dict[str, Any]) -> dict[str, Any]:
+    pages = []
+    for page in candidates.get("pages") or []:
+        pages.append(
+            {
+                "pageId": page["pageId"],
+                "rejectedCandidateIds": [],
+                "hiddenCandidateIds": [],
+                "lastFilter": {},
+            }
+        )
+    return {
+        "schema": REVIEW_STATE_SCHEMA,
+        "projectId": project_id,
+        "lastActivePageId": pages[0]["pageId"] if pages else "",
+        "pages": pages,
+        "updatedAt": datetime.now(UTC).isoformat(),
+    }
+
+
+def validate_review_state(value: dict[str, Any], candidates: dict[str, Any]) -> dict[str, Any]:
+    if value.get("schema") != REVIEW_STATE_SCHEMA:
+        raise ValueError(f"review state schema must be {REVIEW_STATE_SCHEMA}")
+    candidate_pages = {str(page["pageId"]): page for page in candidates.get("pages") or []}
+    candidate_ids_by_page = {
+        page_id: {str(candidate["id"]) for candidate in page.get("candidates") or []}
+        for page_id, page in candidate_pages.items()
+    }
+    pages_value = value.get("pages")
+    if not isinstance(pages_value, list):
+        raise ValueError("review state pages must be a list")
+    pages: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for page in pages_value:
+        page_id = str(page.get("pageId") or "")
+        if page_id not in candidate_pages:
+            raise ValueError(f"unknown pageId: {page_id}")
+        if page_id in seen:
+            raise ValueError(f"duplicate pageId: {page_id}")
+        seen.add(page_id)
+        valid_ids = candidate_ids_by_page[page_id]
+        rejected = [str(item) for item in page.get("rejectedCandidateIds") or [] if str(item) in valid_ids]
+        hidden = [str(item) for item in page.get("hiddenCandidateIds") or [] if str(item) in valid_ids]
+        last_filter = page.get("lastFilter") if isinstance(page.get("lastFilter"), dict) else {}
+        pages.append(
+            {
+                "pageId": page_id,
+                "rejectedCandidateIds": sorted(set(rejected)),
+                "hiddenCandidateIds": sorted(set(hidden)),
+                "lastFilter": last_filter,
+            }
+        )
+    for page_id in sorted(set(candidate_pages) - seen):
+        pages.append({"pageId": page_id, "rejectedCandidateIds": [], "hiddenCandidateIds": [], "lastFilter": {}})
+    last_active = str(value.get("lastActivePageId") or "")
+    if last_active not in candidate_pages and candidate_pages:
+        last_active = next(iter(candidate_pages))
+    return {
+        "schema": REVIEW_STATE_SCHEMA,
+        "projectId": str(value.get("projectId") or candidates.get("projectId") or ""),
+        "lastActivePageId": last_active,
+        "pages": pages,
+        "updatedAt": datetime.now(UTC).isoformat(),
+    }
+
+
+def ensure_review_state(paths: SliceProjectPaths) -> dict[str, Any]:
+    if not paths.candidates_json.exists():
+        raise FileNotFoundError("candidates not found")
+    candidates = read_json(paths.candidates_json)
+    if paths.review_state_json.exists():
+        try:
+            review_state = validate_review_state(read_json(paths.review_state_json), candidates)
+            write_json(paths.review_state_json, review_state)
+            return review_state
+        except ValueError:
+            pass
+    review_state = default_review_state(project_id=paths.project_id, candidates=candidates)
+    write_json(paths.review_state_json, review_state)
+    return review_state
+
+
+def project_summary(paths: SliceProjectPaths) -> dict[str, Any]:
+    project = read_json(paths.project_json)
+    candidates = read_json(paths.candidates_json) if paths.candidates_json.exists() else {"pages": []}
+    manual_slices = read_json(paths.manual_slices_json) if paths.manual_slices_json.exists() else {"pages": []}
+    review_state = ensure_review_state(paths) if paths.candidates_json.exists() else {"pages": []}
+    rejected_by_page = {
+        str(page.get("pageId")): len(page.get("rejectedCandidateIds") or [])
+        for page in review_state.get("pages") or []
+    }
+    selected_by_page = {
+        str(page.get("pageId")): sum(1 for item in page.get("slices") or [] if item.get("selected") is not False)
+        for page in manual_slices.get("pages") or []
+    }
+    pages = []
+    for page in candidates.get("pages") or project.get("pages") or []:
+        page_id = str(page["pageId"])
+        selected_count = selected_by_page.get(page_id, 0)
+        candidate_count = len(page.get("candidates") or [])
+        pages.append(
+            {
+                "pageId": page_id,
+                "sourceImage": page.get("sourceImage") or f"pages/{page_id}/source.png",
+                "width": int(page.get("width") or 0),
+                "height": int(page.get("height") or 0),
+                "candidateCount": candidate_count,
+                "selectedSliceCount": selected_count,
+                "rejectedCandidateCount": rejected_by_page.get(page_id, 0),
+                "status": "ready" if selected_count > 0 else "untouched",
+                "thumbnailUrl": f"/api/pencil/slice-projects/{paths.project_id}/source/{page_id}",
+            }
+        )
+    selected_count_total = sum(page["selectedSliceCount"] for page in pages)
+    candidate_count_total = sum(page["candidateCount"] for page in pages)
+    rejected_count_total = sum(page["rejectedCandidateCount"] for page in pages)
+    completed_pages = sum(1 for page in pages if page["selectedSliceCount"] > 0)
+    exported = (paths.output / "project.zip").exists() and (paths.output / "selected-assets.zip").exists()
+    return {
+        "projectId": paths.project_id,
+        "status": project.get("status") or "unknown",
+        "projectName": project.get("projectName") or "Assisted Slice Project",
+        "pageCount": len(pages),
+        "candidateCount": candidate_count_total,
+        "selectedSliceCount": selected_count_total,
+        "selectedAssetCount": project.get("selectedAssetCount", selected_count_total),
+        "rejectedCandidateCount": rejected_count_total,
+        "completedPageCount": completed_pages,
+        "exported": exported,
+        "manualSlicesConfirmed": project.get("manualSlicesConfirmed") is True,
+        "reviewUrl": f"/api/pencil/slice-projects/{paths.project_id}/review",
+        "workspaceUrl": "/api/pencil/slice-projects/workspace",
+        "downloadUrl": f"/api/pencil/slice-projects/{paths.project_id}/download.zip" if exported else project.get("downloadUrl"),
+        "selectedAssetsDownloadUrl": f"/api/pencil/slice-projects/{paths.project_id}/selected-assets.zip" if exported else None,
+        "thumbnailUrl": pages[0]["thumbnailUrl"] if pages else None,
+        "pages": pages,
+        "createdAt": project.get("createdAt"),
+        "updatedAt": project.get("updatedAt"),
+        "error": project.get("error"),
+        "warnings": project.get("warnings") or [],
+    }
+
+
+def broken_project_summary(paths: SliceProjectPaths, error: str) -> dict[str, Any]:
+    return {
+        "projectId": paths.project_id,
+        "status": "broken",
+        "projectName": paths.project_id,
+        "pageCount": 0,
+        "candidateCount": 0,
+        "selectedSliceCount": 0,
+        "selectedAssetCount": 0,
+        "rejectedCandidateCount": 0,
+        "completedPageCount": 0,
+        "exported": False,
+        "reviewUrl": None,
+        "thumbnailUrl": None,
+        "pages": [],
+        "updatedAt": None,
+        "error": error,
+        "warnings": [error],
     }
 
 
@@ -393,9 +639,14 @@ def validate_manual_slices(value: dict[str, Any], candidates: dict[str, Any]) ->
                 raise ValueError(f"slice {slice_id} bbox is out of bounds")
             item["bbox"] = bbox
             item["name"] = safe_slug(str(item.get("name") or slice_id), slice_id)
+            item["displayName"] = str(item.get("displayName") or item["name"])
             item["kind"] = str(item.get("kind") or "image")
             item["selected"] = item.get("selected") is not False
             item["exportMode"] = export_mode
+            item["reviewState"] = str(item.get("reviewState") or "confirmed")
+            if not isinstance(item.get("tags"), list):
+                item["tags"] = []
+            item["tags"] = [safe_slug(str(tag), "tag") for tag in item.get("tags") or [] if str(tag).strip()]
             if not isinstance(item.get("candidateIds"), list):
                 item["candidateIds"] = []
             normalized_slices.append(item)
@@ -446,6 +697,14 @@ def export_manual_slice_project(
     resource_dir = paths.output / "resource-kit"
     resource_dir.mkdir(parents=True, exist_ok=True)
     write_json(resource_dir / "manifest.json", selected_assets_manifest)
+    contact_sheet = write_contact_sheet(
+        paths=paths,
+        manual_slices=manual_slices,
+        output_dir=resource_dir,
+        filename="contact-sheet.png",
+    )
+    selected_assets_manifest["contactSheet"] = "contact-sheet.png"
+    write_json(resource_dir / "manifest.json", selected_assets_manifest)
     selected_zip = create_selected_assets_zip(paths.output, selected_assets_manifest)
     if include_debug:
         write_manual_debug(paths=paths, manual_slices=manual_slices)
@@ -457,6 +716,7 @@ def export_manual_slice_project(
         "modes": ["clean-editable", "visual-fidelity", "visual-ocr"],
         "manualSlices": "manual_slices.v1.json",
         "selectedAssetsZip": "selected-assets.zip",
+        "contactSheet": "resource-kit/contact-sheet.png",
         "selectedAssetCount": len(selected_assets_manifest["assets"]),
         "modeResults": mode_results,
         "warnings": [],
@@ -467,8 +727,109 @@ def export_manual_slice_project(
     manifest["zip"] = "project.zip"
     manifest["zipPath"] = str(paths.output / "project.zip")
     manifest["selectedAssetsZipPath"] = str(selected_zip)
+    manifest["projectZipUrl"] = f"/api/pencil/slice-projects/{paths.project_id}/download.zip"
+    manifest["selectedAssetsZipUrl"] = f"/api/pencil/slice-projects/{paths.project_id}/selected-assets.zip"
     write_json(paths.output / "manifest.json", manifest)
     return manifest
+
+
+def write_export_preview(*, paths: SliceProjectPaths, manual_slices: dict[str, Any]) -> dict[str, Any]:
+    preview_dir = paths.output / "export-preview"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    contact_sheet = write_contact_sheet(
+        paths=paths,
+        manual_slices=manual_slices,
+        output_dir=preview_dir,
+        filename="contact-sheet.png",
+    )
+    preview_html = preview_dir / "index.html"
+    assets = contact_sheet["assets"]
+    preview_html.write_text(
+        "<!doctype html><html><head><meta charset='utf-8'><title>Export Preview</title>"
+        "<style>body{margin:0;background:#0f172a;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px}"
+        "img{max-width:100%;border:1px solid #334155;border-radius:8px;background:#020617} table{border-collapse:collapse;margin-top:18px;width:100%}"
+        "td,th{border-bottom:1px solid #263244;padding:8px;text-align:left;font-size:13px}</style></head><body>"
+        f"<h1>Export Preview</h1><p>{len(assets)} selected assets</p><img src='contact-sheet.png' alt='contact sheet'>"
+        "<table><thead><tr><th>Page</th><th>Name</th><th>Size</th><th>File</th></tr></thead><tbody>"
+        + "".join(
+            f"<tr><td>{escape(str(asset['pageId']))}</td><td>{escape(str(asset['displayName']))}</td><td>{asset['bbox']['width']}x{asset['bbox']['height']}</td><td>{escape(str(asset['file']))}</td></tr>"
+            for asset in assets
+        )
+        + "</tbody></table></body></html>",
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema": "pencil.export_preview.v1",
+        "createdAt": datetime.now(UTC).isoformat(),
+        "assetCount": len(assets),
+        "contactSheet": str(contact_sheet["path"]),
+        "contactSheetUrl": f"/api/pencil/slice-projects/{paths.project_id}/export-preview/contact-sheet.png",
+        "previewHtml": str(preview_html),
+        "previewHtmlUrl": f"/api/pencil/slice-projects/{paths.project_id}/export-preview/index.html",
+        "assets": assets,
+    }
+    write_json(preview_dir / "manifest.json", manifest)
+    return manifest
+
+
+def write_contact_sheet(
+    *,
+    paths: SliceProjectPaths,
+    manual_slices: dict[str, Any],
+    output_dir: Path,
+    filename: str,
+) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    selected: list[dict[str, Any]] = []
+    for page in manual_slices.get("pages") or []:
+        page_id = str(page["pageId"])
+        for index, item in enumerate([entry for entry in page.get("slices") or [] if entry.get("selected") is not False], start=1):
+            selected.append(
+                {
+                    "id": item["id"],
+                    "pageId": page_id,
+                    "name": item["name"],
+                    "displayName": item.get("displayName") or item["name"],
+                    "kind": item["kind"],
+                    "tags": item.get("tags") or [],
+                    "bbox": item["bbox"],
+                    "file": f"{page_id}/slice_{index:04d}.png",
+                    "sourceImage": str(page["sourceImage"]),
+                }
+            )
+    thumb_w = 160
+    thumb_h = 120
+    label_h = 54
+    gap = 16
+    columns = 4 if len(selected) > 1 else 1
+    rows = max(1, (len(selected) + columns - 1) // columns)
+    sheet_w = columns * thumb_w + (columns + 1) * gap
+    sheet_h = rows * (thumb_h + label_h) + (rows + 1) * gap
+    sheet = Image.new("RGB", (sheet_w, sheet_h), "#0f172a")
+    draw = ImageDraw.Draw(sheet)
+    for index, asset in enumerate(selected):
+        row = index // columns
+        col = index % columns
+        left = gap + col * (thumb_w + gap)
+        top = gap + row * (thumb_h + label_h + gap)
+        bbox = asset["bbox"]
+        source_path = paths.root / asset["sourceImage"]
+        with Image.open(source_path) as image:
+            crop = image.convert("RGBA").crop((bbox["x"], bbox["y"], bbox["x"] + bbox["width"], bbox["y"] + bbox["height"]))
+        crop.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
+        draw.rectangle((left, top, left + thumb_w, top + thumb_h), fill="#020617", outline="#334155")
+        paste_x = left + (thumb_w - crop.width) // 2
+        paste_y = top + (thumb_h - crop.height) // 2
+        sheet.paste(crop.convert("RGB"), (paste_x, paste_y))
+        label_top = top + thumb_h + 6
+        draw.text((left, label_top), f"{index + 1}. {asset['pageId']}", fill="#e5e7eb")
+        draw.text((left, label_top + 16), str(asset["displayName"])[:22], fill="#cbd5e1")
+        draw.text((left, label_top + 32), f"{bbox['width']}x{bbox['height']}  {asset['file']}", fill="#94a3b8")
+    if not selected:
+        draw.text((gap, gap), "No selected assets", fill="#e5e7eb")
+    path = output_dir / filename
+    sheet.save(path)
+    return {"path": path, "assets": selected}
 
 
 def write_selected_assets(*, paths: SliceProjectPaths, manual_slices: dict[str, Any]) -> dict[str, Any]:
@@ -483,8 +844,7 @@ def write_selected_assets(*, paths: SliceProjectPaths, manual_slices: dict[str, 
             source = image.convert("RGBA")
             for index, item in enumerate([entry for entry in page.get("slices") or [] if entry.get("selected") is not False], start=1):
                 bbox = item["bbox"]
-                name = safe_slug(str(item.get("name") or item["id"]), f"slice_{index:04d}")
-                filename = f"{index:04d}_{name}.png"
+                filename = f"slice_{index:04d}.png"
                 relative = f"{page_id}/{filename}"
                 crop = source.crop((bbox["x"], bbox["y"], bbox["x"] + bbox["width"], bbox["y"] + bbox["height"]))
                 crop.save(page_asset_dir / filename)
@@ -493,7 +853,10 @@ def write_selected_assets(*, paths: SliceProjectPaths, manual_slices: dict[str, 
                         "id": item["id"],
                         "pageId": page_id,
                         "name": item["name"],
+                        "displayName": item.get("displayName") or item["name"],
                         "kind": item["kind"],
+                        "tags": item.get("tags") or [],
+                        "reviewState": item.get("reviewState") or "confirmed",
                         "bbox": bbox,
                         "file": relative,
                         "exportMode": item["exportMode"],

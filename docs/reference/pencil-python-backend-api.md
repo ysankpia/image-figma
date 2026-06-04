@@ -53,15 +53,24 @@ GET  /api/pencil/projects/{taskId}/download.zip
 Assisted slice review uses a separate synchronous project API:
 
 ```text
+GET  /api/pencil/slice-projects
+GET  /api/pencil/slice-projects/workspace
 GET  /api/pencil/slice-projects/new
 POST /api/pencil/slice-projects
 GET  /api/pencil/slice-projects/{projectId}
+PUT  /api/pencil/slice-projects/{projectId}
+POST /api/pencil/slice-projects/{projectId}/clone
+DELETE /api/pencil/slice-projects/{projectId}
 GET  /api/pencil/slice-projects/{projectId}/review
 GET  /api/pencil/slice-projects/{projectId}/candidates
+GET  /api/pencil/slice-projects/{projectId}/review-state
+PUT  /api/pencil/slice-projects/{projectId}/review-state
 GET  /api/pencil/slice-projects/{projectId}/manual-slices
 PUT  /api/pencil/slice-projects/{projectId}/manual-slices
+POST /api/pencil/slice-projects/{projectId}/export-preview
 POST /api/pencil/slice-projects/{projectId}/export
 GET  /api/pencil/slice-projects/{projectId}/download.zip
+GET  /api/pencil/slice-projects/{projectId}/selected-assets.zip
 ```
 
 ## Health
@@ -350,6 +359,41 @@ For customer delivery, prefer `mode=all` so the ZIP contains all three fallback 
 
 The assisted slice API is for cases where fully automatic ownership is not reliable enough. The server generates candidates, the user confirms or draws slices in a Canvas review page, and `manual_slices.v1.json` becomes the export truth source. M29, PSD-like, OCR, and foreground audit evidence only produce candidates; they do not decide final visible assets.
 
+### Workspace
+
+```text
+GET /api/pencil/slice-projects/workspace
+GET /api/pencil/slice-projects
+```
+
+`/workspace` returns a plain HTML project workbench. It can create projects, list historical projects, resume review, rename, clone, delete, and download exported packages. The JSON list endpoint scans local slice-project storage and derives summary data from `project.json`, `candidates.v1.json`, `manual_slices.v1.json`, and `review_state.v1.json`; no database is required.
+
+Project summaries include:
+
+```json
+{
+  "projectId": "slice_...",
+  "projectName": "Assisted Slice Project",
+  "status": "ready",
+  "pageCount": 3,
+  "candidateCount": 120,
+  "selectedSliceCount": 18,
+  "rejectedCandidateCount": 42,
+  "completedPageCount": 2,
+  "exported": false,
+  "reviewUrl": "/api/pencil/slice-projects/slice_.../review",
+  "thumbnailUrl": "/api/pencil/slice-projects/slice_.../source/page_0001"
+}
+```
+
+Project management:
+
+```text
+PUT    /api/pencil/slice-projects/{projectId}        rename projectName
+POST   /api/pencil/slice-projects/{projectId}/clone  clone project without exported output
+DELETE /api/pencil/slice-projects/{projectId}        delete project directory
+```
+
 ### Browser Upload Entry
 
 ```text
@@ -416,7 +460,7 @@ The initial `manual_slices.v1.json` is empty so the review UI can load, but expo
 GET /api/pencil/slice-projects/{projectId}/review
 ```
 
-Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, manual box drawing, moving, 8-handle resizing, deleting, renaming, autosave, undo/redo, keyboard save, exporting, and downloading the resulting ZIP.
+Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, candidate box selection, bulk candidate add/reject/restore, manual box drawing, moving, 8-handle resizing, deleting, renaming, autosave, undo/redo, keyboard save, export preview, exporting, and downloading the resulting ZIPs.
 
 The review page keeps two coordinate systems separate:
 
@@ -448,6 +492,25 @@ candidate labels visible
 ```
 
 The page list shows page thumbnails, candidate counts, selected slice counts, and save state. The selected slice panel shows browser-rendered crop thumbnails from the source image so users can verify what will be exported without downloading the ZIP.
+
+Candidate review state is saved separately from final manual slices:
+
+```text
+review_state.v1.json      workbench state: rejected candidates, filters, last active page
+manual_slices.v1.json     delivery truth: selected slices only
+```
+
+Candidate tiers are UI-only filters:
+
+```text
+recommended
+normal
+noise
+text
+rejected
+```
+
+They are derived from candidate kind/source/confidence/reason and relative area. They do not change candidate generation and do not decide final export.
 
 Workbench shortcuts:
 
@@ -520,7 +583,10 @@ PUT /api/pencil/slice-projects/{projectId}/manual-slices
         {
           "id": "page_0001__slice_0001",
           "name": "hero_asset",
+          "displayName": "Hero Asset",
           "kind": "image",
+          "tags": ["hero"],
+          "reviewState": "confirmed",
           "bbox": {"x": 40, "y": 1168, "width": 200, "height": 144},
           "selected": true,
           "exportMode": "rect",
@@ -541,6 +607,7 @@ every candidate page must be present exactly once
 slice ids must be unique
 exportMode must be rect
 bbox must be non-zero and inside source image bounds
+displayName, tags, and reviewState are optional and normalized when present
 ```
 
 After a successful `PUT`, project status includes:
@@ -572,6 +639,16 @@ Calling export after saving an empty or fully unselected manual slice document r
 
 The exporter crops selected slices from `pages/page_XXXX/source.png`, writes three `.pen` modes with slice assets placed back at exact source coordinates, and creates `selected-assets.zip`.
 
+Export preview can be generated before the final ZIP:
+
+```text
+POST /api/pencil/slice-projects/{projectId}/export-preview
+GET  /api/pencil/slice-projects/{projectId}/export-preview/contact-sheet.png
+GET  /api/pencil/slice-projects/{projectId}/export-preview/index.html
+```
+
+The preview writes a contact sheet plus an HTML asset table under `output/export-preview/`. It requires at least one selected slice.
+
 Success manifest:
 
 ```json
@@ -582,6 +659,7 @@ Success manifest:
   "modes": ["clean-editable", "visual-fidelity", "visual-ocr"],
   "manualSlices": "manual_slices.v1.json",
   "selectedAssetsZip": "selected-assets.zip",
+  "contactSheet": "resource-kit/contact-sheet.png",
   "selectedAssetCount": 1,
   "zip": "project.zip"
 }
@@ -594,6 +672,7 @@ manifest.json
 manual_slices.v1.json
 selected-assets.zip
 resource-kit/manifest.json
+resource-kit/contact-sheet.png
 clean-editable/design.pen
 clean-editable/assets/visible/page_0001/...
 visual-fidelity/design.pen
@@ -604,6 +683,13 @@ debug/pages/page_0001/source.png
 debug/pages/page_0001/candidates.v1.json
 debug/pages/page_0001/manual_slices.v1.json
 debug/pages/page_0001/overlay.png
+```
+
+After export, download endpoints are:
+
+```text
+GET /api/pencil/slice-projects/{projectId}/download.zip          Pencil/Figma project package
+GET /api/pencil/slice-projects/{projectId}/selected-assets.zip   frontend asset package
 ```
 
 ## Boundary Sources

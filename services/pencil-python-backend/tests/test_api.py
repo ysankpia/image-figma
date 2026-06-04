@@ -175,6 +175,9 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert "redoManual" in review.text
     assert "renderSliceThumbnails" in review.text
     assert "pageByOffset" in review.text
+    assert "bulkAddCandidates" in review.text
+    assert "review-state" in review.text
+    assert "previewExport" in review.text
 
     project_response = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert project_response.status_code == 200
@@ -220,6 +223,14 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     confirmed = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert confirmed.json()["data"]["manualSlicesConfirmed"] is True
 
+    preview_response = client.post(f"/api/pencil/slice-projects/{project_id}/export-preview")
+    assert preview_response.status_code == 200
+    preview = preview_response.json()["data"]
+    assert preview["assetCount"] == 1
+    assert preview["contactSheetUrl"].endswith("/export-preview/contact-sheet.png")
+    assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/contact-sheet.png").status_code == 200
+    assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/index.html").status_code == 200
+
     export_response = client.post(f"/api/pencil/slice-projects/{project_id}/export")
     assert export_response.status_code == 200
     manifest = export_response.json()["data"]
@@ -251,6 +262,70 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
         selected_names = set(selected_archive.namelist())
     assert "manifest.json" in selected_names
     assert len([name for name in selected_names if name.startswith("page_0001/") and name.endswith(".png")]) == 1
+
+    selected_download = client.get(f"/api/pencil/slice-projects/{project_id}/selected-assets.zip")
+    assert selected_download.status_code == 200
+    assert selected_download.content[:2] == b"PK"
+
+
+def test_slice_project_workspace_lists_renames_clones_and_deletes(tmp_path: Path) -> None:
+    configure_state(tmp_path, default_boundary_source="m29")
+    image_path = tmp_path / "slice-input.png"
+    Image.new("RGB", (80, 60), "#ffffff").save(image_path)
+
+    client = TestClient(create_app())
+    workspace = client.get("/api/pencil/slice-projects/workspace")
+    assert workspace.status_code == 200
+    assert "Pencil Slice Workspace" in workspace.text
+
+    empty_list = client.get("/api/pencil/slice-projects")
+    assert empty_list.status_code == 200
+    assert empty_list.json()["data"]["projectCount"] == 0
+
+    with image_path.open("rb") as handle:
+        response = client.post(
+            "/api/pencil/slice-projects",
+            data={"projectName": "Workspace Project", "boundarySource": "m29"},
+            files=[("files[]", ("slice-input.png", handle, "image/png"))],
+        )
+    assert response.status_code == 200
+    project_id = response.json()["data"]["projectId"]
+
+    project_list = client.get("/api/pencil/slice-projects").json()["data"]
+    assert project_list["projectCount"] == 1
+    listed = project_list["projects"][0]
+    assert listed["projectId"] == project_id
+    assert listed["candidateCount"] > 0
+    assert listed["selectedSliceCount"] == 0
+    assert listed["thumbnailUrl"].endswith("/source/page_0001")
+
+    renamed = client.put(f"/api/pencil/slice-projects/{project_id}", json={"projectName": "Renamed Project"})
+    assert renamed.status_code == 200
+    assert renamed.json()["data"]["projectName"] == "Renamed Project"
+    manual = client.get(f"/api/pencil/slice-projects/{project_id}/manual-slices").json()["data"]
+    assert manual["projectName"] == "Renamed Project"
+
+    review_state = client.get(f"/api/pencil/slice-projects/{project_id}/review-state")
+    assert review_state.status_code == 200
+    state_doc = review_state.json()["data"]
+    candidate_id = client.get(f"/api/pencil/slice-projects/{project_id}/candidates").json()["data"]["pages"][0]["candidates"][0]["id"]
+    state_doc["pages"][0]["rejectedCandidateIds"] = [candidate_id]
+    saved_state = client.put(f"/api/pencil/slice-projects/{project_id}/review-state", json=state_doc)
+    assert saved_state.status_code == 200
+    assert saved_state.json()["data"]["rejectedCandidateCount"] == 1
+    assert client.get(f"/api/pencil/slice-projects/{project_id}/review-state").json()["data"]["pages"][0]["rejectedCandidateIds"] == [candidate_id]
+
+    cloned = client.post(f"/api/pencil/slice-projects/{project_id}/clone")
+    assert cloned.status_code == 200
+    clone_id = cloned.json()["data"]["projectId"]
+    assert clone_id != project_id
+    assert cloned.json()["data"]["projectName"].endswith("Copy")
+    assert cloned.json()["data"]["exported"] is False
+    clone_manual = client.get(f"/api/pencil/slice-projects/{clone_id}/manual-slices").json()["data"]
+    assert clone_manual["projectName"].endswith("Copy")
+
+    assert client.delete(f"/api/pencil/slice-projects/{clone_id}").status_code == 200
+    assert client.get(f"/api/pencil/slice-projects/{clone_id}").status_code == 404
 
 
 def test_slice_project_new_page_returns_upload_workbench_html(tmp_path: Path) -> None:
