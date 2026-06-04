@@ -170,6 +170,11 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert "resizeBox" in review.text
     assert "fitToScreen" in review.text
     assert "filteredCandidates" in review.text
+    assert "scheduleAutosave" in review.text
+    assert "undoManual" in review.text
+    assert "redoManual" in review.text
+    assert "renderSliceThumbnails" in review.text
+    assert "pageByOffset" in review.text
 
     project_response = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert project_response.status_code == 200

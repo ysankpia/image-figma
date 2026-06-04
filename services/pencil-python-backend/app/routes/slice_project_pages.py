@@ -122,11 +122,22 @@ REVIEW_HTML = """<!doctype html>
     .filter-row input[type="range"] { width: 130px; }
     .asset { border: 1px solid #334155; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #111827; }
     .asset.active { border-color: #60a5fa; }
+    .asset.unselected { opacity: .58; }
+    .asset-head { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; align-items: start; }
+    .slice-thumb, .page-thumb { border: 1px solid #334155; background: #020617; object-fit: contain; }
+    .slice-thumb { width: 84px; height: 64px; border-radius: 6px; }
     .asset input, .asset select { width: 100%; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
     .muted { color: #94a3b8; font-size: 12px; }
     .status { margin-left: auto; color: #94a3b8; font-size: 12px; }
     .hud { position: absolute; left: 12px; bottom: 12px; background: rgba(15, 23, 42, .86); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #cbd5e1; font-size: 12px; pointer-events: none; }
+    .page-row { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; align-items: center; }
+    .page-thumb { width: 54px; height: 74px; border-radius: 4px; }
+    .page-meta { display: grid; gap: 2px; min-width: 0; }
+    .page-state { display: inline-block; width: max-content; border-radius: 999px; padding: 1px 6px; font-size: 11px; border: 1px solid #334155; color: #cbd5e1; }
+    .page-state.dirty { border-color: #f59e0b; color: #fcd34d; }
+    .page-state.saved { border-color: #16a34a; color: #86efac; }
+    .page-state.failed { border-color: #ef4444; color: #fca5a5; }
   </style>
 </head>
 <body>
@@ -185,7 +196,10 @@ REVIEW_HTML = """<!doctype html>
     const colors = { image: "#22c55e", icon: "#22c55e", text: "#ef4444", shape: "#3b82f6", group: "#f59e0b", unknown: "#eab308", full_screen: "#64748b", upper_region: "#64748b", middle_region: "#64748b", lower_region: "#64748b" };
     const state = {
       candidates: null, manual: null, pageIndex: 0, mode: "select", image: null, activeId: null, drag: null,
+      hoverCandidateId: null, hoverSliceId: null, pageImages: {}, pageSaveState: {},
       view: { scale: 1, offsetX: 40, offsetY: 40 }, spaceDown: false,
+      autosaveTimer: null, savePromise: null, saveRevision: 0, lastSavedRevision: 0,
+      history: { undo: [], redo: [], limit: 50, restoring: false },
       filters: {
         showCandidates: true, showSelected: true, showLabels: true, minConfidence: 0, candidateOpacity: 0.75,
         kinds: { image: true, icon: true, text: false, shape: true, group: true, unknown: true },
@@ -208,6 +222,7 @@ REVIEW_HTML = """<!doctype html>
     async function load() {
       state.candidates = await api("/candidates");
       state.manual = await api("/manual-slices");
+      for (const page of state.candidates.pages) state.pageSaveState[page.pageId] = "saved";
       renderFilterControls();
       renderPages();
       await loadPage(0);
@@ -219,11 +234,28 @@ REVIEW_HTML = """<!doctype html>
       state.pageIndex = index;
       state.activeId = null;
       const page = currentCandidatePage();
-      state.image = new Image();
-      state.image.onload = () => { resizeCanvas(); fitToScreen(); renderAll(); };
-      state.image.src = `/api/pencil/slice-projects/${projectId}/source/${page.pageId}`;
+      state.hoverCandidateId = null;
+      state.hoverSliceId = null;
+      state.image = await imageForPage(page.pageId);
+      resizeCanvas();
+      fitToScreen();
       renderPages();
       renderAssets();
+    }
+    function imageForPage(pageId) {
+      if (state.pageImages[pageId]?.complete) return Promise.resolve(state.pageImages[pageId]);
+      if (state.pageImages[pageId]?.promise) return state.pageImages[pageId].promise;
+      const image = new Image();
+      image.src = `/api/pencil/slice-projects/${projectId}/source/${pageId}`;
+      const promise = new Promise((resolve, reject) => {
+        image.onload = () => {
+          state.pageImages[pageId] = image;
+          resolve(image);
+        };
+        image.onerror = () => reject(new Error(`failed to load source image: ${pageId}`));
+      });
+      state.pageImages[pageId] = { promise };
+      return promise;
     }
     function resizeCanvas() {
       const rect = viewport.getBoundingClientRect();
@@ -270,11 +302,13 @@ REVIEW_HTML = """<!doctype html>
       if (state.image) ctx.drawImage(state.image, 0, 0);
       if (state.filters.showCandidates) {
         for (const candidate of filteredCandidates()) {
-          drawBox(candidate.bbox, colors[candidate.kind] || colors.unknown, candidate.id.split("_").pop(), false, state.filters.candidateOpacity);
+          drawBox(candidate.bbox, colors[candidate.kind] || colors.unknown, candidate.id.split("_").pop(), candidate.id === state.hoverCandidateId, state.filters.candidateOpacity);
         }
       }
       if (state.filters.showSelected) {
-        for (const slice of currentManualPage().slices) if (slice.selected !== false) drawBox(slice.bbox, "#ffffff", slice.name, slice.id === state.activeId, 1);
+        for (const slice of currentManualPage().slices) {
+          if (slice.selected !== false) drawBox(slice.bbox, "#ffffff", slice.name, slice.id === state.activeId || slice.id === state.hoverSliceId, slice.id === state.activeId ? 1 : .86);
+        }
       }
       if (state.drag?.draft) drawBox(state.drag.draft, "#f97316", "new", true, 1);
       ctx.restore();
@@ -347,6 +381,74 @@ REVIEW_HTML = """<!doctype html>
       const rect = canvas.getBoundingClientRect();
       setZoom(state.view.scale * factor, center || { x: rect.width / 2, y: rect.height / 2 });
     }
+    function manualSnapshot() { return JSON.stringify(state.manual); }
+    function restoreManualSnapshot(snapshot) {
+      state.history.restoring = true;
+      state.manual = JSON.parse(snapshot);
+      state.history.restoring = false;
+      if (!state.manual.pages[state.pageIndex]) state.pageIndex = 0;
+      state.activeId = null;
+      state.saveRevision += 1;
+      for (const page of state.manual.pages) state.pageSaveState[page.pageId] = "dirty";
+      setStatus("dirty");
+      renderPages();
+      scheduleAutosave();
+      renderAll();
+    }
+    function pushUndoSnapshot() {
+      if (state.history.restoring) return;
+      state.history.undo.push(manualSnapshot());
+      if (state.history.undo.length > state.history.limit) state.history.undo.shift();
+      state.history.redo = [];
+    }
+    function mutateManual(fn, pageId=currentManualPage()?.pageId) {
+      pushUndoSnapshot();
+      fn();
+      markDirty(pageId);
+      scheduleAutosave();
+      renderAll();
+    }
+    function undoManual() {
+      if (!state.history.undo.length) return;
+      state.history.redo.push(manualSnapshot());
+      restoreManualSnapshot(state.history.undo.pop());
+    }
+    function redoManual() {
+      if (!state.history.redo.length) return;
+      state.history.undo.push(manualSnapshot());
+      restoreManualSnapshot(state.history.redo.pop());
+    }
+    function markDirty(pageId=currentManualPage()?.pageId) {
+      state.saveRevision += 1;
+      if (pageId) state.pageSaveState[pageId] = "dirty";
+      setStatus("dirty");
+      renderPages();
+    }
+    function markSaved() {
+      for (const page of state.manual.pages) state.pageSaveState[page.pageId] = "saved";
+      renderPages();
+    }
+    function markSaveFailed() {
+      for (const page of state.manual.pages) if (state.pageSaveState[page.pageId] === "dirty") state.pageSaveState[page.pageId] = "failed";
+      renderPages();
+    }
+    function scheduleAutosave() {
+      clearTimeout(state.autosaveTimer);
+      state.autosaveTimer = setTimeout(() => saveManual({ quiet: true }).catch(error => setStatus(error.message || String(error), true)), 500);
+    }
+    async function flushAutosave() {
+      if (state.autosaveTimer) {
+        clearTimeout(state.autosaveTimer);
+        state.autosaveTimer = null;
+        await saveManual({ quiet: true });
+      }
+      if (state.savePromise) await state.savePromise;
+      if (state.lastSavedRevision < state.saveRevision) await saveManual({ quiet: true });
+    }
+    function pageByOffset(delta) {
+      const next = Math.max(0, Math.min(state.candidates.pages.length - 1, state.pageIndex + delta));
+      if (next !== state.pageIndex) loadPage(next);
+    }
 
     canvas.addEventListener("mousedown", event => {
       const screen = eventScreenPoint(event);
@@ -363,14 +465,20 @@ REVIEW_HTML = """<!doctype html>
       if (slice) {
         state.activeId = slice.id;
         const handle = hitHandle(slice, screenToImage(screen));
-        state.drag = { id: slice.id, action: handle ? "resize" : "move", handle, start: p, original: { ...slice.bbox } };
+        pushUndoSnapshot();
+        state.drag = { id: slice.id, action: handle ? "resize" : "move", handle, start: p, original: { ...slice.bbox }, pageId: currentManualPage().pageId };
         renderAll(); return;
       }
       const candidate = hit(filteredCandidates(), p);
       if (candidate) {
         state.activeId = null;
         renderAll();
+        return;
       }
+      state.activeId = null;
+      state.hoverCandidateId = null;
+      state.hoverSliceId = null;
+      renderAll();
     });
     canvas.addEventListener("dblclick", event => {
       const candidate = hit(filteredCandidates(), eventImagePoint(event));
@@ -396,11 +504,25 @@ REVIEW_HTML = """<!doctype html>
         }
         renderAll();
       } else {
+        const hoveredSlice = hit(currentManualPage().slices.filter(item => item.selected !== false), p);
+        const hoveredCandidate = hoveredSlice ? null : hit(filteredCandidates(), p);
+        const nextSliceId = hoveredSlice?.id || null;
+        const nextCandidateId = hoveredCandidate?.id || null;
+        if (nextSliceId !== state.hoverSliceId || nextCandidateId !== state.hoverCandidateId) {
+          state.hoverSliceId = nextSliceId;
+          state.hoverCandidateId = nextCandidateId;
+          renderAll();
+        }
+        canvas.style.cursor = nextSliceId ? "move" : nextCandidateId ? "crosshair" : state.mode === "pan" ? "grab" : "default";
         updateHud(p);
       }
     });
     window.addEventListener("mouseup", () => {
       if (state.drag?.action === "draw" && state.drag.draft.width > 4 && state.drag.draft.height > 4) addManualSlice(state.drag.draft);
+      if (state.drag?.action === "move" || state.drag?.action === "resize") {
+        markDirty(state.drag.pageId);
+        scheduleAutosave();
+      }
       state.drag = null;
       renderAll();
     });
@@ -430,36 +552,44 @@ REVIEW_HTML = """<!doctype html>
       };
     }
     function addSliceFromCandidate(candidate) {
-      const page = currentManualPage();
-      const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-      page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: normalizeKind(candidate.kind), bbox: clampBox({...candidate.bbox}), selected: true, exportMode: "rect", source: "candidate_confirmed", candidateIds: [candidate.id] });
-      state.activeId = id; renderAll();
+      mutateManual(() => {
+        const page = currentManualPage();
+        const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: normalizeKind(candidate.kind), bbox: clampBox({...candidate.bbox}), selected: true, exportMode: "rect", source: "candidate_confirmed", candidateIds: [candidate.id] });
+        state.activeId = id;
+      });
     }
     function addManualSlice(bbox) {
-      const page = currentManualPage();
-      const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-      page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: "image", bbox: clampBox(bbox), selected: true, exportMode: "rect", source: "manual", candidateIds: [] });
-      state.activeId = id;
+      mutateManual(() => {
+        const page = currentManualPage();
+        const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        page.slices.push({ id, name: `slice_${page.slices.length + 1}`, kind: "image", bbox: clampBox(bbox), selected: true, exportMode: "rect", source: "manual", candidateIds: [] });
+        state.activeId = id;
+      });
     }
     function duplicateActive() {
-      const page = currentManualPage();
       const slice = activeSlice();
       if (!slice) return;
-      const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-      page.slices.push({ ...slice, id, name: `${slice.name}_copy`, bbox: clampBox({ ...slice.bbox, x: slice.bbox.x + 12, y: slice.bbox.y + 12 }) });
-      state.activeId = id; renderAll();
+      mutateManual(() => {
+        const page = currentManualPage();
+        const id = `${page.pageId}__slice_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        page.slices.push({ ...slice, id, name: `${slice.name}_copy`, bbox: clampBox({ ...slice.bbox, x: slice.bbox.x + 12, y: slice.bbox.y + 12 }) });
+        state.activeId = id;
+      });
     }
     function activeSlice() { return currentManualPage().slices.find(item => item.id === state.activeId); }
     function deleteActive() {
-      const page = currentManualPage();
-      page.slices = page.slices.filter(item => item.id !== state.activeId);
-      state.activeId = null; renderAll();
+      if (!state.activeId) return;
+      mutateManual(() => {
+        const page = currentManualPage();
+        page.slices = page.slices.filter(item => item.id !== state.activeId);
+        state.activeId = null;
+      });
     }
     function moveActive(dx, dy) {
       const slice = activeSlice();
       if (!slice) return;
-      slice.bbox = moveBox(slice.bbox, dx, dy);
-      renderAll();
+      mutateManual(() => { slice.bbox = moveBox(slice.bbox, dx, dy); });
     }
     function normalizeKind(kind) { return kindOptions.includes(kind) ? kind : "unknown"; }
 
@@ -467,7 +597,20 @@ REVIEW_HTML = """<!doctype html>
       document.getElementById("pages").innerHTML = state.candidates.pages.map((page, i) => {
         const manualPage = state.manual.pages.find(item => item.pageId === page.pageId);
         const count = (manualPage?.slices || []).filter(item => item.selected !== false).length;
-        return `<button class="page-btn ${i === state.pageIndex ? "active" : ""}" onclick="loadPage(${i})">${page.pageId}<span class="count">${count}</span><br><span class="muted">${page.width}x${page.height}</span></button>`;
+        const saveState = state.pageSaveState[page.pageId] || "saved";
+        const candidateCount = (page.candidates || []).length;
+        const thumb = `/api/pencil/slice-projects/${projectId}/source/${page.pageId}`;
+        return `<button class="page-btn ${i === state.pageIndex ? "active" : ""}" onclick="loadPage(${i})">
+          <div class="page-row">
+            <img class="page-thumb" src="${thumb}" alt="${page.pageId}" />
+            <span class="page-meta">
+              <span>${page.pageId}<span class="count">${count}</span></span>
+              <span class="muted">${page.width}x${page.height}</span>
+              <span class="muted">${candidateCount} candidates / ${count} selected</span>
+              <span class="page-state ${saveState}">${saveState}</span>
+            </span>
+          </div>
+        </button>`;
       }).join("");
     }
     function renderAssets() {
@@ -475,11 +618,16 @@ REVIEW_HTML = """<!doctype html>
       const selectedCount = page.slices.filter(item => item.selected !== false).length;
       document.getElementById("selectedCount").textContent = `(${selectedCount})`;
       document.getElementById("assets").innerHTML = page.slices.map(slice => `
-        <div class="asset ${slice.id === state.activeId ? "active" : ""}" onclick="focusSlice('${slice.id}')">
-          <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onchange="updateSlice('${slice.id}', 'name', this.value)" />
-          <div class="row">
-            <select name="${slice.id}__kind" onchange="updateSlice('${slice.id}', 'kind', this.value)">${kindOptions.map(kind => `<option value="${kind}" ${normalizeKind(slice.kind) === kind ? "selected" : ""}>${kind}</option>`).join("")}</select>
-            <label><input name="${slice.id}__selected" type="checkbox" ${slice.selected !== false ? "checked" : ""} onchange="updateSlice('${slice.id}', 'selected', this.checked)" /> selected</label>
+        <div class="asset ${slice.id === state.activeId ? "active" : ""} ${slice.selected === false ? "unselected" : ""}" onclick="focusSlice('${slice.id}')">
+          <div class="asset-head">
+            <canvas class="slice-thumb" data-thumb-slice-id="${slice.id}" width="84" height="64"></canvas>
+            <div>
+              <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onchange="updateSlice('${slice.id}', 'name', this.value)" />
+              <div class="row">
+                <select name="${slice.id}__kind" onchange="updateSlice('${slice.id}', 'kind', this.value)">${kindOptions.map(kind => `<option value="${kind}" ${normalizeKind(slice.kind) === kind ? "selected" : ""}>${kind}</option>`).join("")}</select>
+                <label><input name="${slice.id}__selected" type="checkbox" ${slice.selected !== false ? "checked" : ""} onchange="updateSlice('${slice.id}', 'selected', this.checked)" /> selected</label>
+              </div>
+            </div>
           </div>
           <div class="row">
             <input name="${slice.id}__x" type="number" value="${slice.bbox.x}" onchange="updateBBox('${slice.id}', 'x', this.value)" />
@@ -487,8 +635,26 @@ REVIEW_HTML = """<!doctype html>
             <input name="${slice.id}__width" type="number" value="${slice.bbox.width}" onchange="updateBBox('${slice.id}', 'width', this.value)" />
             <input name="${slice.id}__height" type="number" value="${slice.bbox.height}" onchange="updateBBox('${slice.id}', 'height', this.value)" />
           </div>
-          <div class="muted">${slice.source || "manual"} ${slice.candidateIds?.length ? "/ candidate" : ""}</div>
+          <div class="muted">${slice.source || "manual"} ${slice.candidateIds?.length ? "/ candidate" : ""} / ${slice.bbox.width}x${slice.bbox.height}</div>
         </div>`).join("");
+      renderSliceThumbnails();
+    }
+    function renderSliceThumbnails() {
+      const image = state.pageImages[currentCandidatePage().pageId];
+      if (!image || !image.complete) return;
+      for (const thumb of document.querySelectorAll("[data-thumb-slice-id]")) {
+        const slice = currentManualPage().slices.find(item => item.id === thumb.dataset.thumbSliceId);
+        if (!slice) continue;
+        const tctx = thumb.getContext("2d");
+        tctx.clearRect(0, 0, thumb.width, thumb.height);
+        const bbox = slice.bbox;
+        const scale = Math.min(thumb.width / bbox.width, thumb.height / bbox.height);
+        const w = bbox.width * scale, h = bbox.height * scale;
+        const x = (thumb.width - w) / 2, y = (thumb.height - h) / 2;
+        tctx.fillStyle = "#020617";
+        tctx.fillRect(0, 0, thumb.width, thumb.height);
+        tctx.drawImage(image, bbox.x, bbox.y, bbox.width, bbox.height, x, y, w, h);
+      }
     }
     function focusSlice(id) {
       state.activeId = id;
@@ -510,14 +676,16 @@ REVIEW_HTML = """<!doctype html>
       document.getElementById("candidateOpacity").oninput = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; renderAll(); };
     }
     function updateSlice(id, key, value) {
-      const s = currentManualPage().slices.find(x => x.id === id);
-      if (s) s[key] = value;
-      renderAll();
+      mutateManual(() => {
+        const s = currentManualPage().slices.find(x => x.id === id);
+        if (s) s[key] = value;
+      });
     }
     function updateBBox(id, key, value) {
-      const s = currentManualPage().slices.find(x => x.id === id);
-      if (s) { s.bbox[key] = Math.max(0, Number(value) || 0); s.bbox = clampBox(s.bbox); }
-      renderAll();
+      mutateManual(() => {
+        const s = currentManualPage().slices.find(x => x.id === id);
+        if (s) { s.bbox[key] = Math.max(0, Number(value) || 0); s.bbox = clampBox(s.bbox); }
+      });
     }
     function updateHud(point=null) {
       const slice = activeSlice();
@@ -530,14 +698,41 @@ REVIEW_HTML = """<!doctype html>
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
     }
-    async function saveManual() {
-      setStatus("saving...");
-      await api("/manual-slices", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(state.manual) });
-      setStatus("saved");
+    async function saveManual(options={}) {
+      clearTimeout(state.autosaveTimer);
+      state.autosaveTimer = null;
+      if (state.savePromise) {
+        await state.savePromise;
+        if (state.lastSavedRevision >= state.saveRevision) return { selectedSliceCount: currentManualPage().slices.filter(item => item.selected !== false).length };
+      }
+      const revision = state.saveRevision;
+      const run = async () => {
+        setStatus(options.quiet ? "autosaving..." : "saving...");
+        try {
+          const data = await api("/manual-slices", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(state.manual) });
+          state.lastSavedRevision = Math.max(state.lastSavedRevision, revision);
+          if (state.lastSavedRevision >= state.saveRevision) {
+            markSaved();
+            setStatus(`saved (${data.selectedSliceCount})`);
+          } else {
+            setStatus("dirty");
+            scheduleAutosave();
+          }
+          return data;
+        } catch (error) {
+          markSaveFailed();
+          setStatus(error.message || String(error), true);
+          throw error;
+        } finally {
+          state.savePromise = null;
+        }
+      };
+      state.savePromise = state.savePromise || run();
+      return state.savePromise;
     }
     async function exportProject() {
       try {
-        await saveManual();
+        await flushAutosave();
         setStatus("exporting...");
         await api("/export", { method: "POST" });
         const link = document.getElementById("download");
@@ -571,7 +766,11 @@ REVIEW_HTML = """<!doctype html>
       if (event.key === "Delete" || event.key === "Backspace") { deleteActive(); event.preventDefault(); }
       if (event.key === "Escape") { state.drag = null; state.activeId = null; renderAll(); event.preventDefault(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { saveManual().catch(error => setStatus(error.message || String(error), true)); event.preventDefault(); }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && event.shiftKey) { redoManual(); event.preventDefault(); return; }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") { undoManual(); event.preventDefault(); return; }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") { duplicateActive(); event.preventDefault(); }
+      if (event.altKey && event.key === "ArrowLeft") { pageByOffset(-1); event.preventDefault(); return; }
+      if (event.altKey && event.key === "ArrowRight") { pageByOffset(1); event.preventDefault(); return; }
       const step = event.shiftKey ? 10 : 1;
       if (event.key === "ArrowLeft") { moveActive(-step, 0); event.preventDefault(); }
       if (event.key === "ArrowRight") { moveActive(step, 0); event.preventDefault(); }
@@ -580,6 +779,10 @@ REVIEW_HTML = """<!doctype html>
     });
     window.addEventListener("keyup", event => { if (event.code === "Space") state.spaceDown = false; });
     window.loadPage = loadPage; window.focusSlice = focusSlice; window.updateSlice = updateSlice; window.updateBBox = updateBBox;
+    window.addSliceFromCandidate = addSliceFromCandidate; window.addManualSlice = addManualSlice; window.duplicateActive = duplicateActive;
+    window.undoManual = undoManual; window.redoManual = redoManual; window.flushAutosave = flushAutosave; window.pageByOffset = pageByOffset;
+    window.filteredCandidates = filteredCandidates; window.currentCandidatePage = currentCandidatePage; window.currentManualPage = currentManualPage;
+    window.state = state;
     load().catch(error => setStatus(error.message || String(error), true));
   </script>
 </body>

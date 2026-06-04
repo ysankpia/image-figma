@@ -416,7 +416,7 @@ The initial `manual_slices.v1.json` is empty so the review UI can load, but expo
 GET /api/pencil/slice-projects/{projectId}/review
 ```
 
-Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, manual box drawing, moving, 8-handle resizing, deleting, renaming, keyboard save, exporting, and downloading the resulting ZIP.
+Returns a static HTML Canvas workbench. It supports page switching, pan, zoom, fit-to-screen, 100% zoom, candidate filtering, candidate double-click selection, manual box drawing, moving, 8-handle resizing, deleting, renaming, autosave, undo/redo, keyboard save, exporting, and downloading the resulting ZIP.
 
 The review page keeps two coordinate systems separate:
 
@@ -427,6 +427,17 @@ source image coordinates: saved manual_slices bbox truth
 
 Saved `manual_slices.v1.json` bboxes are always source-image coordinates, regardless of current zoom or pan.
 
+Manual edits are autosaved with a short debounce. The status text reports:
+
+```text
+dirty
+autosaving...
+saved
+save failed
+```
+
+Export waits for any pending autosave before it calls `POST /export`.
+
 Default candidate display is tuned for slicing, not OCR proofreading:
 
 ```text
@@ -434,6 +445,23 @@ image/icon/group/shape/unknown visible
 text hidden by default
 selected slices visible
 candidate labels visible
+```
+
+The page list shows page thumbnails, candidate counts, selected slice counts, and save state. The selected slice panel shows browser-rendered crop thumbnails from the source image so users can verify what will be exported without downloading the ZIP.
+
+Workbench shortcuts:
+
+```text
+Delete / Backspace  delete active slice
+Arrow keys          move active slice by 1 px
+Shift + Arrow keys  move active slice by 10 px
+Cmd/Ctrl + S        save immediately
+Cmd/Ctrl + Z        undo manual_slices change
+Cmd/Ctrl+Shift+Z    redo manual_slices change
+Cmd/Ctrl + D        duplicate active slice
+Alt/Option + Left   previous page
+Alt/Option + Right  next page
+Esc                 clear active drag/selection
 ```
 
 ### Candidates

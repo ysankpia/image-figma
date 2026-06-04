@@ -174,12 +174,21 @@ pan / zoom / fit / 100%
 双击候选加入 selected slices
 手动画框
 拖动和 8 点缩放
+自动保存 manual_slices.v1.json
+Undo / Redo
+左侧 page 缩略图、candidate 数、selected 数、保存状态
+右侧 selected slice 缩略图预览
 Delete 删除
 方向键微调
 Cmd/Ctrl+S 保存
+Cmd/Ctrl+Z 撤销
+Cmd/Ctrl+Shift+Z 重做
 Cmd/Ctrl+D 复制
+Alt/Option+左右键切页
 导出并下载 project.zip
 ```
+
+自动保存使用短 debounce；导出前会等待 pending autosave，所以用户不需要记住先按保存。保存状态会显示为 `dirty`、`autosaving...`、`saved` 或失败信息。
 
 CLI 或脚本也可以直接创建项目：
 
