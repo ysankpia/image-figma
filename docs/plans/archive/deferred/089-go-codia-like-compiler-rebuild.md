@@ -18,7 +18,7 @@ Reason for pause:
 This deferred plan remains the Go Codia-like compiler checkpoint. The resumed detector work is now tracked in the active plan:
 
 ```text
-docs/plans/active/090-openai-compatible-ui-detector-short-pass.md
+docs/plans/archive/superseded/090-openai-compatible-ui-detector-short-pass.md
 ```
 
 The practical conclusion from the 2026-05-30 probes:

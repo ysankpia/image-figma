@@ -1,17 +1,14 @@
 # Validation Strategy
 
-Current validation protects the Editable Draft pipeline.
+Current validation protects the Pencil assisted slice delivery path.
 
 ```text
-Figma Plugin
--> /api/draft-preview
--> Go backend
--> M29 physical evidence
--> optional vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma
+1..N images
+-> candidates.v1.json
+-> review_state.v1.json
+-> manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
 ## Canonical Checks
@@ -23,7 +20,15 @@ git diff --check
 git status --short --branch
 ```
 
-Go backend:
+Current Pencil backend:
+
+```bash
+cd services/pencil-python-backend
+make check
+make slice-acceptance IMAGE=/absolute/path/to/image-or-dir OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
+Historical/deferred Go backend:
 
 ```bash
 cd services/backend-go
@@ -46,7 +51,7 @@ pnpm --filter @image-figma/figma-plugin run build
 
 ## Targeted Checks
 
-Draft contract and assembly:
+Draft contract and assembly, only when explicitly working on Go Draft:
 
 ```bash
 cd services/backend-go

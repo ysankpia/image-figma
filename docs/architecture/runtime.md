@@ -1,6 +1,13 @@
 # Draft Runtime
 
-Draft runtime 是当前产品主线。它把一张 PNG 转成可编辑 Figma 草稿。
+Draft runtime 是历史/延后自动化路线。当前分支的可交付产品主线是
+`services/pencil-python-backend` assisted slice workspace：
+
+```text
+images -> candidates.v1.json -> manual_slices.v1.json -> project.zip + selected-assets.zip
+```
+
+本文件保留 Draft 路线的接口和合同说明，只有在显式恢复 Go Draft 时才作为实现参考。
 
 ## Request Flow
 

@@ -2,7 +2,7 @@
 
 后端有本地默认值，不需要 `.env` 才能启动。`.env.local` 可用于本地凭证，但不能提交。
 
-当前产品主线是 Go Draft backend。
+当前产品交付主线是 Pencil Python Backend assisted slice workspace。Go Draft、Python Draft MVP、Unified Vision、Layout Advisor 等变量保留为历史/实验/显式恢复路径配置。
 
 ## Current Variables
 
@@ -89,7 +89,52 @@
 | `UNIFIED_VISION_MAX_GAP_VARIANCE` | accepted group 最大 gap variance | `4096` | 否 |
 | `UNIFIED_VISION_CROP_PADDING` | section/batch crop padding 像素 | `10` | 否 |
 
+## Pencil Python Assisted Slice Server
+
+Current delivery route:
+
+```bash
+cd services/pencil-python-backend
+PENCIL_BACKEND_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_BACKEND_PSDLIKE_ROOT=../psdlike-python \
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
+PENCIL_BACKEND_ADDR=127.0.0.1:8100 \
+PENCIL_BACKEND_MAX_WORKERS=1 \
+OCR_PROVIDER=none \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
+```
+
+Workspace:
+
+```text
+http://127.0.0.1:8100/api/pencil/slice-projects/workspace
+```
+
+Assisted slice endpoints:
+
+```text
+GET  /api/pencil/slice-projects/workspace
+GET  /api/pencil/slice-projects/new
+POST /api/pencil/slice-projects
+GET  /api/pencil/slice-projects/{projectId}
+GET  /api/pencil/slice-projects/{projectId}/review
+GET  /api/pencil/slice-projects/{projectId}/candidates
+GET  /api/pencil/slice-projects/{projectId}/review-state
+PUT  /api/pencil/slice-projects/{projectId}/review-state
+GET  /api/pencil/slice-projects/{projectId}/manual-slices
+PUT  /api/pencil/slice-projects/{projectId}/manual-slices
+POST /api/pencil/slice-projects/{projectId}/export-preview
+POST /api/pencil/slice-projects/{projectId}/export
+GET  /api/pencil/slice-projects/{projectId}/download.zip
+GET  /api/pencil/slice-projects/{projectId}/selected-assets.zip
+```
+
+Caller contract: [pencil-python-backend-api.md](pencil-python-backend-api.md).
+
 ## Draft Server
+
+Historical/deferred automatic editable draft route. Use only when explicitly
+working on Go Draft:
 
 Local run:
 

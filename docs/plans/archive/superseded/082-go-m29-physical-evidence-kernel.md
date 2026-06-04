@@ -4,7 +4,7 @@
 - 创建日期：2026-05-28
 - 分支：`feat/final-m29-visual-compiler`
 - 负责人：Codex
-- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](../../active/093-editable-draft-layer-pipeline-rebuild.md)
+- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](093-editable-draft-layer-pipeline-rebuild.md), then the Pencil assisted slice workspace mainline
 
 ## Goal
 

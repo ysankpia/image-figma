@@ -1,6 +1,10 @@
 # API Contracts
 
-Current product runtime is Draft Preview, served by the Go backend.
+Current product runtime is Pencil assisted slice, documented in
+[../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md).
+
+This file records historical/deferred Draft Preview contracts served by the Go
+backend. Use it only when explicitly working on `/api/draft-preview`.
 
 ## Base URL
 

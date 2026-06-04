@@ -1,13 +1,24 @@
 # Pencil Python Backend 部署 Runbook
 
-这个服务是当前 Pencil `.pen` / `project.zip` 交付入口。它不替代 Go Draft runtime，也不需要 Figma 插件改动。
+这个服务是当前 Pencil `.pen` / `project.zip` / `selected-assets.zip` 交付入口。它不替代 Go Draft runtime，也不需要 Figma 插件改动。
 
 HTTP 调用方合同见 [../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md)。
 
 生产默认链路：
 
 ```text
-HTTP upload
+GET /api/pencil/slice-projects/workspace
+-> upload images
+-> candidates.v1.json
+-> user-confirmed manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
+```
+
+保留的自动导出链路：
+
+```text
+POST /api/pencil/projects
 -> boundarySource=psdlike
 -> services/psdlike-python
 -> Pencil Python exporter
@@ -15,7 +26,7 @@ HTTP upload
 -> project.zip
 ```
 
-`m29` 和 `hybrid` 仍可显式指定，但默认入口必须保持 `psdlike`，否则前端不传 `boundarySource` 时会回到碎资产链路。
+`m29` 和 `hybrid` 仍可显式指定，但默认入口必须保持 `psdlike`，否则调用方不传 `boundarySource` 时会回到碎资产链路。Assisted slice 当前仍以 `manual_slices.v1.json` 为最终交付真相源，自动证据只负责候选。
 
 ## 资源判断
 

@@ -7,15 +7,13 @@
 Current product path:
 
 ```text
-Figma Plugin
--> /api/draft-preview
--> Go backend
--> M29 physical evidence
--> optional vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma
+1..N images
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> review_state.v1.json
+-> manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
-Legacy Codia Beta and Python upload-preview checks are not current product acceptance gates unless a task explicitly targets those legacy paths.
+Go Draft, legacy Codia Beta, and Python upload-preview checks are not current product acceptance gates unless a task explicitly targets those historical paths.

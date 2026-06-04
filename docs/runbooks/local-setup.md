@@ -1,8 +1,8 @@
 # 本地设置
 
-当前本地默认运行面是 Go Draft backend：`services/backend-go/cmd/draftserver`。插件通过 `/api/draft-preview` 上传 PNG，并拉取 Draft Runtime DSL 和本地 crop assets。
+当前本地默认运行面是 Pencil Python Backend assisted slice workspace：`services/pencil-python-backend`。浏览器通过 `/api/pencil/slice-projects/workspace` 创建项目、确认 `manual_slices.v1.json`，并导出 `project.zip` / `selected-assets.zip`。
 
-历史 Python/FastAPI `/api/upload-preview` 只在任务明确要求调试旧 preview 路径时启动。旧 Codia Beta、M29 Direct compare、legacy M30、M31-M39、ONNX proposer 等实验保留在历史文档或 git history 中，不是当前默认运行路径。
+Go Draft `/api/draft-preview`、历史 Python/FastAPI `/api/upload-preview`、旧 Codia Beta、M29 Direct compare、legacy M30、M31-M39、ONNX proposer 等实验只在任务明确要求调试旧路径时启动。它们不是当前默认运行路径。
 
 ## Prerequisites
 
@@ -35,9 +35,37 @@ cd backend
 uv sync
 ```
 
+## Run Pencil Assisted Slice Backend
+
+当前默认启动 Pencil 后端：
+
+```bash
+cd services/pencil-python-backend
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
+OCR_PROVIDER=none \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
+```
+
+打开工作台：
+
+```text
+http://127.0.0.1:8100/api/pencil/slice-projects/workspace
+```
+
+验收工作台：
+
+```bash
+cd services/pencil-python-backend
+make slice-acceptance \
+  IMAGE=/absolute/path/to/image-or-dir \
+  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
 ## Run Go Draft Backend
 
-插件 Draft 调试默认启动 Go 后端：
+以下是历史/延后 Draft 路线。只有明确调试 Go Draft 时才启动。
+
+插件 Draft 调试启动 Go 后端：
 
 ```bash
 cd services/backend-go

@@ -3,33 +3,41 @@
 Last full HTTP acceptance evidence baseline:
 
 ```text
-c37433f feat: add pencil backend readiness endpoint
+5a59327 test: add assisted slice workspace acceptance
 ```
 
-This handoff records the current operational path for Pencil `.pen` / `project.zip` delivery. It intentionally does not cover visual algorithm experiments, YOLO integration, `services/pencil-go`, or Figma plugin changes.
+This handoff records the current operational path for Pencil `.pen` /
+`project.zip` / `selected-assets.zip` delivery. It intentionally does not cover
+visual algorithm experiments, YOLO as final owner, `services/pencil-go`, Go
+Draft, Codia, or Figma plugin changes.
 
 ## Current Product Path
 
 ```text
 images
--> services/psdlike-python boundary source by default
--> services/pencil-python-backend exporter
--> clean-editable / visual-fidelity / visual-ocr
--> project.zip
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> user-confirmed manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
 Default behavior:
 
 ```text
 PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike
-mode=all
 includeDebug=true
 PENCIL_BACKEND_MAX_WORKERS=1
+manual_slices.v1.json is final delivery truth
+review_state.v1.json is workbench state only
 ```
 
-Use `boundarySource=m29` or `hybrid` only for explicit diagnostics or fallback work.
+PSD-like, M29, OCR, foreground audit, and model evidence only create candidates
+or debug data. Use `boundarySource=m29` or `hybrid` only for explicit diagnostics
+or fallback work.
 
-## Local Self-Use
+## Local Workspace Self-Use
 
 Build `m29extract`:
 
@@ -46,7 +54,73 @@ cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/
 make install-local
 ```
 
-Export a project:
+Start the service:
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/pencil-python-backend
+PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
+OCR_PROVIDER=none \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
+```
+
+Open:
+
+```text
+http://127.0.0.1:8100/api/pencil/slice-projects/workspace
+```
+
+Expected workflow:
+
+```text
+create project
+-> open review
+-> select candidates or draw slices
+-> save manual_slices.v1.json
+-> generate export preview
+-> export
+-> download project.zip and selected-assets.zip
+```
+
+## Assisted Slice Acceptance
+
+Use this before trusting a branch for current product self-use:
+
+```bash
+cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/pencil-python-backend
+make slice-acceptance \
+  IMAGE=/absolute/path/to/image-or-dir \
+  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
+Passing output must include:
+
+```text
+sliceWorkspaceAcceptance=ok
+projectCreated=true
+candidateCount>0
+manualSliceSaved=true
+reviewStateSaved=true
+exportPreviewGenerated=true
+projectZipExists=true
+selectedAssetsZipExists=true
+selectedAssetCount == selectedPngCount
+badRefs=0
+missingRefs=0
+```
+
+The script writes:
+
+```text
+acceptance_report.md
+acceptance_report.json
+```
+
+## Automatic Pencil Export
+
+The older automatic export path is still available for batch diagnostics. It is
+not the current product judge.
+
+Export a project with the local CLI:
 
 ```bash
 pencil-export \
@@ -68,9 +142,9 @@ Expected output:
 /Volumes/WorkDrive/pencil-exports/my-project/visual-ocr/design.pen
 ```
 
-## Local HTTP Acceptance
+## Automatic HTTP Acceptance
 
-Use this before trusting a branch for self-use:
+Use this only when validating the older automatic `/api/pencil/projects` path:
 
 ```bash
 cd /Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/pencil-python-backend
@@ -117,7 +191,7 @@ PSD-like dependencies install
 m29extract builds from the bundled Go source
 preflight passes against the unpacked tree
 temporary HTTP service starts on 127.0.0.1:8110
-sample upload completes
+sample upload completes through the automatic project route
 downloaded ZIP has badRefs=0 and missingRefs=0 for all modes
 ```
 
@@ -213,6 +287,10 @@ missingRefs=0
 serverSmoke=ok
 ```
 
+Current assisted slice acceptance should still be run separately against a live
+instance with `make slice-acceptance BASE_URL=... IMAGE=... OUT=...` when
+validating the workspace path.
+
 ## Do Not Change During Deployment
 
 Do not change these unless deliberately starting a new algorithm stage:
@@ -220,7 +298,9 @@ Do not change these unless deliberately starting a new algorithm stage:
 ```text
 Figma plugin
 services/pencil-go
-YOLO/M29 visual heuristics
-clean-editable OCR ownership rules
-asset clustering rules
+Go Draft runtime
+Codia routes
+YOLO/M29 visual heuristics as final ownership judges
+clean-editable OCR ownership rules outside candidate generation
+asset clustering rules outside candidate generation
 ```

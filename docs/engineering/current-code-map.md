@@ -1,24 +1,75 @@
 # Current Code Map
 
-This document maps the current Editable Draft branch. It describes where new work should land. It is authoritative for new code.
+This document maps the current `feat/pencil-assisted-slice-review` branch. It describes where new work should land. It is authoritative for new code.
 
 ## Product Mainline
 
 ```text
-Figma Plugin
--> /api/draft-preview
--> services/backend-go internal/app
--> internal/m29
--> internal/vision
--> internal/draft
--> Draft Runtime DSL
--> packages/image-to-figma-renderer
--> Figma
+1..N images
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
-## Pencil Project Export Surface
+The current product truth source is `manual_slices.v1.json`. Automatic evidence
+from PSD-like, M29, OCR, foreground audit, or model experiments only creates
+candidates/debug data.
 
-`services/pencil-python-backend` is the current Pencil project package export route. It is separate from the Draft runtime mainline and does not import the renderer/plugin/Draft packages. It uses the already-validated Python Pencil exporter. The default HTTP/CLI boundary source is `psdlike`; explicit `m29` and `hybrid` remain available.
+## Pencil Assisted Slice Surface
+
+`services/pencil-python-backend` is the current product delivery route. It is
+separate from the Draft runtime packages and does not import the renderer/plugin
+packages. It uses the already-validated Python Pencil exporter plus a plain HTML
+Canvas review workspace.
+
+Current assisted slice flow:
+
+```text
+POST /api/pencil/slice-projects
+-> save uploaded source images
+-> normalize PSD-like/M29/OCR/audit evidence into candidates.v1.json
+-> serve /api/pencil/slice-projects/{projectId}/review
+-> user confirms or draws slices
+-> PUT /api/pencil/slice-projects/{projectId}/manual-slices
+-> POST /api/pencil/slice-projects/{projectId}/export-preview
+-> POST /api/pencil/slice-projects/{projectId}/export
+-> GET project.zip and selected-assets.zip
+```
+
+Primary files:
+
+```text
+services/pencil-python-backend/app/slice_projects.py
+services/pencil-python-backend/app/routes/slice_projects.py
+services/pencil-python-backend/app/routes/slice_project_pages.py
+services/pencil-python-backend/scripts/slice_workspace_acceptance.py
+services/pencil-python-backend/tests/test_api.py
+```
+
+Operational files:
+
+```text
+services/pencil-python-backend/Makefile
+services/pencil-python-backend/README.md
+services/pencil-python-backend/deploy/pencil-python-backend.env.example
+services/pencil-python-backend/deploy/pencil-python-backend.service
+services/pencil-python-backend/scripts/http_smoke.py
+services/pencil-python-backend/scripts/server_smoke.py
+docs/reference/pencil-python-backend-api.md
+docs/runbooks/pencil-python-backend-handoff.md
+docs/runbooks/pencil-python-backend-deploy.md
+```
+
+## Automatic Pencil Export Surface
+
+The older automatic Pencil package route remains available for explicit
+batch/diagnostic use. It is not the current product judge.
+
+The default HTTP/CLI boundary source is `psdlike`; explicit `m29` and `hybrid`
+remain available.
 
 ```text
 1..N PNG
@@ -28,18 +79,23 @@ Figma Plugin
 -> clean-editable / visual-fidelity / visual-ocr .pen ZIP
 ```
 
-Operational files:
+Automatic project endpoints:
 
 ```text
-services/pencil-python-backend/deploy/pencil-python-backend.env.example
-services/pencil-python-backend/deploy/pencil-python-backend.service
-services/pencil-python-backend/scripts/http_smoke.py
-docs/runbooks/pencil-python-backend-deploy.md
+POST /api/pencil/projects
+GET  /api/pencil/projects/{taskId}
+GET  /api/pencil/projects/{taskId}/manifest
+GET  /api/pencil/projects/{taskId}/download.zip
 ```
 
 `services/pencil-go` is retained as a superseded experiment and should not be extended as the current product delivery path.
 
-## Go Backend Target Layout
+## Go Draft / M29 Surface
+
+`services/backend-go` is historical/deferred as a product delivery route on this
+branch. It remains useful for `m29extract`, Draft experiments, and archived
+evidence work, but new current-product work should not land there unless a new
+active plan explicitly resumes the Draft runtime.
 
 ```text
 services/backend-go/
@@ -118,7 +174,7 @@ services/backend-go/internal/eval/codia
 
 ## Command Responsibilities
 
-`cmd/draftserver` is the Draft HTTP runtime.
+`cmd/draftserver` is the historical/deferred Draft HTTP runtime.
 
 `cmd/draftcompile` is the local CLI for one PNG to Draft artifacts.
 
@@ -130,7 +186,7 @@ services/backend-go/internal/eval/codia
 
 ## Artifact Names
 
-Current main artifacts:
+Draft artifact names:
 
 ```text
 m29_physical_evidence.v1.json

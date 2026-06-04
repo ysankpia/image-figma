@@ -1,6 +1,8 @@
 # 后端架构
 
-当前分支的后端主线是 Go Draft backend。它接收单张 PNG，运行 OCR、M29 physical evidence、可选 vision detector/review，生成 Editable Layer Graph、Draft Runtime DSL 和本地 assets。
+当前分支的可交付后端主线是 `services/pencil-python-backend` assisted slice workspace。它接收 1..N 张图片，生成 `candidates.v1.json`，由用户确认 `manual_slices.v1.json`，再导出 `project.zip` 和 `selected-assets.zip`。
+
+本文件下面记录的是历史/延后 Go Draft backend 架构。只有明确恢复 `/api/draft-preview` 自动可编辑稿路线时，才把它作为实现参考。
 
 ## Runtime Surface
 

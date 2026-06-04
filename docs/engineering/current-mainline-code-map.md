@@ -5,15 +5,15 @@ This compatibility page has been superseded by [current-code-map.md](current-cod
 Current product path:
 
 ```text
-Figma Plugin
--> /api/draft-preview
--> Go backend
--> M29 physical evidence
--> optional vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma
+1..N images
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> user-confirmed manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
-Do not use historical Codia Beta, Python `/api/upload-preview`, M29 Direct compare, M30, or M31-M39 notes in old revisions of this file as current runtime truth.
+Do not use historical Codia Beta, Go Draft `/api/draft-preview`, Python
+`/api/upload-preview`, M29 Direct compare, M30, M31-M39 notes, or old automatic
+ownership plans as current runtime truth.

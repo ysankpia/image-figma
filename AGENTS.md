@@ -6,7 +6,8 @@ This repository uses an agent-first workflow. Repository files are the source of
 
 This repository is a pnpm workspace plus backend services.
 
-- `services/backend-go/` is the current backend implementation surface for the new Editable Draft pipeline. It owns Go M29 physical evidence, provider-neutral vision detection/review, editable layer graph assembly, local crop assets, Draft runtime DSL export, task storage, and Go tests.
+- `services/pencil-python-backend/` is the current usable product delivery surface on this branch. It owns the assisted slice workspace, slice project storage, candidate generation, user-confirmed `manual_slices.v1.json`, Pencil `.pen` export, `project.zip`, `selected-assets.zip`, deploy scripts, and Python tests.
+- `services/backend-go/` is retained as a Go M29/Draft evidence and tooling surface. It still provides `m29extract` for Pencil boundary/evidence work, but Go Draft is not the current product delivery mainline on this branch.
 - `figma-plugin/` contains the plugin UI, main thread, manifest, and bundle checks.
 - `packages/image-to-figma-renderer/` renders validated runtime DSL into Figma through an adapter.
 - `packages/dsl-schema/` owns shared DSL contracts that are intentionally shared with TypeScript code.
@@ -19,23 +20,19 @@ Start from [docs/index.md](docs/index.md). Current specs live in `docs/product/`
 The active product mainline on this branch is:
 
 ```text
-Figma Plugin
--> POST /api/draft-preview
--> Go backend services/backend-go
--> OCR
--> M29 physical evidence
--> optional OpenAI-compatible vision detector
--> optional vision review/reconciliation
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma editable draft
+1..N images
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> user-confirmed manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
 Core product target:
 
 ```text
-PNG -> editable Figma draft
+PNG/screenshots -> user-confirmed Pencil/Figma handoff package
 ```
 
 Non-targets for the mainline:
@@ -43,15 +40,46 @@ Non-targets for the mainline:
 ```text
 PNG -> Codia-like tree
 PNG -> official Codia JSON byte-for-byte clone
-PNG -> semantic UI control tree
+PNG -> fully automatic semantic UI control tree
 PNG -> Auto Layout/component reconstruction
+YOLO/model output as final visible ownership judge
+Go Draft as the default delivery route
+services/pencil-go revival
 ```
 
-Codia artifacts and official Codia JSON samples are eval/reference inputs only. Generation code must not read Codia golden data.
+Codia artifacts, official Codia JSON samples, old Go Draft plans, and automatic ownership experiments are eval/reference inputs only. Generation code must not read Codia golden data.
 
 ## Runtime Surfaces
 
-The new Draft runtime surface is:
+The current assisted slice runtime surface is:
+
+```text
+GET  /api/pencil/slice-projects/workspace
+GET  /api/pencil/slice-projects/new
+POST /api/pencil/slice-projects
+GET  /api/pencil/slice-projects/{projectId}
+GET  /api/pencil/slice-projects/{projectId}/review
+GET  /api/pencil/slice-projects/{projectId}/candidates
+GET  /api/pencil/slice-projects/{projectId}/review-state
+PUT  /api/pencil/slice-projects/{projectId}/review-state
+GET  /api/pencil/slice-projects/{projectId}/manual-slices
+PUT  /api/pencil/slice-projects/{projectId}/manual-slices
+POST /api/pencil/slice-projects/{projectId}/export-preview
+POST /api/pencil/slice-projects/{projectId}/export
+GET  /api/pencil/slice-projects/{projectId}/download.zip
+GET  /api/pencil/slice-projects/{projectId}/selected-assets.zip
+```
+
+The older automatic Pencil project export surface remains available for explicit batch/diagnostic use, but it is no longer the product judge:
+
+```text
+POST /api/pencil/projects
+GET  /api/pencil/projects/{taskId}
+GET  /api/pencil/projects/{taskId}/manifest
+GET  /api/pencil/projects/{taskId}/download.zip
+```
+
+The Draft runtime surface is retained as historical/deferred Draft work, not the current default delivery route on this branch:
 
 ```text
 POST /api/draft-preview
@@ -69,7 +97,7 @@ codia_runtime.dsl.v0_2.json
 Generate Beta
 ```
 
-Do not restore the Codia HTTP route or add new generation behavior to Codia packages. If a Codia concept is useful, translate the underlying need into Draft terms: layer ownership, asset crop, z-order, grouping, or eval metric.
+Do not restore the Codia HTTP route or add new generation behavior to Codia packages. If a Codia or Draft concept is useful for the assisted slice route, translate the underlying need into candidate evidence, source-image crop, user confirmation, export manifest, or acceptance metric.
 
 The retained Python/FastAPI preview path is historical/reference unless explicitly targeted:
 
@@ -127,6 +155,14 @@ UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 12
 uv run pytest -q
 ```
 
+Current Pencil assisted slice backend checks:
+
+```bash
+cd services/pencil-python-backend
+make check
+make slice-acceptance IMAGE=/absolute/path/to/image-or-dir OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
+```
+
 Before handoff, run at least:
 
 ```bash
@@ -150,9 +186,31 @@ Do not commit `dist/`, `backend/storage/`, `services/backend-go/storage/`, datab
 
 Prefer simple, current, verifiable implementations. Do not create `utils`, `common`, or `misc` dumping-ground modules. Large central files are design pressure; add new behavior through focused modules with clear responsibility.
 
+## Assisted Slice Guardrails
+
+The assisted slice pipeline centers on these contracts:
+
+```text
+candidates.v1.json
+review_state.v1.json
+manual_slices.v1.json
+project.zip
+selected-assets.zip
+```
+
+Hard invariants:
+
+- `manual_slices.v1.json` is the final delivery truth source.
+- `review_state.v1.json` is workbench state only.
+- PSD-like, M29, OCR, foreground audit, and model detections only produce candidates or debug evidence.
+- Export crops selected slices from the original `source.png`, not from raw fragment crops.
+- Pencil `.pen` visible image refs must point to package-local `./assets/visible/...` files.
+- Do not emit absolute paths, `source.png`, raw crops, masks, debug assets, or `../` as visible refs.
+- Default export is rectangular crop; transparent background remains optional future work.
+
 ## Draft Architecture Guardrails
 
-The Draft pipeline centers on `editable_layer_graph.v1.json`. First-version visible layer kinds are intentionally small:
+The Draft pipeline is historical/deferred on this branch. If explicitly resumed, it centers on `editable_layer_graph.v1.json`. First-version visible layer kinds are intentionally small:
 
 ```text
 Page

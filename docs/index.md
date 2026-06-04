@@ -1,55 +1,53 @@
 # 文档地图
 
-本目录是 Image-to-Figma Design 的事实来源。当前分支的产品主线是 **Editable Draft Layer Pipeline**：从 PNG 生成可编辑 Figma 草稿。旧 Codia Beta、Python `/api/upload-preview`、历史 ADR、completed plans 和 legacy drafts 只作参考，不能覆盖当前主线。
+本目录是 Image-to-Figma Design 的事实来源。当前分支的可交付产品主线是 **Pencil Assisted Slice Workspace**：从 1..N 张图片生成自动候选，由用户在 Canvas 工作台确认切片，然后导出 Pencil/Figma 项目包和前端资源包。旧 Codia Beta、Go Draft `/api/draft-preview`、Python `/api/upload-preview`、历史 ADR、completed plans 和 legacy drafts 只作参考，不能覆盖当前主线。
 
 ## Start Here
 
 按顺序阅读：
 
 1. [../AGENTS.md](../AGENTS.md)：仓库规则、当前主线、禁止项。
-2. [product/vision.md](product/vision.md)：产品目标。
-3. [architecture/overview.md](architecture/overview.md)：系统边界总览。
-4. [architecture/runtime.md](architecture/runtime.md)：Draft runtime 链路。
-5. [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)：`editable_layer_graph.v1` 合同。
-6. [architecture/vision-provider.md](architecture/vision-provider.md)：OpenAI-compatible 视觉候选与 review 边界。
-7. [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)：M29 物理证据职责。
-8. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
-9. [engineering/validation.md](engineering/validation.md)：验证策略。
-10. [plans/active/093-editable-draft-layer-pipeline-rebuild.md](plans/active/093-editable-draft-layer-pipeline-rebuild.md)：当前破坏性重构计划。
+2. [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)：当前 Pencil assisted slice 服务运行、工作台和验收命令。
+3. [reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)：当前 HTTP/API 合同。
+4. [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)：当前交付、验收和部署交接。
+5. [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)：部署 Runbook。
+6. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
+7. [engineering/validation.md](engineering/validation.md)：验证策略。
+8. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
+9. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
+10. [plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)：验收脚本和 ZIP 合同检查。
 
 ## Current Runtime
 
 当前主线：
 
 ```text
-Figma Plugin
--> POST /api/draft-preview
--> Go backend services/backend-go
--> OCR
--> M29 physical evidence
--> optional vision detector
--> optional vision review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma editable draft
+1..N images
+-> services/pencil-python-backend
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> user-confirmed manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
 旧路径状态：
 
 - Codia Beta / `Generate Beta`：产品入口已撤掉，只能作为 legacy/eval reference，不再作为新功能落点。
+- Go Draft `/api/draft-preview`：历史/延后自动可编辑稿路线，不是当前可交付产品主线。
 - Python `/api/upload-preview`：historical/reference preview path，不是 Draft runtime。
 - Official Codia JSON：eval/reference/training-label material only，禁止 generation 读取。
+- YOLO/M29/PSD-like/foreground ownership 自动裁判：只作为候选、debug、eval 或未来研究输入；不能覆盖 `manual_slices.v1.json`。
 
 ## By Task Type
 
-- 做产品范围：读 [product/vision.md](product/vision.md)、[product/requirements.md](product/requirements.md)、[product/non-goals.md](product/non-goals.md)、[product/acceptance-criteria.md](product/acceptance-criteria.md)。
-- 做 Draft graph：读 [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md) 和 [engineering/validation.md](engineering/validation.md)。
-- 做 Go 后端：读 [architecture/runtime.md](architecture/runtime.md)、[engineering/current-code-map.md](engineering/current-code-map.md) 和当前 active plan。
-- 做视觉模型接入：读 [architecture/vision-provider.md](architecture/vision-provider.md) 和 [reference/env-vars.md](reference/env-vars.md)。
-- 做 M29 物理证据：读 [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)。
-- 做 Pencil `.pen` 项目导出、调用或部署：读 [engineering/current-code-map.md](engineering/current-code-map.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[reference/env-vars.md](reference/env-vars.md) 和 [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)。
-- 做插件/Renderer：读 [architecture/plugin-rendering.md](architecture/plugin-rendering.md)、[architecture/dsl.md](architecture/dsl.md) 和 [engineering/validation.md](engineering/validation.md)。
+- 做当前产品范围：读 [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
+- 做 assisted slice 工作台/API/导出：读 [engineering/current-code-map.md](engineering/current-code-map.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[reference/env-vars.md](reference/env-vars.md)、[plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)、[plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)。
+- 做部署：读 [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md) 和 [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
+- 做 Draft graph / Go Draft 历史恢复：读 [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)、[architecture/runtime.md](architecture/runtime.md) 和 [plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md](plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md)，并先写新的 active plan。
+- 做视觉模型接入实验：读 [architecture/vision-provider.md](architecture/vision-provider.md) 和 [reference/env-vars.md](reference/env-vars.md)，但模型输出不能成为当前 assisted slice 的最终 visible owner。
+- 做 M29 物理证据：读 [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)，默认只作为候选/证据输入。
+- 做插件/Renderer：读 [architecture/plugin-rendering.md](architecture/plugin-rendering.md)、[architecture/dsl.md](architecture/dsl.md) 和 [engineering/validation.md](engineering/validation.md)，但它们不是当前 assisted slice 交付路径。
 - 做 bug 修复：读 [bugs/index.md](bugs/index.md)、相关 bug record 和 [engineering/validation.md](engineering/validation.md)。
 - 做历史对比：读 [reference/codia-samples/](reference/codia-samples/) 和 `internal/eval/codia`，不要把 eval 数据接入 generation。
 

@@ -2,11 +2,27 @@
 
 ## Image-to-Figma Design
 
-本项目名称，把 PNG 截图或设计稿转换成 Figma 可编辑草稿。
+本项目名称，当前分支把 PNG 截图或设计稿转换成用户确认后的 Pencil/Figma 交付包。
+
+## Pencil Assisted Slice Workspace
+
+当前产品主线。它从 1..N 张图片生成 `candidates.v1.json`，让用户在 HTML Canvas 工作台确认或手动画框，保存 `manual_slices.v1.json`，再导出 `project.zip` 和 `selected-assets.zip`。
+
+## Manual Slices
+
+当前交付真相源，文件名为 `manual_slices.v1.json`。它记录用户确认后的 selected slices、source-image bbox、名称、kind 和导出模式。自动候选不能覆盖它。
+
+## Slice Candidates
+
+自动候选文件，文件名为 `candidates.v1.json`。PSD-like、M29、OCR、foreground audit 和模型证据都只能进入候选/调试层，不能直接决定最终 visible asset。
+
+## Review State
+
+工作台状态文件，文件名为 `review_state.v1.json`。它记录 rejected candidates、筛选和最后处理页等 UI 状态，不参与最终交付真相。
 
 ## Editable Draft Layer Pipeline
 
-当前产品主线。它从 PNG、OCR、M29 physical evidence 和可选 vision candidates/review 生成 Editable Layer Graph，再导出 Draft Runtime DSL 给 Renderer。
+历史/延后自动化路线。它从 PNG、OCR、M29 physical evidence 和可选 vision candidates/review 生成 Editable Layer Graph，再导出 Draft Runtime DSL 给 Renderer。
 
 ## Editable Layer Graph
 

@@ -8,21 +8,20 @@ Current product work must start from:
 
 - [../../AGENTS.md](../../AGENTS.md)
 - [../index.md](../index.md)
-- [../architecture/overview.md](../architecture/overview.md)
-- [../architecture/runtime.md](../architecture/runtime.md)
+- [../../services/pencil-python-backend/README.md](../../services/pencil-python-backend/README.md)
+- [../reference/pencil-python-backend-api.md](pencil-python-backend-api.md)
+- [../runbooks/pencil-python-backend-handoff.md](../runbooks/pencil-python-backend-handoff.md)
 - [../engineering/current-code-map.md](../engineering/current-code-map.md)
-- [../plans/active/093-editable-draft-layer-pipeline-rebuild.md](../plans/active/093-editable-draft-layer-pipeline-rebuild.md)
+- [../plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](../plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)
 
 Current architecture:
 
 ```text
-PNG
--> Go /api/draft-preview
--> OCR + M29 physical evidence + optional vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma editable draft
+1..N images
+-> Pencil assisted slice workspace
+-> candidates.v1.json
+-> manual_slices.v1.json
+-> project.zip + selected-assets.zip
 ```
 
 Use git history if the full superseded report is needed for archaeology.

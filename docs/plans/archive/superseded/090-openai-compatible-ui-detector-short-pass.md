@@ -5,7 +5,7 @@
 - 负责人：未指定
 - 关联暂停计划：[089 Go Codia-like Compiler Rebuild](../deferred/089-go-codia-like-compiler-rebuild.md)
 - 历史质量债：[017 Codia-like Beta UI Role Detector Gap](../../../bugs/archive/superseded/017-codia-like-beta-ui-role-detector-gap.md)
-- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](../../active/093-editable-draft-layer-pipeline-rebuild.md)
+- Superseded by：[093 Editable Draft Layer Pipeline Rebuild](093-editable-draft-layer-pipeline-rebuild.md), then the Pencil assisted slice workspace mainline
 
 ## Superseded Note
 

@@ -1,6 +1,6 @@
 # Codia/Figma JSON 编译器逆向规格审计与可实施方案
 
-> Reference-only Codia reverse-engineering audit. It is not the current product specification on this branch. Current product work targets Editable Draft Layer Pipeline: `/api/draft-preview` -> Editable Layer Graph -> Draft Runtime DSL -> Renderer. This document may inform `internal/eval/codia` metrics and historical comparison only.
+> Reference-only Codia reverse-engineering audit. It is not the current product specification on this branch. Current product work targets Pencil assisted slice workspace: candidates -> `manual_slices.v1.json` -> `project.zip` + `selected-assets.zip`. This document may inform eval/reference work only.
 
 **审计对象**
 

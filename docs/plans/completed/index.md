@@ -106,6 +106,7 @@
 - [PSD-like Web Surface Profile Validation](111-psdlike-web-surface-profile-validation.md) — `completed`
 - [Pencil Python Backend Productization](116-pencil-python-backend-productization.md) — `completed`
 - [Pencil PSD-like Boundary Source Integration](117-pencil-psdlike-boundary-source.md) — `completed`
+- [Pencil Hybrid Boundary Source](118-pencil-hybrid-boundary-source.md) — `completed`
 - [Pencil .pen Contract Normalization](119-pencil-pen-contract-normalization.md) — `completed`
 - [Pencil TextLayer Safe Bounds](120-pencil-textlayer-safe-bounds.md) — `completed`
 - [Pencil PSD-like Raster Boundary Repair](121-pencil-psdlike-raster-boundary-repair.md) — `completed`
@@ -133,3 +134,4 @@
 - [Assisted Slice Workbench P0 Hardening](143-assisted-slice-workbench-p0-hardening.md) — `completed`
 - [Assisted Slice Project Workspace](144-assisted-slice-project-workspace.md) — `completed`
 - [Assisted Slice Workspace Acceptance Hardening](145-assisted-slice-workspace-acceptance-hardening.md) — `completed`
+- [Pencil Assisted Slice Mainline Cleanup And Handoff](146-pencil-assisted-slice-mainline-cleanup-and-handoff.md) — `completed`

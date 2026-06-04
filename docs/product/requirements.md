@@ -1,10 +1,20 @@
 # 一期需求
 
-本文档定义当前 Draft MVP 必须实现的产品能力。任何不在这里的能力，默认不进入当前阶段。
+本文档记录历史 Draft MVP 的产品能力。当前分支的一期可交付产品已经切到 Pencil assisted slice workspace：
+
+```text
+1..N images
+-> candidates.v1.json
+-> Canvas 工作台人工确认
+-> manual_slices.v1.json
+-> project.zip + selected-assets.zip
+```
+
+新的当前产品需求以 [../services/pencil-python-backend/README.md](../../services/pencil-python-backend/README.md)、[../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md) 和 completed plans `141`-`145` 为准。本文件只在显式恢复 Go Draft 自动化路线时作为历史参考。
 
 ## Scope
 
-一期只支持单张 PNG 转 Figma 可编辑稿：
+历史 Draft MVP 一期只支持单张 PNG 转 Figma 可编辑稿：
 
 ```text
 单张 PNG

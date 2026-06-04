@@ -1,146 +1,144 @@
 # Image-to-Figma Roadmap
 
 - 状态：active
-- 更新日期：2026-05-31
+- 更新日期：2026-06-05
 
 ## Purpose
 
-本文档固定当前路线，避免后续工作继续在旧 Python preview、Codia-like tree、官方 Codia JSON、组件化、Auto Layout 和代码生成之间来回跳。
+本文档固定当前路线，避免后续工作继续在旧 Python preview、Codia-like tree、官方 Codia JSON、Go Draft、YOLO 主裁判、Pencil-Go、组件化、Auto Layout 和代码生成之间来回跳。
 
 当前产品目标只有一个：
 
 ```text
-PNG -> editable Figma draft
+1..N images -> user-confirmed Pencil/Figma handoff package
 ```
 
-当前主线是 Editable Draft Layer Pipeline：
+当前主线是 Pencil Assisted Slice Workspace：
 
 ```text
-PNG
--> OCR + M29 physical evidence + optional vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> Renderer
--> Figma editable draft
+1..N images
+-> candidates.v1.json
+-> HTML Canvas assisted slice workspace
+-> manual_slices.v1.json
+-> export-preview
+-> project.zip + selected-assets.zip
 ```
 
 第一性原理边界：
 
 ```text
 PNG 像素是输入真相源。
-M29/OCR 提供物理证据。
-Vision provider 提供语义候选和 review，不生成最终树。
-Draft assembly 是 layer ownership authority。
-Renderer 只机械渲染 DSL，不修 ownership。
+PSD-like/M29/OCR/foreground audit/model evidence 提供候选。
+用户确认的 manual_slices.v1.json 是最终交付真相源。
+Pencil exporter 只机械裁 source.png 并按坐标放回，不修自动 ownership。
 Codia golden 只做 eval/reference，不进入 generation。
 ```
 
 硬不变量：
 
 ```text
-one visible foreground pixel -> one visible owner
+manual_slices.v1.json -> one selected slice contract
 ```
 
-这条不变量优先级高于下游 grouping、视觉相似度和节点数量。它不禁止 Figma layer bbox 重叠；背景 shape 可以和 child text/image/icon 在空间上重叠，因为它们拥有不同 source evidence。
+这条不变量优先级高于自动候选质量、节点数量和未来可编辑性。自动候选可以错，最终交付必须以用户确认的 source-image 坐标为准。
 
 ## Current Runtime Surfaces
 
-当前 Go Draft 主链：
+当前 assisted slice 主链：
 
 ```text
-Figma Plugin Generate Draft
--> POST /api/draft-preview
--> Go draftserver
--> OCR
--> Go M29 physical evidence
--> optional OpenAI-compatible vision detector/review
--> Editable Layer Graph
--> Draft Runtime DSL
--> GET /api/draft-preview/{taskId}/dsl
--> GET /api/draft-preview/{taskId}/assets/{assetId}.png
--> renderDraftRuntimeDesign
--> Figma Canvas
+GET /api/pencil/slice-projects/workspace
+-> POST /api/pencil/slice-projects
+-> GET /api/pencil/slice-projects/{projectId}/review
+-> PUT /api/pencil/slice-projects/{projectId}/manual-slices
+-> POST /api/pencil/slice-projects/{projectId}/export-preview
+-> POST /api/pencil/slice-projects/{projectId}/export
+-> GET /api/pencil/slice-projects/{projectId}/download.zip
+-> GET /api/pencil/slice-projects/{projectId}/selected-assets.zip
 ```
 
-当前 Draft 输出质量、vision、M29、layer ownership、asset、DSL、renderer 和插件 wiring 问题都先归到：
+当前工作台、候选、manual slices、导出预览、ZIP 合同和部署问题都先归到：
 
 ```text
-services/backend-go/internal/m29
-services/backend-go/internal/vision
-services/backend-go/internal/draft
-services/backend-go/internal/app
-packages/image-to-figma-renderer
-figma-plugin
+services/pencil-python-backend/app/slice_projects.py
+services/pencil-python-backend/app/routes/slice_projects.py
+services/pencil-python-backend/app/routes/slice_project_pages.py
+services/pencil-python-backend/scripts/slice_workspace_acceptance.py
+docs/reference/pencil-python-backend-api.md
+docs/runbooks/pencil-python-backend-handoff.md
 ```
 
 旧运行面状态：
 
+- Go Draft `/api/draft-preview`：历史/延后自动可编辑稿路线，不是当前交付主线。
 - Python/FastAPI `/api/upload-preview`：历史 preview/reference path，不是 Draft runtime。
 - Codia generation path：已从产品代码移除。
 - Official Codia JSON：eval/reference material only。
+- `services/pencil-go`：已被 Python Pencil backend 取代。
+- YOLO/M29/PSD-like 自动 ownership：只作为候选/eval/debug，不作为最终交付裁判。
 
 ## What To Improve Next
 
-### 1. Stabilize Draft Layer Ownership
+### 1. Stabilize Assisted Slice Workspace
 
-最高优先级是让真实样图稳定生成可编辑草稿，而不是继续追一个 Codia-like semantic tree。
+最高优先级是让真实样图稳定完成候选、人工确认、预览、导出和 ZIP 合同检查，而不是继续追一个全自动 semantic tree。
 
 重点：
 
-- TextLayer 必须在同区域 Shape/Raster 上方。
-- 原图不能作为 visible full-page backing。
-- RasterLayer 必须有可解析 asset。
-- ShapeLayer 不应携带前景文字像素。
-- 普通 OCR 文本默认保留为可编辑文本。
-- 只有局部媒体、图标、头像、封面、缩略图等 compact evidence 才成为 RasterLayer。
-- 所有 emit/consume/suppress/refine 决策必须有 source refs 和 reason。
+- Workspace 能批量创建项目、恢复历史项目、继续处理。
+- 候选可以框选、加入、拒绝、恢复。
+- manual slices 能保存、刷新恢复、批量管理。
+- export-preview 与最终 ZIP 一致。
+- `.pen` visible refs 无绝对路径、无 `source.png`、无 raw crops、无 masks、无 debug、无 `../`。
+- `selected-assets.zip` 只包含用户确认的资源。
 
-### 2. Vision + M29 Reconciliation
+### 2. Candidate Quality, Not Final Authority
 
-Vision 不是最终 authority。它补语义、补漏、做二次 review；M29/OCR 提供更硬的 bbox 和像素证据。
+候选质量值得继续提升，但候选不是最终 authority。PSD-like、M29、OCR、foreground audit 和模型都只能减少用户手工成本，不能覆盖 `manual_slices.v1.json`。
 
 需要继续收敛：
 
-- detector pass 并发和 deterministic merge。
-- VLM review 对 M29 缺失/碎片/误报的二次校验。
-- 越界、空响应、TLS/provider 失败时的 fallback artifact。
-- provider/baseUrl/model/apiKey/stream/concurrency 全部保持可配置。
+- candidate ranking：recommended / normal / noise / text / rejected。
+- 多页候选统计和页面处理状态。
+- 更稳的 bbox 合并/去噪，但不写样本名、固定坐标、品牌、可见文字规则。
+- 透明底和智能命名只能作为可选增强，不改变默认矩形裁剪真相。
 
 ### 3. Real Sample Validation
 
-每次改 Draft pipeline 都要跑真实样例，而不是只看单元测试。
+每次改 assisted slice 工作台或导出链路都要跑真实样例，而不是只看单元测试。
 
 当前最小样例集：
 
 ```text
-Tencent 018
-Tencent 022
-Lizhi 011
-Xianyu
+/Users/luhui/Downloads/figma/image/腾讯动漫_018_1440.png
+/Users/luhui/Downloads/PencilBridge_Admin_UI_XcodeDark/01_UI_Pages
+/Users/luhui/Downloads/dorm_selection_ui_assets 2
 ```
 
 验收信号：
 
-- asset missing = 0。
-- plugin image load failed = 0。
-- visible full-page backing = 0。
-- TextLayer covered by RasterLayer = 0。
-- unauthorized large sibling overlap = 0。
-- ordinary OCR text remains editable。
-- major regions can be moved as groups。
+- projectCreated=true。
+- candidateCount>0。
+- manualSliceSaved=true。
+- reviewStateSaved=true。
+- exportPreviewGenerated=true。
+- projectZipExists=true。
+- selectedAssetsZipExists=true。
+- selectedAssetCount == selected PNG count。
+- badRefs=0。
+- missingRefs=0。
 
 ### 4. Code Slimming
 
-重构方向是删掉错误抽象，不是给旧 Codia-like pipeline 打补丁。
+重构方向是删掉错误抽象，不是给旧 Codia-like、Draft ownership 或 YOLO 主裁判路径打补丁。
 
 优先整理：
 
 ```text
-internal/draft/assemble
-internal/draft/group
-internal/vision/detector
-internal/m29/pipeline
-internal/app/server
+services/pencil-python-backend/app/slice_projects.py
+services/pencil-python-backend/app/routes/slice_project_pages.py
+services/pencil-python-backend/app/routes/slice_projects.py
+services/pencil-python-backend/scripts/slice_workspace_acceptance.py
 ```
 
 原则：
@@ -180,9 +178,11 @@ Figma Component/Instance
 frontend code generation
 official Codia JSON clone
 semantic UI control tree as product contract
-batch upload
+YOLO as final owner
+services/pencil-go revival
+Go Draft as default delivery route
 quality dashboard
 account/payment/quota
 ```
 
-这些不是永远不做。它们被阻塞到 Draft layer ownership、asset、z-order、grouping 和真实样图验证稳定之后。
+这些不是永远不做。它们被阻塞到 assisted slice workspace、manual slices、ZIP 合同和真实样图验收稳定之后。
