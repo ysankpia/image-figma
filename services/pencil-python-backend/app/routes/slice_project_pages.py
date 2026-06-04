@@ -421,6 +421,7 @@ REVIEW_HTML = """<!doctype html>
       <h3>Selected Slices <span id="selectedCount" class="muted"></span></h3>
       <input id="assetSearch" class="search" placeholder="搜索 selected assets" />
       <div class="filter-row" style="margin-bottom:10px">
+        <label><input id="assetAllPages" type="checkbox" checked /> 全项目</label>
         <button class="secondary" onclick="bulkRenameSlices()">批量重命名</button>
         <button class="warn" onclick="bulkDeleteVisibleSlices()">删除可见</button>
       </div>
@@ -444,6 +445,7 @@ REVIEW_HTML = """<!doctype html>
       reviewSaveTimer: null, reviewSavePromise: null, reviewSaveRevision: 0, lastSavedReviewRevision: 0,
       view: { scale: 1, offsetX: 40, offsetY: 40 }, spaceDown: false,
       autosaveTimer: null, savePromise: null, saveRevision: 0, lastSavedRevision: 0,
+      assetAllPages: true,
       history: { undo: [], redo: [], limit: 50, restoring: false },
       filters: {
         showCandidates: true, showSelected: true, showLabels: true, minConfidence: 0, candidateOpacity: 0.75,
@@ -509,6 +511,7 @@ REVIEW_HTML = """<!doctype html>
     function hydrateReviewFilters() {
       const saved = state.reviewState && typeof state.reviewState.filters === "object" ? state.reviewState.filters : {};
       mergeFilterGroup(state.filters, saved);
+      if (typeof saved.assetAllPages === "boolean") state.assetAllPages = saved.assetAllPages;
     }
     function mergeFilterGroup(target, source) {
       if (!source || typeof source !== "object") return;
@@ -520,6 +523,7 @@ REVIEW_HTML = """<!doctype html>
     }
     function persistReviewFilters() {
       state.reviewState.filters = JSON.parse(JSON.stringify(state.filters));
+      state.reviewState.filters.assetAllPages = state.assetAllPages;
       scheduleReviewStateSave();
     }
     function syncExportLinks(project) {
@@ -569,7 +573,9 @@ REVIEW_HTML = """<!doctype html>
       return { x: Math.round(p.x), y: Math.round(p.y) };
     }
     function clampBox(b) {
-      const page = currentCandidatePage();
+      return clampBoxForPage(b, currentCandidatePage());
+    }
+    function clampBoxForPage(b, page) {
       const x = Math.max(0, Math.min(page.width - 1, Math.round(b.x)));
       const y = Math.max(0, Math.min(page.height - 1, Math.round(b.y)));
       const width = Math.max(1, Math.min(page.width - x, Math.round(b.width)));
@@ -592,8 +598,11 @@ REVIEW_HTML = """<!doctype html>
       if (state.filters.showCandidates) {
         for (const candidate of filteredCandidates()) {
           const active = candidate.id === state.hoverCandidateId || state.selectedCandidateIds.has(candidate.id);
-          const label = `${candidate.id.split("_").pop()} ${candidateTier(candidate).slice(0, 1)}`;
-          drawBox(candidate.bbox, colors[candidate.kind] || colors.unknown, label, active, state.filters.candidateOpacity);
+          const tier = candidateTier(candidate);
+          const selected = state.selectedCandidateIds.has(candidate.id);
+          const color = tier === "rejected" ? "#64748b" : selected ? "#a78bfa" : colors[candidate.kind] || colors.unknown;
+          const label = `${candidate.id.split("_").pop()} ${tier.slice(0, 1)}`;
+          drawBox(candidate.bbox, color, label, active, tier === "rejected" ? Math.min(.45, state.filters.candidateOpacity) : state.filters.candidateOpacity, tier === "rejected" ? "dashed" : "solid");
         }
       }
       if (state.filters.showSelected) {
@@ -604,11 +613,12 @@ REVIEW_HTML = """<!doctype html>
       if (state.drag?.draft) drawBox(state.drag.draft, state.drag.action === "candidateBox" ? "#a78bfa" : "#f97316", state.drag.action === "candidateBox" ? "select" : "new", true, 1);
       ctx.restore();
     }
-    function drawBox(b, color, label, active, alpha) {
+    function drawBox(b, color, label, active, alpha, style="solid") {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = color;
       ctx.lineWidth = (active ? 3 : 2) / state.view.scale;
+      if (style === "dashed") ctx.setLineDash([6 / state.view.scale, 5 / state.view.scale]);
       ctx.strokeRect(b.x, b.y, b.width, b.height);
       if (state.filters.showLabels) {
         ctx.fillStyle = "rgba(2,6,23,.78)";
@@ -712,6 +722,17 @@ REVIEW_HTML = """<!doctype html>
       pushUndoSnapshot();
       fn();
       markDirty(pageId);
+      scheduleAutosave();
+      renderAll();
+    }
+    function mutateManualForPages(pageIds, fn) {
+      pushUndoSnapshot();
+      fn();
+      const unique = [...new Set(pageIds.filter(Boolean))];
+      state.saveRevision += 1;
+      for (const pageId of unique) state.pageSaveState[pageId] = "dirty";
+      setStatus("dirty");
+      renderPages();
       scheduleAutosave();
       renderAll();
     }
@@ -932,15 +953,16 @@ REVIEW_HTML = """<!doctype html>
       renderAll();
     }
     function selectedCandidates() {
-      return currentCandidatePage().candidates.filter(candidate => state.selectedCandidateIds.has(candidate.id));
+      const visibleIds = new Set(filteredCandidates().map(candidate => candidate.id));
+      return currentCandidatePage().candidates.filter(candidate => state.selectedCandidateIds.has(candidate.id) && visibleIds.has(candidate.id));
     }
     function bulkAddCandidates() {
       const candidates = selectedCandidates();
       if (!candidates.length) return;
+      let added = 0;
       mutateManual(() => {
         const page = currentManualPage();
         const existingCandidateIds = new Set(page.slices.flatMap(slice => slice.candidateIds || []));
-        let added = 0;
         for (const candidate of candidates) {
           if (existingCandidateIds.has(candidate.id)) continue;
           added += 1;
@@ -949,6 +971,7 @@ REVIEW_HTML = """<!doctype html>
         if (added) state.activeId = page.slices[page.slices.length - 1].id;
       });
       state.selectedCandidateIds.clear();
+      setStatus(added ? `added ${added} candidate(s)` : "no new candidates");
       renderAll();
     }
     function rejectSelectedCandidates() {
@@ -958,12 +981,15 @@ REVIEW_HTML = """<!doctype html>
       reviewPage.rejectedCandidateIds = [...new Set([...(reviewPage.rejectedCandidateIds || []), ...ids])];
       state.selectedCandidateIds.clear();
       scheduleReviewStateSave();
+      setStatus(`rejected ${ids.length} candidate(s)`);
       renderAll();
     }
     function restoreRejectedOnPage() {
+      const count = (currentReviewPage().rejectedCandidateIds || []).length;
       currentReviewPage().rejectedCandidateIds = [];
       state.selectedCandidateIds.clear();
       scheduleReviewStateSave();
+      setStatus(`restored ${count} rejected candidate(s)`);
       renderAll();
     }
     function clearCandidateSelection() {
@@ -1034,53 +1060,69 @@ REVIEW_HTML = """<!doctype html>
       }).join("");
     }
     function renderAssets() {
-      const page = currentManualPage();
-      const selectedCount = page.slices.filter(item => item.selected !== false).length;
+      const selectedCount = totalSelectedSliceCount();
       document.getElementById("selectedCount").textContent = `(${selectedCount})`;
-      const visibleSlices = visibleAssetSlices();
-      document.getElementById("assets").innerHTML = visibleSlices.map(slice => `
-        <div class="asset ${slice.id === state.activeId ? "active" : ""} ${slice.selected === false ? "unselected" : ""}" onclick="focusSlice('${slice.id}')">
+      const visibleRefs = visibleAssetRefs();
+      document.getElementById("assets").innerHTML = visibleRefs.map(ref => {
+        const slice = ref.slice;
+        return `
+        <div class="asset ${slice.id === state.activeId ? "active" : ""} ${slice.selected === false ? "unselected" : ""}" onclick="focusSlice('${slice.id}', ${ref.pageIndex})">
           <div class="asset-head">
             <canvas class="slice-thumb" data-thumb-slice-id="${slice.id}" width="84" height="64"></canvas>
             <div>
-              <input name="${slice.id}__displayName" value="${escapeHtml(slice.displayName || slice.name)}" onchange="updateSlice('${slice.id}', 'displayName', this.value)" />
-              <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onchange="updateSlice('${slice.id}', 'name', safeName(this.value))" style="margin-top:6px" />
+              <input name="${slice.id}__displayName" value="${escapeHtml(slice.displayName || slice.name)}" onclick="event.stopPropagation()" onchange="updateSlice('${slice.id}', 'displayName', this.value, ${ref.pageIndex})" />
+              <input name="${slice.id}__name" value="${escapeHtml(slice.name)}" onclick="event.stopPropagation()" onchange="updateSlice('${slice.id}', 'name', safeName(this.value), ${ref.pageIndex})" style="margin-top:6px" />
               <div class="row">
-                <select name="${slice.id}__kind" onchange="updateSlice('${slice.id}', 'kind', this.value)">${kindOptions.map(kind => `<option value="${kind}" ${normalizeKind(slice.kind) === kind ? "selected" : ""}>${kind}</option>`).join("")}</select>
-                <label><input name="${slice.id}__selected" type="checkbox" ${slice.selected !== false ? "checked" : ""} onchange="updateSlice('${slice.id}', 'selected', this.checked)" /> selected</label>
+                <select name="${slice.id}__kind" onclick="event.stopPropagation()" onchange="updateSlice('${slice.id}', 'kind', this.value, ${ref.pageIndex})">${kindOptions.map(kind => `<option value="${kind}" ${normalizeKind(slice.kind) === kind ? "selected" : ""}>${kind}</option>`).join("")}</select>
+                <label><input name="${slice.id}__selected" type="checkbox" ${slice.selected !== false ? "checked" : ""} onclick="event.stopPropagation()" onchange="updateSlice('${slice.id}', 'selected', this.checked, ${ref.pageIndex})" /> selected</label>
               </div>
               <div class="tagline">
-                <input name="${slice.id}__tags" value="${escapeHtml((slice.tags || []).join(','))}" placeholder="tags" onchange="updateTags('${slice.id}', this.value)" />
-                <select name="${slice.id}__reviewState" onchange="updateSlice('${slice.id}', 'reviewState', this.value)">
+                <input name="${slice.id}__tags" value="${escapeHtml((slice.tags || []).join(','))}" placeholder="tags" onclick="event.stopPropagation()" onchange="updateTags('${slice.id}', this.value, ${ref.pageIndex})" />
+                <select name="${slice.id}__reviewState" onclick="event.stopPropagation()" onchange="updateSlice('${slice.id}', 'reviewState', this.value, ${ref.pageIndex})">
                   ${["confirmed", "review", "ignored"].map(value => `<option value="${value}" ${(slice.reviewState || "confirmed") === value ? "selected" : ""}>${value}</option>`).join("")}
                 </select>
               </div>
             </div>
           </div>
           <div class="row">
-            <input name="${slice.id}__x" type="number" value="${slice.bbox.x}" onchange="updateBBox('${slice.id}', 'x', this.value)" />
-            <input name="${slice.id}__y" type="number" value="${slice.bbox.y}" onchange="updateBBox('${slice.id}', 'y', this.value)" />
-            <input name="${slice.id}__width" type="number" value="${slice.bbox.width}" onchange="updateBBox('${slice.id}', 'width', this.value)" />
-            <input name="${slice.id}__height" type="number" value="${slice.bbox.height}" onchange="updateBBox('${slice.id}', 'height', this.value)" />
+            <input name="${slice.id}__x" type="number" value="${slice.bbox.x}" onclick="event.stopPropagation()" onchange="updateBBox('${slice.id}', 'x', this.value, ${ref.pageIndex})" />
+            <input name="${slice.id}__y" type="number" value="${slice.bbox.y}" onclick="event.stopPropagation()" onchange="updateBBox('${slice.id}', 'y', this.value, ${ref.pageIndex})" />
+            <input name="${slice.id}__width" type="number" value="${slice.bbox.width}" onclick="event.stopPropagation()" onchange="updateBBox('${slice.id}', 'width', this.value, ${ref.pageIndex})" />
+            <input name="${slice.id}__height" type="number" value="${slice.bbox.height}" onclick="event.stopPropagation()" onchange="updateBBox('${slice.id}', 'height', this.value, ${ref.pageIndex})" />
           </div>
-          <div class="muted">${slice.source || "manual"} ${slice.candidateIds?.length ? "/ candidate" : ""} / ${slice.bbox.width}x${slice.bbox.height}</div>
-        </div>`).join("");
+          <div class="muted">${ref.page.pageId} / ${slice.source || "manual"} ${slice.candidateIds?.length ? "/ candidate" : ""} / ${slice.bbox.width}x${slice.bbox.height}</div>
+        </div>`;
+      }).join("");
       document.getElementById("candidateSelectionCount").textContent = `(${state.selectedCandidateIds.size})`;
       renderSliceThumbnails();
     }
-    function visibleAssetSlices() {
+    function totalSelectedSliceCount() {
+      return state.manual.pages.reduce((count, page) => count + page.slices.filter(item => item.selected !== false).length, 0);
+    }
+    function visibleAssetRefs() {
       const needle = state.assetSearch.trim().toLowerCase();
-      return currentManualPage().slices.filter(slice => {
+      const pageRefs = state.manual.pages.flatMap((page, pageIndex) => (state.assetAllPages || pageIndex === state.pageIndex) ? [{ page, pageIndex }] : []);
+      return pageRefs.flatMap(({ page, pageIndex }) => page.slices.map(slice => ({ page, pageIndex, slice }))).filter(({ slice }) => {
         if (!needle) return true;
         return [slice.name, slice.displayName, slice.kind, ...(slice.tags || [])].some(value => String(value || "").toLowerCase().includes(needle));
       });
     }
+    function visibleAssetSlices() {
+      return visibleAssetRefs().map(ref => ref.slice);
+    }
     function renderSliceThumbnails() {
-      const image = state.pageImages[currentCandidatePage().pageId];
-      if (!image || !image.complete) return;
       for (const thumb of document.querySelectorAll("[data-thumb-slice-id]")) {
-        const slice = currentManualPage().slices.find(item => item.id === thumb.dataset.thumbSliceId);
-        if (!slice) continue;
+        const ref = findSliceRef(thumb.dataset.thumbSliceId);
+        if (!ref) continue;
+        const image = state.pageImages[ref.page.pageId];
+        if (!image || !image.complete) {
+          imageForPage(ref.page.pageId).then(() => renderSliceThumbnails()).catch(() => {});
+          continue;
+        }
+        drawSliceThumbnail(thumb, image, ref.slice);
+      }
+    }
+    function drawSliceThumbnail(thumb, image, slice) {
         const tctx = thumb.getContext("2d");
         tctx.clearRect(0, 0, thumb.width, thumb.height);
         const bbox = slice.bbox;
@@ -1090,9 +1132,17 @@ REVIEW_HTML = """<!doctype html>
         tctx.fillStyle = "#020617";
         tctx.fillRect(0, 0, thumb.width, thumb.height);
         tctx.drawImage(image, bbox.x, bbox.y, bbox.width, bbox.height, x, y, w, h);
-      }
     }
-    function focusSlice(id) {
+    function findSliceRef(id) {
+      for (let pageIndex = 0; pageIndex < state.manual.pages.length; pageIndex += 1) {
+        const page = state.manual.pages[pageIndex];
+        const slice = page.slices.find(item => item.id === id);
+        if (slice) return { page, pageIndex, slice };
+      }
+      return null;
+    }
+    async function focusSlice(id, pageIndex=state.pageIndex) {
+      if (pageIndex !== state.pageIndex) await loadPage(pageIndex);
       state.activeId = id;
       const slice = activeSlice();
       if (slice) {
@@ -1109,6 +1159,7 @@ REVIEW_HTML = """<!doctype html>
       for (const id of ["showCandidates", "showSelected", "showLabels", "onlyTodoPages", "onlySelectedPages", "onlyDensePages"]) document.getElementById(id).checked = Boolean(state.filters[id]);
       document.getElementById("minConfidence").value = String(state.filters.minConfidence);
       document.getElementById("candidateOpacity").value = String(state.filters.candidateOpacity);
+      document.getElementById("assetAllPages").checked = Boolean(state.assetAllPages);
       for (const input of document.querySelectorAll("[data-kind]")) input.onchange = () => { state.filters.kinds[input.dataset.kind] = input.checked; persistReviewFilters(); renderAll(); };
       for (const input of document.querySelectorAll("[data-source]")) input.onchange = () => { state.filters.sources[input.dataset.source] = input.checked; persistReviewFilters(); renderAll(); };
       for (const input of document.querySelectorAll("[data-tier]")) input.onchange = () => { state.filters.tiers[input.dataset.tier] = input.checked; persistReviewFilters(); renderAll(); };
@@ -1118,24 +1169,27 @@ REVIEW_HTML = """<!doctype html>
       document.getElementById("candidateOpacity").onchange = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; persistReviewFilters(); renderAll(); };
       document.getElementById("candidateOpacity").oninput = event => { state.filters.candidateOpacity = Number(event.target.value) || 0.75; renderAll(); };
       document.getElementById("assetSearch").oninput = event => { state.assetSearch = event.target.value || ""; renderAssets(); };
+      document.getElementById("assetAllPages").onchange = event => { state.assetAllPages = event.target.checked; persistReviewFilters(); renderAssets(); };
     }
-    function updateSlice(id, key, value) {
+    function updateSlice(id, key, value, pageIndex=state.pageIndex) {
       mutateManual(() => {
-        const s = currentManualPage().slices.find(x => x.id === id);
+        const s = state.manual.pages[pageIndex]?.slices.find(x => x.id === id);
         if (s) s[key] = value;
-      });
+      }, state.manual.pages[pageIndex]?.pageId);
     }
-    function updateBBox(id, key, value) {
+    function updateBBox(id, key, value, pageIndex=state.pageIndex) {
       mutateManual(() => {
-        const s = currentManualPage().slices.find(x => x.id === id);
-        if (s) { s.bbox[key] = Math.max(0, Number(value) || 0); s.bbox = clampBox(s.bbox); }
-      });
+        const page = state.manual.pages[pageIndex];
+        const candidatePage = state.candidates.pages[pageIndex];
+        const s = page?.slices.find(x => x.id === id);
+        if (s && candidatePage) { s.bbox[key] = Math.max(0, Number(value) || 0); s.bbox = clampBoxForPage(s.bbox, candidatePage); }
+      }, state.manual.pages[pageIndex]?.pageId);
     }
-    function updateTags(id, value) {
+    function updateTags(id, value, pageIndex=state.pageIndex) {
       mutateManual(() => {
-        const s = currentManualPage().slices.find(x => x.id === id);
+        const s = state.manual.pages[pageIndex]?.slices.find(x => x.id === id);
         if (s) s.tags = String(value || "").split(",").map(item => safeName(item)).filter(Boolean);
-      });
+      }, state.manual.pages[pageIndex]?.pageId);
     }
     function safeName(value) {
       return String(value || "").replace(/[^0-9A-Za-z_-]+/g, "_").replace(/^_+|_+$/g, "") || "slice";
@@ -1144,22 +1198,32 @@ REVIEW_HTML = """<!doctype html>
       const prefix = prompt("批量名称前缀", "slice");
       if (!prefix) return;
       const base = safeName(prefix);
-      mutateManual(() => {
-        visibleAssetSlices().forEach((slice, index) => {
+      const refs = visibleAssetRefs();
+      mutateManualForPages(refs.map(ref => ref.page.pageId), () => {
+        refs.forEach(({ slice }, index) => {
           const name = `${base}_${String(index + 1).padStart(4, "0")}`;
-          slice.name = name;
           slice.displayName = name;
         });
       });
+      setStatus(`renamed ${refs.length} display name(s)`);
     }
     function bulkDeleteVisibleSlices() {
-      const ids = new Set(visibleAssetSlices().map(slice => slice.id));
+      const refs = visibleAssetRefs();
+      const idsByPage = new Map();
+      for (const ref of refs) {
+        if (!idsByPage.has(ref.page.pageId)) idsByPage.set(ref.page.pageId, new Set());
+        idsByPage.get(ref.page.pageId).add(ref.slice.id);
+      }
+      const ids = new Set(refs.map(ref => ref.slice.id));
       if (!ids.size || !confirm(`删除当前可见的 ${ids.size} 个 selected assets？`)) return;
-      mutateManual(() => {
-        const page = currentManualPage();
-        page.slices = page.slices.filter(slice => !ids.has(slice.id));
+      mutateManualForPages([...idsByPage.keys()], () => {
+        for (const page of state.manual.pages) {
+          const pageIds = idsByPage.get(page.pageId);
+          if (pageIds) page.slices = page.slices.filter(slice => !pageIds.has(slice.id));
+        }
         state.activeId = null;
       });
+      setStatus(`deleted ${ids.size} visible asset(s)`);
     }
     function updateHud(point=null) {
       const slice = activeSlice();

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from io import BytesIO
 from pathlib import Path
 from time import sleep
@@ -180,6 +182,11 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert "previewExport" in review.text
     assert "hydrateReviewFilters" in review.text
     assert "syncExportLinks" in review.text
+    assert "assetAllPages" in review.text
+    assert "visibleAssetRefs" in review.text
+    assert "mutateManualForPages" in review.text
+    assert "clampBoxForPage" in review.text
+    assert "dashed" in review.text
 
     project_response = client.get(f"/api/pencil/slice-projects/{project_id}")
     assert project_response.status_code == 200
@@ -278,6 +285,26 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     selected_download = client.get(f"/api/pencil/slice-projects/{project_id}/selected-assets.zip")
     assert selected_download.status_code == 200
     assert selected_download.content[:2] == b"PK"
+
+
+def test_slice_project_review_page_embedded_javascript_is_parseable() -> None:
+    node = shutil.which("node")
+    if node is None:
+        return
+    from app.routes.slice_project_pages import REVIEW_HTML
+
+    script_start = REVIEW_HTML.index("<script>") + len("<script>")
+    script_end = REVIEW_HTML.index("</script>", script_start)
+    script = REVIEW_HTML[script_start:script_end]
+    result = subprocess.run(
+        [node, "--check", "-"],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_slice_project_workspace_lists_renames_clones_and_deletes(tmp_path: Path) -> None:
