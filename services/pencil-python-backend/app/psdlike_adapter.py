@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .container_foreground_audit import build_repeated_local_groups, read_ocr_blocks
+
 
 class PSDLikeAdapterError(RuntimeError):
     pass
@@ -36,7 +38,20 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
     primitives: list[dict[str, Any]] = []
     replay_layers: list[dict[str, Any]] = []
     source_layers = list(layer_stack.get("layers") or [])
-    for index, layer in enumerate(sorted(source_layers, key=lambda item: item.get("z", 0)), start=1):
+    synthetic_text_layers = build_synthetic_foreground_text_layers(
+        psdlike_dir=psdlike_dir,
+        source_layers=source_layers,
+        canvas_width=width,
+        canvas_height=height,
+    )
+    synthetic_image_layers = build_synthetic_foreground_image_layers(
+        psdlike_dir=psdlike_dir,
+        source_layers=source_layers,
+        canvas_width=width,
+        canvas_height=height,
+    )
+    adapted_layers = sorted([*source_layers, *synthetic_image_layers, *synthetic_text_layers], key=lambda item: item.get("z", 0))
+    for index, layer in enumerate(adapted_layers, start=1):
         layer_type = str(layer.get("type") or "")
         if layer_type == "raster":
             primitive, replay = adapt_raster_layer(
@@ -76,6 +91,8 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
             "psdlikeRasterLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "raster"),
             "psdlikeShapeLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "shape"),
             "psdlikeTextLayerCount": sum(1 for item in layer_stack.get("layers") or [] if item.get("type") == "text"),
+            "psdlikeSyntheticForegroundTextCount": len(synthetic_text_layers),
+            "psdlikeSyntheticForegroundImageCount": len(synthetic_image_layers),
             "hybridFallbackLayerCount": source_diagnostics.get("hybridFallbackLayerCount", 0),
             "hybridFallbackPolicy": source_diagnostics.get("hybridFallbackPolicy"),
         },
@@ -99,6 +116,598 @@ def adapt_psdlike_to_pencil_evidence(psdlike_dir: Path, output_dir: Path) -> Pat
     write_json(output_dir / "m29-pencil-replay.v1.json", replay)
     copy_psdlike_debug(psdlike_dir, output_dir / "psdlike_debug")
     return output_dir
+
+
+def build_synthetic_foreground_image_layers(
+    *,
+    psdlike_dir: Path,
+    source_layers: list[dict[str, Any]],
+    canvas_width: int,
+    canvas_height: int,
+) -> list[dict[str, Any]]:
+    source_path = psdlike_dir / "source.png"
+    if not source_path.exists():
+        source_path = psdlike_dir / "input.png"
+    if not source_path.exists():
+        return []
+
+    raw_blocks = read_ocr_blocks(psdlike_dir / "input.ocr_blocks.v1.json")
+    assets_dir = psdlike_dir / "assets"
+    assets_dir.mkdir(exist_ok=True)
+
+    existing_boxes = [
+        normalize_bbox(layer.get("bbox") or {})
+        for layer in source_layers
+        if layer.get("type") in {"raster", "shape"}
+    ]
+    selected: list[dict[str, Any]] = []
+    selected_boxes: list[dict[str, int]] = []
+    max_z = max((int(layer.get("z") or 0) for layer in source_layers), default=0)
+    canvas_area = max(1, canvas_width * canvas_height)
+
+    with Image.open(source_path) as image:
+        source = image.convert("RGBA")
+        for container in source_layers:
+            if not is_texture_foreground_container(container, canvas_width, canvas_height):
+                continue
+            container_bbox = normalize_bbox(container.get("bbox") or {})
+            boxes = repeated_texture_item_boxes(source, container_bbox, canvas_width, canvas_height)
+            for box in boxes:
+                if not is_valid_synthetic_image_box(
+                    box=box,
+                    container_bbox=container_bbox,
+                    existing_boxes=existing_boxes,
+                    selected_boxes=selected_boxes,
+                    raw_blocks=raw_blocks,
+                    canvas_area=canvas_area,
+                ):
+                    continue
+                selected_boxes.append(box)
+                asset_name = f"foreground_release_{len(selected_boxes):04d}.png"
+                source.crop((box["x"], box["y"], box["x"] + box["width"], box["y"] + box["height"])).save(
+                    assets_dir / asset_name
+                )
+                member_layers = [
+                    str(layer.get("id"))
+                    for layer in source_layers
+                    if layer is not container and ioa_float(normalize_bbox(layer.get("bbox") or {}), box) >= 0.45
+                ]
+                member_ocr = [
+                    block["id"]
+                    for block in raw_blocks
+                    if ioa_float(block["bbox"], box) >= 0.45
+                ]
+                selected.append(
+                    {
+                        "id": f"foreground_release_{len(selected_boxes):04d}",
+                        "type": "raster",
+                        "bbox": box,
+                        "z": int(container.get("z") or max_z) + 1 + len(selected_boxes),
+                        "asset": f"assets/{asset_name}",
+                        "scores": foreground_box_scores(source, box),
+                        "reason": "container_foreground_ownership_repair",
+                        "syntheticForeground": True,
+                        "ownershipRepair": {
+                            "policy": "container_foreground_ownership_repair.v1",
+                            "reason": "repeated_local_foreground_image_item",
+                            "containerLayerId": container.get("id"),
+                            "containerLayerType": container.get("type"),
+                            "containerReason": container.get("reason"),
+                            "containerBBox": container_bbox,
+                            "sourceLayerIds": member_layers,
+                            "ocrBlockIds": member_ocr,
+                            "source": "source_pixel_repeated_local_item",
+                        },
+                    }
+                )
+    return selected
+
+
+def is_texture_foreground_container(layer: dict[str, Any], canvas_width: int, canvas_height: int) -> bool:
+    if layer.get("type") != "raster":
+        return False
+    bbox = normalize_bbox(layer.get("bbox") or {})
+    area = bbox["width"] * bbox["height"]
+    canvas_area = max(1, canvas_width * canvas_height)
+    if area < canvas_area * 0.025 or area > canvas_area * 0.42:
+        return False
+    if bbox["width"] < 180 or bbox["height"] < 100:
+        return False
+    reason = str(layer.get("reason") or "")
+    return any(token in reason for token in ("foreground_object", "high_texture", "source_raster", "fallback_object"))
+
+
+def repeated_texture_item_boxes(
+    source: Image.Image,
+    container_bbox: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> list[dict[str, int]]:
+    tile = 8
+    crop = source.crop(
+        (
+            container_bbox["x"],
+            container_bbox["y"],
+            container_bbox["x"] + container_bbox["width"],
+            container_bbox["y"] + container_bbox["height"],
+        )
+    ).convert("RGB")
+    scores = texture_tile_scores(crop, tile)
+    if scores.size == 0:
+        return []
+
+    all_groups: list[list[dict[str, int]]] = []
+    for percentile in (60.0, 65.0, 70.0):
+        groups = texture_groups_for_percentile(
+            scores=scores,
+            percentile=percentile,
+            tile=tile,
+            container_bbox=container_bbox,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+        )
+        all_groups.extend(groups)
+
+    candidates: list[dict[str, int]] = []
+    for group in sorted(all_groups, key=lambda value: (-len(value), group_area(value))):
+        if not has_regular_box_spacing(group):
+            continue
+        for box in group:
+            expanded = expand_bbox(box, max(4, tile), canvas_width, canvas_height)
+            if any(iou(expanded, existing) >= 0.72 for existing in candidates):
+                continue
+            candidates.append(expanded)
+    return candidates
+
+
+def texture_tile_scores(crop: Image.Image, tile: int) -> np.ndarray:
+    rgb = np.asarray(crop.convert("RGB"), dtype=np.float32)
+    gray = np.asarray(crop.convert("L"), dtype=np.float32)
+    tile_rows = gray.shape[0] // tile
+    tile_cols = gray.shape[1] // tile
+    if tile_rows <= 0 or tile_cols <= 0:
+        return np.empty((0, 0), dtype=np.float32)
+
+    grad_x = np.zeros_like(gray)
+    grad_y = np.zeros_like(gray)
+    grad_x[:, 1:] = np.abs(np.diff(gray, axis=1))
+    grad_y[1:, :] = np.abs(np.diff(gray, axis=0))
+    gradient = grad_x + grad_y
+
+    scores = np.zeros((tile_rows, tile_cols), dtype=np.float32)
+    for row in range(tile_rows):
+        for col in range(tile_cols):
+            sl = (slice(row * tile, (row + 1) * tile), slice(col * tile, (col + 1) * tile))
+            rgb_tile = rgb[sl]
+            gradient_tile = gradient[sl]
+            scores[row, col] = float(
+                rgb_tile.std(axis=(0, 1)).mean()
+                + gradient_tile.mean() * 0.65
+                + np.percentile(gradient_tile, 90) * 0.18
+            )
+    return scores
+
+
+def texture_groups_for_percentile(
+    *,
+    scores: np.ndarray,
+    percentile: float,
+    tile: int,
+    container_bbox: dict[str, int],
+    canvas_width: int,
+    canvas_height: int,
+) -> list[list[dict[str, int]]]:
+    active = scores > max(18.0, float(np.percentile(scores, percentile)))
+    if not active.any():
+        return []
+
+    row_counts = active.sum(axis=1)
+    row_threshold = max(4, int(active.shape[1] * 0.12))
+    bands = contiguous_runs([int(index) for index in np.where(row_counts >= row_threshold)[0]])
+    groups: list[list[dict[str, int]]] = []
+    for start_row, end_row in bands:
+        row_count = end_row - start_row + 1
+        band_height = row_count * tile
+        if not valid_texture_band_height(band_height, container_bbox, canvas_height):
+            continue
+        band = active[start_row : end_row + 1]
+        col_counts = band.sum(axis=0)
+        col_threshold = max(2, int(row_count * 0.25))
+        col_runs = contiguous_runs([int(index) for index in np.where(col_counts >= col_threshold)[0]])
+        boxes = [
+            {
+                "x": container_bbox["x"] + start_col * tile,
+                "y": container_bbox["y"] + start_row * tile,
+                "width": (end_col - start_col + 1) * tile,
+                "height": band_height,
+            }
+            for start_col, end_col in col_runs
+        ]
+        boxes = [box for box in boxes if valid_texture_item_aspect(box, canvas_width, canvas_height)]
+        if len(boxes) >= 3:
+            groups.append(boxes)
+    return groups
+
+
+def contiguous_runs(values: list[int]) -> list[tuple[int, int]]:
+    if not values:
+        return []
+    runs: list[tuple[int, int]] = []
+    start = previous = values[0]
+    for value in values[1:]:
+        if value <= previous + 1:
+            previous = value
+            continue
+        runs.append((start, previous))
+        start = previous = value
+    runs.append((start, previous))
+    return runs
+
+
+def valid_texture_band_height(band_height: int, container_bbox: dict[str, int], canvas_height: int) -> bool:
+    if band_height < 48:
+        return False
+    if band_height > max(240, int(canvas_height * 0.22)):
+        return False
+    return band_height <= max(72, int(container_bbox["height"] * 0.72))
+
+
+def valid_texture_item_aspect(box: dict[str, int], canvas_width: int, canvas_height: int) -> bool:
+    width = box["width"]
+    height = box["height"]
+    if width < 48 or height < 48:
+        return False
+    if width > max(160, canvas_width * 0.55) or height > max(128, canvas_height * 0.28):
+        return False
+    aspect = width / max(1, height)
+    return 0.45 <= aspect <= 2.65
+
+
+def has_regular_box_spacing(boxes: list[dict[str, int]]) -> bool:
+    if len(boxes) < 3:
+        return False
+    widths = [box["width"] for box in boxes]
+    heights = [box["height"] for box in boxes]
+    if max(widths) > max(1, min(widths)) * 2.15:
+        return False
+    if max(heights) > max(1, min(heights)) * 1.45:
+        return False
+    centers = sorted(center_float(box, "x") for box in boxes)
+    gaps = [b - a for a, b in zip(centers, centers[1:]) if b > a]
+    if len(gaps) < 2:
+        return False
+    median = sorted(gaps)[len(gaps) // 2]
+    if median <= 0:
+        return False
+    return max(abs(gap - median) for gap in gaps) <= max(24.0, median * 0.36)
+
+
+def group_area(boxes: list[dict[str, int]]) -> int:
+    return sum(box["width"] * box["height"] for box in boxes)
+
+
+def is_valid_synthetic_image_box(
+    *,
+    box: dict[str, int],
+    container_bbox: dict[str, int],
+    existing_boxes: list[dict[str, int]],
+    selected_boxes: list[dict[str, int]],
+    raw_blocks: list[dict[str, Any]],
+    canvas_area: int,
+) -> bool:
+    box_area = box["width"] * box["height"]
+    if box_area < 2200 or box_area > canvas_area * 0.11:
+        return False
+    if ioa_float(box, container_bbox) < 0.92:
+        return False
+    if box_area > container_bbox["width"] * container_bbox["height"] * 0.68:
+        return False
+    if any(iou(box, selected) >= 0.58 for selected in selected_boxes):
+        return False
+    if any(iou(box, existing) >= 0.82 and (existing["width"] * existing["height"]) <= box_area * 1.25 for existing in existing_boxes):
+        return False
+    text_blocks = [block for block in raw_blocks if ioa_float(block["bbox"], box) >= 0.58]
+    text_area = sum(area_float(block["bbox"]) for block in text_blocks)
+    if len(text_blocks) >= 3 and text_area / max(1.0, float(box_area)) >= 0.10:
+        return False
+    return True
+
+
+def foreground_box_scores(source: Image.Image, box: dict[str, int]) -> dict[str, float]:
+    crop = source.crop((box["x"], box["y"], box["x"] + box["width"], box["y"] + box["height"])).convert("RGB")
+    rgb = np.asarray(crop, dtype=np.float32)
+    gray = np.asarray(crop.convert("L"), dtype=np.float32)
+    if rgb.size == 0:
+        return {"texture": 0.0, "edge": 0.0, "unique": 0.0}
+    grad_x = np.zeros_like(gray)
+    grad_y = np.zeros_like(gray)
+    grad_x[:, 1:] = np.abs(np.diff(gray, axis=1))
+    grad_y[1:, :] = np.abs(np.diff(gray, axis=0))
+    return {
+        "texture": round(float(rgb.std(axis=(0, 1)).mean() / 128.0), 4),
+        "edge": round(float((grad_x + grad_y).mean() / 128.0), 4),
+        "unique": round(float(len(np.unique(rgb.reshape(-1, 3), axis=0)) / max(1, rgb.shape[0] * rgb.shape[1])), 4),
+    }
+
+
+def build_synthetic_foreground_text_layers(
+    *,
+    psdlike_dir: Path,
+    source_layers: list[dict[str, Any]],
+    canvas_width: int,
+    canvas_height: int,
+) -> list[dict[str, Any]]:
+    raw_blocks = read_ocr_blocks(psdlike_dir / "input.ocr_blocks.v1.json")
+    if not raw_blocks:
+        return []
+
+    emitted_ids = {
+        str(layer.get("id"))
+        for layer in source_layers
+        if layer.get("type") == "text" and layer.get("id")
+    }
+    missing_blocks = [
+        block
+        for block in raw_blocks
+        if block["id"] not in emitted_ids and is_safe_missing_ocr_block(block, canvas_width, canvas_height)
+    ]
+    if not missing_blocks:
+        return []
+
+    canvas = {"width": canvas_width, "height": canvas_height}
+    selected: dict[str, dict[str, Any]] = {}
+    containers = [
+        layer
+        for layer in source_layers
+        if is_foreground_release_container(layer, canvas_width, canvas_height)
+    ]
+    for container in containers:
+        container_bbox = normalize_bbox(container.get("bbox") or {})
+        contained = [
+            block
+            for block in missing_blocks
+            if ioa_float(block["bbox"], container_bbox) >= 0.70
+        ]
+        if not contained:
+            continue
+
+        repeated_groups = build_repeated_local_groups(
+            contained,
+            {"id": container.get("id"), "bbox": to_float_bbox(container_bbox)},
+            canvas,
+        )
+        for group in repeated_groups:
+            for member in group.get("members") or []:
+                block = next((item for item in contained if item["id"] == member.get("ocrId")), None)
+                if block is not None:
+                    select_missing_text_block(
+                        selected,
+                        block,
+                        container,
+                        reason="repeated_local_foreground_item",
+                        group=group,
+                    )
+            for block in contained:
+                if related_to_repeated_foreground_group(block, group, container_bbox):
+                    select_missing_text_block(
+                        selected,
+                        block,
+                        container,
+                        reason="repeated_local_foreground_related_text",
+                        group=group,
+                    )
+
+        for block in contained:
+            if is_simple_control_foreground_text(block, container, canvas_width, canvas_height):
+                select_missing_text_block(
+                    selected,
+                    block,
+                    container,
+                    reason="simple_control_foreground_text",
+                    group=None,
+                )
+
+    if not selected:
+        return []
+
+    max_z = max((int(layer.get("z") or 0) for layer in source_layers), default=0)
+    synthetic_layers: list[dict[str, Any]] = []
+    for offset, block_id in enumerate(sorted(selected), start=1):
+        block = selected[block_id]
+        bbox = normalize_bbox(block["bbox"])
+        synthetic_layers.append(
+            {
+                "id": block["id"],
+                "type": "text",
+                "bbox": bbox,
+                "z": max_z + offset,
+                "text": block["text"],
+                "style": {},
+                "confidence": block.get("confidence"),
+                "reason": "container_foreground_ownership_repair",
+                "syntheticForeground": True,
+                "ownershipRepair": block["ownershipRepair"],
+            }
+        )
+    return synthetic_layers
+
+
+def is_safe_missing_ocr_block(block: dict[str, Any], canvas_width: int, canvas_height: int) -> bool:
+    text = str(block.get("text") or "").strip()
+    if not text:
+        return False
+    bbox = block["bbox"]
+    area = area_float(bbox)
+    canvas_area = max(1.0, float(canvas_width) * float(canvas_height))
+    if area <= 12 or area > canvas_area * 0.035:
+        return False
+    if float(bbox.get("width") or 0) > canvas_width * 0.72:
+        return False
+    if float(bbox.get("height") or 0) > max(96.0, canvas_height * 0.085):
+        return False
+    return True
+
+
+def is_foreground_release_container(layer: dict[str, Any], canvas_width: int, canvas_height: int) -> bool:
+    layer_type = str(layer.get("type") or "")
+    if layer_type not in {"raster", "shape"}:
+        return False
+    bbox = normalize_bbox(layer.get("bbox") or {})
+    area = float(bbox["width"] * bbox["height"])
+    canvas_area = max(1.0, float(canvas_width) * float(canvas_height))
+    if area < canvas_area * 0.008 or area > canvas_area * 0.68:
+        return False
+    if bbox["width"] < 40 or bbox["height"] < 28:
+        return False
+    reason = str(layer.get("reason") or "")
+    if layer_type == "shape":
+        return any(token in reason for token in ("surface", "solid", "background"))
+    return any(token in reason for token in ("foreground_object", "high_texture", "source_raster", "fallback_object"))
+
+
+def select_missing_text_block(
+    selected: dict[str, dict[str, Any]],
+    block: dict[str, Any],
+    container: dict[str, Any],
+    *,
+    reason: str,
+    group: dict[str, Any] | None,
+) -> None:
+    existing = selected.get(block["id"])
+    if existing is not None and release_reason_rank(existing["ownershipRepair"]["reason"]) >= release_reason_rank(reason):
+        return
+    selected[block["id"]] = {
+        **block,
+        "ownershipRepair": {
+            "policy": "container_foreground_ownership_repair.v1",
+            "reason": reason,
+            "containerLayerId": container.get("id"),
+            "containerLayerType": container.get("type"),
+            "containerReason": container.get("reason"),
+            "containerBBox": normalize_bbox(container.get("bbox") or {}),
+            "groupId": group.get("id") if group else None,
+            "groupPolicy": group.get("policy") if group else None,
+            "source": "raw_ocr_block_missing_from_layer_stack",
+        },
+    }
+
+
+def release_reason_rank(reason: str) -> int:
+    return {
+        "repeated_local_foreground_item": 30,
+        "repeated_local_foreground_related_text": 20,
+        "simple_control_foreground_text": 10,
+    }.get(reason, 0)
+
+
+def related_to_repeated_foreground_group(
+    block: dict[str, Any],
+    group: dict[str, Any],
+    container_bbox: dict[str, int],
+) -> bool:
+    members = group.get("members") or []
+    if not members:
+        return False
+    if any(block["id"] == member.get("ocrId") for member in members):
+        return True
+
+    axis = str(group.get("axis") or "x")
+    centers = sorted(center_float(member["bbox"], axis) for member in members)
+    gaps = [b - a for a, b in zip(centers, centers[1:]) if b > a]
+    median_gap = sorted(gaps)[len(gaps) // 2] if gaps else max(float(container_bbox["width"]), float(container_bbox["height"]))
+    block_main = center_float(block["bbox"], axis)
+    member_widths = [float(member["bbox"].get("width") or 0) for member in members]
+    member_heights = [float(member["bbox"].get("height") or 0) for member in members]
+    main_size = max([float(block["bbox"].get("width" if axis == "x" else "height") or 0), *member_widths, *member_heights])
+    main_threshold = max(42.0, min(median_gap * 0.42, main_size * 2.2))
+    if min(abs(block_main - center) for center in centers) > main_threshold:
+        return False
+
+    group_bbox = group.get("bbox") or {}
+    cross = "y" if axis == "x" else "x"
+    block_cross = center_float(block["bbox"], cross)
+    group_cross = center_float(group_bbox, cross)
+    group_cross_size = float(group_bbox.get("height" if cross == "y" else "width") or 0)
+    block_cross_size = float(block["bbox"].get("height" if cross == "y" else "width") or 0)
+    container_cross_size = float(container_bbox["height" if cross == "y" else "width"])
+    cross_threshold = min(
+        max(72.0, group_cross_size * 2.6, block_cross_size * 2.8),
+        max(72.0, container_cross_size * 0.38),
+    )
+    return abs(block_cross - group_cross) <= cross_threshold
+
+
+def is_simple_control_foreground_text(
+    block: dict[str, Any],
+    container: dict[str, Any],
+    canvas_width: int,
+    canvas_height: int,
+) -> bool:
+    bbox = block["bbox"]
+    container_bbox = normalize_bbox(container.get("bbox") or {})
+    if ioa_float(bbox, container_bbox) < 0.82:
+        return False
+    width = float(container_bbox["width"])
+    height = float(container_bbox["height"])
+    aspect = width / max(1.0, height)
+    short_side = float(min(canvas_width, canvas_height))
+    if aspect < 2.2 or height > max(96.0, short_side * 0.16):
+        return False
+    text_area_ratio = area_float(bbox) / max(1.0, width * height)
+    if text_area_ratio < 0.045 or text_area_ratio > 0.62:
+        return False
+    reason = str(container.get("reason") or "")
+    layer_type = str(container.get("type") or "")
+    if layer_type == "raster" and "foreground_object" in reason:
+        return False
+    center_x = center_float(bbox, "x")
+    center_y = center_float(bbox, "y")
+    container_center_x = container_bbox["x"] + width / 2.0
+    container_center_y = container_bbox["y"] + height / 2.0
+    return (
+        abs(center_x - container_center_x) <= width * 0.32
+        and abs(center_y - container_center_y) <= height * 0.34
+    )
+
+
+def to_float_bbox(bbox: dict[str, int]) -> dict[str, float]:
+    return {
+        "x": float(bbox["x"]),
+        "y": float(bbox["y"]),
+        "width": float(bbox["width"]),
+        "height": float(bbox["height"]),
+    }
+
+
+def area_float(bbox: dict[str, Any]) -> float:
+    return max(0.0, float(bbox.get("width") or 0)) * max(0.0, float(bbox.get("height") or 0))
+
+
+def intersection_area_float(a: dict[str, Any], b: dict[str, Any]) -> float:
+    ax1 = float(a.get("x") or 0)
+    ay1 = float(a.get("y") or 0)
+    ax2 = ax1 + float(a.get("width") or 0)
+    ay2 = ay1 + float(a.get("height") or 0)
+    bx1 = float(b.get("x") or 0)
+    by1 = float(b.get("y") or 0)
+    bx2 = bx1 + float(b.get("width") or 0)
+    by2 = by1 + float(b.get("height") or 0)
+    return max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
+
+
+def ioa_float(inner: dict[str, Any], outer: dict[str, Any]) -> float:
+    return intersection_area_float(inner, outer) / max(1.0, area_float(inner))
+
+
+def iou(a: dict[str, Any], b: dict[str, Any]) -> float:
+    overlap = intersection_area_float(a, b)
+    if overlap <= 0:
+        return 0.0
+    return overlap / max(1.0, area_float(a) + area_float(b) - overlap)
+
+
+def center_float(bbox: dict[str, Any], axis: str) -> float:
+    return float(bbox.get(axis) or 0) + float(bbox.get("width" if axis == "x" else "height") or 0) / 2.0
 
 
 def ensure_source_png(psdlike_dir: Path, output_dir: Path) -> Path:
@@ -155,6 +764,11 @@ def adapt_raster_layer(
         source_layers=source_layers,
     )
     compile_hints: dict[str, Any] = {}
+    if layer.get("syntheticForeground"):
+        compile_hints["foregroundObjectRelease"] = {
+            **(layer.get("ownershipRepair") or {}),
+            "layerReason": layer.get("reason"),
+        }
     if repair is None:
         shutil.copy2(source_asset, output_dir / crop_ref)
     else:
@@ -177,6 +791,7 @@ def adapt_raster_layer(
             "kind": "psdlike_raster",
             "sourceLayerId": layer.get("id"),
             "reason": layer.get("reason"),
+            "syntheticForeground": bool(layer.get("syntheticForeground")),
         },
         "measurements": layer.get("scores") or {},
         "compileHints": compile_hints,
@@ -489,6 +1104,12 @@ def adapt_text_layer(
         ).save(output_dir / crop_ref)
     write_rect_mask(output_dir / mask_ref, canvas_width, canvas_height, bbox)
     text = str(layer.get("text") or "")
+    compile_hints: dict[str, Any] = {}
+    if layer.get("syntheticForeground"):
+        compile_hints["foregroundObjectRelease"] = {
+            **(layer.get("ownershipRepair") or {}),
+            "layerReason": layer.get("reason"),
+        }
     primitive = {
         "id": primitive_id,
         "primitiveType": "text_region",
@@ -499,11 +1120,12 @@ def adapt_text_layer(
             "kind": "ocr",
             "ocrBlockId": layer.get("id"),
             "text": text,
+            "reason": layer.get("reason"),
             "psdlikeStyle": layer.get("style") or {},
             "confidence": layer.get("confidence"),
         },
         "measurements": layer.get("textFit") or {},
-        "compileHints": {},
+        "compileHints": compile_hints,
     }
     replay = base_replay_layer(layer, primitive_id, "text_region", bbox, crop_ref, mask_ref)
     return primitive, replay
@@ -517,7 +1139,7 @@ def base_replay_layer(
     crop_ref: str,
     mask_ref: str,
 ) -> dict[str, Any]:
-    return {
+    replay = {
         "id": primitive_id,
         "sourcePrimitiveId": primitive_id,
         "sourceLayerId": layer.get("id"),
@@ -529,6 +1151,12 @@ def base_replay_layer(
         "editableMode": "raster_crop",
         "z": int(layer.get("z") or 0),
     }
+    if layer.get("syntheticForeground"):
+        replay["foregroundObjectRelease"] = {
+            **(layer.get("ownershipRepair") or {}),
+            "layerReason": layer.get("reason"),
+        }
+    return replay
 
 
 def normalize_bbox(raw: dict[str, Any]) -> dict[str, int]:

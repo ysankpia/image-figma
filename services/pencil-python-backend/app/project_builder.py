@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from PIL import Image
 
 from .config import Settings
+from .container_foreground_audit import write_container_foreground_audit
 from .exporter.single_page import SinglePageExportOptions, export_single_page
 from .hybrid_boundary import build_hybrid_boundary_artifact
 from .jsonio import read_json, write_json
@@ -134,6 +135,7 @@ def build_boundary_artifact(
             )
         artifact_dir = page_work / "psdlike_pencil_evidence"
         adapt_psdlike_to_pencil_evidence(psdlike_dir, artifact_dir)
+        write_container_foreground_audit(artifact_dir)
         return artifact_dir
     if request.boundary_source == "hybrid":
         psdlike_dir = page_work / "psdlike"
@@ -163,6 +165,7 @@ def build_boundary_artifact(
         )
         artifact_dir = page_work / "hybrid_pencil_evidence"
         adapt_psdlike_to_pencil_evidence(hybrid_dir, artifact_dir)
+        write_container_foreground_audit(artifact_dir)
         return artifact_dir
     raise ValueError(f"unsupported boundary source: {request.boundary_source}")
 
@@ -436,6 +439,7 @@ def copy_page_debug(m29_dir: Path, target_dir: Path) -> None:
     for name in (
         "m29_physical_evidence.v1.json",
         "m29-pencil-replay.v1.json",
+        "container_foreground_audit.v1.json",
         "ocr.json",
         "debug_overlay.png",
         "preview_sheet.png",

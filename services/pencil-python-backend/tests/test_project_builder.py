@@ -415,6 +415,57 @@ def test_psdlike_adapter_repairs_truncated_local_raster_from_source(tmp_path: Pa
     assert crop.size == (raster["bbox"]["width"], raster["bbox"]["height"])
 
 
+def test_psdlike_adapter_releases_repeated_foreground_image_items(tmp_path: Path) -> None:
+    psdlike_dir = write_fake_repeated_foreground_items_output(tmp_path / "repeated_foreground_items")
+    evidence_dir = tmp_path / "evidence"
+    adapt_psdlike_to_pencil_evidence(psdlike_dir, evidence_dir)
+
+    evidence = read_json(evidence_dir / "m29_physical_evidence.v1.json")
+    released = [
+        item
+        for item in evidence["primitives"]
+        if item["primitiveType"] == "image_region"
+        and (item.get("compileHints") or {}).get("foregroundObjectRelease")
+    ]
+    assert evidence["diagnostics"]["psdlikeSyntheticForegroundImageCount"] == 3
+    assert len(released) == 3
+    assert all(80 <= item["bbox"]["width"] <= 120 for item in released)
+    centers = sorted(item["bbox"]["x"] + item["bbox"]["width"] / 2 for item in released)
+    gaps = [b - a for a, b in zip(centers, centers[1:])]
+    assert max(gaps) - min(gaps) <= 24
+    assert all((evidence_dir / item["cropRef"]).exists() for item in released)
+    assert all(
+        item["compileHints"]["foregroundObjectRelease"]["reason"] == "repeated_local_foreground_image_item"
+        for item in released
+    )
+
+    export_dir = tmp_path / "single"
+    export_single_page(
+        SinglePageExportOptions(
+            input_dir=evidence_dir,
+            out=export_dir,
+            name="Repeated Foreground Unit",
+            mode="all",
+            include_debug_pen=True,
+        )
+    )
+    clean_manifest = read_json(export_dir / "production" / "manifest.json")
+    visual_manifest = read_json(export_dir / "visual-fidelity" / "manifest.json")
+    clean_released = [
+        item
+        for item in clean_manifest["assets"]
+        if (item.get("foregroundObjectRelease") or {}).get("reason") == "repeated_local_foreground_image_item"
+    ]
+    visual_released = [
+        item
+        for item in visual_manifest["assets"]
+        if (item.get("foregroundObjectRelease") or {}).get("reason") == "repeated_local_foreground_image_item"
+    ]
+    assert len(clean_released) == 3
+    assert visual_released == []
+    assert "source.png" not in json.dumps(read_json(export_dir / "production" / "design.pen"))
+
+
 def test_hybrid_boundary_adds_low_coverage_m29_fallback_below_text(tmp_path: Path) -> None:
     psdlike_dir = write_fake_psdlike_text_only_output(tmp_path / "psdlike_text_only")
     m29_dir = write_fake_hybrid_m29_output(tmp_path / "m29", psdlike_dir / "source.png")
@@ -1150,6 +1201,67 @@ def write_fake_truncated_raster_output(path: Path) -> Path:
             },
         ],
         "diagnostics": {"pageBackground": "#f8fafc"},
+    }
+    (path / "layer_stack.v1.json").write_text(json.dumps(layer_stack), encoding="utf-8")
+    return path
+
+
+def write_fake_repeated_foreground_items_output(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    assets = path / "assets"
+    assets.mkdir()
+    image = Image.new("RGB", (520, 340), "#1f2937")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((48, 72, 472, 244), radius=14, fill="#2b241a")
+    item_boxes = [
+        (72, 96, 160, 216),
+        (216, 96, 304, 216),
+        (360, 96, 448, 216),
+    ]
+    colors = [("#fbbf24", "#2563eb"), ("#60a5fa", "#dc2626"), ("#fb7185", "#14b8a6")]
+    for (x1, y1, x2, y2), (a, b) in zip(item_boxes, colors):
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=8, fill="#f8fafc")
+        for offset in range(0, x2 - x1, 4):
+            color = a if (offset // 4) % 2 == 0 else b
+            draw.line((x1 + offset, y1, x1 + offset, y2), fill=color, width=3)
+        draw.rectangle((x1 + 8, y1 + 8, x2 - 8, y2 - 8), outline="#111827", width=2)
+    image.save(path / "source.png")
+    container_bbox = {"x": 48, "y": 72, "width": 424, "height": 172}
+    image.crop(
+        (
+            container_bbox["x"],
+            container_bbox["y"],
+            container_bbox["x"] + container_bbox["width"],
+            container_bbox["y"] + container_bbox["height"],
+        )
+    ).save(assets / "raster_container.png")
+    layer_stack = {
+        "version": "layer_stack.v1",
+        "sourceImage": str(path / "source.png"),
+        "canvas": {"width": 520, "height": 340},
+        "pageBackground": "#1f2937",
+        "layers": [
+            {
+                "id": "shape_background",
+                "type": "shape",
+                "bbox": {"x": 0, "y": 0, "width": 520, "height": 340},
+                "z": 100,
+                "style": {"fill": "#1f2937"},
+                "scores": {},
+                "reason": "background_surface_band",
+            },
+            {
+                "id": "raster_container",
+                "type": "raster",
+                "bbox": container_bbox,
+                "z": 200,
+                "asset": "assets/raster_container.png",
+                "scores": {},
+                "ownership": {},
+                "reason": "foreground_object_on_surface",
+            },
+        ],
+        "diagnostics": {"pageBackground": "#1f2937"},
     }
     (path / "layer_stack.v1.json").write_text(json.dumps(layer_stack), encoding="utf-8")
     return path

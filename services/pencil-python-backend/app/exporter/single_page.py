@@ -603,6 +603,8 @@ def copy_used_crop_to_visible_assets(
         "visibleAssetSource": "raw_crop",
         "sourceCropRef": source_rel,
     }
+    if isinstance(layer.get("foregroundObjectRelease"), dict):
+        metadata["foregroundObjectRelease"] = layer["foregroundObjectRelease"]
     output_name = f"{primitive_id}.png"
     output_path = paths.production_assets_dir / output_name
 
@@ -622,6 +624,14 @@ def copy_used_crop_to_visible_assets(
         shutil.copy2(source_path, output_path)
 
     return f"./assets/visible/{output_name}", metadata
+
+
+def should_skip_layer_for_mode(layer: dict[str, Any], primitive: Primitive | None, mode: ExportMode) -> bool:
+    if primitive is None or not is_foreground_released_primitive(primitive):
+        return False
+    if primitive.primitive_type == "text_region":
+        return False
+    return mode.name == "visual-fidelity"
 
 
 def source_image_path(paths: ExportPaths) -> Path:
@@ -912,6 +922,25 @@ def can_visual_text_owner(
     return False
 
 
+def is_foreground_released_primitive(primitive: Primitive) -> bool:
+    release = primitive.compile_hints.get("foregroundObjectRelease")
+    return isinstance(release, dict) and release.get("policy") == "container_foreground_ownership_repair.v1"
+
+
+def is_foreground_released_text(primitive: Primitive) -> bool:
+    return primitive.primitive_type == "text_region" and is_foreground_released_primitive(primitive)
+
+
+def is_foreground_released_layer(layer: dict[str, Any], primitives: dict[str, Primitive] | None = None) -> bool:
+    release = layer.get("foregroundObjectRelease")
+    if isinstance(release, dict) and release.get("policy") == "container_foreground_ownership_repair.v1":
+        return True
+    if primitives is not None:
+        primitive = primitives.get(str(layer.get("sourcePrimitiveId") or ""))
+        return primitive is not None and is_foreground_released_primitive(primitive)
+    return False
+
+
 def visual_text_rejection_decision(
     layer: dict[str, Any],
     primitive: Primitive,
@@ -919,6 +948,9 @@ def visual_text_rejection_decision(
     primitives: dict[str, Primitive],
     canvas: dict[str, int],
 ) -> dict[str, Any] | None:
+    if is_foreground_released_text(primitive):
+        return None
+
     owners = [
         candidate
         for candidate in layers
@@ -1187,6 +1219,7 @@ def make_text_node(
             "colorSource": color_source,
             "colorScore": round(float(color_score), 4),
             "z": layer["z"],
+            "foregroundObjectRelease": primitive.compile_hints.get("foregroundObjectRelease"),
         },
     }
 
@@ -1256,6 +1289,8 @@ def component_parent_area_limit(parent: dict[str, Any], canvas_area: float) -> f
 
 def can_component_parent(parent: dict[str, Any], child: dict[str, Any], canvas: dict[str, int]) -> bool:
     if parent is child:
+        return False
+    if is_foreground_released_layer(child):
         return False
     if parent.get("role") == "rect":
         return False
@@ -1592,10 +1627,14 @@ def build_production_document(
         )
 
     for layer in layers:
+        primitive = primitives.get(str(layer.get("sourcePrimitiveId") or ""))
+        if should_skip_layer_for_mode(layer, primitive, mode):
+            continue
         if layer.get("editableMode") == "shape":
             editable_shape_layers.append(layer)
             continue
-        primitive = primitives.get(layer["sourcePrimitiveId"])
+        if primitive is not None and is_foreground_released_primitive(primitive) and "foregroundObjectRelease" not in layer:
+            layer = {**layer, "foregroundObjectRelease": primitive.compile_hints.get("foregroundObjectRelease")}
         if layer.get("role") != "text_region":
             crop_layers.append(layer)
             continue
@@ -1640,7 +1679,12 @@ def build_production_document(
                     if mode.crop_text_regions and mode.visible_ocr_text
                     else ("editable_text" if mode.visible_ocr_text else "crop")
                 ),
-                "reason": "normal_ocr_text" if mode.visible_ocr_text else "visual_fidelity_text_crop",
+                "reason": (
+                    "foreground_object_release_from_container"
+                    if is_foreground_released_text(primitive) and mode.visible_ocr_text
+                    else ("normal_ocr_text" if mode.visible_ocr_text else "visual_fidelity_text_crop")
+                ),
+                "foregroundObjectRelease": primitive.compile_hints.get("foregroundObjectRelease"),
             }
         )
 
