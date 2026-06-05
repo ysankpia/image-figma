@@ -135,3 +135,5 @@
 - [Assisted Slice Project Workspace](144-assisted-slice-project-workspace.md) — `completed`
 - [Assisted Slice Workspace Acceptance Hardening](145-assisted-slice-workspace-acceptance-hardening.md) — `completed`
 - [Pencil Assisted Slice Mainline Cleanup And Handoff](146-pencil-assisted-slice-mainline-cleanup-and-handoff.md) — `completed`
+- [Assisted Slice Workspace P0/P2 Hardening](147-assisted-slice-workspace-p0-p2.md) — `completed`
+- [Assisted Slice Workspace Browser Acceptance](148-assisted-slice-workspace-browser-acceptance.md) — `completed`

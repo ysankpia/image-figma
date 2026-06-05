@@ -717,6 +717,7 @@ def export_manual_slice_project(
     selected_zip = create_selected_assets_zip(paths.output, selected_assets_manifest)
     if include_debug:
         write_manual_debug(paths=paths, manual_slices=manual_slices)
+    preview_manifest = write_export_preview(paths=paths, manual_slices=manual_slices)
     manifest = {
         "schema": "pencil.assisted_slice_project_manifest.v1",
         "projectName": manual_slices.get("projectName") or "Assisted Slice Project",
@@ -726,6 +727,8 @@ def export_manual_slice_project(
         "manualSlices": "manual_slices.v1.json",
         "selectedAssetsZip": "selected-assets.zip",
         "contactSheet": "resource-kit/contact-sheet.png",
+        "exportPreview": "export-preview/manifest.json",
+        "exportPreviewUrl": preview_manifest["previewHtmlUrl"],
         "selectedAssetCount": len(selected_assets_manifest["assets"]),
         "modeResults": mode_results,
         "warnings": [],

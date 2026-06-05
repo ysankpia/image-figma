@@ -248,6 +248,9 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
     assert export_response.status_code == 200
     manifest = export_response.json()["data"]
     assert manifest["selectedAssetCount"] == 1
+    assert manifest["exportPreviewUrl"].endswith("/export-preview/index.html")
+    assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/contact-sheet.png").status_code == 200
+    assert client.get(f"/api/pencil/slice-projects/{project_id}/export-preview/index.html").status_code == 200
 
     download_response = client.get(f"/api/pencil/slice-projects/{project_id}/download.zip")
     assert download_response.status_code == 200
@@ -259,6 +262,8 @@ def test_slice_project_api_review_manual_export_and_download(tmp_path: Path) -> 
         selected_assets_manifest = json.loads(archive.read("resource-kit/manifest.json"))
         assert selected_assets_manifest["assetCount"] == manifest["selectedAssetCount"]
         assert "resource-kit/contact-sheet.png" in names
+        assert "export-preview/contact-sheet.png" in names
+        assert "export-preview/index.html" in names
         for mode in ("clean-editable", "visual-fidelity", "visual-ocr"):
             design = json.loads(archive.read(f"{mode}/design.pen"))
             serialized = json.dumps(design)
