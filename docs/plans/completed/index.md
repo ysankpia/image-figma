@@ -137,3 +137,4 @@
 - [Pencil Assisted Slice Mainline Cleanup And Handoff](146-pencil-assisted-slice-mainline-cleanup-and-handoff.md) — `completed`
 - [Assisted Slice Workspace P0/P2 Hardening](147-assisted-slice-workspace-p0-p2.md) — `completed`
 - [Assisted Slice Workspace Browser Acceptance](148-assisted-slice-workspace-browser-acceptance.md) — `completed`
+- [Assisted Slice Mainline Merge Readiness](149-assisted-slice-mainline-merge-readiness.md) — `completed`

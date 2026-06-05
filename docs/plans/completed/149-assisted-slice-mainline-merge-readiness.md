@@ -1,7 +1,8 @@
 # 149 Assisted Slice Mainline Merge Readiness
 
-Status: active
+Status: completed
 Created: 2026-06-05 21:50 +0800
+Completed: 2026-06-05 21:56 +0800
 
 ## Objective
 
@@ -114,3 +115,45 @@ git push origin main
 - Pre-merge or post-merge acceptance fails with a P0/P1 issue.
 - Push is rejected because remote changed.
 - Any required fix would exceed merge readiness scope.
+
+## Merge Evidence
+
+Branch relationship before merge:
+
+```text
+origin/main -> main: 0 / 18
+origin/main -> feat/pencil-assisted-slice-review: 0 / 177
+main -> feat/pencil-assisted-slice-review: 0 / 160
+main is ancestor of feat/pencil-assisted-slice-review
+```
+
+Pre-merge validation on `feat/pencil-assisted-slice-review`:
+
+```text
+make check: 35 passed
+slice acceptance: passed=1 failed=0 missingSample=0
+sample_01_腾讯动漫_018_1440: pages=1 candidates=63 selected=3 preview=3 exported=3 pngs=3 badRefs=0 missingRefs=0 errors=[]
+git diff --check: passed
+```
+
+Merge:
+
+```bash
+git switch main
+git merge --ff-only feat/pencil-assisted-slice-review
+```
+
+Result:
+
+```text
+main fast-forwarded from c6977b0 to e28944d
+```
+
+Post-merge validation on `main`:
+
+```text
+make check: 35 passed
+slice acceptance: passed=1 failed=0 missingSample=0
+sample_01_腾讯动漫_018_1440: pages=1 candidates=63 selected=3 preview=3 exported=3 pngs=3 badRefs=0 missingRefs=0 errors=[]
+git diff --check: passed
+```
