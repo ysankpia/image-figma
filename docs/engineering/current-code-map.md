@@ -1,6 +1,6 @@
 # Current Code Map
 
-This document maps the current `feat/pencil-assisted-slice-review` branch. It describes where new work should land. It is authoritative for new code.
+This document maps the current `main` branch. It describes where new work should land. It is authoritative for new product code.
 
 ## Product Mainline
 
@@ -63,6 +63,8 @@ docs/runbooks/pencil-python-backend-handoff.md
 docs/runbooks/pencil-python-backend-deploy.md
 ```
 
+For non-mainline directories, read [legacy-code-inventory.md](legacy-code-inventory.md) before editing or deleting code.
+
 ## Automatic Pencil Export Surface
 
 The older automatic Pencil package route remains available for explicit
@@ -90,12 +92,28 @@ GET  /api/pencil/projects/{taskId}/download.zip
 
 `services/pencil-go` is retained as a superseded experiment and should not be extended as the current product delivery path.
 
+## PSD-like And M29 Dependency Boundary
+
+Some older-looking code is still a current dependency:
+
+```text
+services/psdlike-python/
+services/backend-go/cmd/m29extract/
+services/backend-go/internal/m29/
+```
+
+`services/pencil-python-backend/app/psdlike_runner.py` invokes `services/psdlike-python/tools/run_one.py` for `boundarySource=psdlike`. `services/pencil-python-backend` also supports `boundarySource=m29/hybrid`, and the deploy bundle includes `m29extract` plus the Go M29 kernel. These directories are not dead code.
+
+They remain evidence/candidate dependencies. They do not decide final visible assets; `manual_slices.v1.json` does.
+
 ## Go Draft / M29 Surface
 
-`services/backend-go` is historical/deferred as a product delivery route on this
-branch. It remains useful for `m29extract`, Draft experiments, and archived
-evidence work, but new current-product work should not land there unless a new
-active plan explicitly resumes the Draft runtime.
+`services/backend-go` is split:
+
+- `cmd/m29extract` and `internal/m29` are retained current diagnostic/dependency code for Pencil boundary evidence.
+- Draft server/compiler/vision/app packages are historical/deferred as a product delivery route on this branch.
+
+New current-product work should not land in the deferred Draft packages unless a new active plan explicitly resumes the Draft runtime.
 
 ```text
 services/backend-go/
@@ -157,6 +175,26 @@ Codia comparison-only code lives under:
 ```text
 services/backend-go/internal/eval/codia
 ```
+
+## Frozen Research Assets
+
+These directories are intentionally retained but are not current product entrypoints:
+
+```text
+backend/
+services/backend-python/
+services/pencil-go/
+packages/dsl-schema/
+packages/image-to-figma-renderer/
+figma-plugin/
+docs/reference/legacy/
+docs/plans/archive/
+docs/code-reviews*/
+docs/reports/
+docs/prototypes/
+```
+
+Treat them as historical, deferred runtime, eval, or research assets according to [legacy-code-inventory.md](legacy-code-inventory.md). Do not delete or revive them by default.
 
 ## Package Responsibilities
 

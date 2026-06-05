@@ -1,10 +1,25 @@
-# Image-to-Figma Backend
+# Historical Python Upload Preview Backend
 
-FastAPI backend for the current Image-to-Figma preview pipeline.
+This directory is retained as historical/research code for the old Python `/api/upload-preview` pipeline. It is not the current product delivery backend on `main`.
 
-## Current Runtime
+Current product work belongs in:
 
-The product runtime is M29 plan-driven:
+```text
+services/pencil-python-backend/
+```
+
+Current code ownership and legacy classification are documented in:
+
+```text
+docs/engineering/current-code-map.md
+docs/engineering/legacy-code-inventory.md
+```
+
+Do not use this directory as the starting point for assisted slice workspace, Pencil `.pen` export, `project.zip`, or `selected-assets.zip` work.
+
+## Historical Runtime
+
+The historical preview runtime in this directory was M29 plan-driven:
 
 ```text
 Figma plugin
@@ -20,7 +35,7 @@ Figma plugin
 -> Renderer writes Figma nodes
 ```
 
-`/api/upload-preview` is the product upload endpoint. The legacy materializer is not the product source of truth.
+`/api/upload-preview` is the historical upload-preview endpoint. It is not the current product endpoint on `main`.
 
 The frozen pre-M29 upload chain, M29 Direct compare product endpoint, legacy M30 materialization product path, M31-M39/M39.1 downstream experiments, and ONNX proposer are not active backend runtime.
 
@@ -58,7 +73,7 @@ uv run pytest \
   -q
 ```
 
-## Current API
+## Historical API
 
 ```text
 GET  /api/health
@@ -99,7 +114,7 @@ storage/upload_previews/{taskId}/materialized_design/design.dsl.json
 
 `GET /api/tasks/{taskId}/materialization` returns the materialization report summary, warnings, skipped items, replayed nodes, output paths, and `stage_timings.json`.
 
-## Current Pipeline
+## Historical Pipeline
 
 The upload preview pipeline runs:
 
@@ -199,7 +214,7 @@ promote M29.4 clusters into components
 
 Runtime storage lives under `backend/storage/` by default and is not committed.
 
-Current runtime directories:
+Historical runtime directories:
 
 ```text
 storage/uploads/

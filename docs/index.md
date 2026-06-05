@@ -12,10 +12,11 @@
 4. [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)：当前交付、验收和部署交接。
 5. [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)：部署 Runbook。
 6. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
-7. [engineering/validation.md](engineering/validation.md)：验证策略。
-8. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
-9. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
-10. [plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)：验收脚本和 ZIP 合同检查。
+7. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：非主线代码、冷冻资产和可删除产物边界。
+8. [engineering/validation.md](engineering/validation.md)：验证策略。
+9. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
+10. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
+11. [plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)：验收脚本和 ZIP 合同检查。
 
 ## Current Runtime
 
@@ -47,6 +48,7 @@
 - 做 Draft graph / Go Draft 历史恢复：读 [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)、[architecture/runtime.md](architecture/runtime.md) 和 [plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md](plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md)，并先写新的 active plan。
 - 做视觉模型接入实验：读 [architecture/vision-provider.md](architecture/vision-provider.md) 和 [reference/env-vars.md](reference/env-vars.md)，但模型输出不能成为当前 assisted slice 的最终 visible owner。
 - 做 M29 物理证据：读 [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)，默认只作为候选/证据输入。
+- 判断旧代码能不能删、能不能改、能不能恢复为产品路径：读 [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)。
 - 做插件/Renderer：读 [architecture/plugin-rendering.md](architecture/plugin-rendering.md)、[architecture/dsl.md](architecture/dsl.md) 和 [engineering/validation.md](engineering/validation.md)，但它们不是当前 assisted slice 交付路径。
 - 做 bug 修复：读 [bugs/index.md](bugs/index.md)、相关 bug record 和 [engineering/validation.md](engineering/validation.md)。
 - 做历史对比：读 [reference/codia-samples/](reference/codia-samples/) 和 `internal/eval/codia`，不要把 eval 数据接入 generation。
@@ -77,6 +79,7 @@
 ## Engineering
 
 - [engineering/current-code-map.md](engineering/current-code-map.md)
+- [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)
 - [engineering/validation.md](engineering/validation.md)
 - [engineering/coding-standards.md](engineering/coding-standards.md)
 - [engineering/definition-of-done.md](engineering/definition-of-done.md)

@@ -15,6 +15,8 @@ This repository is a pnpm workspace plus backend services.
 
 Start from [docs/index.md](docs/index.md). Current specs live in `docs/product/`, `docs/architecture/`, `docs/engineering/`, `docs/runbooks/`, `docs/reference/`, `docs/plans/`, and `docs/bugs/`. Historical drafts live only in `docs/reference/legacy/` or `docs/plans/archive/`.
 
+Before deleting, moving, or reviving non-mainline directories, read [docs/engineering/legacy-code-inventory.md](docs/engineering/legacy-code-inventory.md). Old code can be valuable research asset even when it is not current product code.
+
 ## Current Mainline
 
 The active product mainline on this branch is:
