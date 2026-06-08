@@ -52,6 +52,9 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
     assert "Pencil Asset Review" in review.text
     assert "manual-slices" in review.text
     assert "review-state" in review.text
+    assert 'id="toolDraw"' in review.text
+    assert "画框" in review.text
+    assert "toolMode === 'draw'" in review.text
     assert "Alt+点击或右键隐藏错误候选" in review.text
 
     candidates = client.get(f"/api/asset-projects/{project_id}/candidates").json()["data"]

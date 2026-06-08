@@ -80,17 +80,19 @@ GET  /api/asset-projects/{projectId}/selected-assets.zip
 Canvas Review uses source-image coordinates as the only saved geometry:
 
 ```text
-left click candidate        -> confirm as selected image/icon slice
-Alt+left click candidate    -> hide wrong candidate
-right click candidate       -> hide wrong candidate
-blank drag                  -> draw missing slice manually
-Delete/Backspace            -> delete active selected slice
+选择 tool + left click candidate      -> confirm as selected image/icon slice
+选择 tool + Alt+left click candidate  -> hide wrong candidate
+选择 tool + right click candidate     -> hide wrong candidate
+画框 tool + drag anywhere             -> draw missing slice manually
+拖动 tool + drag                      -> pan canvas
+Delete/Backspace                      -> delete active selected slice
 ```
 
 Hidden candidates are persisted in `review_state.v1.json`. They do not enter
 `manual_slices.v1.json`, `project.zip`, or `selected-assets.zip`. Use the Review
 page buttons to show hidden candidates as gray dashed boxes or restore hidden
-candidates for the current page.
+candidates for the current page. Use `V`, `B`, and `H` to switch to select,
+draw, and pan when focus is not inside a form control.
 
 ## Output
 

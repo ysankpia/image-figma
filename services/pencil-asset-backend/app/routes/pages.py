@@ -129,6 +129,7 @@ REVIEW_HTML = r"""<!doctype html>
     .page .name{font-size:13px;font-weight:650}
     .page .meta{font-size:11px;color:#94a3b8;margin-top:3px}
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .tool.active{background:#16a34a;color:#fff}
     .panel-title{font-size:13px;font-weight:700;margin:10px 0 8px;color:#cbd5e1}
     .slice{border:1px solid #26313c;border-radius:7px;padding:8px;margin-bottom:8px;background:#111820}
     .slice.active{border-color:#22c55e}
@@ -143,6 +144,9 @@ REVIEW_HTML = r"""<!doctype html>
 <header>
   <h1>Pencil Asset Review</h1>
   <div class="toolbar">
+    <button id="toolSelect" class="tool active">选择</button>
+    <button id="toolDraw" class="tool secondary">画框</button>
+    <button id="toolPan" class="tool secondary">拖动</button>
     <select id="kind"><option value="image">image</option><option value="icon">icon</option></select>
     <button id="save">保存</button>
     <button id="preview" class="secondary">导出预览</button>
@@ -157,7 +161,7 @@ REVIEW_HTML = r"""<!doctype html>
   <main id="stage"><canvas id="canvas"></canvas></main>
   <aside id="side">
     <div class="panel-title">Selected image/icon assets</div>
-    <div class="small">左键确认候选；Alt+点击或右键隐藏错误候选；空白拖拽手动画框；滚轮缩放，按住 Space 或中键拖动画布。</div>
+    <div class="small">选择：左键确认候选，Alt+点击或右键隐藏错误候选。画框：拖拽任意区域创建手动资产。拖动：拖动画布。滚轮缩放。</div>
     <div class="row"><button id="delete" class="danger">删除选中</button><button id="fit" class="secondary">适应屏幕</button><button id="actual" class="secondary">100%</button></div>
     <div class="row"><button id="toggleRejected" class="secondary">显示已隐藏候选</button><button id="restoreRejected" class="secondary">恢复本页隐藏</button></div>
     <div id="pageStats" class="small"></div>
@@ -179,6 +183,7 @@ let drag = null;
 let activeSliceId = null;
 let showRejected = false;
 let reviewSavePromise = null;
+let toolMode = 'select';
 
 async function api(url, opts={}) {
   const res = await fetch(url, opts);
@@ -308,6 +313,7 @@ function draw() {
   }
   if (drag?.mode === 'draw') stroke(dragBox(), '#ffffff', 2 / view.scale);
   ctx.restore();
+  canvas.style.cursor = drag?.mode === 'pan' || toolMode === 'pan' ? 'grab' : toolMode === 'draw' ? 'crosshair' : 'default';
 }
 function stroke(b,c,w){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.strokeRect(b.x,b.y,b.width,b.height)}
 function dashedStroke(b,c,w){ctx.save();ctx.setLineDash([6 / view.scale, 4 / view.scale]);stroke(b,c,w);ctx.restore()}
@@ -323,8 +329,13 @@ function candidateAt(pt) {
 canvas.onmousedown = (ev) => {
   const pt = screenToImage(ev);
   if (ev.button === 2) return;
-  if (ev.button === 1 || ev.shiftKey || ev.getModifierState('Space')) {
+  if (ev.button === 1 || ev.shiftKey || ev.getModifierState('Space') || toolMode === 'pan') {
     drag = {mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y};
+    return;
+  }
+  if (toolMode === 'draw') {
+    drag = {mode:'draw', start:pt, end:pt};
+    draw();
     return;
   }
   const c = candidateAt(pt);
@@ -337,7 +348,6 @@ canvas.onmousedown = (ev) => {
     draw(); renderSlices(); renderPages();
     return;
   }
-  drag = {mode:'draw', start:pt, end:pt};
 };
 canvas.oncontextmenu = (ev) => {
   ev.preventDefault();
@@ -353,7 +363,10 @@ canvas.onmousemove = (ev) => {
 window.onmouseup = () => {
   if (drag?.mode === 'draw') {
     const b = dragBox();
-    if (b.width >= 4 && b.height >= 4) addManualSlice(b);
+    if (b.width >= 4 && b.height >= 4) {
+      addManualSlice(b);
+      msg.textContent = `已画框 ${b.width}x${b.height}，记得保存`;
+    }
     renderSlices(); renderPages();
   }
   drag = null;
@@ -398,6 +411,9 @@ function deleteActiveSlice() {
 document.getElementById('fit').onclick = fit;
 document.getElementById('actual').onclick = actualSize;
 document.getElementById('save').onclick = save;
+document.getElementById('toolSelect').onclick = () => setToolMode('select');
+document.getElementById('toolDraw').onclick = () => setToolMode('draw');
+document.getElementById('toolPan').onclick = () => setToolMode('pan');
 document.getElementById('toggleRejected').onclick = () => {
   showRejected = !showRejected;
   document.getElementById('toggleRejected').textContent = showRejected ? '隐藏已隐藏候选' : '显示已隐藏候选';
@@ -443,11 +459,26 @@ function autosaveReviewState(message) {
   }).catch(e => {msg.textContent = `保存候选状态失败：${e.message || e}`;});
 }
 window.onkeydown = (ev) => {
+  if (!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName || '')) {
+    if (ev.key === 'v' || ev.key === 'V') { setToolMode('select'); return; }
+    if (ev.key === 'b' || ev.key === 'B') { setToolMode('draw'); return; }
+    if (ev.key === 'h' || ev.key === 'H') { setToolMode('pan'); return; }
+  }
   if ((ev.key === 'Delete' || ev.key === 'Backspace') && activeSliceId && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName || '')) {
     ev.preventDefault();
     deleteActiveSlice();
   }
 };
+function setToolMode(mode) {
+  toolMode = mode;
+  for (const [id, value] of [['toolSelect','select'], ['toolDraw','draw'], ['toolPan','pan']]) {
+    const button = document.getElementById(id);
+    button.classList.toggle('active', value === mode);
+    button.classList.toggle('secondary', value !== mode);
+  }
+  msg.textContent = mode === 'draw' ? '画框模式：拖拽任意区域创建手动资产' : mode === 'pan' ? '拖动模式：拖动画布' : '选择模式：点击候选加入资产';
+  draw();
+}
 function slug(s){return String(s).replace(/[^0-9A-Za-z_-]+/g,'_').replace(/^_+|_+$/g,'')}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 window.onresize = draw;
