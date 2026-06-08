@@ -52,23 +52,27 @@ async def create_asset_project(
     if len(files) > state.settings.max_files:
         raise HTTPException(status_code=413, detail=f"too many files; max is {state.settings.max_files}")
 
+    validated_uploads: list[tuple[str, str, bytes]] = []
+    for index, upload in enumerate(files, start=1):
+        original = upload.filename or f"page_{index:04d}.png"
+        suffix = Path(original).suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"unsupported image type: {original}")
+        data = await upload.read()
+        if len(data) > state.settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail=f"{original} exceeds max upload bytes")
+        try:
+            with Image.open(BytesIO(data)) as image:
+                image.verify()
+        except (OSError, UnidentifiedImageError) as error:
+            raise HTTPException(status_code=400, detail=f"invalid image: {original}") from error
+        validated_uploads.append((original, suffix, data))
+
     store = storage()
     paths = store.create_project(projectName)
-    inputs: list[UploadInput] = []
     try:
-        for index, upload in enumerate(files, start=1):
-            original = upload.filename or f"page_{index:04d}.png"
-            suffix = Path(original).suffix.lower()
-            if suffix not in IMAGE_EXTENSIONS:
-                raise HTTPException(status_code=400, detail=f"unsupported image type: {original}")
-            data = await upload.read()
-            if len(data) > state.settings.max_upload_bytes:
-                raise HTTPException(status_code=413, detail=f"{original} exceeds max upload bytes")
-            try:
-                with Image.open(BytesIO(data)) as image:
-                    image.verify()
-            except (OSError, UnidentifiedImageError) as error:
-                raise HTTPException(status_code=400, detail=f"invalid image: {original}") from error
+        inputs: list[UploadInput] = []
+        for index, (original, suffix, data) in enumerate(validated_uploads, start=1):
             upload_name = f"page_{index:04d}_{safe_slug(Path(original).stem, 'source')}{suffix}"
             target = paths.uploads / upload_name
             target.write_bytes(data)

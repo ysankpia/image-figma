@@ -110,6 +110,10 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
         assert "manifest.json" in names
         assert "assets/visible/page_0001/slice_0001.png" in names
         assert "selected-assets.zip" not in names
+        zipped_manifest = json.loads(archive.read("manifest.json"))
+        assert zipped_manifest["projectZipUrl"] == f"/api/asset-projects/{project_id}/download.zip"
+        assert zipped_manifest["selectedAssetsZipUrl"] == f"/api/asset-projects/{project_id}/selected-assets.zip"
+        assert "zipPath" not in zipped_manifest
         design = json.loads(archive.read("design.pen"))
         refs: list[str] = []
         collect_refs(design, refs)
@@ -171,6 +175,21 @@ def test_manual_validation_rejects_bad_kind_and_bounds(tmp_path: Path, monkeypat
         ],
     }
     assert client.put(f"/api/asset-projects/{project_id}/manual-slices", json=out_of_bounds).status_code == 400
+
+
+def test_invalid_upload_does_not_create_project_directory(tmp_path: Path) -> None:
+    configure_state(tmp_path)
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/asset-projects",
+        data={"projectName": "Bad Upload"},
+        files=[("files[]", ("bad.txt", b"not image", "text/plain"))],
+    )
+
+    assert response.status_code == 400
+    projects = client.get("/api/asset-projects").json()["data"]["projects"]
+    assert projects == []
 
 
 def test_text_evidence_does_not_become_export_candidate(tmp_path: Path, monkeypatch) -> None:

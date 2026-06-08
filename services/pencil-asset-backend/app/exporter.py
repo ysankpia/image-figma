@@ -45,20 +45,14 @@ def export_asset_project(*, paths: AssetProjectPaths, manual_slices: dict[str, A
         "selectedAssetCount": len(selected_manifest["assets"]),
         "modeResult": mode_result,
         "refCheck": mode_result["refCheck"],
+        "zip": "project.zip",
+        "projectZipUrl": f"/api/asset-projects/{paths.project_id}/download.zip",
+        "selectedAssetsZipUrl": f"/api/asset-projects/{paths.project_id}/selected-assets.zip",
+        "exportPreviewUrl": preview["previewHtmlUrl"],
     }
     write_json(paths.output / "manual_slices.v1.json", manual_slices)
     write_json(paths.output / "manifest.json", manifest)
-    project_zip = create_project_zip(paths.output)
-    manifest.update(
-        {
-            "zip": "project.zip",
-            "zipPath": str(project_zip),
-            "selectedAssetsZipPath": str(selected_zip),
-            "projectZipUrl": f"/api/asset-projects/{paths.project_id}/download.zip",
-            "selectedAssetsZipUrl": f"/api/asset-projects/{paths.project_id}/selected-assets.zip",
-            "exportPreviewUrl": preview["previewHtmlUrl"],
-        }
-    )
+    create_project_zip(paths.output)
     write_json(paths.output / "manifest.json", manifest)
     return manifest
 
