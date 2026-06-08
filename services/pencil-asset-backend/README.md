@@ -13,7 +13,7 @@
 -> project.zip + selected-assets.zip
 ```
 
-这个服务不生成 Codia-like tree，不接 Draft graph，不调用 Figma plugin runtime，也不输出 `clean-editable` / `visual-fidelity` / `visual-ocr` 三套模式。v1 只交付 `image` 和 `icon` 两类 PNG 资产，并按原图坐标放进 Pencil handoff 项目。
+这个服务不生成 Codia-like tree，不接 Draft graph，不调用 Figma plugin runtime，也不输出 `clean-editable` / `visual-fidelity` / `visual-ocr` 三套模式。v1 只交付 `image` 和 `icon` 两类 PNG 资产，并按原图坐标放进 Pencil handoff 项目。`.pen` 同时包含一个 source reference 层用于人工复核上下文，但 reference 不进入 `selected-assets.zip`。
 
 ## Environment
 
@@ -78,6 +78,7 @@ GET  /api/asset-projects/{projectId}/selected-assets.zip
 
 ```text
 design.pen
+assets/reference/page_0001/source.png
 assets/visible/page_0001/slice_0001.png
 manifest.json
 manual_slices.v1.json
@@ -95,8 +96,10 @@ manifest.json
 Hard contract:
 
 - selected assets are cropped from `pages/page_XXXX/source.png`.
-- `.pen` visible image refs must point to `./assets/visible/...`.
-- `.pen` must not visibly reference absolute paths, `source.png`, raw crops, masks, debug assets, or `../`.
+- `.pen` deliverable slice refs must point to `./assets/visible/...`.
+- `.pen` review-only source reference refs must point to `./assets/reference/page_XXXX/source.png`.
+- `selected-assets.zip` must contain selected slices only; it must not contain source reference images.
+- `.pen` must not reference absolute paths, debug assets, raw crops, masks, or `../`.
 - `manual_slices.v1.json` is the final delivery truth source.
 
 ## Validation

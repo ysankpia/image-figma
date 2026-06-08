@@ -39,6 +39,7 @@ def export_asset_project(*, paths: AssetProjectPaths, manual_slices: dict[str, A
         "manualSlices": "manual_slices.v1.json",
         "designPen": "design.pen",
         "assetRoot": "assets/visible",
+        "referenceRoot": "assets/reference",
         "selectedAssetsZip": "selected-assets.zip",
         "exportPreview": "export-preview/manifest.json",
         "contactSheet": "export-preview/contact-sheet.png",
@@ -148,11 +149,19 @@ def write_pencil_handoff(
     *, paths: AssetProjectPaths, manual_slices: dict[str, Any], selected_assets_manifest: dict[str, Any]
 ) -> dict[str, Any]:
     visible_root = paths.output / "assets" / "visible"
+    reference_root = paths.output / "assets" / "reference"
     assets_by_id = {asset["id"]: asset for asset in selected_assets_manifest["assets"]}
     frames: list[dict[str, Any]] = []
     emitted_assets: list[dict[str, Any]] = []
+    emitted_references: list[dict[str, Any]] = []
     for page_index, page in enumerate(manual_slices.get("pages") or [], start=1):
         page_id = str(page["pageId"])
+        source_path = paths.root / str(page["sourceImage"])
+        reference_dir = reference_root / page_id
+        reference_dir.mkdir(parents=True, exist_ok=True)
+        reference_path = reference_dir / "source.png"
+        shutil.copy2(source_path, reference_path)
+        reference_url = f"./assets/reference/{page_id}/source.png"
         frame = {
             "id": f"{page_id}__frame",
             "type": "frame",
@@ -168,8 +177,37 @@ def write_pencil_handoff(
                 "pageId": page_id,
                 "sourceImage": page["sourceImage"],
             },
-            "children": [],
+            "children": [
+                {
+                    "id": f"{page_id}__source_reference",
+                    "type": "rectangle",
+                    "name": "source reference",
+                    "x": 0,
+                    "y": 0,
+                    "width": int(page["width"]),
+                    "height": int(page["height"]),
+                    "opacity": 0.45,
+                    "fill": {"type": "image", "enabled": True, "url": reference_url, "mode": "stretch"},
+                    "metadata": {
+                        "type": "pencil_asset_source_reference",
+                        "pageId": page_id,
+                        "sourceImage": page["sourceImage"],
+                        "role": "reference_only",
+                        "selectedAsset": False,
+                    },
+                }
+            ],
         }
+        emitted_references.append(
+            {
+                "pageId": page_id,
+                "sourceImage": page["sourceImage"],
+                "url": reference_url,
+                "file": f"{page_id}/source.png",
+                "width": int(page["width"]),
+                "height": int(page["height"]),
+            }
+        )
         for item in page.get("slices") or []:
             if item.get("selected") is False or item.get("kind") not in {"image", "icon"}:
                 continue
@@ -209,11 +247,15 @@ def write_pencil_handoff(
     if check.bad_refs or check.missing_refs:
         raise RuntimeError(f"invalid .pen image refs: badRefs={check.bad_refs} missingRefs={check.missing_refs}")
     write_json(paths.output / "design.pen", document)
-    write_json(paths.output / "pencil-handoff.manifest.json", {"mode": "pencil-handoff", "assets": emitted_assets})
+    write_json(
+        paths.output / "pencil-handoff.manifest.json",
+        {"mode": "pencil-handoff", "assets": emitted_assets, "references": emitted_references},
+    )
     return {
         "mode": "pencil-handoff",
         "designPen": "design.pen",
         "assetCount": len(emitted_assets),
+        "referenceCount": len(emitted_references),
         "frameCount": len(frames),
         "refCheck": {
             "refs": check.refs,
@@ -230,9 +272,9 @@ def validate_pen_refs(document: dict[str, Any], root: Path) -> PenRefCheck:
     bad = [
         ref
         for ref in refs
-        if not ref.startswith("./assets/visible/")
+        if not (ref.startswith("./assets/visible/") or ref.startswith("./assets/reference/"))
+        or ("source.png" in ref and not ref.startswith("./assets/reference/"))
         or "../" in ref
-        or "source.png" in ref
         or "debug/" in ref
         or "raw-crops" in ref
         or "masks/" in ref

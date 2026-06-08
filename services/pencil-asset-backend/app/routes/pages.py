@@ -110,14 +110,14 @@ REVIEW_HTML = r"""<!doctype html>
   <title>Pencil Asset Review</title>
   <style>
     :root{color-scheme:dark}
-    body{margin:0;background:#0b1016;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+    body{margin:0;background:#0b1016;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:auto}
     header{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #26313c;background:#101820}
     h1{font-size:15px;margin:0;font-weight:650}
     button,a.button{background:#2563eb;border:0;color:#fff;text-decoration:none;border-radius:6px;padding:8px 10px;cursor:pointer;font-weight:650;font-size:13px}
     button.secondary,a.secondary{background:#263241;color:#dbe4ef}
     button.danger{background:#b42318}
     select,input{background:#0e1620;border:1px solid #334155;color:#e5e7eb;border-radius:6px;padding:7px}
-    #app{display:grid;grid-template-columns:220px 1fr 300px;height:calc(100vh - 55px)}
+    #app{display:grid;grid-template-columns:220px minmax(420px,1fr) 300px;height:calc(100vh - 55px);min-width:940px}
     #pages,#side{background:#0d131a;overflow:auto}
     #pages{border-right:1px solid #26313c;padding:12px}
     #side{border-left:1px solid #26313c;padding:12px}
@@ -158,7 +158,7 @@ REVIEW_HTML = r"""<!doctype html>
   <aside id="side">
     <div class="panel-title">Selected image/icon assets</div>
     <div class="small">点击候选框加入；在空白处拖拽可手动画框；滚轮缩放，按住 Space 或中键拖动画布。</div>
-    <div class="row"><button id="delete" class="danger">删除选中</button><button id="fit" class="secondary">适应屏幕</button></div>
+    <div class="row"><button id="delete" class="danger">删除选中</button><button id="fit" class="secondary">适应屏幕</button><button id="actual" class="secondary">100%</button></div>
     <div id="slices"></div>
   </aside>
 </div>
@@ -235,10 +235,33 @@ function fit() {
   view.y = 20;
   resizeCanvas();
 }
-function resizeCanvas(){const r=stage.getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;}
+function actualSize() {
+  view.scale = 1;
+  view.x = 20;
+  view.y = 20;
+  draw();
+}
+function resizeCanvas(){
+  const r = stage.getBoundingClientRect();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const cssWidth = Math.max(1, Math.round(r.width));
+  const cssHeight = Math.max(1, Math.round(r.height));
+  const pixelWidth = Math.round(cssWidth * dpr);
+  const pixelHeight = Math.round(cssHeight * dpr);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {width: cssWidth, height: cssHeight, dpr};
+}
 function draw() {
-  resizeCanvas();
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const size = resizeCanvas();
+  ctx.clearRect(0,0,size.width,size.height);
+  ctx.imageSmoothingEnabled = view.scale < 1;
+  ctx.imageSmoothingQuality = 'high';
   ctx.save();
   ctx.translate(view.x, view.y);
   ctx.scale(view.scale, view.scale);
@@ -321,6 +344,7 @@ document.getElementById('delete').onclick = () => {
   draw(); renderSlices(); renderPages();
 };
 document.getElementById('fit').onclick = fit;
+document.getElementById('actual').onclick = actualSize;
 document.getElementById('save').onclick = save;
 document.getElementById('preview').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export-preview`,{method:'POST'}); msg.innerHTML=`预览 ${data.assetCount} 个资产 <a style="color:#93c5fd" href="${data.previewHtmlUrl}" target="_blank">打开</a>`};
 document.getElementById('export').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export`,{method:'POST'}); document.getElementById('projectZip').style.display='inline-flex';document.getElementById('assetsZip').style.display='inline-flex';document.getElementById('projectZip').href=data.projectZipUrl;document.getElementById('assetsZip').href=data.selectedAssetsZipUrl;msg.textContent=`已导出 ${data.selectedAssetCount} 个资产`};

@@ -24,7 +24,9 @@ candidates/debug data.
 asset handoff. It intentionally does less than the assisted slice workspace:
 it produces only PNG `image` and `icon` assets, writes a single
 `pencil-handoff` `design.pen`, and leaves non-asset UI reconstruction to Pencil
-MCP/manual follow-up.
+MCP/manual follow-up. The `.pen` includes a source screenshot reference layer so
+reviewers can judge selected slices in context; that reference is not a selected
+asset and is excluded from `selected-assets.zip`.
 
 Current asset handoff flow:
 
@@ -59,7 +61,9 @@ Hard asset handoff rules:
 manual_slices.v1.json is the final truth source
 only image/icon slices are exported
 assets are cropped from source.png
-design.pen visible refs must be ./assets/visible/...
+design.pen selected slice refs must be ./assets/visible/...
+design.pen source reference refs must be ./assets/reference/page_XXXX/source.png
+selected-assets.zip must not contain source reference images
 no Codia-like tree, Draft graph, TextLayer knockout, SVG, or auto ownership judge
 ```
 

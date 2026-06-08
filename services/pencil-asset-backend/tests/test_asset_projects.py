@@ -108,19 +108,27 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
         names = set(archive.namelist())
         assert "design.pen" in names
         assert "manifest.json" in names
+        assert "assets/reference/page_0001/source.png" in names
         assert "assets/visible/page_0001/slice_0001.png" in names
         assert "selected-assets.zip" not in names
         zipped_manifest = json.loads(archive.read("manifest.json"))
         assert zipped_manifest["projectZipUrl"] == f"/api/asset-projects/{project_id}/download.zip"
         assert zipped_manifest["selectedAssetsZipUrl"] == f"/api/asset-projects/{project_id}/selected-assets.zip"
+        assert zipped_manifest["referenceRoot"] == "assets/reference"
+        assert zipped_manifest["modeResult"]["referenceCount"] == 1
         assert "zipPath" not in zipped_manifest
         design = json.loads(archive.read("design.pen"))
         refs: list[str] = []
         collect_refs(design, refs)
-        assert refs == ["./assets/visible/page_0001/slice_0001.png"]
+        assert refs == ["./assets/reference/page_0001/source.png", "./assets/visible/page_0001/slice_0001.png"]
+        frame = design["children"][0]
+        assert frame["children"][0]["id"] == "page_0001__source_reference"
+        assert frame["children"][0]["metadata"]["role"] == "reference_only"
+        assert frame["children"][1]["metadata"]["type"] == "pencil_asset_slice"
     with ZipFile(selected_zip) as archive:
         names = set(archive.namelist())
         assert "page_0001/slice_0001.png" in names
+        assert "page_0001/source.png" not in names
         selected_manifest = json.loads(archive.read("manifest.json"))
         assert selected_manifest["assetCount"] == 1
 

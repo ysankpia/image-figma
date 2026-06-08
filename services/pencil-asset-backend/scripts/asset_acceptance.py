@@ -31,6 +31,7 @@ class AcceptanceResult:
     exported_asset_count: int = 0
     selected_png_count: int = 0
     selected_manifest_asset_count: int = 0
+    reference_count: int = 0
     project_zip_exists: bool = False
     selected_assets_zip_exists: bool = False
     bad_refs: int = 0
@@ -188,14 +189,19 @@ def run_sample(
     ref_result = check_design_refs(unzipped)
     result.bad_refs = ref_result["badRefs"]
     result.missing_refs = ref_result["missingRefs"]
-    if ref_result["refs"] != result.selected_slice_count:
-        raise AssertionError(f"ref count {ref_result['refs']} != selected slices {result.selected_slice_count}")
+    result.reference_count = ref_result["referenceRefs"]
+    if ref_result["visibleRefs"] != result.selected_slice_count:
+        raise AssertionError(f"visible ref count {ref_result['visibleRefs']} != selected slices {result.selected_slice_count}")
+    if result.reference_count != result.page_count:
+        raise AssertionError(f"reference ref count {result.reference_count} != page count {result.page_count}")
     if result.bad_refs or result.missing_refs:
         raise AssertionError(f"badRefs={result.bad_refs} missingRefs={result.missing_refs}")
 
     with ZipFile(selected_zip) as archive:
         names = set(archive.namelist())
         result.selected_png_count = len([name for name in names if name.endswith(".png")])
+        if any(name.endswith("source.png") for name in names):
+            raise AssertionError("selected-assets.zip must not contain source reference images")
         selected_manifest = json.loads(archive.read("manifest.json"))
         result.selected_manifest_asset_count = int(selected_manifest.get("assetCount") or 0)
     if result.selected_png_count != result.selected_slice_count:
@@ -277,19 +283,27 @@ def check_design_refs(root: Path) -> dict[str, int]:
     refs: list[str] = []
     for child in design.get("children") or []:
         collect_image_refs(child, refs)
+    visible_refs = [ref for ref in refs if ref.startswith("./assets/visible/")]
+    reference_refs = [ref for ref in refs if ref.startswith("./assets/reference/")]
     bad_refs = [
         ref
         for ref in refs
-        if not ref.startswith("./assets/visible/")
+        if not (ref.startswith("./assets/visible/") or ref.startswith("./assets/reference/"))
+        or ("source.png" in ref and not ref.startswith("./assets/reference/"))
         or "../" in ref
-        or "source.png" in ref
         or "debug/" in ref
         or "raw-crops" in ref
         or "masks/" in ref
         or Path(ref).is_absolute()
     ]
     missing_refs = [ref for ref in refs if not (root / ref.removeprefix("./")).exists()]
-    return {"refs": len(refs), "badRefs": len(bad_refs), "missingRefs": len(missing_refs)}
+    return {
+        "refs": len(refs),
+        "visibleRefs": len(visible_refs),
+        "referenceRefs": len(reference_refs),
+        "badRefs": len(bad_refs),
+        "missingRefs": len(missing_refs),
+    }
 
 
 def collect_image_refs(node: Any, refs: list[str]) -> None:
@@ -372,6 +386,7 @@ def result_to_dict(result: AcceptanceResult) -> dict[str, Any]:
         "exportedAssetCount": result.exported_asset_count,
         "selectedPngCount": result.selected_png_count,
         "selectedManifestAssetCount": result.selected_manifest_asset_count,
+        "referenceCount": result.reference_count,
         "projectZipExists": result.project_zip_exists,
         "selectedAssetsZipExists": result.selected_assets_zip_exists,
         "badRefs": result.bad_refs,
@@ -391,13 +406,14 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- failed: `{report['failed']}`",
         f"- missingSample: `{report['missingSample']}`",
         "",
-        "| Sample | Status | Pages | Candidates | Selected | Preview | Exported | PNGs | badRefs | missingRefs |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Sample | Status | Pages | Candidates | Selected | Reference | Preview | Exported | PNGs | badRefs | missingRefs |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for item in report["results"]:
         lines.append(
             "| {name} | {status} | {pageCount} | {candidateCount} | {selectedSliceCount} | "
-            "{previewAssetCount} | {exportedAssetCount} | {selectedPngCount} | {badRefs} | {missingRefs} |".format(**item)
+            "{referenceCount} | {previewAssetCount} | {exportedAssetCount} | {selectedPngCount} | "
+            "{badRefs} | {missingRefs} |".format(**item)
         )
     lines.append("")
     for item in report["results"]:
