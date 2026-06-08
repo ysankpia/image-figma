@@ -157,8 +157,10 @@ REVIEW_HTML = r"""<!doctype html>
   <main id="stage"><canvas id="canvas"></canvas></main>
   <aside id="side">
     <div class="panel-title">Selected image/icon assets</div>
-    <div class="small">点击候选框加入；在空白处拖拽可手动画框；滚轮缩放，按住 Space 或中键拖动画布。</div>
+    <div class="small">左键确认候选；Alt+点击或右键隐藏错误候选；空白拖拽手动画框；滚轮缩放，按住 Space 或中键拖动画布。</div>
     <div class="row"><button id="delete" class="danger">删除选中</button><button id="fit" class="secondary">适应屏幕</button><button id="actual" class="secondary">100%</button></div>
+    <div class="row"><button id="toggleRejected" class="secondary">显示已隐藏候选</button><button id="restoreRejected" class="secondary">恢复本页隐藏</button></div>
+    <div id="pageStats" class="small"></div>
     <div id="slices"></div>
   </aside>
 </div>
@@ -169,11 +171,14 @@ const ctx = canvas.getContext('2d');
 const stage = document.getElementById('stage');
 const msg = document.getElementById('message');
 let project, candidatesDoc, manualDoc;
+let reviewState = null;
 let pageIndex = 0;
 let image = new Image();
 let view = {scale:1, x:20, y:20};
 let drag = null;
 let activeSliceId = null;
+let showRejected = false;
+let reviewSavePromise = null;
 
 async function api(url, opts={}) {
   const res = await fetch(url, opts);
@@ -185,14 +190,29 @@ async function init() {
   project = await api(`/api/asset-projects/${projectId}`);
   candidatesDoc = await api(`/api/asset-projects/${projectId}/candidates`);
   manualDoc = await api(`/api/asset-projects/${projectId}/manual-slices`);
+  reviewState = await api(`/api/asset-projects/${projectId}/review-state`);
   syncExportLinks(project);
   renderPages();
   await loadPage(0);
 }
 function currentCandidatePage(){return candidatesDoc.pages[pageIndex]}
 function currentManualPage(){return manualDoc.pages[pageIndex]}
+function currentReviewPage(){
+  if (!reviewState) return {pageId:currentCandidatePage().pageId,rejectedCandidateIds:[],hiddenCandidateIds:[],lastFilter:{}};
+  const pageId = currentCandidatePage().pageId;
+  let page = (reviewState.pages || []).find(p => p.pageId === pageId);
+  if (!page) {
+    page = {pageId,rejectedCandidateIds:[],hiddenCandidateIds:[],lastFilter:{}};
+    reviewState.pages = [...(reviewState.pages || []), page];
+  }
+  page.rejectedCandidateIds ||= [];
+  page.hiddenCandidateIds ||= [];
+  page.lastFilter ||= {};
+  return page;
+}
 async function loadPage(index) {
   pageIndex = index;
+  if (reviewState) reviewState.lastActivePageId = currentCandidatePage().pageId;
   const p = currentCandidatePage();
   image = new Image();
   image.onload = () => {fit(); draw(); renderPages(); renderSlices();};
@@ -203,9 +223,11 @@ function renderPages() {
   el.innerHTML = '';
   candidatesDoc.pages.forEach((p,i)=>{
     const selected = (manualDoc.pages[i]?.slices || []).filter(s=>s.selected!==false).length;
+    const reviewPage = (reviewState?.pages || []).find(item => item.pageId === p.pageId);
+    const rejected = (reviewPage?.rejectedCandidateIds || []).length;
     const div = document.createElement('div');
     div.className = 'page' + (i===pageIndex ? ' active':'');
-    div.innerHTML = `<img src="/api/asset-projects/${projectId}/source/${p.pageId}"><div><div class="name">${p.pageId}</div><div class="meta">${p.candidates.length} 候选 / ${selected} 已选</div></div>`;
+    div.innerHTML = `<img src="/api/asset-projects/${projectId}/source/${p.pageId}"><div><div class="name">${p.pageId}</div><div class="meta">${p.candidates.length} 候选 / ${selected} 已选 / ${rejected} 已隐藏</div></div>`;
     div.onclick = ()=>loadPage(i);
     el.appendChild(div);
   });
@@ -213,6 +235,10 @@ function renderPages() {
 function renderSlices() {
   const el = document.getElementById('slices');
   const p = currentManualPage();
+  const stats = document.getElementById('pageStats');
+  const reviewPage = currentReviewPage();
+  const hidden = new Set([...(reviewPage.rejectedCandidateIds || []), ...(reviewPage.hiddenCandidateIds || [])]);
+  stats.textContent = `${currentCandidatePage().candidates.length} 候选 / ${hidden.size} 已隐藏 / ${(p.slices || []).filter(s=>s.selected!==false).length} 已选`;
   el.innerHTML = '';
   (p.slices || []).forEach((s, i)=>{
     const div = document.createElement('div');
@@ -266,9 +292,16 @@ function draw() {
   ctx.translate(view.x, view.y);
   ctx.scale(view.scale, view.scale);
   ctx.drawImage(image, 0, 0);
+  const rejected = rejectedCandidateSet();
   for (const c of currentCandidatePage().candidates || []) {
     if (!['strong','normal'].includes(c.level || 'normal')) continue;
-    stroke(c.bbox, c.kind === 'icon' ? '#38bdf8' : '#22c55e', 2 / view.scale);
+    const isRejected = rejected.has(c.id);
+    if (isRejected && !showRejected) continue;
+    if (isRejected) {
+      dashedStroke(c.bbox, '#64748b', 2 / view.scale);
+    } else {
+      stroke(c.bbox, c.kind === 'icon' ? '#38bdf8' : '#22c55e', 2 / view.scale);
+    }
   }
   for (const s of currentManualPage().slices || []) {
     stroke(s.bbox, s.id===activeSliceId ? '#f97316' : '#facc15', 3 / view.scale);
@@ -277,23 +310,39 @@ function draw() {
   ctx.restore();
 }
 function stroke(b,c,w){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.strokeRect(b.x,b.y,b.width,b.height)}
+function dashedStroke(b,c,w){ctx.save();ctx.setLineDash([6 / view.scale, 4 / view.scale]);stroke(b,c,w);ctx.restore()}
 function screenToImage(ev){const r=canvas.getBoundingClientRect();return {x:(ev.clientX-r.left-view.x)/view.scale,y:(ev.clientY-r.top-view.y)/view.scale}}
 function candidateAt(pt) {
-  return [...(currentCandidatePage().candidates || [])].reverse().find(c => pt.x>=c.bbox.x && pt.y>=c.bbox.y && pt.x<=c.bbox.x+c.bbox.width && pt.y<=c.bbox.y+c.bbox.height);
+  const rejected = rejectedCandidateSet();
+  return [...(currentCandidatePage().candidates || [])].reverse().find(c => {
+    if (!['strong','normal'].includes(c.level || 'normal')) return false;
+    if (rejected.has(c.id) && !showRejected) return false;
+    return pt.x>=c.bbox.x && pt.y>=c.bbox.y && pt.x<=c.bbox.x+c.bbox.width && pt.y<=c.bbox.y+c.bbox.height;
+  });
 }
 canvas.onmousedown = (ev) => {
   const pt = screenToImage(ev);
+  if (ev.button === 2) return;
   if (ev.button === 1 || ev.shiftKey || ev.getModifierState('Space')) {
     drag = {mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y};
     return;
   }
   const c = candidateAt(pt);
   if (c) {
+    if (ev.altKey) {
+      rejectCandidate(c.id);
+      return;
+    }
     addSliceFromCandidate(c);
     draw(); renderSlices(); renderPages();
     return;
   }
   drag = {mode:'draw', start:pt, end:pt};
+};
+canvas.oncontextmenu = (ev) => {
+  ev.preventDefault();
+  const c = candidateAt(screenToImage(ev));
+  if (c) rejectCandidate(c.id);
 };
 canvas.onmousemove = (ev) => {
   if (!drag) return;
@@ -337,19 +386,68 @@ function addManualSlice(bbox) {
   activeSliceId = id;
 }
 document.getElementById('delete').onclick = () => {
+  deleteActiveSlice();
+};
+function deleteActiveSlice() {
   if (!activeSliceId) return;
   const p = currentManualPage();
   p.slices = (p.slices || []).filter(s => s.id !== activeSliceId);
   activeSliceId = null;
   draw(); renderSlices(); renderPages();
-};
+}
 document.getElementById('fit').onclick = fit;
 document.getElementById('actual').onclick = actualSize;
 document.getElementById('save').onclick = save;
+document.getElementById('toggleRejected').onclick = () => {
+  showRejected = !showRejected;
+  document.getElementById('toggleRejected').textContent = showRejected ? '隐藏已隐藏候选' : '显示已隐藏候选';
+  draw();
+};
+document.getElementById('restoreRejected').onclick = () => {
+  const reviewPage = currentReviewPage();
+  const count = new Set([...(reviewPage.rejectedCandidateIds || []), ...(reviewPage.hiddenCandidateIds || [])]).size;
+  reviewPage.rejectedCandidateIds = [];
+  reviewPage.hiddenCandidateIds = [];
+  autosaveReviewState(`已恢复 ${count} 个候选`);
+  draw(); renderSlices(); renderPages();
+};
 document.getElementById('preview').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export-preview`,{method:'POST'}); msg.innerHTML=`预览 ${data.assetCount} 个资产 <a style="color:#93c5fd" href="${data.previewHtmlUrl}" target="_blank">打开</a>`};
 document.getElementById('export').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export`,{method:'POST'}); document.getElementById('projectZip').style.display='inline-flex';document.getElementById('assetsZip').style.display='inline-flex';document.getElementById('projectZip').href=data.projectZipUrl;document.getElementById('assetsZip').href=data.selectedAssetsZipUrl;msg.textContent=`已导出 ${data.selectedAssetCount} 个资产`};
 function syncExportLinks(p){if(!p?.exported)return;document.getElementById('projectZip').style.display='inline-flex';document.getElementById('assetsZip').style.display='inline-flex';document.getElementById('projectZip').href=p.downloadUrl;document.getElementById('assetsZip').href=p.selectedAssetsDownloadUrl}
 async function save(){const data=await api(`/api/asset-projects/${projectId}/manual-slices`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(manualDoc)}); msg.textContent=`已保存 ${data.selectedSliceCount} 个资产`; return data}
+function rejectedCandidateSet(){const page=currentReviewPage();return new Set([...(page.rejectedCandidateIds || []), ...(page.hiddenCandidateIds || [])])}
+function rejectCandidate(candidateId) {
+  const page = currentReviewPage();
+  const rejected = new Set(page.rejectedCandidateIds || []);
+  if (rejected.has(candidateId)) {
+    rejected.delete(candidateId);
+    page.rejectedCandidateIds = [...rejected].sort();
+    autosaveReviewState('已恢复候选');
+  } else {
+    rejected.add(candidateId);
+    page.rejectedCandidateIds = [...rejected].sort();
+    page.hiddenCandidateIds = (page.hiddenCandidateIds || []).filter(id => id !== candidateId);
+    autosaveReviewState('已隐藏错误候选');
+  }
+  draw(); renderSlices(); renderPages();
+}
+function autosaveReviewState(message) {
+  reviewSavePromise = api(`/api/asset-projects/${projectId}/review-state`, {
+    method:'PUT',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify(reviewState)
+  }).then(data => {
+    reviewState = data.reviewState || reviewState;
+    msg.textContent = `${message}，共隐藏 ${data.rejectedCandidateCount} 个候选`;
+    return data;
+  }).catch(e => {msg.textContent = `保存候选状态失败：${e.message || e}`;});
+}
+window.onkeydown = (ev) => {
+  if ((ev.key === 'Delete' || ev.key === 'Backspace') && activeSliceId && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName || '')) {
+    ev.preventDefault();
+    deleteActiveSlice();
+  }
+};
 function slug(s){return String(s).replace(/[^0-9A-Za-z_-]+/g,'_').replace(/^_+|_+$/g,'')}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 window.onresize = draw;

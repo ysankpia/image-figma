@@ -18,6 +18,7 @@ from .utils import bbox_area, bbox_iou, clamp_bbox, file_sha256, normalize_bbox,
 ASSET_CANDIDATES_SCHEMA = "pencil_asset.candidates.v1"
 MANUAL_SLICES_SCHEMA = "pencil.manual_slices.v1"
 PROJECT_MANIFEST_SCHEMA = "pencil_asset.project.v1"
+REVIEW_STATE_SCHEMA = "pencil_asset.review_state.v1"
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class AssetProjectPaths:
     project_json: Path
     candidates_json: Path
     manual_slices_json: Path
+    review_state_json: Path
 
 
 class AssetProjectStorage:
@@ -80,6 +82,7 @@ class AssetProjectStorage:
             project_json=root / "project.json",
             candidates_json=root / "candidates.v1.json",
             manual_slices_json=root / "manual_slices.v1.json",
+            review_state_json=root / "review_state.v1.json",
         )
 
     def patch_project(self, paths: AssetProjectPaths, **updates: Any) -> dict[str, Any]:
@@ -204,8 +207,10 @@ def initialize_asset_project(
         ],
     }
     manual_doc = default_manual_slices(project_name=project_name, pages=public_pages)
+    review_state = default_review_state(project_id=paths.project_id, candidates=candidates_doc)
     write_json(paths.candidates_json, candidates_doc)
     write_json(paths.manual_slices_json, manual_doc)
+    write_json(paths.review_state_json, review_state)
     return {
         "schema": PROJECT_MANIFEST_SCHEMA,
         "projectId": paths.project_id,
@@ -221,6 +226,7 @@ def initialize_asset_project(
         "reviewUrl": f"/api/asset-projects/{paths.project_id}/review",
         "candidatesPath": str(paths.candidates_json),
         "manualSlicesPath": str(paths.manual_slices_json),
+        "reviewStatePath": str(paths.review_state_json),
     }
 
 
@@ -284,6 +290,103 @@ def default_manual_slices(*, project_name: str, pages: list[dict[str, Any]]) -> 
             for page in pages
         ],
     }
+
+
+def default_review_state(*, project_id: str, candidates: dict[str, Any]) -> dict[str, Any]:
+    pages = [
+        {
+            "pageId": str(page["pageId"]),
+            "rejectedCandidateIds": [],
+            "hiddenCandidateIds": [],
+            "lastFilter": {},
+        }
+        for page in candidates.get("pages") or []
+    ]
+    return {
+        "schema": REVIEW_STATE_SCHEMA,
+        "projectId": project_id,
+        "lastActivePageId": pages[0]["pageId"] if pages else "",
+        "filters": {},
+        "pages": pages,
+        "updatedAt": now_iso(),
+    }
+
+
+def validate_review_state(value: dict[str, Any], candidates: dict[str, Any]) -> dict[str, Any]:
+    if value.get("schema") != REVIEW_STATE_SCHEMA:
+        raise ValueError(f"review state schema must be {REVIEW_STATE_SCHEMA}")
+    candidate_pages = {str(page["pageId"]): page for page in candidates.get("pages") or []}
+    candidate_ids_by_page = {
+        page_id: {str(candidate["id"]) for candidate in page.get("candidates") or []}
+        for page_id, page in candidate_pages.items()
+    }
+    pages_value = value.get("pages")
+    if not isinstance(pages_value, list):
+        raise ValueError("review state pages must be a list")
+
+    pages: list[dict[str, Any]] = []
+    seen_pages: set[str] = set()
+    for page in pages_value:
+        page_id = str(page.get("pageId") or "")
+        if page_id not in candidate_pages:
+            raise ValueError(f"unknown pageId: {page_id}")
+        if page_id in seen_pages:
+            raise ValueError(f"duplicate pageId: {page_id}")
+        seen_pages.add(page_id)
+        valid_ids = candidate_ids_by_page[page_id]
+        rejected = normalize_candidate_id_list(page.get("rejectedCandidateIds"), valid_ids, page_id, "rejectedCandidateIds")
+        hidden = normalize_candidate_id_list(page.get("hiddenCandidateIds"), valid_ids, page_id, "hiddenCandidateIds")
+        last_filter = page.get("lastFilter") if isinstance(page.get("lastFilter"), dict) else {}
+        pages.append(
+            {
+                "pageId": page_id,
+                "rejectedCandidateIds": rejected,
+                "hiddenCandidateIds": hidden,
+                "lastFilter": last_filter,
+            }
+        )
+
+    for page_id in sorted(set(candidate_pages) - seen_pages):
+        pages.append({"pageId": page_id, "rejectedCandidateIds": [], "hiddenCandidateIds": [], "lastFilter": {}})
+
+    last_active = str(value.get("lastActivePageId") or "")
+    if last_active not in candidate_pages and candidate_pages:
+        last_active = sorted(candidate_pages)[0]
+    filters = value.get("filters") if isinstance(value.get("filters"), dict) else {}
+    return {
+        "schema": REVIEW_STATE_SCHEMA,
+        "projectId": str(value.get("projectId") or candidates.get("projectId") or ""),
+        "lastActivePageId": last_active,
+        "filters": filters,
+        "pages": pages,
+        "updatedAt": now_iso(),
+    }
+
+
+def normalize_candidate_id_list(value: object, valid_ids: set[str], page_id: str, field: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"page {page_id} {field} must be a list")
+    normalized: list[str] = []
+    for raw in value:
+        candidate_id = str(raw)
+        if candidate_id not in valid_ids:
+            raise ValueError(f"unknown candidate id for {page_id}: {candidate_id}")
+        normalized.append(candidate_id)
+    return sorted(set(normalized))
+
+
+def ensure_review_state(paths: AssetProjectPaths) -> dict[str, Any]:
+    if not paths.candidates_json.exists():
+        raise FileNotFoundError("candidates.v1.json not found")
+    candidates = read_json(paths.candidates_json)
+    if paths.review_state_json.exists():
+        review_state = validate_review_state(read_json(paths.review_state_json), candidates)
+    else:
+        review_state = default_review_state(project_id=paths.project_id, candidates=candidates)
+    write_json(paths.review_state_json, review_state)
+    return review_state
 
 
 def validate_manual_slices(value: dict[str, Any], candidates: dict[str, Any]) -> dict[str, Any]:
@@ -380,6 +483,7 @@ def project_summary(paths: AssetProjectPaths) -> dict[str, Any]:
     project = read_json(paths.project_json)
     candidates = read_json(paths.candidates_json) if paths.candidates_json.exists() else {"pages": []}
     manual = read_json(paths.manual_slices_json) if paths.manual_slices_json.exists() else {"pages": []}
+    review_state = ensure_review_state(paths) if paths.candidates_json.exists() else {"pages": []}
     selected_by_page = {
         str(page.get("pageId")): sum(
             1
@@ -388,11 +492,16 @@ def project_summary(paths: AssetProjectPaths) -> dict[str, Any]:
         )
         for page in manual.get("pages") or []
     }
+    rejected_by_page = {
+        str(page.get("pageId")): len(page.get("rejectedCandidateIds") or [])
+        for page in review_state.get("pages") or []
+    }
     pages: list[dict[str, Any]] = []
     for page in candidates.get("pages") or project.get("pages") or []:
         page_id = str(page["pageId"])
         candidate_count = len(page.get("candidates") or [])
         selected_count = selected_by_page.get(page_id, 0)
+        rejected_count = rejected_by_page.get(page_id, 0)
         pages.append(
             {
                 "pageId": page_id,
@@ -401,12 +510,14 @@ def project_summary(paths: AssetProjectPaths) -> dict[str, Any]:
                 "height": int(page.get("height") or 0),
                 "candidateCount": candidate_count,
                 "selectedSliceCount": selected_count,
+                "rejectedCandidateCount": rejected_count,
                 "thumbnailUrl": f"/api/asset-projects/{paths.project_id}/source/{page_id}",
                 "status": "ready" if selected_count > 0 else "untouched",
             }
         )
     exported = (paths.output / "project.zip").exists() and (paths.output / "selected-assets.zip").exists()
     selected_count_total = sum(page["selectedSliceCount"] for page in pages)
+    rejected_count_total = sum(page["rejectedCandidateCount"] for page in pages)
     return {
         "projectId": paths.project_id,
         "projectName": project.get("projectName") or "Pencil Asset Project",
@@ -414,6 +525,7 @@ def project_summary(paths: AssetProjectPaths) -> dict[str, Any]:
         "pageCount": len(pages),
         "candidateCount": sum(page["candidateCount"] for page in pages),
         "selectedSliceCount": selected_count_total,
+        "rejectedCandidateCount": rejected_count_total,
         "selectedAssetCount": project.get("selectedAssetCount", selected_count_total),
         "exported": exported,
         "reviewUrl": f"/api/asset-projects/{paths.project_id}/review",

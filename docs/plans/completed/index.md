@@ -139,5 +139,6 @@
 - [Assisted Slice Workspace Browser Acceptance](148-assisted-slice-workspace-browser-acceptance.md) — `completed`
 - [Assisted Slice Mainline Merge Readiness](149-assisted-slice-mainline-merge-readiness.md) — `completed`
 - [Pencil Asset Source Reference Handoff](152-pencil-asset-source-reference-handoff.md) — `completed`
+- [Pencil Asset Review Candidate Correction](153-pencil-asset-review-candidate-correction.md) — `completed`
 - [Mainline Legacy Code Inventory And Cleanup](150-mainline-legacy-code-inventory-and-cleanup.md) — `completed`
 - [Pencil Asset Handoff Slim Backend](151-pencil-asset-handoff-slim-backend.md) — `completed`

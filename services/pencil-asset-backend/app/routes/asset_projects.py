@@ -14,10 +14,12 @@ from ..projects import (
     AssetProjectStorage,
     UploadInput,
     initialize_asset_project,
+    ensure_review_state,
     project_summary,
     selected_slice_count,
     source_path_for_page,
     validate_manual_slices,
+    validate_review_state,
 )
 from ..state import state
 from ..utils import safe_slug
@@ -144,6 +146,30 @@ def get_candidates(project_id: str) -> dict[str, object]:
 def get_manual_slices(project_id: str) -> dict[str, object]:
     paths = existing_paths(project_id)
     return {"success": True, "data": read_json(paths.manual_slices_json)}
+
+
+@router.get("/{project_id}/review-state")
+def get_review_state(project_id: str) -> dict[str, object]:
+    paths = existing_paths(project_id)
+    try:
+        review_state = ensure_review_state(paths)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"success": True, "data": review_state}
+
+
+@router.put("/{project_id}/review-state")
+async def put_review_state(project_id: str, request: Request) -> dict[str, object]:
+    paths = existing_paths(project_id)
+    payload = await request.json()
+    try:
+        review_state = validate_review_state(payload, read_json(paths.candidates_json))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    write_json(paths.review_state_json, review_state)
+    rejected = sum(len(page.get("rejectedCandidateIds") or []) for page in review_state.get("pages") or [])
+    storage().patch_project(paths, reviewStatePath=str(paths.review_state_json), rejectedCandidateCount=rejected)
+    return {"success": True, "data": {"projectId": paths.project_id, "rejectedCandidateCount": rejected, "reviewState": review_state}}
 
 
 @router.put("/{project_id}/manual-slices")

@@ -51,9 +51,25 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
     assert review.status_code == 200
     assert "Pencil Asset Review" in review.text
     assert "manual-slices" in review.text
+    assert "review-state" in review.text
+    assert "Alt+点击或右键隐藏错误候选" in review.text
 
     candidates = client.get(f"/api/asset-projects/{project_id}/candidates").json()["data"]
     candidate = candidates["pages"][0]["candidates"][0]
+    review_state = client.get(f"/api/asset-projects/{project_id}/review-state")
+    assert review_state.status_code == 200
+    assert review_state.json()["data"]["schema"] == "pencil_asset.review_state.v1"
+    assert review_state.json()["data"]["pages"][0]["rejectedCandidateIds"] == []
+
+    state_doc = review_state.json()["data"]
+    state_doc["pages"][0]["rejectedCandidateIds"] = [candidate["id"]]
+    saved_state = client.put(f"/api/asset-projects/{project_id}/review-state", json=state_doc)
+    assert saved_state.status_code == 200
+    assert saved_state.json()["data"]["rejectedCandidateCount"] == 1
+    assert saved_state.json()["data"]["reviewState"]["pages"][0]["rejectedCandidateIds"] == [candidate["id"]]
+    persisted_state = client.get(f"/api/asset-projects/{project_id}/review-state").json()["data"]
+    assert persisted_state["pages"][0]["rejectedCandidateIds"] == [candidate["id"]]
+
     manual = {
         "schema": "pencil.manual_slices.v1",
         "projectName": "Asset Project",
@@ -99,6 +115,8 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
     selected_zip_response = client.get(f"/api/asset-projects/{project_id}/selected-assets.zip")
     assert project_zip_response.status_code == 200
     assert selected_zip_response.status_code == 200
+    persisted_manual = client.get(f"/api/asset-projects/{project_id}/manual-slices").json()["data"]
+    assert "rejectedCandidateIds" not in json.dumps(persisted_manual)
 
     project_zip = tmp_path / "project.zip"
     selected_zip = tmp_path / "selected-assets.zip"
@@ -128,6 +146,7 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
     with ZipFile(selected_zip) as archive:
         names = set(archive.namelist())
         assert "page_0001/slice_0001.png" in names
+        assert len([name for name in names if name.endswith(".png")]) == 1
         assert "page_0001/source.png" not in names
         selected_manifest = json.loads(archive.read("manifest.json"))
         assert selected_manifest["assetCount"] == 1
@@ -146,6 +165,46 @@ def test_empty_export_returns_409(tmp_path: Path, monkeypatch) -> None:
         ).json()["data"]["projectId"]
     assert client.post(f"/api/asset-projects/{project_id}/export-preview").status_code == 409
     assert client.post(f"/api/asset-projects/{project_id}/export").status_code == 409
+
+
+def test_review_state_validation_and_recovery(tmp_path: Path, monkeypatch) -> None:
+    configure_state(tmp_path)
+    monkeypatch.setattr("app.projects.evidence.collect_page_evidence", fake_collect_page_evidence)
+    image_path = write_image(tmp_path / "input.png", (96, 72))
+    client = TestClient(create_app())
+    with image_path.open("rb") as handle:
+        project_id = client.post(
+            "/api/asset-projects",
+            data={"projectName": "Review State"},
+            files=[("files[]", ("input.png", handle, "image/png"))],
+        ).json()["data"]["projectId"]
+
+    candidates = client.get(f"/api/asset-projects/{project_id}/candidates").json()["data"]
+    candidate_id = candidates["pages"][0]["candidates"][0]["id"]
+    state_doc = client.get(f"/api/asset-projects/{project_id}/review-state").json()["data"]
+    state_doc["pages"][0]["rejectedCandidateIds"] = [candidate_id]
+    state_doc["pages"][0]["hiddenCandidateIds"] = [candidate_id]
+    state_doc["filters"] = {"showRejected": True}
+    response = client.put(f"/api/asset-projects/{project_id}/review-state", json=state_doc)
+    assert response.status_code == 200
+    persisted = client.get(f"/api/asset-projects/{project_id}/review-state").json()["data"]
+    assert persisted["filters"]["showRejected"] is True
+    assert persisted["pages"][0]["rejectedCandidateIds"] == [candidate_id]
+    assert persisted["pages"][0]["hiddenCandidateIds"] == [candidate_id]
+
+    bad = dict(persisted)
+    bad["pages"] = [dict(persisted["pages"][0], rejectedCandidateIds=["missing_candidate"])]
+    invalid = client.put(f"/api/asset-projects/{project_id}/review-state", json=bad)
+    assert invalid.status_code == 400
+    assert "unknown candidate id" in invalid.json()["detail"]
+
+    state_path = tmp_path / "storage" / "asset-projects" / project_id / "review_state.v1.json"
+    state_path.unlink()
+    recovered = client.get(f"/api/asset-projects/{project_id}/review-state")
+    assert recovered.status_code == 200
+    assert recovered.json()["data"]["schema"] == "pencil_asset.review_state.v1"
+    assert recovered.json()["data"]["pages"][0]["rejectedCandidateIds"] == []
+    assert recovered.json()["data"]["filters"] == {}
 
 
 def test_manual_validation_rejects_bad_kind_and_bounds(tmp_path: Path, monkeypatch) -> None:
