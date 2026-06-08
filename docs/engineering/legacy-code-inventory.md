@@ -2,7 +2,7 @@
 
 本文件回答一个具体问题：哪些代码是当前主线，哪些代码还有价值但已经不该出现在默认产品路径里。
 
-当前产品主线只有一条：
+当前产品主线和新瘦资产路线如下：
 
 ```text
 1..N images
@@ -12,6 +12,13 @@
 -> user-confirmed manual_slices.v1.json
 -> export-preview
 -> project.zip + selected-assets.zip
+
+1..N images
+-> services/pencil-asset-backend
+-> YOLO/M29/PSD-like/OCR evidence
+-> image/icon candidates
+-> user-confirmed manual_slices.v1.json
+-> pencil-handoff project.zip + selected-assets.zip
 ```
 
 旧代码不能按“没用”粗暴删除。这个仓库里很多旧代码是 Codia-like、Draft、M29、PSD-like 和 Pencil 交付路线的研究资产。正确状态是冷冻、标注、隔离，而不是让它们继续伪装成当前产品。
@@ -21,6 +28,7 @@
 | Path | Status | Keep Reason | Current Rule |
 | --- | --- | --- | --- |
 | `services/pencil-python-backend/` | `current` | 当前 assisted slice workspace、Pencil `.pen` 导出、`project.zip`、`selected-assets.zip`、部署和验收脚本都在这里。 | 新产品交付和 P0/P1 修复默认落这里。 |
+| `services/pencil-asset-backend/` | `current-slim` | 151 新增瘦 image/icon 资产 handoff 服务，只输出 PNG 工程资产和单一 `pencil-handoff` `.pen`，用于后续 Pencil MCP/人工补画。 | 新的 image/icon 资产交付实验和 P0/P1 修复落这里；不要把旧 Draft/Codia/三模式自动 ownership 搬进来。 |
 | `services/psdlike-python/` | `diagnostic/dependency` | 当前 Pencil backend 默认 `boundarySource=psdlike` 会通过 `app/psdlike_runner.py` 调用 `tools/run_one.py`；部署 bundle 也显式包含该目录。 | 不能归档或删除。只能作为候选证据源，不是最终 visible owner。 |
 | `services/backend-go/cmd/m29extract/` and `services/backend-go/internal/m29/` | `diagnostic/dependency` | 当前 Pencil backend 仍支持 `boundarySource=m29/hybrid`，部署 bundle 包含 `m29extract` 和 Go M29 内核。 | 保留为 M29 evidence/tooling。Go Draft 不因此恢复为产品主线。 |
 | `services/backend-go/internal/draft/`, `services/backend-go/cmd/draft*`, `services/backend-go/internal/vision/`, `services/backend-go/internal/app/` | `legacy-research` | Draft runtime、vision review、DSL export 和旧 `/api/draft-preview` 仍有研究价值。 | 不作为 assisted slice 新功能入口。恢复前必须新建 active plan 和验收标准。 |

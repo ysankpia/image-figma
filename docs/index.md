@@ -1,6 +1,6 @@
 # 文档地图
 
-本目录是 Image-to-Figma Design 的事实来源。当前分支的可交付产品主线是 **Pencil Assisted Slice Workspace**：从 1..N 张图片生成自动候选，由用户在 Canvas 工作台确认切片，然后导出 Pencil/Figma 项目包和前端资源包。旧 Codia Beta、Go Draft `/api/draft-preview`、Python `/api/upload-preview`、历史 ADR、completed plans 和 legacy drafts 只作参考，不能覆盖当前主线。
+本目录是 Image-to-Figma Design 的事实来源。当前分支的可交付产品主线是 **Pencil Assisted Slice Workspace**：从 1..N 张图片生成自动候选，由用户在 Canvas 工作台确认切片，然后导出 Pencil/Figma 项目包和前端资源包。151 之后新增的 **Pencil Asset Backend** 是更瘦的 image/icon 资产 handoff 路线，默认只交付工程切图 PNG 和单一 `pencil-handoff` `.pen`。旧 Codia Beta、Go Draft `/api/draft-preview`、Python `/api/upload-preview`、历史 ADR、completed plans 和 legacy drafts 只作参考，不能覆盖当前主线。
 
 ## Start Here
 
@@ -8,15 +8,16 @@
 
 1. [../AGENTS.md](../AGENTS.md)：仓库规则、当前主线、禁止项。
 2. [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)：当前 Pencil assisted slice 服务运行、工作台和验收命令。
-3. [reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)：当前 HTTP/API 合同。
-4. [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)：当前交付、验收和部署交接。
-5. [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)：部署 Runbook。
-6. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
-7. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：非主线代码、冷冻资产和可删除产物边界。
-8. [engineering/validation.md](engineering/validation.md)：验证策略。
-9. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
-10. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
-11. [plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)：验收脚本和 ZIP 合同检查。
+3. [../services/pencil-asset-backend/README.md](../services/pencil-asset-backend/README.md)：瘦 image/icon 资产 handoff 服务、单一 `.pen` 输出和验收命令。
+4. [reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)：当前 HTTP/API 合同。
+5. [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)：当前交付、验收和部署交接。
+6. [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)：部署 Runbook。
+7. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
+8. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：非主线代码、冷冻资产和可删除产物边界。
+9. [engineering/validation.md](engineering/validation.md)：验证策略。
+10. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
+11. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
+12. [plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)：验收脚本和 ZIP 合同检查。
 
 ## Current Runtime
 
@@ -32,6 +33,19 @@
 -> project.zip + selected-assets.zip
 ```
 
+瘦资产 handoff 路线：
+
+```text
+1..N images
+-> services/pencil-asset-backend
+-> YOLO/M29/PSD-like/OCR evidence
+-> image/icon candidates
+-> Canvas Review
+-> user-confirmed manual_slices.v1.json
+-> PNG assets
+-> pencil-handoff project.zip + selected-assets.zip
+```
+
 旧路径状态：
 
 - Codia Beta / `Generate Beta`：产品入口已撤掉，只能作为 legacy/eval reference，不再作为新功能落点。
@@ -43,6 +57,7 @@
 ## By Task Type
 
 - 做当前产品范围：读 [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
+- 做瘦 image/icon 资产 handoff：读 [../services/pencil-asset-backend/README.md](../services/pencil-asset-backend/README.md)、[engineering/current-code-map.md](engineering/current-code-map.md)、[reference/env-vars.md](reference/env-vars.md)。
 - 做 assisted slice 工作台/API/导出：读 [engineering/current-code-map.md](engineering/current-code-map.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[reference/env-vars.md](reference/env-vars.md)、[plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)、[plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)。
 - 做部署：读 [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md) 和 [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
 - 做 Draft graph / Go Draft 历史恢复：读 [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)、[architecture/runtime.md](architecture/runtime.md) 和 [plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md](plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md)，并先写新的 active plan。

@@ -33,6 +33,17 @@
 | `PENCIL_BACKEND_MAX_FILES` | Python Pencil project server 单项目最大图片数 | `20` | 否 |
 | `PENCIL_BACKEND_MAX_WORKERS` | Python Pencil project server 后台导出并发数；部署低内存机器建议保持 `1` | `1` | 否 |
 | `PENCIL_BACKEND_CORS_ALLOW_ORIGINS` | Python Pencil project server CORS origins，逗号分隔 | `*` | 否 |
+| `PENCIL_ASSET_STORAGE_ROOT` | Pencil Asset Backend 存储根目录 | `services/pencil-asset-backend/storage` | 否 |
+| `PENCIL_ASSET_YOLO_MODEL` | Pencil Asset Backend 的 YOLOv8 UI 检测模型路径 | 无 | 是 |
+| `PENCIL_ASSET_YOLO_CONF` | YOLOv8 候选置信度阈值 | `0.18` | 否 |
+| `PENCIL_ASSET_YOLO_IOU` | YOLOv8 NMS IoU 阈值 | `0.45` | 否 |
+| `PENCIL_ASSET_YOLO_IMGSZ` | YOLOv8 推理输入尺寸 | `640` | 否 |
+| `PENCIL_ASSET_YOLO_DEVICE` | YOLOv8 推理设备，`auto` 表示交给 ultralytics/torch 自动选择 | `auto` | 否 |
+| `PENCIL_ASSET_M29EXTRACT` | Pencil Asset Backend 调用的 `m29extract` 路径 | 自动查找 `services/backend-go/bin/m29extract` | 否 |
+| `PENCIL_ASSET_PSDLIKE_ROOT` | Pencil Asset Backend 调用的 PSD-like Python 服务目录 | 自动查找 `services/psdlike-python` | 否 |
+| `PENCIL_ASSET_MAX_UPLOAD_BYTES` | Pencil Asset Backend 单图片上传大小上限 | `10485760` | 否 |
+| `PENCIL_ASSET_MAX_FILES` | Pencil Asset Backend 单项目最大图片数 | `20` | 否 |
+| `PENCIL_ASSET_CORS_ALLOW_ORIGINS` | Pencil Asset Backend CORS origins，逗号分隔 | `*` | 否 |
 | `PENCIL_SERVER_ADDR` | Go Pencil project server 监听地址，已被 Python Pencil backend 取代 | `127.0.0.1:8100` | legacy |
 | `PENCIL_SERVER_STORAGE_ROOT` | Go Pencil project server 存储根目录，已被 Python Pencil backend 取代 | `./storage/pencil_server` | legacy |
 | `PENCIL_SERVER_MAX_UPLOAD_BYTES` | Go Pencil project server 单 PNG 上传大小上限，已被 Python Pencil backend 取代 | `10485760` | legacy |
@@ -130,6 +141,45 @@ GET  /api/pencil/slice-projects/{projectId}/selected-assets.zip
 ```
 
 Caller contract: [pencil-python-backend-api.md](pencil-python-backend-api.md).
+
+## Pencil Asset Backend
+
+Slim image/icon asset handoff route:
+
+```bash
+cd services/pencil-asset-backend
+PENCIL_ASSET_YOLO_MODEL=/Volumes/WorkDrive/Datasets/vins_rico_yolov8/VINS-RICO-UPLABS-ANDROID.v2i.yolov8/runs/detect/runs/detect/train/weights/best.pt \
+PENCIL_ASSET_M29EXTRACT=../backend-go/bin/m29extract \
+PENCIL_ASSET_PSDLIKE_ROOT=../psdlike-python \
+OCR_PROVIDER=none \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8110
+```
+
+Workspace:
+
+```text
+http://127.0.0.1:8110/api/asset-projects/workspace
+```
+
+Asset handoff endpoints:
+
+```text
+GET  /api/health
+GET  /api/ready
+POST /api/asset-projects
+GET  /api/asset-projects
+GET  /api/asset-projects/{projectId}
+GET  /api/asset-projects/{projectId}/review
+GET  /api/asset-projects/{projectId}/source/{pageId}
+GET  /api/asset-projects/{projectId}/evidence
+GET  /api/asset-projects/{projectId}/candidates
+GET  /api/asset-projects/{projectId}/manual-slices
+PUT  /api/asset-projects/{projectId}/manual-slices
+POST /api/asset-projects/{projectId}/export-preview
+POST /api/asset-projects/{projectId}/export
+GET  /api/asset-projects/{projectId}/download.zip
+GET  /api/asset-projects/{projectId}/selected-assets.zip
+```
 
 ## Draft Server
 

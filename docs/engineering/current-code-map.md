@@ -18,6 +18,51 @@ The current product truth source is `manual_slices.v1.json`. Automatic evidence
 from PSD-like, M29, OCR, foreground audit, or model experiments only creates
 candidates/debug data.
 
+## Pencil Asset Handoff Surface
+
+`services/pencil-asset-backend` is the slim 151 product surface for image/icon
+asset handoff. It intentionally does less than the assisted slice workspace:
+it produces only PNG `image` and `icon` assets, writes a single
+`pencil-handoff` `design.pen`, and leaves non-asset UI reconstruction to Pencil
+MCP/manual follow-up.
+
+Current asset handoff flow:
+
+```text
+POST /api/asset-projects
+-> save uploaded source images
+-> collect YOLO/M29/PSD-like/OCR evidence
+-> normalize image/icon candidates
+-> serve /api/asset-projects/{projectId}/review
+-> user confirms image/icon slices
+-> PUT /api/asset-projects/{projectId}/manual-slices
+-> POST /api/asset-projects/{projectId}/export-preview
+-> POST /api/asset-projects/{projectId}/export
+-> GET project.zip and selected-assets.zip
+```
+
+Primary files:
+
+```text
+services/pencil-asset-backend/app/projects.py
+services/pencil-asset-backend/app/evidence.py
+services/pencil-asset-backend/app/exporter.py
+services/pencil-asset-backend/app/routes/asset_projects.py
+services/pencil-asset-backend/app/routes/pages.py
+services/pencil-asset-backend/scripts/asset_acceptance.py
+services/pencil-asset-backend/tests/test_asset_projects.py
+```
+
+Hard asset handoff rules:
+
+```text
+manual_slices.v1.json is the final truth source
+only image/icon slices are exported
+assets are cropped from source.png
+design.pen visible refs must be ./assets/visible/...
+no Codia-like tree, Draft graph, TextLayer knockout, SVG, or auto ownership judge
+```
+
 ## Pencil Assisted Slice Surface
 
 `services/pencil-python-backend` is the current product delivery route. It is

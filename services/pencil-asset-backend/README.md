@@ -1,0 +1,110 @@
+# Pencil Asset Backend
+
+瘦后端，只做 UI 截图中的工程资产 handoff：
+
+```text
+1..N UI screenshots
+-> YOLO/M29/PSD-like/OCR evidence
+-> image/icon candidates
+-> Canvas Review
+-> manual_slices.v1.json
+-> PNG assets
+-> design.pen
+-> project.zip + selected-assets.zip
+```
+
+这个服务不生成 Codia-like tree，不接 Draft graph，不调用 Figma plugin runtime，也不输出 `clean-editable` / `visual-fidelity` / `visual-ocr` 三套模式。v1 只交付 `image` 和 `icon` 两类 PNG 资产，并按原图坐标放进 Pencil handoff 项目。
+
+## Environment
+
+`PENCIL_ASSET_YOLO_MODEL` 是必需配置。M29/PSD-like/OCR 是辅助证据源；它们失败会记录 warning，但不会覆盖用户确认的 `manual_slices.v1.json`。
+
+```bash
+export PENCIL_ASSET_YOLO_MODEL=/Volumes/WorkDrive/Datasets/vins_rico_yolov8/VINS-RICO-UPLABS-ANDROID.v2i.yolov8/runs/detect/runs/detect/train/weights/best.pt
+export PENCIL_ASSET_M29EXTRACT=/Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/backend-go/bin/m29extract
+export PENCIL_ASSET_PSDLIKE_ROOT=/Volumes/WorkDrive/Code/github.com/LuQing-Studio/python/image-figma/services/psdlike-python
+export OCR_PROVIDER=none
+```
+
+Defaults:
+
+```text
+PENCIL_ASSET_STORAGE_ROOT=services/pencil-asset-backend/storage
+PENCIL_ASSET_YOLO_CONF=0.18
+PENCIL_ASSET_YOLO_IOU=0.45
+PENCIL_ASSET_YOLO_IMGSZ=640
+PENCIL_ASSET_YOLO_DEVICE=auto
+PENCIL_ASSET_MAX_FILES=20
+PENCIL_ASSET_MAX_UPLOAD_BYTES=10485760
+```
+
+## Run
+
+```bash
+cd services/pencil-asset-backend
+uv sync
+make serve
+```
+
+Open:
+
+```text
+http://127.0.0.1:8110/api/asset-projects/workspace
+```
+
+## API
+
+```text
+GET  /api/health
+GET  /api/ready
+POST /api/asset-projects
+GET  /api/asset-projects
+GET  /api/asset-projects/{projectId}
+GET  /api/asset-projects/{projectId}/review
+GET  /api/asset-projects/{projectId}/source/{pageId}
+GET  /api/asset-projects/{projectId}/evidence
+GET  /api/asset-projects/{projectId}/candidates
+GET  /api/asset-projects/{projectId}/manual-slices
+PUT  /api/asset-projects/{projectId}/manual-slices
+POST /api/asset-projects/{projectId}/export-preview
+POST /api/asset-projects/{projectId}/export
+GET  /api/asset-projects/{projectId}/download.zip
+GET  /api/asset-projects/{projectId}/selected-assets.zip
+```
+
+## Output
+
+`project.zip`:
+
+```text
+design.pen
+assets/visible/page_0001/slice_0001.png
+manifest.json
+manual_slices.v1.json
+export-preview/contact-sheet.png
+debug/pages/page_0001/manual_overlay.png
+```
+
+`selected-assets.zip`:
+
+```text
+page_0001/slice_0001.png
+manifest.json
+```
+
+Hard contract:
+
+- selected assets are cropped from `pages/page_XXXX/source.png`.
+- `.pen` visible image refs must point to `./assets/visible/...`.
+- `.pen` must not visibly reference absolute paths, `source.png`, raw crops, masks, debug assets, or `../`.
+- `manual_slices.v1.json` is the final delivery truth source.
+
+## Validation
+
+```bash
+cd services/pencil-asset-backend
+make check
+make asset-acceptance \
+  IMAGE=/Users/luhui/Downloads/figma/image/腾讯动漫_018_1440.png \
+  OUT=/Volumes/WorkDrive/pencil-exports/asset-acceptance-151/tencent
+```
