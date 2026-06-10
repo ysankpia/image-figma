@@ -1100,6 +1100,7 @@ h1 {
 .inspectorHeader span,
 .inspectorSummary span,
 .pageInfoPanel span,
+.boxColorPanel label > span,
 .pageNameField span,
 .compactFields label > span,
 .fieldStack label > span,
@@ -1111,7 +1112,8 @@ h1 {
 
 .activeAssetPanel,
 .pageInfoPanel,
-.inspectorSummary {
+.inspectorSummary,
+.boxColorPanel {
   display: grid;
   gap: 10px;
   min-width: 0;
@@ -1127,6 +1129,42 @@ h1 {
 
 .pageInfoPanel {
   gap: 7px;
+}
+
+.boxColorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.boxColorHeader strong {
+  font-size: 13px;
+}
+
+.boxColorHeader button {
+  min-height: 26px;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.boxColorPanel label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.boxColorPanel input[type="color"] {
+  width: 42px;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  background: var(--surface);
+  cursor: pointer;
 }
 
 .pageInfoPanel > strong,
@@ -1217,7 +1255,6 @@ h1 {
 
 .compactFields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px;
   gap: 8px;
 }
 
@@ -1263,7 +1300,7 @@ h1 {
 
 .assetItem {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 64px 28px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -1340,7 +1377,7 @@ h1 {
 }
 
 .assetItemDelete,
-.iconDangerButton {
+.assetDangerButton {
   display: grid;
   width: 28px;
   height: 28px;
@@ -1352,7 +1389,7 @@ h1 {
 }
 
 .assetItemDelete svg,
-.iconDangerButton svg {
+.assetDangerButton svg {
   width: 14px;
   height: 14px;
 }

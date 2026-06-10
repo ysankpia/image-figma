@@ -33,6 +33,11 @@ type PageConfirmAction =
   | { type: "replace"; pageId: string; file: File };
 
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
+const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
+const defaultBoxColors = {
+  slice: "#0066cc",
+  active: "#ff2d55"
+};
 
 export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
@@ -50,6 +55,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [pageConfirmAction, setPageConfirmAction] = useState<PageConfirmAction | null>(null);
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
+  const [boxColors, setBoxColors] = useState(defaultBoxColors);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -82,6 +88,20 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   useEffect(() => {
     void loadProject().catch((error) => setStatus(`读取失败：${error instanceof Error ? error.message : "unknown error"}`));
   }, [loadProject]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(reviewColorStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<typeof defaultBoxColors>;
+      setBoxColors({
+        slice: normalizeColor(parsed.slice, defaultBoxColors.slice),
+        active: normalizeColor(parsed.active, defaultBoxColors.active)
+      });
+    } catch {
+      setBoxColors(defaultBoxColors);
+    }
+  }, []);
 
   useEffect(() => {
     const resize = () => {
@@ -430,13 +450,27 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     sliceEditUndoRef.current = sliceId;
   }
 
-  function commitSlicePatch(sliceId: string, patch: Partial<Pick<SliceRecord, "name" | "kind" | "bbox">>, undoLabel = "编辑资产", options: { pushUndo?: boolean } = { pushUndo: true }) {
+  function commitSlicePatch(sliceId: string, patch: Partial<Pick<SliceRecord, "name" | "bbox">>, undoLabel = "编辑资产", options: { pushUndo?: boolean } = { pushUndo: true }) {
     if (!activePage) return;
     const nextPages = pages.map((page) => page.id === activePage.id ? {
       ...page,
       slices: page.slices.map((slice) => slice.id === sliceId ? { ...slice, ...patch } : slice)
     } : page);
     scheduleSave(nextPages, { pushUndo: options.pushUndo, undoLabel });
+  }
+
+  function updateBoxColor(key: keyof typeof defaultBoxColors, value: string) {
+    const nextColors = {
+      ...boxColors,
+      [key]: normalizeColor(value, defaultBoxColors[key])
+    };
+    setBoxColors(nextColors);
+    window.localStorage.setItem(reviewColorStorageKey, JSON.stringify(nextColors));
+  }
+
+  function resetBoxColors() {
+    setBoxColors(defaultBoxColors);
+    window.localStorage.setItem(reviewColorStorageKey, JSON.stringify(defaultBoxColors));
   }
 
   function deleteActiveSlice(sliceId = activeSliceId) {
@@ -676,9 +710,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       y={slice.bbox.y}
                       width={slice.bbox.width}
                       height={slice.bbox.height}
-                      stroke={isActive ? "#ff2d55" : "#0066cc"}
+                      stroke={isActive ? boxColors.active : boxColors.slice}
                       strokeWidth={isActive ? 2 : 1.4}
-                      fill={tool === "draw" ? "rgba(0,102,204,0.02)" : "rgba(0,102,204,0.08)"}
+                      fill={colorWithAlpha(boxColors.slice, tool === "draw" ? 0.02 : 0.08)}
                       draggable={tool === "select"}
                       listening={tool === "select"}
                       onDragEnd={(event) => {
@@ -753,6 +787,20 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 </div>
               ) : null}
             </section>
+            <section className="boxColorPanel">
+              <div className="boxColorHeader">
+                <strong>框颜色</strong>
+                <button type="button" onClick={resetBoxColors}>重置</button>
+              </div>
+              <label>
+                <span>普通框</span>
+                <input type="color" value={boxColors.slice} onChange={(event) => updateBoxColor("slice", event.target.value)} aria-label="普通框颜色" />
+              </label>
+              <label>
+                <span>选中框</span>
+                <input type="color" value={boxColors.active} onChange={(event) => updateBoxColor("active", event.target.value)} aria-label="选中框颜色" />
+              </label>
+            </section>
             {activeSlice ? (
               <section className="activeAssetPanel">
                 <div className="activeAssetHeader">
@@ -760,7 +808,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                     <span>Active asset</span>
                     <strong>{activeSlice.name || "Untitled"}</strong>
                   </div>
-                  <button className="iconDangerButton" type="button" aria-label="删除当前资产" title="删除当前资产" onClick={() => deleteActiveSlice(activeSlice.id)}>
+                  <button className="assetDangerButton" type="button" aria-label="删除当前资产" title="删除当前资产" onClick={() => deleteActiveSlice(activeSlice.id)}>
                     <Trash2 aria-hidden="true" />
                   </button>
                 </div>
@@ -777,22 +825,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       }}
                       onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
-                  </label>
-                  <label className="kindField">
-                    <span>类型</span>
-                    <select
-                      name={`activeSliceKind-${activeSlice.id}`}
-                      aria-label="资产类型"
-                      value={activeSlice.kind}
-                      onFocus={() => beginSliceEdit(activeSlice.id, "编辑资产")}
-                      onBlur={() => {
-                        sliceEditUndoRef.current = null;
-                      }}
-                      onChange={(event) => commitSlicePatch(activeSlice.id, { kind: event.target.value === "icon" ? "icon" : "image" }, "编辑资产", { pushUndo: false })}
-                    >
-                      <option value="image">image</option>
-                      <option value="icon">icon</option>
-                    </select>
                   </label>
                 </div>
                 <div className="bboxGrid">
@@ -834,23 +866,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
                   </span>
-                  <select
-                    name={`sliceKind-${slice.id}`}
-                    aria-label="资产类型"
-                    value={slice.kind}
-                    onFocus={() => {
-                      setActiveSliceId(slice.id);
-                      beginSliceEdit(slice.id, "编辑资产");
-                    }}
-                    onBlur={() => {
-                      sliceEditUndoRef.current = null;
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => commitSlicePatch(slice.id, { kind: event.target.value === "icon" ? "icon" : "image" }, "编辑资产", { pushUndo: false })}
-                  >
-                    <option value="image">image</option>
-                    <option value="icon">icon</option>
-                  </select>
                   <button className="assetItemDelete" type="button" aria-label={`删除 ${slice.name}`} title="删除资产" onClick={(event) => {
                     event.stopPropagation();
                     deleteActiveSlice(slice.id);
@@ -898,6 +913,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       ) : null}
     </main>
   );
+}
+
+function normalizeColor(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
+function colorWithAlpha(hex: string, alpha: number): string {
+  const normalized = normalizeColor(hex, defaultBoxColors.slice);
+  const red = Number.parseInt(normalized.slice(1, 3), 16);
+  const green = Number.parseInt(normalized.slice(3, 5), 16);
+  const blue = Number.parseInt(normalized.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function serializeSlices(pages: WorkbenchPage[], activePageId: string | null) {

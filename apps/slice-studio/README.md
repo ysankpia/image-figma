@@ -22,7 +22,7 @@ Elysia API: http://127.0.0.1:4110
 1..N UI screenshots
 -> project workspace
 -> originals saved to storage
--> manual image/icon slices
+-> manual image slices
 -> SQLite metadata
 -> assets.zip
 ```
@@ -57,8 +57,8 @@ The right inspector owns page naming and active asset details:
 ```text
 page name: editable display name, shown with current order P1/P2
 page actions: replace source image, delete page
-asset list: #number, name, kind, delete only
-active asset: name, kind, bbox x/y/w/h
+asset list: #number, name, delete only
+active asset: name, bbox x/y/w/h
 ```
 
 Page management rules:
@@ -81,7 +81,9 @@ Cmd/Ctrl+Z: undo the latest session operation
 Cmd/Ctrl + wheel: zoom around cursor
 ```
 
-Undo is session-local. Slice creation, move, resize, delete, rename, kind changes, page rename, and page ordering are written back after undo. File-level page delete/replace cannot restore the old source image after it has been removed or overwritten; the UI reloads from current disk state and shows a warning instead of pretending the file came back.
+Undo is session-local. Slice creation, move, resize, delete, rename, page rename, and page ordering are written back after undo. File-level page delete/replace cannot restore the old source image after it has been removed or overwritten; the UI reloads from current disk state and shows a warning instead of pretending the file came back.
+
+Box colors are local Review UI preferences. Use the color controls in the right inspector to change normal and active slice outline colors; the preference is kept in browser local storage and does not affect exported assets.
 
 ## Storage
 
@@ -120,4 +122,4 @@ SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
 
 ## Scope
 
-v1 only supports manual `image` and `icon` slicing. AI, OCR, YOLO, M29, PSD-like, Pencil export, Figma import, auth, and cloud sync are intentionally out of scope.
+v1 only supports manual `image` slicing. AI, OCR, YOLO, M29, PSD-like, Pencil export, Figma import, auth, and cloud sync are intentionally out of scope.

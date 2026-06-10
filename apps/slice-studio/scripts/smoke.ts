@@ -35,7 +35,7 @@ async function main() {
           {
             pageId: "page_0002",
             slices: [
-              { id: "page_0002__slice_a", name: "tab_icon", kind: "icon", bbox: { x: 3, y: 3, width: 6, height: 6 }, selected: true }
+              { id: "page_0002__slice_a", name: "tab_asset", kind: "image", bbox: { x: 3, y: 3, width: 6, height: 6 }, selected: true }
             ]
           },
           { pageId: "page_0003", slices: [] }

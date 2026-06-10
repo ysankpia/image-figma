@@ -1,4 +1,4 @@
-export type SliceKind = "image" | "icon";
+export type SliceKind = "image";
 
 export type BBox = {
   x: number;

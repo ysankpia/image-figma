@@ -104,8 +104,8 @@ describe("manifest", () => {
             projectId: "project_1",
             pageId: "page_0002",
             sliceIndex: 1,
-            name: "icon",
-            kind: "icon",
+            name: "asset",
+            kind: "image",
             bbox: { x: 1, y: 2, width: 10, height: 10 },
             selected: true
           }]

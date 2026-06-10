@@ -14,8 +14,8 @@ export function assertSafeSliceId(value: string): void {
 }
 
 export function normalizeSliceKind(value: unknown): SliceKind {
-  if (value !== "image" && value !== "icon") {
-    throw new Error("slice kind must be image or icon");
+  if (value !== "image") {
+    throw new Error("slice kind must be image");
   }
   return value;
 }

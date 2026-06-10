@@ -39,7 +39,7 @@ export function initDatabase(): void {
       page_id TEXT NOT NULL,
       slice_index INTEGER NOT NULL,
       name TEXT NOT NULL,
-      kind TEXT NOT NULL CHECK (kind IN ('image', 'icon')),
+      kind TEXT NOT NULL CHECK (kind IN ('image')),
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
       width INTEGER NOT NULL,
@@ -51,6 +51,7 @@ export function initDatabase(): void {
     );
   `);
   ensureColumn("pages", "display_name", "TEXT NOT NULL DEFAULT ''");
+  db.query("UPDATE slices SET kind = 'image' WHERE kind != 'image'").run();
 }
 
 function ensureColumn(tableName: string, columnName: string, definition: string): void {
@@ -99,7 +100,7 @@ export type SliceRow = {
   page_id: string;
   slice_index: number;
   name: string;
-  kind: "image" | "icon";
+  kind: "image";
   x: number;
   y: number;
   width: number;
