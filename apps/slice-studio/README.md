@@ -32,10 +32,11 @@ Elysia API: http://127.0.0.1:4110
 `/projects` is the local project browser:
 
 ```text
-topbar: product filters, project name input, new project
-content controls: search, recent/all/with-assets filters, sort, grid/list view
+topbar: current view title, new project button
+new project: modal form
+content toolbar: recent/all/with-assets filters, search, sort, grid/list view
 content grid: Figma-like project cards with first-page previews
-controls: search, sort, grid/list view, rename, delete
+card actions: inline rename, delete confirmation
 ```
 
 ## Review Workbench
@@ -43,10 +44,29 @@ controls: search, sort, grid/list view, rename, delete
 Review uses a canvas-first layout:
 
 ```text
-topbar: project, upload, zoom, save state, export
+topbar: project, upload, grouped zoom, short save state, export
 left rail: page thumbnails
-center: black Konva canvas with floating tools
-right inspector: selected asset editing, collapsible
+center: black Konva canvas with select/draw/pan floating tools
+right inspector: compact active asset editor and asset list, collapsible
+```
+
+Delete is an action, not a toolbar mode. Use `Delete/Backspace`, the active asset delete icon, or the asset row delete icon.
+
+The right inspector owns page naming and active asset details:
+
+```text
+page name: editable display name, shown with current order P1/P2
+page actions: move up, move down, replace source image, delete page
+asset list: #number, name, kind, delete only
+active asset: name, kind, bbox x/y/w/h
+```
+
+Page management rules:
+
+```text
+delete page: removes the page source image and all slices on that page
+replace page: uploads one new source image for the current page and clears that page's slices
+move page: changes the current business order; export regenerates P1/P2 from that order
 ```
 
 Shortcuts:
@@ -57,8 +77,11 @@ B: continuously draw slices
 H: pan canvas
 Delete/Backspace: delete active slice
 Cmd/Ctrl+S: save immediately
+Cmd/Ctrl+Z: undo the latest session operation
 Cmd/Ctrl + wheel: zoom around cursor
 ```
+
+Undo is session-local. Slice creation, move, resize, delete, rename, kind changes, page rename, and page ordering are written back after undo. File-level page delete/replace cannot restore the old source image after it has been removed or overwritten; the UI reloads from current disk state and shows a warning instead of pretending the file came back.
 
 ## Storage
 
@@ -70,6 +93,30 @@ storage/
 ```
 
 `storage/` is local runtime data and must not be committed.
+
+`assets.zip` exports by page order plus optional page display name:
+
+```text
+originals/P1-首页.png
+slices/P1-首页/slice_0001.png
+manifest.json
+project.json
+```
+
+The exporter reads SQLite slices and original PNG files on disk. It does not crop from frontend thumbnails or canvas state. Export fails when no slices exist.
+
+## Configuration
+
+```text
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+SLICE_STUDIO_API_PORT=4110
+SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
+SLICE_STUDIO_MAX_UPLOAD_BYTES=20971520
+SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
+```
+
+`NEXT_PUBLIC_SLICE_STUDIO_API_URL` is used by the Next.js browser client. `SLICE_STUDIO_API_URL` is used by scripts such as `bun run smoke`.
 
 ## Scope
 

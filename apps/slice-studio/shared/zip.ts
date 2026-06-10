@@ -7,18 +7,19 @@ export function createZipBuffer(files: ZipFile[]): Buffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
+  const utf8Flag = 0x0800;
 
   for (const file of files) {
     const name = Buffer.from(file.name);
     const data = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data);
     const crc = crc32(data);
     const local = Buffer.concat([
-      uint32(0x04034b50), uint16(20), uint16(0), uint16(0), uint16(0), uint16(0),
+      uint32(0x04034b50), uint16(20), uint16(utf8Flag), uint16(0), uint16(0), uint16(0),
       uint32(crc), uint32(data.length), uint32(data.length), uint16(name.length), uint16(0), name, data
     ]);
     localParts.push(local);
     centralParts.push(Buffer.concat([
-      uint32(0x02014b50), uint16(20), uint16(20), uint16(0), uint16(0), uint16(0), uint16(0),
+      uint32(0x02014b50), uint16(20), uint16(20), uint16(utf8Flag), uint16(0), uint16(0), uint16(0),
       uint32(crc), uint32(data.length), uint32(data.length), uint16(name.length), uint16(0), uint16(0),
       uint16(0), uint16(0), uint32(0), uint32(offset), name
     ]));

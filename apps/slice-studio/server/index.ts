@@ -1,18 +1,22 @@
 import cors from "@elysiajs/cors";
 import { Elysia, t } from "elysia";
 import fs from "node:fs";
-import { apiHost, apiPort } from "./config";
+import { allowedOrigin, apiHost, apiPort } from "./config";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
 import {
   addPages,
   createProject,
+  deletePage,
   deleteProject,
   getPageOriginalPath,
   getProjectDetail,
-  listProjects,
+  listProjectCards,
+  renamePage,
   renameProject,
+  reorderPages,
+  replacePage,
   saveSlices
 } from "./projects";
 import type { SaveSlicesRequest } from "../shared/types";
@@ -20,7 +24,7 @@ import type { SaveSlicesRequest } from "../shared/types";
 initDatabase();
 
 const app = new Elysia()
-  .use(cors())
+  .use(cors({ origin: allowedOrigin }))
   .onError(({ error, set }) => {
     if (error instanceof HttpError) {
       set.status = error.statusCode;
@@ -30,7 +34,7 @@ const app = new Elysia()
     return { error: error instanceof Error ? error.message : "Internal server error" };
   })
   .get("/api/health", () => ({ ok: true }))
-  .get("/api/projects", () => ({ projects: listProjects() }))
+  .get("/api/projects", () => ({ projects: listProjectCards() }))
   .post("/api/projects", ({ body }) => ({ project: createProject(body) }), {
     body: t.Object({
       name: t.Optional(t.String())
@@ -53,6 +57,24 @@ const app = new Elysia()
       })
     })
   })
+  .patch("/api/projects/:projectId/pages/order", ({ params, body }) => reorderPages(params.projectId, body.pageIds), {
+    body: t.Object({
+      pageIds: t.Array(t.String())
+    })
+  })
+  .patch("/api/projects/:projectId/pages/:pageId", ({ params, body }) => ({ page: renamePage(params.projectId, params.pageId, body.displayName) }), {
+    body: t.Object({
+      displayName: t.String()
+    })
+  })
+  .post("/api/projects/:projectId/pages/:pageId/replace", async ({ params, body }) => replacePage(params.projectId, params.pageId, body.file), {
+    body: t.Object({
+      file: t.File({
+        type: "image"
+      })
+    })
+  })
+  .delete("/api/projects/:projectId/pages/:pageId", ({ params }) => deletePage(params.projectId, params.pageId))
   .get("/api/projects/:projectId/pages/:pageId/source", ({ params }) => {
     const filePath = getPageOriginalPath(params.projectId, params.pageId);
     return new Response(Bun.file(filePath), {

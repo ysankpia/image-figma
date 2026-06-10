@@ -9,6 +9,14 @@ describe("zip writer", () => {
     ]);
     expect(readZipEntryNames(zip)).toEqual(["manifest.json", "slices/page_0001/slice_0001.png"]);
   });
+
+  it("marks utf8 filenames", () => {
+    const zip = createZipBuffer([
+      { name: "originals/P1-首页.png", data: Buffer.from("png") }
+    ]);
+    expect(readZipEntryNames(zip)).toEqual(["originals/P1-首页.png"]);
+    expect(zip.readUInt16LE(6) & 0x0800).toBe(0x0800);
+  });
 });
 
 function readZipEntryNames(buffer: Buffer): string[] {

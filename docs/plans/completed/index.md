@@ -149,3 +149,7 @@
 - [157 Figma Design Manual Slice Workbench](157-figma-design-manual-slice-workbench.md)
 - [160 Slice Studio Canvas-First UI](160-slice-studio-canvas-first-ui.md)
 - [161 Slice Studio Projects Home UI](161-slice-studio-projects-home-ui.md)
+- [162 Slice Studio Project Home Toolbar Cleanup](162-slice-studio-project-home-toolbar-cleanup.md)
+- [163 Slice Studio Review Editor Density](163-slice-studio-review-editor-density.md)
+- [164 Slice Studio Page Naming And Asset List Density](164-slice-studio-page-naming-and-asset-list-density.md)
+- [165 Slice Studio Persistence And Page Management Hardening](165-slice-studio-persistence-and-page-management-hardening.md)

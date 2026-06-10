@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Check, FileImage, Grid3X3, LayoutList, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiBaseUrl, apiDelete, apiGet, apiPatch, apiPost } from "@/components/api";
-import type { ProjectDetail, ProjectSummary } from "@/shared/types";
+import type { ProjectListItem, ProjectSummary } from "@/shared/types";
 
 type ProjectFilter = "recent" | "all" | "withSlices";
 type SortMode = "updated" | "name" | "pages";
@@ -27,6 +27,7 @@ export function ProjectWorkspace() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ProjectCardModel | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     void loadProjects();
@@ -34,8 +35,13 @@ export function ProjectWorkspace() {
 
   async function loadProjects() {
     try {
-      const data = await apiGet<{ projects: ProjectSummary[] }>("/api/projects");
-      const enriched = await Promise.all(data.projects.map(loadProjectCard));
+      const data = await apiGet<{ projects: ProjectListItem[] }>("/api/projects");
+      const enriched = data.projects.map((project) => ({
+        ...project,
+        previewUrl: project.firstPage?.sourceUrl ? resolveApiUrl(project.firstPage.sourceUrl) : null,
+        firstPageName: project.firstPage ? project.firstPage.displayName || project.firstPage.originalName : null,
+        firstPageSize: project.firstPage ? `${project.firstPage.width}x${project.firstPage.height}` : null
+      }));
       setProjects(enriched);
       setStatus(data.projects.length ? `共 ${data.projects.length} 个项目。` : "还没有项目。新建一个项目开始切图。");
     } catch (error) {
@@ -43,30 +49,15 @@ export function ProjectWorkspace() {
     }
   }
 
-  async function loadProjectCard(project: ProjectSummary): Promise<ProjectCardModel> {
-    try {
-      const detail = await apiGet<ProjectDetail>(`/api/projects/${project.id}`);
-      const firstPage = detail.pages[0];
-      return {
-        ...project,
-        previewUrl: firstPage?.sourceUrl ? resolveApiUrl(firstPage.sourceUrl) : null,
-        firstPageName: firstPage?.originalName || null,
-        firstPageSize: firstPage ? `${firstPage.width}x${firstPage.height}` : null
-      };
-    } catch {
-      return {
-        ...project,
-        previewUrl: null,
-        firstPageName: null,
-        firstPageSize: null
-      };
-    }
-  }
-
   async function createProject() {
     const projectName = name.trim() || `未命名项目 ${new Date().toLocaleString("zh-CN")}`;
     const data = await apiPost<{ project: ProjectSummary }>("/api/projects", { name: projectName });
     window.location.href = `/projects/${data.project.id}/review`;
+  }
+
+  function closeCreateDialog() {
+    setCreateDialogOpen(false);
+    setName("");
   }
 
   function startRenameProject(project: ProjectSummary) {
@@ -119,30 +110,13 @@ export function ProjectWorkspace() {
             <span>Slice Studio</span>
             <strong>{filter === "withSlices" ? "With assets" : filter === "all" ? "All projects" : "Recents"}</strong>
           </div>
-          <div className="workspaceProductSwitch" aria-label="项目类型">
-            <button type="button" className={filter === "recent" ? "active" : ""} onClick={() => setFilter("recent")}><FileImage aria-hidden="true" /> Design</button>
-            <button type="button" className={filter === "withSlices" ? "active" : ""} onClick={() => setFilter("withSlices")}>Assets</button>
-            <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button>
-          </div>
-          <form
-            className="createBar"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void createProject();
-            }}
-          >
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="项目名称" aria-label="项目名称" />
-            <button type="submit"><Plus aria-hidden="true" /> 新建</button>
-          </form>
+          <button type="button" className="newProjectButton" onClick={() => setCreateDialogOpen(true)}>
+            <Plus aria-hidden="true" />
+            新建项目
+          </button>
         </header>
 
         <div className="workspaceContent">
-          <div className="workspaceSearchRow">
-            <label className="workspaceSearch">
-              <Search aria-hidden="true" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目" />
-            </label>
-          </div>
           <div className="workspaceSectionBar">
             <div className="workspaceTabs" role="tablist" aria-label="项目过滤">
               <button type="button" className={filter === "recent" ? "active" : ""} onClick={() => setFilter("recent")}>最近查看</button>
@@ -150,6 +124,10 @@ export function ProjectWorkspace() {
               <button type="button" className={filter === "withSlices" ? "active" : ""} onClick={() => setFilter("withSlices")}>已有切图</button>
             </div>
             <div className="workspaceControls">
+              <label className="workspaceSearch">
+                <Search aria-hidden="true" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目" />
+              </label>
               <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} aria-label="排序方式">
                 <option value="updated">最近更新</option>
                 <option value="name">项目名称</option>
@@ -194,6 +172,44 @@ export function ProjectWorkspace() {
           )}
         </div>
       </section>
+      {createDialogOpen ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={closeCreateDialog}>
+          <section
+            className="confirmDialog createProjectDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-project-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="dialogCloseButton" aria-label="关闭" onClick={closeCreateDialog}>
+              <X aria-hidden="true" />
+            </button>
+            <div className="dialogIcon primary">
+              <FileImage aria-hidden="true" />
+            </div>
+            <div className="dialogText">
+              <h2 id="create-project-title">新建项目</h2>
+              <p>创建一个本地切图项目，然后上传 UI 截图开始画框。</p>
+            </div>
+            <form
+              className="createProjectForm"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createProject();
+              }}
+            >
+              <label>
+                <span>项目名称</span>
+                <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：小程序一期切图" />
+              </label>
+              <div className="dialogActions">
+                <button type="button" onClick={closeCreateDialog}>取消</button>
+                <button type="submit" className="primaryConfirmButton">创建项目</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
       {pendingDeleteProject ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => setPendingDeleteProject(null)}>
           <section

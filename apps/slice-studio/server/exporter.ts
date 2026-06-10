@@ -2,12 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { projectsRoot } from "./config";
+import { httpError } from "./errors";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
-import { buildExportManifest } from "../shared/manifest";
+import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
 export async function exportAssets(projectId: string): Promise<{ ok: true; assetCount: number; url: string }> {
   const detail = getProjectDetail(projectId);
+  const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
+  if (assetCount === 0) throw httpError(409, "No slices selected");
+
   const exportDir = path.join(projectsRoot, projectId, "exports");
   fs.mkdirSync(exportDir, { recursive: true });
 
@@ -25,9 +29,10 @@ export async function exportAssets(projectId: string): Promise<{ ok: true; asset
   ];
 
   for (const [pageIndex, page] of detail.pages.entries()) {
+    const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
     const originalBuffer = fs.readFileSync(getPageOriginalPath(projectId, page.id));
     files.push({
-      name: `originals/page_${String(pageIndex + 1).padStart(4, "0")}.png`,
+      name: `originals/${pageDirectory}.png`,
       data: originalBuffer
     });
     for (const [sliceIndex, slice] of page.slices.entries()) {
@@ -41,7 +46,7 @@ export async function exportAssets(projectId: string): Promise<{ ok: true; asset
         .png()
         .toBuffer();
       files.push({
-        name: `slices/${page.id}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
+        name: `slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
         data: sliceBuffer
       });
     }
@@ -50,7 +55,7 @@ export async function exportAssets(projectId: string): Promise<{ ok: true; asset
   fs.writeFileSync(path.join(exportDir, "assets.zip"), createZipBuffer(files));
   return {
     ok: true,
-    assetCount: detail.pages.reduce((sum, page) => sum + page.slices.length, 0),
+    assetCount,
     url: `/api/projects/${projectId}/assets.zip`
   };
 }

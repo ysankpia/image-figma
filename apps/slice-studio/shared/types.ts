@@ -16,11 +16,16 @@ export type ProjectSummary = {
   sliceCount: number;
 };
 
+export type ProjectListItem = ProjectSummary & {
+  firstPage: PageRecord | null;
+};
+
 export type PageRecord = {
   id: string;
   projectId: string;
   pageIndex: number;
   originalName: string;
+  displayName: string;
   width: number;
   height: number;
   sourceUrl: string;
@@ -63,6 +68,8 @@ export type ExportManifest = {
   pages: Array<{
     pageId: string;
     originalName: string;
+    displayName: string;
+    pageDirectory: string;
     original: string;
     width: number;
     height: number;

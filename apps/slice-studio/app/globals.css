@@ -54,7 +54,7 @@ button:disabled {
 }
 
 .primaryButton,
-.createBar button {
+.newProjectButton {
   display: inline-grid;
   place-items: center;
   border-color: var(--blue);
@@ -90,12 +90,6 @@ h1 {
   font-size: 13px;
 }
 
-.workspaceSearchRow {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 22px;
-}
-
 .workspaceCrumbs span {
   color: var(--muted);
   font-size: 12px;
@@ -114,8 +108,7 @@ h1 {
 }
 
 .workspaceSearch svg,
-.workspaceProductSwitch svg,
-.createBar svg,
+.newProjectButton svg,
 .viewSwitch svg,
 .cardActions svg,
 .projectIcon svg,
@@ -144,7 +137,7 @@ h1 {
 
 .workspaceTopbar {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(320px, 420px);
+  grid-template-columns: minmax(180px, 1fr) auto;
   align-items: center;
   gap: 18px;
   min-width: 0;
@@ -168,49 +161,9 @@ h1 {
   white-space: nowrap;
 }
 
-.workspaceProductSwitch {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.workspaceProductSwitch button {
-  display: inline-grid;
+.newProjectButton {
   grid-auto-flow: column;
   align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  border-radius: 9999px;
-  background: #f6f6f7;
-  white-space: nowrap;
-}
-
-.workspaceProductSwitch button.active {
-  border-color: #d9e8ff;
-  background: #f2f8ff;
-}
-
-.createBar {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-
-.createBar input {
-  width: 100%;
-  min-width: 0;
-  min-height: 38px;
-  border: 1px solid var(--border);
-  border-radius: 9999px;
-  padding: 0 14px;
-  background: var(--surface);
-}
-
-.createBar button {
-  display: inline-grid;
-  grid-auto-flow: column;
   gap: 6px;
   white-space: nowrap;
 }
@@ -237,6 +190,10 @@ h1 {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.workspaceControls {
+  justify-content: flex-end;
 }
 
 .workspaceTabs button {
@@ -450,6 +407,19 @@ h1 {
   grid-area: actions;
   display: flex;
   gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.projectCard:hover .cardActions,
+.projectCard:focus-within .cardActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.projectCard:focus-within .cardActions {
+  opacity: 1;
 }
 
 .cardActions button {
@@ -538,6 +508,11 @@ h1 {
   color: var(--danger);
 }
 
+.dialogIcon.primary {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
 .dialogText {
   display: grid;
   gap: 8px;
@@ -565,6 +540,38 @@ h1 {
   border-radius: 10px;
 }
 
+.createProjectForm {
+  display: grid;
+  gap: 16px;
+}
+
+.createProjectForm label {
+  display: grid;
+  gap: 7px;
+}
+
+.createProjectForm label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.createProjectForm input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 11px;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.createProjectForm input:focus {
+  border-color: var(--blue);
+  outline: 3px solid rgba(0, 102, 204, 0.12);
+}
+
 .dangerConfirmButton {
   border-color: var(--danger);
   background: var(--danger);
@@ -574,6 +581,18 @@ h1 {
 .dangerConfirmButton:hover:not(:disabled) {
   border-color: #8f1d14;
   background: #8f1d14;
+  color: #fff;
+}
+
+.primaryConfirmButton {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.primaryConfirmButton:hover:not(:disabled) {
+  border-color: #0057b8;
+  background: #0057b8;
   color: #fff;
 }
 
@@ -637,6 +656,7 @@ h1 {
   gap: 8px;
   justify-content: flex-end;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .topbarBack,
@@ -682,11 +702,45 @@ h1 {
   white-space: nowrap;
 }
 
-.projectTitleBlock span,
-.zoomReadout {
+.projectTitleBlock span {
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.zoomGroup {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.zoomButton {
+  min-height: 32px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.zoomButton:hover:not(:disabled) {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.zoomReadout {
+  min-width: 54px;
+  border-inline: 1px solid var(--border);
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 32px;
+  text-align: center;
 }
 
 .uploadButton {
@@ -747,11 +801,10 @@ h1 {
   padding: 0 8px 12px;
 }
 
-.pageThumbButton {
+.pageThumbCard {
   position: relative;
   display: grid;
   gap: 5px;
-  width: 100%;
   min-height: 74px;
   padding: 5px;
   border: 1px solid transparent;
@@ -760,9 +813,26 @@ h1 {
   color: var(--ink);
 }
 
-.pageThumbButton.active {
+.pageThumbCard.active {
   border-color: var(--blue);
   background: var(--blue-soft);
+}
+
+.pageThumbButton {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.pageThumbButton:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--ink);
 }
 
 .pageThumbImage {
@@ -783,11 +853,21 @@ h1 {
 }
 
 .pageThumbMeta,
+.pageThumbName,
 .pageThumbCount {
   color: var(--muted);
   font-size: 10px;
   line-height: 1;
   text-align: center;
+}
+
+.pageThumbName {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pageThumbCount {
@@ -802,6 +882,27 @@ h1 {
   background: var(--blue);
   color: #fff;
   font-size: 10px;
+}
+
+.pageThumbActions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pageThumbActions button {
+  display: grid;
+  width: 100%;
+  height: 22px;
+  min-height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  padding: 0;
+}
+
+.pageThumbActions svg {
+  width: 12px;
+  height: 12px;
 }
 
 .pageRailEmpty {
@@ -829,15 +930,33 @@ h1 {
 }
 
 .saveState {
-  min-width: 0;
+  display: inline-grid;
+  min-width: 56px;
+  min-height: 26px;
+  place-items: center;
   overflow: hidden;
-  color: var(--muted);
-  font-size: 13px;
+  border-radius: 999px;
+  padding: 0 9px;
+  background: #eef7ee;
+  color: #257a38;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.saveState.saving {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.saveState.saved {
+  background: #eef7ee;
+  color: #257a38;
+}
+
 .saveState.error {
+  background: #fff1f0;
   color: var(--danger);
 }
 
@@ -948,11 +1067,11 @@ h1 {
 
 .inspectorInner {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 14px;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 12px;
   height: 100%;
   min-width: 0;
-  padding: 14px;
+  padding: 12px;
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -964,25 +1083,31 @@ h1 {
 }
 
 .inspectorHeader h2 {
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1.2;
 }
 
 .inspectorHeader span,
 .inspectorSummary span,
+.pageInfoPanel span,
+.pageNameField span,
+.compactFields label > span,
 .fieldStack label > span,
+.activeAssetHeader span,
 .assetItem span {
   color: var(--muted);
   font-size: 12px;
 }
 
 .activeAssetPanel,
+.pageInfoPanel,
 .inspectorSummary {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface);
 }
 
@@ -990,18 +1115,112 @@ h1 {
   gap: 6px;
 }
 
+.pageInfoPanel {
+  gap: 7px;
+}
+
+.pageInfoPanel > strong,
+.pageInfoPanel > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pageNameField {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pageNameField input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 9px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.pageActionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pageActionGrid button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  place-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 30px;
+  border-radius: 8px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+
+.pageActionGrid svg {
+  width: 13px;
+  height: 13px;
+}
+
+.pageActionGrid input {
+  display: none;
+}
+
+.hiddenFileInput {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .fieldStack {
   display: grid;
   gap: 10px;
 }
 
-.fieldStack label {
+.activeAssetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.activeAssetHeader div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activeAssetHeader strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compactFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 8px;
+}
+
+.fieldStack label,
+.compactFields label {
   display: grid;
   gap: 5px;
 }
 
 .fieldStack input,
-.fieldStack select {
+.fieldStack select,
+.compactFields input,
+.compactFields select {
   width: 100%;
   min-height: 32px;
   border: 1px solid var(--border);
@@ -1012,7 +1231,7 @@ h1 {
 
 .bboxGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1029,15 +1248,22 @@ h1 {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 .assetItem {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) 64px 28px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 42px;
+  overflow: hidden;
+  padding: 5px 6px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--surface);
+  cursor: pointer;
 }
 
 .assetItem.active {
@@ -1045,23 +1271,85 @@ h1 {
   background: #fff5f7;
 }
 
+.assetItem:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.assetIndex {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.assetFields {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .assetItem input,
 .assetItem select {
   width: 100%;
-  min-height: 30px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 26px;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 0 8px;
+  border-radius: 8px;
+  padding: 0 6px;
   background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.assetItem input {
+  border-color: transparent;
+  padding-inline: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetItem input:focus {
+  border-color: var(--blue);
+  padding-inline: 7px;
+}
+
+.assetItem select {
+  appearance: none;
+  overflow: hidden;
+  padding-right: 4px;
+  text-overflow: ellipsis;
+}
+
+.assetItemDelete,
+.iconDangerButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--danger);
+}
+
+.assetItemDelete svg,
+.iconDangerButton svg {
+  width: 14px;
+  height: 14px;
 }
 
 @media (max-width: 980px) {
   .workspaceTopbar {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .workspaceProductSwitch {
-    display: none;
   }
 
   .workspaceContent {

@@ -24,6 +24,7 @@ export function initDatabase(): void {
       project_id TEXT NOT NULL,
       page_index INTEGER NOT NULL,
       original_name TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
       original_path TEXT NOT NULL,
       width INTEGER NOT NULL,
       height INTEGER NOT NULL,
@@ -49,6 +50,14 @@ export function initDatabase(): void {
       FOREIGN KEY (project_id, page_id) REFERENCES pages(project_id, id) ON DELETE CASCADE
     );
   `);
+  ensureColumn("pages", "display_name", "TEXT NOT NULL DEFAULT ''");
+}
+
+function ensureColumn(tableName: string, columnName: string, definition: string): void {
+  const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${tableName})`).all();
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
 }
 
 export function transaction<T>(fn: () => T): T {
@@ -77,6 +86,7 @@ export type PageRow = {
   project_id: string;
   page_index: number;
   original_name: string;
+  display_name: string;
   original_path: string;
   width: number;
   height: number;

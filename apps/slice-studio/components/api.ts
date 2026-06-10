@@ -1,4 +1,4 @@
-import type { ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
+import type { PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_SLICE_STUDIO_API_URL || "http://127.0.0.1:4110";
 
@@ -45,6 +45,27 @@ export async function uploadPages(projectId: string, files: File[]): Promise<{ p
 
 export async function saveSlices(projectId: string, payload: SaveSlicesRequest): Promise<{ ok: true; project: ProjectSummary }> {
   return apiPut(`/api/projects/${projectId}/slices`, payload);
+}
+
+export async function renamePage(projectId: string, pageId: string, displayName: string): Promise<{ page: PageRecord }> {
+  return apiPatch(`/api/projects/${projectId}/pages/${pageId}`, { displayName });
+}
+
+export async function reorderPages(projectId: string, pageIds: string[]): Promise<ProjectDetail> {
+  return apiPatch(`/api/projects/${projectId}/pages/order`, { pageIds });
+}
+
+export async function deletePage(projectId: string, pageId: string): Promise<ProjectDetail> {
+  return apiDelete(`/api/projects/${projectId}/pages/${pageId}`);
+}
+
+export async function replacePage(projectId: string, pageId: string, file: File): Promise<ProjectDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request(`/api/projects/${projectId}/pages/${pageId}/replace`, {
+    method: "POST",
+    body: formData
+  });
 }
 
 export async function request<T>(path: string, init: RequestInit): Promise<T> {
