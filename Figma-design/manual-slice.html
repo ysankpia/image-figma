@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual UI Slice Workbench</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --apple-primary: #0066cc;
+        --apple-primary-hover: #0071e3;
+        --apple-primary-pressed: #005bb5;
+        --apple-ink: #1d1d1f;
+        --apple-muted: #7a7a7a;
+        --apple-canvas: #ffffff;
+        --apple-surface: #ffffff;
+        --apple-surface-alt: #fafafc;
+        --apple-surface-muted: #f5f5f7;
+        --apple-border: #e0e0e0;
+        --apple-border-strong: #c6c6c8;
+        --apple-focus: #0071e3;
+        --apple-on-primary: #ffffff;
+        --apple-selection: rgba(0, 102, 204, 0.12);
+        --apple-selection-active: rgba(0, 113, 227, 0.16);
+        --apple-blue-soft: #f5f9ff;
+        --apple-grid: rgba(29, 29, 31, 0.045);
+        --apple-grid-strong: rgba(29, 29, 31, 0.075);
+        --apple-shadow-canvas: 0 24px 70px rgba(0, 0, 0, 0.18);
+        --scrollbar-thumb: #d2d2d7;
+        --scrollbar-track: #f5f5f7;
+        --panel-left: clamp(200px, 18dvw, 300px);
+        --panel-right: clamp(220px, 21dvw, 340px);
+        --toolbar-height: 48px;
+        --floating-tool-size: 46px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        height: 100dvh;
+        overflow: hidden;
+        background: var(--apple-surface-muted);
+        color: var(--apple-ink);
+        font-family: "SF Pro Text", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        min-height: 32px;
+        border: 1px solid var(--apple-border);
+        border-radius: 9999px;
+        background: var(--apple-surface);
+        color: var(--apple-ink);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+      }
+
+      button:hover:not(:disabled) {
+        border-color: var(--apple-primary);
+        background: var(--apple-blue-soft);
+        color: var(--apple-primary);
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--apple-focus);
+        outline-offset: 2px;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .sidebar,
+      .rightbar,
+      .stageWrap {
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+        scrollbar-width: thin;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: var(--panel-left) minmax(0, 1fr) var(--panel-right);
+        height: 100dvh;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .sidebar,
+      .rightbar {
+        min-width: 0;
+        overflow: auto;
+        scrollbar-gutter: stable;
+        border-color: var(--apple-border);
+        background: color-mix(in srgb, var(--apple-surface-alt) 94%, transparent);
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--apple-border);
+      }
+
+      .rightbar {
+        border-left: 1px solid var(--apple-border);
+      }
+
+      main {
+        position: relative;
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        color: var(--apple-ink);
+        font-family: "SF Pro Display", "SF Pro Text", system-ui, -apple-system, sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+
+      h2 {
+        margin-bottom: 10px;
+        color: var(--apple-ink);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .muted {
+        color: var(--apple-muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .upload {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid var(--apple-border);
+        border-radius: 18px;
+        background: var(--apple-surface);
+      }
+
+      .upload.dragover {
+        border-color: var(--apple-primary);
+        background: var(--apple-blue-soft);
+      }
+
+      .fileInput {
+        width: 100%;
+      }
+
+      .pageList,
+      .assetList {
+        display: grid;
+        gap: 8px;
+      }
+
+      .pageBtn {
+        display: grid;
+        gap: 3px;
+        width: 100%;
+        padding: 10px 12px;
+        text-align: left;
+        border-color: transparent;
+        border-radius: 12px;
+        background: transparent;
+      }
+
+      .pageBtn.active {
+        border-color: var(--apple-primary);
+        background: var(--apple-blue-soft);
+        color: var(--apple-primary);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-width: 0;
+        min-height: var(--toolbar-height);
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--apple-border);
+        background: color-mix(in srgb, var(--apple-surface-alt) 94%, transparent);
+      }
+
+      .toolbar button {
+        padding: 0 7px;
+      }
+
+      .toolbar button.active,
+      .floatingTools button.active {
+        border-color: var(--apple-primary);
+        background: var(--apple-primary);
+        color: var(--apple-on-primary);
+      }
+
+      .toolbar button.active:hover:not(:disabled),
+      .floatingTools button.active:hover:not(:disabled) {
+        border-color: var(--apple-primary-hover);
+        background: var(--apple-primary-hover);
+        color: var(--apple-on-primary);
+      }
+
+      .toolbar .status {
+        flex: 1 1 140px;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--apple-muted);
+        font-size: 12px;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .zoomValue {
+        min-width: 40px;
+        color: var(--apple-ink);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      .stageWrap {
+        position: relative;
+        height: 100%;
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+        background:
+          linear-gradient(90deg, var(--apple-grid-strong) 1px, transparent 1px),
+          linear-gradient(0deg, var(--apple-grid-strong) 1px, transparent 1px),
+          linear-gradient(90deg, var(--apple-grid) 1px, transparent 1px),
+          linear-gradient(0deg, var(--apple-grid) 1px, transparent 1px),
+          var(--apple-surface-muted);
+        background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+        cursor: default;
+      }
+
+      .floatingTools {
+        position: absolute;
+        top: calc(var(--toolbar-height) + 18px);
+        left: 18px;
+        z-index: 20;
+        display: grid;
+        gap: 8px;
+        width: 64px;
+        padding: 8px;
+        border: 1px solid rgba(224, 224, 224, 0.84);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 18px 42px rgba(29, 29, 31, 0.16);
+      }
+
+      .floatingTools button {
+        display: grid;
+        place-items: center;
+        width: var(--floating-tool-size);
+        height: var(--floating-tool-size);
+        min-height: var(--floating-tool-size);
+        padding: 0;
+        border-color: transparent;
+        border-radius: 15px;
+        background: transparent;
+        color: var(--apple-ink);
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .floatingTools svg {
+        width: 24px;
+        height: 24px;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+        pointer-events: none;
+      }
+
+      .floatingTools button:hover:not(:disabled) {
+        border-color: var(--apple-border);
+      }
+
+      .floatingTools button:disabled {
+        color: var(--apple-muted);
+      }
+
+      .floatingTools .toolDivider {
+        width: 28px;
+        height: 1px;
+        margin: 2px auto;
+        background: var(--apple-border);
+      }
+
+      .stageWrap.space-ready {
+        cursor: grab;
+      }
+
+      .stageWrap.hand-tool {
+        cursor: grab;
+      }
+
+      .stageWrap.panning {
+        cursor: grabbing;
+      }
+
+      .stageInner {
+        position: relative;
+        width: max-content;
+        min-width: 100%;
+        min-height: 100%;
+        padding: 720px;
+      }
+
+      .canvas {
+        position: relative;
+        display: inline-block;
+        line-height: 0;
+        background: var(--apple-canvas);
+        box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.12), var(--apple-shadow-canvas);
+      }
+
+      .canvas img {
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        line-height: normal;
+      }
+
+      .slice {
+        position: absolute;
+        border: 2px solid var(--apple-primary);
+        background: var(--apple-selection);
+        box-shadow: 0 0 0 1px #fff inset, 0 0 0 1px rgba(29, 29, 31, 0.56);
+        cursor: move;
+      }
+
+      .slice.active {
+        border-color: var(--apple-primary-hover);
+        background: var(--apple-selection-active);
+      }
+
+      .label {
+        position: absolute;
+        top: -18px;
+        left: -2px;
+        min-width: 20px;
+        height: 16px;
+        overflow: hidden;
+        padding: 0 5px;
+        border-radius: 9999px;
+        background: var(--apple-primary);
+        color: var(--apple-on-primary);
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 16px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .handle {
+        position: absolute;
+        width: 11px;
+        height: 11px;
+        border: 2px solid var(--apple-primary);
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 1px 3px rgba(29, 29, 31, 0.24);
+      }
+
+      .handle[data-handle="nw"] { top: -7px; left: -7px; cursor: nwse-resize; }
+      .handle[data-handle="n"] { top: -7px; left: calc(50% - 5px); cursor: ns-resize; }
+      .handle[data-handle="ne"] { top: -7px; right: -7px; cursor: nesw-resize; }
+      .handle[data-handle="e"] { top: calc(50% - 5px); right: -7px; cursor: ew-resize; }
+      .handle[data-handle="se"] { right: -7px; bottom: -7px; cursor: nwse-resize; }
+      .handle[data-handle="s"] { bottom: -7px; left: calc(50% - 5px); cursor: ns-resize; }
+      .handle[data-handle="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+      .handle[data-handle="w"] { top: calc(50% - 5px); left: -7px; cursor: ew-resize; }
+
+      .draft {
+        position: absolute;
+        border: 2px dashed #fff;
+        background: rgba(0, 102, 204, 0.05);
+        box-shadow: 0 0 0 2px var(--apple-ink);
+        pointer-events: none;
+      }
+
+      .canvas.drawing .overlay {
+        cursor: crosshair;
+      }
+
+      .canvas.drawing .slice {
+        border-width: 1px;
+        border-color: rgba(0, 102, 204, 0.78);
+        background: transparent;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.88), 0 0 0 2px rgba(0, 0, 0, 0.32);
+        pointer-events: none;
+      }
+
+      .canvas.drawing .slice.active {
+        border-color: rgba(0, 102, 204, 0.78);
+        background: transparent;
+      }
+
+      .canvas.drawing .label,
+      .canvas.drawing .handle {
+        display: none;
+      }
+
+      .asset {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid var(--apple-border);
+        border-radius: 12px;
+        background: var(--apple-surface);
+      }
+
+      .asset.active {
+        border-color: var(--apple-primary);
+        background: var(--apple-blue-soft);
+      }
+
+      .thumb {
+        width: 52px;
+        height: 52px;
+        object-fit: contain;
+        border: 1px solid var(--apple-border);
+        border-radius: 10px;
+        background:
+          linear-gradient(45deg, #f0f1f4 25%, transparent 25%),
+          linear-gradient(-45deg, #f0f1f4 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #f0f1f4 75%),
+          linear-gradient(-45deg, transparent 75%, #f0f1f4 75%);
+        background-size: 12px 12px;
+      }
+
+      .assetMeta {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .assetMeta input,
+      .assetMeta select {
+        width: 100%;
+        height: 28px;
+        border: 1px solid var(--apple-border);
+        border-radius: 8px;
+        padding: 0 7px;
+        background: var(--apple-surface);
+        color: var(--apple-ink);
+      }
+
+      .assetActions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .assetActions button {
+        height: 27px;
+        padding: 0 8px;
+      }
+
+      .empty {
+        padding: 18px;
+        border: 1px solid var(--apple-border);
+        border-radius: 18px;
+        color: var(--apple-muted);
+        background: color-mix(in srgb, var(--apple-surface) 88%, transparent);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      #emptyState {
+        position: absolute;
+        top: 32px;
+        left: 32px;
+        max-width: 360px;
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      @media (max-width: 880px) {
+        .app {
+          grid-template-columns: 220px minmax(0, 1fr);
+        }
+
+        .rightbar {
+          display: none;
+        }
+      }
+
+      @media (max-width: 780px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto minmax(0, 1fr);
+        }
+
+        .sidebar {
+          max-height: 220px;
+          border-right: 0;
+          border-bottom: 1px solid var(--apple-border);
+        }
+
+        .toolbar {
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="panel">
+          <h1 id="projectTitle">Manual Slice Workbench</h1>
+          <p class="muted">上传 UI 截图，手动画出开发要用的 image/icon 资产。没有自动候选，没有 basic/text/shape 噪音。</p>
+          <div id="dropZone" class="upload">
+            <input id="fileInput" class="fileInput" name="files" type="file" accept="image/*" multiple />
+            <button id="clearBtn" type="button">清空项目</button>
+            <span class="muted">支持多图、拖拽、粘贴图片。</span>
+            <span class="muted">H 手形拖动画布，Ctrl/⌘ + 滚轮缩放。</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Pages</h2>
+          <div id="pageList" class="pageList"></div>
+        </div>
+      </aside>
+
+      <main>
+        <header class="toolbar">
+          <button id="fitBtn" type="button">Fit</button>
+          <button id="oneBtn" type="button">100%</button>
+          <span id="zoomValue" class="zoomValue">100%</span>
+          <button id="exportBtn" type="button" disabled>导出</button>
+          <button id="figmaBtn" type="button" disabled>Figma</button>
+          <span id="status" class="status">等待上传图片。</span>
+        </header>
+        <nav class="floatingTools" aria-label="画布工具">
+          <button id="selectTool" type="button" class="active" aria-label="选择工具 V" title="选择 V">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3l14 8-6 2-3 6z" /></svg>
+          </button>
+          <button id="drawTool" type="button" aria-label="画框工具 B" title="画框 B">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" /></svg>
+          </button>
+          <button id="panTool" type="button" aria-label="手形拖动画布 H" title="手形 H">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12V7a1.6 1.6 0 0 1 3.2 0v4" /><path d="M10.2 11V5.8a1.6 1.6 0 0 1 3.2 0V11" /><path d="M13.4 11V7.2a1.6 1.6 0 0 1 3.2 0V13" /><path d="M16.6 13v-2.2a1.6 1.6 0 0 1 3.2 0V15c0 4-2.4 6-6.2 6h-1.3a6 6 0 0 1-4.6-2.2L4.6 15a1.7 1.7 0 0 1 2.6-2.2l1.4 1.5" /></svg>
+          </button>
+          <span class="toolDivider" aria-hidden="true"></span>
+          <button id="deleteBtn" type="button" disabled aria-label="删除当前资产" title="删除">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16" /><path d="M9 7V5h6v2" /><path d="M6 7l1 14h10l1-14" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+          </button>
+        </nav>
+        <div id="stageWrap" class="stageWrap">
+          <div id="stageInner" class="stageInner">
+            <div id="emptyState" class="empty">上传一张或多张 UI 截图后，在中间画布拖拽框选需要切出的资产。</div>
+            <div id="canvas" class="canvas" hidden>
+              <img id="sourceImage" alt="当前 UI 截图" />
+              <div id="overlay" class="overlay"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="rightbar">
+        <div class="panel">
+          <h2>Selected Assets</h2>
+          <div id="assetList" class="assetList"></div>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const projectId = new URLSearchParams(window.location.search).get("projectId");
+      const state = {
+        pages: [],
+        activePageId: null,
+        activeSliceId: null,
+        tool: "select",
+        zoom: 1,
+        drag: null,
+        spacePressed: false,
+        projectId,
+        projectMode: Boolean(projectId),
+        project: null,
+        saveState: "idle",
+        saveTimer: null
+      };
+
+      const projectTitle = document.getElementById("projectTitle");
+      const fileInput = document.getElementById("fileInput");
+      const dropZone = document.getElementById("dropZone");
+      const clearBtn = document.getElementById("clearBtn");
+      const pageList = document.getElementById("pageList");
+      const assetList = document.getElementById("assetList");
+      const sourceImage = document.getElementById("sourceImage");
+      const canvas = document.getElementById("canvas");
+      const overlay = document.getElementById("overlay");
+      const stageWrap = document.getElementById("stageWrap");
+      const floatingTools = document.querySelector(".floatingTools");
+      const stageInner = document.getElementById("stageInner");
+      const emptyState = document.getElementById("emptyState");
+      const statusEl = document.getElementById("status");
+      const zoomValue = document.getElementById("zoomValue");
+      const selectTool = document.getElementById("selectTool");
+      const panTool = document.getElementById("panTool");
+      const drawTool = document.getElementById("drawTool");
+      const fitBtn = document.getElementById("fitBtn");
+      const oneBtn = document.getElementById("oneBtn");
+      const deleteBtn = document.getElementById("deleteBtn");
+      const exportBtn = document.getElementById("exportBtn");
+      const figmaBtn = document.getElementById("figmaBtn");
+
+      if (state.projectMode) {
+        clearBtn.textContent = "返回项目列表";
+      }
+
+      fileInput.addEventListener("change", () => addFiles(fileInput.files));
+      clearBtn.addEventListener("click", clearProject);
+      selectTool.addEventListener("click", () => setTool("select"));
+      panTool.addEventListener("click", () => setTool("pan"));
+      drawTool.addEventListener("click", () => setTool("draw"));
+      fitBtn.addEventListener("click", fitToViewport);
+      oneBtn.addEventListener("click", () => setZoom(1));
+      deleteBtn.addEventListener("click", deleteActiveSlice);
+      exportBtn.addEventListener("click", exportAssetsZip);
+      figmaBtn.addEventListener("click", sendToFigma);
+      for (const eventName of ["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel", "contextmenu"]) {
+        floatingTools.addEventListener(eventName, (event) => event.stopPropagation());
+      }
+      stageWrap.addEventListener("wheel", onStageWheel, { passive: false });
+      stageWrap.addEventListener("pointerdown", onStagePointerDown);
+      stageWrap.addEventListener("pointermove", onStagePointerMove);
+      stageWrap.addEventListener("pointerup", onStagePointerUp);
+      stageWrap.addEventListener("pointercancel", onStagePointerUp);
+      window.addEventListener("blur", () => {
+        state.spacePressed = false;
+        if (state.drag?.type === "pan") state.drag = null;
+        updateStageCursor();
+      });
+
+      dropZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+      dropZone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dropZone.classList.remove("dragover");
+        addFiles(event.dataTransfer.files);
+      });
+      window.addEventListener("paste", (event) => {
+        const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
+        if (files.length) addFiles(files);
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.target && ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) return;
+        if (event.code === "Space") {
+          event.preventDefault();
+          state.spacePressed = true;
+          updateStageCursor();
+          return;
+        }
+        if (event.key.toLowerCase() === "v") setTool("select");
+        if (event.key.toLowerCase() === "h") setTool("pan");
+        if (event.key.toLowerCase() === "b") setTool("draw");
+        if (event.key === "Delete" || event.key === "Backspace") {
+          event.preventDefault();
+          deleteActiveSlice();
+        }
+      });
+      window.addEventListener("keyup", (event) => {
+        if (event.code !== "Space") return;
+        state.spacePressed = false;
+        updateStageCursor();
+      });
+
+      overlay.addEventListener("pointerdown", onPointerDown);
+      overlay.addEventListener("pointermove", onPointerMove);
+      overlay.addEventListener("pointerup", onPointerUp);
+      overlay.addEventListener("pointercancel", cancelDrag);
+
+      async function initApp() {
+        if (!state.projectMode) {
+          render();
+          return;
+        }
+        try {
+          setStatus("正在读取本地项目。");
+          const detail = await apiGet(`/api/projects/${encodeURIComponent(state.projectId)}`);
+          state.project = detail.project;
+          projectTitle.textContent = state.project.name || "Manual Slice Workbench";
+          const pages = [];
+          for (const page of detail.pages || []) {
+            pages.push(await hydrateProjectPage(page));
+          }
+          state.pages = pages;
+          state.activePageId = pages[0]?.id || null;
+          state.activeSliceId = null;
+          setStatus(pages.length ? "项目已恢复。继续画框会自动保存。" : "项目已创建。上传 UI 截图开始切图。");
+          render();
+          if (pages.length) fitToViewport();
+        } catch (error) {
+          setStatus(`项目读取失败：${error.message}`);
+          render();
+        }
+      }
+
+      async function hydrateProjectPage(page) {
+        const dataUrl = await fetchImageAsDataUrl(page.sourceUrl);
+        const hydrated = {
+          id: page.id,
+          name: page.name,
+          dataUrl,
+          width: page.width,
+          height: page.height,
+          slices: (page.slices || []).map((slice) => ({
+            id: slice.id,
+            name: slice.name,
+            kind: slice.kind === "icon" ? "icon" : "image",
+            bbox: { ...slice.bbox },
+            selected: true,
+            dataUrl: ""
+          }))
+        };
+        for (const slice of hydrated.slices) {
+          await refreshSliceCrop(hydrated, slice);
+        }
+        return hydrated;
+      }
+
+      async function addFiles(fileList) {
+        const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+        if (!files.length) return;
+        if (state.projectMode) {
+          await addFilesToProject(files);
+          return;
+        }
+        const newPages = [];
+        for (const file of files) {
+          const dataUrl = await readFileAsDataUrl(file);
+          const size = await readImageSize(dataUrl);
+          const index = state.pages.length + newPages.length + 1;
+          newPages.push({
+            id: `page_${String(index).padStart(4, "0")}`,
+            name: file.name || `page_${index}.png`,
+            dataUrl,
+            width: size.width,
+            height: size.height,
+            slices: []
+          });
+        }
+        state.pages.push(...newPages);
+        state.activePageId = state.activePageId || newPages[0].id;
+        setStatus(`已载入 ${files.length} 张图片。`);
+        render();
+        fitToViewport();
+      }
+
+      async function addFilesToProject(files) {
+        try {
+          setStatus(`正在保存 ${files.length} 张原图到本地项目。`);
+          const payloadFiles = [];
+          for (const file of files) {
+            payloadFiles.push({
+              name: file.name || "source.png",
+              type: file.type || "image/png",
+              dataUrl: await readFileAsDataUrl(file)
+            });
+          }
+          const response = await apiPost(`/api/projects/${encodeURIComponent(state.projectId)}/pages`, { files: payloadFiles });
+          const newPages = [];
+          for (const page of response.pages || []) {
+            newPages.push(await hydrateProjectPage(page));
+          }
+          state.pages.push(...newPages);
+          state.activePageId = state.activePageId || newPages[0]?.id || null;
+          fileInput.value = "";
+          setStatus(`已保存 ${newPages.length} 张原图。切图状态会自动保存。`);
+          render();
+          if (newPages.length) fitToViewport();
+        } catch (error) {
+          setStatus(`上传失败：${error.message}`);
+        }
+      }
+
+      function clearProject() {
+        if (state.projectMode) {
+          location.href = "/workspace.html";
+          return;
+        }
+        state.pages = [];
+        state.activePageId = null;
+        state.activeSliceId = null;
+        state.drag = null;
+        fileInput.value = "";
+        setStatus("项目已清空。");
+        render();
+      }
+
+      function activePage() {
+        return state.pages.find((page) => page.id === state.activePageId) || null;
+      }
+
+      function activeSlice() {
+        const page = activePage();
+        return page?.slices.find((slice) => slice.id === state.activeSliceId) || null;
+      }
+
+      function setTool(tool) {
+        state.tool = tool;
+        selectTool.classList.toggle("active", tool === "select");
+        panTool.classList.toggle("active", tool === "pan");
+        drawTool.classList.toggle("active", tool === "draw");
+        canvas.classList.toggle("drawing", tool === "draw");
+        setStatus(tool === "draw"
+          ? "画框模式：连续拖拽创建资产；按 V 调整已有框。"
+          : tool === "pan"
+            ? "手形模式：左键拖动画布；按 V 选择，按 B 画框。"
+            : "选择模式：点击资产框后可移动、缩放、删除、改名。");
+        renderCanvas();
+        updateStageCursor();
+      }
+
+      function setZoom(zoom) {
+        state.zoom = clamp(Number(zoom), 0.08, 4);
+        renderCanvas();
+        updateZoomValue();
+      }
+
+      function fitToViewport() {
+        const page = activePage();
+        if (!page) return;
+        const maxWidth = Math.max(120, stageWrap.clientWidth - 120);
+        const maxHeight = Math.max(120, stageWrap.clientHeight - 120);
+        setZoom(Math.min(maxWidth / page.width, maxHeight / page.height, 1));
+        centerCanvas();
+      }
+
+      function render() {
+        renderPages();
+        renderCanvas();
+        renderAssets();
+        updateActions();
+      }
+
+      function renderPages() {
+        pageList.innerHTML = "";
+        if (!state.pages.length) {
+          pageList.innerHTML = '<div class="empty">还没有图片。</div>';
+          return;
+        }
+        for (const page of state.pages) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `pageBtn${page.id === state.activePageId ? " active" : ""}`;
+          button.innerHTML = `<strong>${escapeHtml(page.name)}</strong><span class="muted">${page.width}x${page.height} · ${page.slices.length} assets</span>`;
+          button.addEventListener("click", () => {
+            state.activePageId = page.id;
+            state.activeSliceId = null;
+            render();
+            fitToViewport();
+          });
+          pageList.appendChild(button);
+        }
+      }
+
+      function renderCanvas() {
+        const page = activePage();
+        emptyState.hidden = Boolean(page);
+        canvas.hidden = !page;
+        overlay.innerHTML = "";
+        if (!page) return;
+        sourceImage.src = page.dataUrl;
+        sourceImage.style.width = `${Math.round(page.width * state.zoom)}px`;
+        sourceImage.style.height = `${Math.round(page.height * state.zoom)}px`;
+        canvas.style.width = `${Math.round(page.width * state.zoom)}px`;
+        canvas.style.height = `${Math.round(page.height * state.zoom)}px`;
+        overlay.style.width = canvas.style.width;
+        overlay.style.height = canvas.style.height;
+        updateZoomValue();
+
+        page.slices.forEach((slice, index) => {
+          overlay.appendChild(renderSliceBox(slice, index));
+        });
+        if (state.drag?.type === "draw") {
+          overlay.appendChild(renderDraftBox(normalizeDraft(state.drag)));
+        }
+      }
+
+      function renderSliceBox(slice, index) {
+        const isActive = slice.id === state.activeSliceId;
+        const isSelectMode = state.tool === "select";
+        const box = document.createElement("div");
+        box.className = `slice${isActive ? " active" : ""}`;
+        box.dataset.sliceId = slice.id;
+        assignBoxStyle(box, slice.bbox);
+        if (isSelectMode && isActive) {
+          const label = document.createElement("span");
+          label.className = "label";
+          label.textContent = `#${index + 1}`;
+          box.appendChild(label);
+          for (const handle of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+            const node = document.createElement("span");
+            node.className = "handle";
+            node.dataset.handle = handle;
+            box.appendChild(node);
+          }
+        }
+        return box;
+      }
+
+      function renderDraftBox(box) {
+        const node = document.createElement("div");
+        node.className = "draft";
+        assignBoxStyle(node, box);
+        return node;
+      }
+
+      function assignBoxStyle(element, box) {
+        element.style.left = `${box.x * state.zoom}px`;
+        element.style.top = `${box.y * state.zoom}px`;
+        element.style.width = `${box.width * state.zoom}px`;
+        element.style.height = `${box.height * state.zoom}px`;
+      }
+
+      function onStageWheel(event) {
+        if (!event.ctrlKey && !event.metaKey) return;
+        const page = activePage();
+        if (!page) return;
+        event.preventDefault();
+        const beforeZoom = state.zoom;
+        const nextZoom = clamp(beforeZoom * Math.exp(-event.deltaY * 0.0016), 0.08, 4);
+        if (Math.abs(nextZoom - beforeZoom) < 0.001) return;
+
+        const stageRect = stageWrap.getBoundingClientRect();
+        const canvasLeft = stageInner.offsetLeft + canvas.offsetLeft;
+        const canvasTop = stageInner.offsetTop + canvas.offsetTop;
+        const pointerX = event.clientX - stageRect.left + stageWrap.scrollLeft;
+        const pointerY = event.clientY - stageRect.top + stageWrap.scrollTop;
+        const imageX = (pointerX - canvasLeft) / beforeZoom;
+        const imageY = (pointerY - canvasTop) / beforeZoom;
+
+        setZoom(nextZoom);
+        stageWrap.scrollLeft = canvasLeft + imageX * nextZoom - (event.clientX - stageRect.left);
+        stageWrap.scrollTop = canvasTop + imageY * nextZoom - (event.clientY - stageRect.top);
+        setStatus(`缩放 ${Math.round(state.zoom * 100)}%。Ctrl/⌘ + 滚轮继续缩放，Space 拖拽平移。`);
+      }
+
+      function onStagePointerDown(event) {
+        if (event.button !== 1 && !(event.button === 0 && (state.spacePressed || state.tool === "pan"))) return;
+        event.preventDefault();
+        try {
+          stageWrap.setPointerCapture(event.pointerId);
+        } catch {
+          // Synthetic pointer events used by browser smoke tests do not always own capture.
+        }
+        state.drag = {
+          type: "pan",
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          scrollLeft: stageWrap.scrollLeft,
+          scrollTop: stageWrap.scrollTop
+        };
+        updateStageCursor();
+      }
+
+      function onStagePointerMove(event) {
+        if (state.drag?.type !== "pan") return;
+        event.preventDefault();
+        stageWrap.scrollLeft = state.drag.scrollLeft - (event.clientX - state.drag.startX);
+        stageWrap.scrollTop = state.drag.scrollTop - (event.clientY - state.drag.startY);
+      }
+
+      function onStagePointerUp(event) {
+        if (state.drag?.type !== "pan") return;
+        state.drag = null;
+        try {
+          stageWrap.releasePointerCapture(event.pointerId);
+        } catch {
+          // Pointer capture may already be released by the browser.
+        }
+        updateStageCursor();
+      }
+
+      function centerCanvas() {
+        const page = activePage();
+        if (!page) return;
+        const canvasWidth = page.width * state.zoom;
+        const canvasHeight = page.height * state.zoom;
+        stageWrap.scrollLeft = Math.max(0, stageInner.offsetLeft + canvas.offsetLeft + canvasWidth / 2 - stageWrap.clientWidth / 2);
+        stageWrap.scrollTop = Math.max(0, stageInner.offsetTop + canvas.offsetTop + canvasHeight / 2 - stageWrap.clientHeight / 2);
+      }
+
+      function updateStageCursor() {
+        stageWrap.classList.toggle("space-ready", state.spacePressed && state.drag?.type !== "pan");
+        stageWrap.classList.toggle("hand-tool", state.tool === "pan" && state.drag?.type !== "pan");
+        stageWrap.classList.toggle("panning", state.drag?.type === "pan");
+        overlay.style.pointerEvents = state.spacePressed || state.tool === "pan" || state.drag?.type === "pan" ? "none" : "";
+      }
+
+      function updateZoomValue() {
+        zoomValue.textContent = `${Math.round(state.zoom * 100)}%`;
+      }
+
+      function renderAssets() {
+        const page = activePage();
+        assetList.innerHTML = "";
+        if (!page || !page.slices.length) {
+          assetList.innerHTML = '<div class="empty">还没有资产。切到“画框 B”，拖拽创建第一个资产。</div>';
+          return;
+        }
+        for (const slice of page.slices) {
+          const item = document.createElement("div");
+          item.className = `asset${slice.id === state.activeSliceId ? " active" : ""}`;
+          item.innerHTML = `
+            <img class="thumb" src="${slice.dataUrl}" alt="">
+            <div class="assetMeta">
+              <input name="assetName-${slice.id}" aria-label="资产名称" value="${escapeHtmlAttribute(slice.name)}">
+              <select name="assetKind-${slice.id}" aria-label="资产类型">
+                <option value="image"${slice.kind === "image" ? " selected" : ""}>image</option>
+                <option value="icon"${slice.kind === "icon" ? " selected" : ""}>icon</option>
+              </select>
+              <span class="muted">${page.id} · ${slice.bbox.width}x${slice.bbox.height} · x${slice.bbox.x} y${slice.bbox.y}</span>
+              <div class="assetActions"><button type="button" data-action="locate">定位</button><button type="button" data-action="delete">删除</button></div>
+            </div>
+          `;
+          item.addEventListener("click", () => {
+            state.activeSliceId = slice.id;
+            render();
+          });
+          item.querySelector("input").addEventListener("input", (event) => {
+            slice.name = sanitizeName(event.target.value || slice.name);
+            renderCanvas();
+            scheduleSaveProject();
+          });
+          item.querySelector("select").addEventListener("change", (event) => {
+            slice.kind = event.target.value === "icon" ? "icon" : "image";
+            scheduleSaveProject();
+          });
+          item.querySelector('[data-action="locate"]').addEventListener("click", (event) => {
+            event.stopPropagation();
+            state.activeSliceId = slice.id;
+            render();
+          });
+          item.querySelector('[data-action="delete"]').addEventListener("click", (event) => {
+            event.stopPropagation();
+            deleteSlice(slice.id);
+          });
+          assetList.appendChild(item);
+        }
+      }
+
+      function updateActions() {
+        const hasPages = state.pages.length > 0;
+        const hasAssets = state.pages.some((page) => page.slices.length > 0);
+        deleteBtn.disabled = !activeSlice();
+        exportBtn.disabled = !hasAssets;
+        figmaBtn.disabled = !hasPages;
+      }
+
+      function onPointerDown(event) {
+        const page = activePage();
+        if (!page || event.button !== 0) return;
+        const point = eventToImagePoint(event);
+        if (state.tool === "draw") {
+          try {
+            overlay.setPointerCapture(event.pointerId);
+          } catch {
+            // Synthetic pointer events used by browser smoke tests do not always own capture.
+          }
+          state.drag = { type: "draw", startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
+          renderCanvas();
+          return;
+        }
+        const handle = event.target.closest("[data-handle]");
+        const sliceNode = event.target.closest("[data-slice-id]");
+        if (!sliceNode) {
+          state.activeSliceId = null;
+          render();
+          return;
+        }
+        const slice = page.slices.find((item) => item.id === sliceNode.dataset.sliceId);
+        if (!slice) return;
+        state.activeSliceId = slice.id;
+        try {
+          overlay.setPointerCapture(event.pointerId);
+        } catch {
+          // Synthetic pointer events used by browser smoke tests do not always own capture.
+        }
+        state.drag = {
+          type: handle ? "resize" : "move",
+          handle: handle?.dataset.handle || "move",
+          sliceId: slice.id,
+          startX: point.x,
+          startY: point.y,
+          original: { ...slice.bbox }
+        };
+        render();
+      }
+
+      async function onPointerMove(event) {
+        if (!state.drag) return;
+        if (state.drag.type === "pan") return;
+        const page = activePage();
+        if (!page) return;
+        const point = eventToImagePoint(event);
+        if (state.drag.type === "draw") {
+          state.drag.currentX = point.x;
+          state.drag.currentY = point.y;
+          renderCanvas();
+          return;
+        }
+        const slice = page.slices.find((item) => item.id === state.drag.sliceId);
+        if (!slice) return;
+        const dx = point.x - state.drag.startX;
+        const dy = point.y - state.drag.startY;
+        slice.bbox = state.drag.type === "move"
+          ? moveBox(state.drag.original, dx, dy, page)
+          : resizeBox(state.drag.original, state.drag.handle, dx, dy, page);
+        renderCanvas();
+        renderAssets();
+      }
+
+      async function onPointerUp(event) {
+        if (!state.drag) return;
+        const drag = state.drag;
+        if (drag.type === "pan") return;
+        state.drag = null;
+        try {
+          overlay.releasePointerCapture(event.pointerId);
+        } catch {
+          // Pointer capture may already be released by the browser.
+        }
+        if (drag.type === "draw") {
+          const box = normalizeDraft(drag);
+          if (box.width >= 8 && box.height >= 8) {
+            await addSlice(box);
+          } else {
+            renderCanvas();
+          }
+          return;
+        }
+        const page = activePage();
+        const slice = page?.slices.find((item) => item.id === drag.sliceId);
+        if (page && slice) {
+          await refreshSliceCrop(page, slice);
+          scheduleSaveProject();
+          render();
+        }
+      }
+
+      function cancelDrag() {
+        state.drag = null;
+        updateStageCursor();
+        renderCanvas();
+      }
+
+      async function addSlice(bbox) {
+        const page = activePage();
+        if (!page) return;
+        const index = page.slices.length + 1;
+        const slice = {
+          id: `${page.id}__slice_${Date.now().toString(36)}_${index}`,
+          name: `slice_${String(index).padStart(2, "0")}`,
+          kind: "image",
+          bbox,
+          selected: true,
+          dataUrl: ""
+        };
+        await refreshSliceCrop(page, slice);
+        page.slices.push(slice);
+        state.activeSliceId = slice.id;
+        setStatus(state.tool === "draw" ? `已创建 ${slice.name}，继续拖拽可创建下一个；按 V 调整已有框。` : `已创建资产 ${slice.name}。`);
+        scheduleSaveProject();
+        render();
+      }
+
+      async function refreshSliceCrop(page, slice) {
+        slice.bbox = normalizeBox(slice.bbox, page);
+        slice.dataUrl = await cropImageRegion(page.dataUrl, slice.bbox);
+      }
+
+      function deleteActiveSlice() {
+        if (!state.activeSliceId) return;
+        deleteSlice(state.activeSliceId);
+      }
+
+      function deleteSlice(sliceId) {
+        const page = activePage();
+        if (!page) return;
+        page.slices = page.slices.filter((slice) => slice.id !== sliceId);
+        if (state.activeSliceId === sliceId) state.activeSliceId = null;
+        setStatus("已删除资产。");
+        scheduleSaveProject();
+        render();
+      }
+
+      function eventToImagePoint(event) {
+        const rect = overlay.getBoundingClientRect();
+        return {
+          x: clamp(Math.round((event.clientX - rect.left) / state.zoom), 0, activePage().width),
+          y: clamp(Math.round((event.clientY - rect.top) / state.zoom), 0, activePage().height)
+        };
+      }
+
+      function normalizeDraft(draft) {
+        const page = activePage();
+        return normalizeBox({
+          x: Math.min(draft.startX, draft.currentX),
+          y: Math.min(draft.startY, draft.currentY),
+          width: Math.abs(draft.currentX - draft.startX),
+          height: Math.abs(draft.currentY - draft.startY)
+        }, page);
+      }
+
+      function normalizeBox(box, page) {
+        const x = clamp(Math.round(box.x), 0, page.width - 1);
+        const y = clamp(Math.round(box.y), 0, page.height - 1);
+        const width = clamp(Math.round(box.width), 1, page.width - x);
+        const height = clamp(Math.round(box.height), 1, page.height - y);
+        return { x, y, width, height };
+      }
+
+      function moveBox(box, dx, dy, page) {
+        return {
+          x: clamp(Math.round(box.x + dx), 0, page.width - box.width),
+          y: clamp(Math.round(box.y + dy), 0, page.height - box.height),
+          width: box.width,
+          height: box.height
+        };
+      }
+
+      function resizeBox(box, handle, dx, dy, page) {
+        let left = box.x;
+        let top = box.y;
+        let right = box.x + box.width;
+        let bottom = box.y + box.height;
+        if (handle.includes("w")) left += dx;
+        if (handle.includes("e")) right += dx;
+        if (handle.includes("n")) top += dy;
+        if (handle.includes("s")) bottom += dy;
+        left = clamp(Math.round(left), 0, page.width - 1);
+        top = clamp(Math.round(top), 0, page.height - 1);
+        right = clamp(Math.round(right), left + 8, page.width);
+        bottom = clamp(Math.round(bottom), top + 8, page.height);
+        return { x: left, y: top, width: right - left, height: bottom - top };
+      }
+
+      async function exportAssetsZip() {
+        if (state.projectMode) {
+          await exportProjectAssetsZip();
+          return;
+        }
+        const files = await buildAssetZipFiles();
+        if (!files.length) return;
+        triggerBlobDownload(createZipBlob(files), `ui-sliced-assets-${timestamp()}.zip`);
+        setStatus("已导出 assets.zip。");
+      }
+
+      async function exportProjectAssetsZip() {
+        try {
+          await saveProjectNow();
+          setStatus("正在导出 assets.zip。");
+          const result = await apiPost(`/api/projects/${encodeURIComponent(state.projectId)}/export-assets`, {});
+          triggerUrlDownload(result.url, `${state.projectId}-assets.zip`);
+          setStatus(`已导出 assets.zip，共 ${result.assetCount || 0} 个切图。`);
+        } catch (error) {
+          setStatus(`导出失败：${error.message}`);
+        }
+      }
+
+      function scheduleSaveProject() {
+        if (!state.projectMode) return;
+        if (state.saveTimer) clearTimeout(state.saveTimer);
+        setSaveState("saving");
+        state.saveTimer = setTimeout(() => {
+          saveProjectNow().catch((error) => {
+            setSaveState("error", error.message);
+          });
+        }, 800);
+      }
+
+      async function saveProjectNow() {
+        if (!state.projectMode) return;
+        if (state.saveTimer) {
+          clearTimeout(state.saveTimer);
+          state.saveTimer = null;
+        }
+        setSaveState("saving");
+        await apiPut(`/api/projects/${encodeURIComponent(state.projectId)}/slices`, serializeProjectSlices());
+        setSaveState("saved");
+      }
+
+      function serializeProjectSlices() {
+        return {
+          activePageId: state.activePageId,
+          pages: state.pages.map((page) => ({
+            pageId: page.id,
+            slices: page.slices.map((slice) => ({
+              id: slice.id,
+              name: slice.name,
+              kind: slice.kind,
+              bbox: { ...slice.bbox },
+              selected: true
+            }))
+          }))
+        };
+      }
+
+      function setSaveState(saveState, detail = "") {
+        state.saveState = saveState;
+        if (saveState === "saving") {
+          setStatus("保存中。");
+        } else if (saveState === "saved") {
+          setStatus("已保存。");
+        } else if (saveState === "error") {
+          setStatus(`保存失败：${detail || "未知错误"}`);
+        }
+      }
+
+      async function buildAssetZipFiles() {
+        if (!state.pages.length) return [];
+        const manifest = buildAssetsManifest();
+        const files = [{ name: "manifest.json", data: textToUint8Array(JSON.stringify(manifest, null, 2)) }];
+        for (const [pageIndex, page] of state.pages.entries()) {
+          files.push({ name: `originals/page_${String(pageIndex + 1).padStart(4, "0")}.png`, data: dataUrlToUint8Array(page.dataUrl) });
+          for (const [sliceIndex, slice] of page.slices.entries()) {
+            files.push({
+              name: `slices/page_${String(pageIndex + 1).padStart(4, "0")}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
+              data: dataUrlToUint8Array(slice.dataUrl)
+            });
+          }
+        }
+        return files;
+      }
+
+      function buildAssetsManifest() {
+        return {
+          schema: "manual_ui_slices.v1",
+          exportedAt: new Date().toISOString(),
+          pages: state.pages.map((page, pageIndex) => ({
+            pageId: page.id,
+            originalName: page.name,
+            original: `originals/page_${String(pageIndex + 1).padStart(4, "0")}.png`,
+            width: page.width,
+            height: page.height,
+            slices: page.slices.map((slice, sliceIndex) => ({
+              id: slice.id,
+              name: slice.name,
+              kind: slice.kind,
+              filename: `slices/page_${String(pageIndex + 1).padStart(4, "0")}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
+              placement: { ...slice.bbox },
+              selected: true
+            }))
+          }))
+        };
+      }
+
+      function sendToFigma() {
+        const page = activePage();
+        if (!page) return;
+        const manifest = {
+          screen: { name: page.name.replace(/\.[^.]+$/, "") || page.id, width: page.width, height: page.height },
+          previewImage: { dataUrl: page.dataUrl },
+          assets: page.slices.map((slice) => ({
+            id: slice.id,
+            name: slice.name,
+            type: "manual_slice",
+            kind: slice.kind,
+            selected: true,
+            dataUrl: slice.dataUrl,
+            placement: { ...slice.bbox }
+          }))
+        };
+        parent.postMessage({ pluginMessage: { type: "create-ui-asset-screen", manifest } }, "*");
+        setStatus(`已发送 ${page.slices.length} 个资产到 Figma。`);
+      }
+
+      async function cropImageRegion(dataUrl, box) {
+        const image = await loadImageElement(dataUrl);
+        const output = document.createElement("canvas");
+        output.width = box.width;
+        output.height = box.height;
+        const context = output.getContext("2d");
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+        return output.toDataURL("image/png");
+      }
+
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(reader.error || new Error("读取文件失败"));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function fetchImageAsDataUrl(url) {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`读取原图失败：HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        return readBlobAsDataUrl(blob);
+      }
+
+      function readBlobAsDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(reader.error || new Error("读取图片失败"));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function readImageSize(dataUrl) {
+        return loadImageElement(dataUrl).then((image) => ({ width: image.naturalWidth || image.width, height: image.naturalHeight || image.height }));
+      }
+
+      function loadImageElement(dataUrl) {
+        return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("图片加载失败"));
+          image.src = dataUrl;
+        });
+      }
+
+      function dataUrlToUint8Array(dataUrl) {
+        const base64 = String(dataUrl).split(",")[1] || "";
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        return bytes;
+      }
+
+      function textToUint8Array(text) {
+        return new TextEncoder().encode(text);
+      }
+
+      function createZipBlob(files) {
+        const localParts = [];
+        const centralParts = [];
+        let offset = 0;
+        for (const file of files) {
+          const name = textToUint8Array(file.name);
+          const data = file.data;
+          const crc = crc32(data);
+          const local = concatBytes([
+            uint32(0x04034b50), uint16(20), uint16(0), uint16(0), uint16(0), uint16(0), uint32(crc), uint32(data.length), uint32(data.length), uint16(name.length), uint16(0), name, data
+          ]);
+          localParts.push(local);
+          centralParts.push(concatBytes([
+            uint32(0x02014b50), uint16(20), uint16(20), uint16(0), uint16(0), uint16(0), uint16(0), uint32(crc), uint32(data.length), uint32(data.length), uint16(name.length), uint16(0), uint16(0), uint16(0), uint16(0), uint32(0), uint32(offset), name
+          ]));
+          offset += local.length;
+        }
+        const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+        const centralOffset = offset;
+        const end = concatBytes([uint32(0x06054b50), uint16(0), uint16(0), uint16(files.length), uint16(files.length), uint32(centralSize), uint32(centralOffset), uint16(0)]);
+        return new Blob([...localParts, ...centralParts, end], { type: "application/zip" });
+      }
+
+      function uint16(value) {
+        return new Uint8Array([value & 255, (value >>> 8) & 255]);
+      }
+
+      function uint32(value) {
+        return new Uint8Array([value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255]);
+      }
+
+      function concatBytes(parts) {
+        const total = parts.reduce((sum, part) => sum + part.length, 0);
+        const output = new Uint8Array(total);
+        let offset = 0;
+        for (const part of parts) {
+          output.set(part, offset);
+          offset += part.length;
+        }
+        return output;
+      }
+
+      function crc32(bytes) {
+        let crc = -1;
+        for (const byte of bytes) {
+          crc ^= byte;
+          for (let index = 0; index < 8; index += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+        }
+        return (crc ^ -1) >>> 0;
+      }
+
+      function triggerBlobDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function triggerUrlDownload(url, filename) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      async function apiGet(url) {
+        return apiRequest(url, { method: "GET" });
+      }
+
+      async function apiPost(url, body) {
+        return apiRequest(url, { method: "POST", body: JSON.stringify(body || {}) });
+      }
+
+      async function apiPut(url, body) {
+        return apiRequest(url, { method: "PUT", body: JSON.stringify(body || {}) });
+      }
+
+      async function apiRequest(url, options) {
+        const response = await fetch(url, {
+          ...options,
+          headers: { "content-type": "application/json", ...(options.headers || {}) }
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : {};
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        return data;
+      }
+
+      function sanitizeName(value) {
+        return String(value || "slice").trim().replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80) || "slice";
+      }
+
+      function timestamp() {
+        return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "");
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(value, max));
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+      }
+
+      function escapeHtmlAttribute(value) {
+        return escapeHtml(value);
+      }
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      window.manualSliceWorkbench = {
+        state,
+        addFiles,
+        addSlice,
+        sendToFigma,
+        exportAssetsZip,
+        buildAssetsManifest,
+        buildAssetZipFiles,
+        saveProjectNow
+      };
+
+      initApp();
+    </script>
+  </body>
+</html>

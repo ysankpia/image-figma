@@ -1,0 +1,8 @@
+.local-provider-config.json
+.env
+.env.local
+node_modules/
+.DS_Store
+*.log
+dist/
+storage/

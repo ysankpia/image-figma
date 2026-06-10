@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual Slice Studio</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg: #f5f5f7;
+        --surface: #ffffff;
+        --surface-alt: #fbfbfd;
+        --ink: #1d1d1f;
+        --muted: #6e6e73;
+        --border: #d2d2d7;
+        --blue: #0066cc;
+        --blue-hover: #0071e3;
+        --danger: #b42318;
+        --shadow: 0 18px 60px rgba(0, 0, 0, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "SF Pro Text", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        min-height: 36px;
+        padding: 0 14px;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled) {
+        border-color: var(--blue);
+        color: var(--blue);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .primary {
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #ffffff;
+      }
+
+      .primary:hover:not(:disabled) {
+        border-color: var(--blue-hover);
+        background: var(--blue-hover);
+        color: #ffffff;
+      }
+
+      .danger {
+        color: var(--danger);
+      }
+
+      .shell {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 100dvh;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 28px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(251, 251, 253, 0.88);
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "SF Pro Display", "SF Pro Text", system-ui, -apple-system, sans-serif;
+        font-size: 24px;
+        font-weight: 650;
+        letter-spacing: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .create {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: min(520px, 52vw);
+      }
+
+      .create input {
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        padding: 0 14px;
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      main {
+        padding: 28px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        display: grid;
+        gap: 14px;
+        min-height: 176px;
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .cardTitle {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .card h2 {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 17px;
+        font-weight: 650;
+        letter-spacing: 0;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .stat {
+        padding: 10px;
+        border-radius: 14px;
+        background: var(--surface-alt);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: auto;
+      }
+
+      .empty {
+        display: grid;
+        place-items: center;
+        min-height: 320px;
+        border: 1px dashed var(--border);
+        border-radius: 24px;
+        background: var(--surface);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .status {
+        min-height: 20px;
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 760px) {
+        header {
+          display: grid;
+          padding: 18px;
+        }
+
+        .create {
+          min-width: 0;
+        }
+
+        main {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div>
+          <h1>Manual Slice Studio</h1>
+          <div class="muted">本地项目管理。图片落盘，SQLite 保存页面和切图元数据。</div>
+        </div>
+        <form id="createForm" class="create">
+          <input id="projectName" name="projectName" autocomplete="off" placeholder="项目名称，例如：小程序首页切图" />
+          <button class="primary" type="submit">新建项目</button>
+        </form>
+      </header>
+      <main>
+        <div id="status" class="status">正在读取项目。</div>
+        <div id="projectGrid" class="grid"></div>
+      </main>
+    </div>
+
+    <script>
+      const createForm = document.getElementById("createForm");
+      const projectName = document.getElementById("projectName");
+      const projectGrid = document.getElementById("projectGrid");
+      const statusEl = document.getElementById("status");
+
+      createForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const name = projectName.value.trim() || `未命名项目 ${new Date().toLocaleString("zh-CN")}`;
+        setStatus("正在创建项目。");
+        const response = await apiPost("/api/projects", { name });
+        location.href = `/manual-slice.html?projectId=${encodeURIComponent(response.project.id)}`;
+      });
+
+      async function loadProjects() {
+        try {
+          const data = await apiGet("/api/projects");
+          renderProjects(data.projects || []);
+          setStatus(data.projects?.length ? `共 ${data.projects.length} 个项目。` : "还没有项目。新建一个项目开始切图。");
+        } catch (error) {
+          setStatus(`读取失败：${error.message}`);
+        }
+      }
+
+      function renderProjects(projects) {
+        projectGrid.innerHTML = "";
+        if (!projects.length) {
+          projectGrid.innerHTML = '<div class="empty">没有项目。输入名称后点击“新建项目”。</div>';
+          return;
+        }
+        for (const project of projects) {
+          const card = document.createElement("article");
+          card.className = "card";
+          card.innerHTML = `
+            <div class="cardTitle">
+              <h2>${escapeHtml(project.name)}</h2>
+              <span class="muted">${formatDate(project.updatedAt)}</span>
+            </div>
+            <div class="stats">
+              <div class="stat"><strong>${project.pageCount}</strong><span class="muted">页面</span></div>
+              <div class="stat"><strong>${project.sliceCount}</strong><span class="muted">切图</span></div>
+              <div class="stat"><strong>${project.createdAt ? formatShortDate(project.createdAt) : "-"}</strong><span class="muted">创建</span></div>
+            </div>
+            <div class="actions">
+              <button class="primary" type="button" data-action="open">打开</button>
+              <button type="button" data-action="rename">重命名</button>
+              <button class="danger" type="button" data-action="delete">删除</button>
+            </div>
+          `;
+          card.querySelector('[data-action="open"]').addEventListener("click", () => {
+            location.href = `/manual-slice.html?projectId=${encodeURIComponent(project.id)}`;
+          });
+          card.querySelector('[data-action="rename"]').addEventListener("click", async () => {
+            const nextName = prompt("项目名称", project.name);
+            if (!nextName || nextName.trim() === project.name) return;
+            await apiPatch(`/api/projects/${encodeURIComponent(project.id)}`, { name: nextName.trim() });
+            await loadProjects();
+          });
+          card.querySelector('[data-action="delete"]').addEventListener("click", async () => {
+            if (!confirm(`删除项目“${project.name}”？本地图片和切图记录会一起删除。`)) return;
+            await apiDelete(`/api/projects/${encodeURIComponent(project.id)}`);
+            await loadProjects();
+          });
+          projectGrid.appendChild(card);
+        }
+      }
+
+      async function apiGet(url) {
+        return request(url, { method: "GET" });
+      }
+
+      async function apiPost(url, body) {
+        return request(url, { method: "POST", body: JSON.stringify(body || {}) });
+      }
+
+      async function apiPatch(url, body) {
+        return request(url, { method: "PATCH", body: JSON.stringify(body || {}) });
+      }
+
+      async function apiDelete(url) {
+        return request(url, { method: "DELETE" });
+      }
+
+      async function request(url, options) {
+        const response = await fetch(url, {
+          ...options,
+          headers: { "content-type": "application/json", ...(options.headers || {}) }
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : {};
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        return data;
+      }
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function formatDate(value) {
+        return value ? new Date(value).toLocaleString("zh-CN") : "-";
+      }
+
+      function formatShortDate(value) {
+        return value ? new Date(value).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }) : "-";
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+      }
+
+      loadProjects();
+    </script>
+  </body>
+</html>
