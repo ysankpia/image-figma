@@ -44,6 +44,17 @@
 | `PENCIL_ASSET_MAX_UPLOAD_BYTES` | Pencil Asset Backend 单图片上传大小上限 | `10485760` | 否 |
 | `PENCIL_ASSET_MAX_FILES` | Pencil Asset Backend 单项目最大图片数 | `20` | 否 |
 | `PENCIL_ASSET_CORS_ALLOW_ORIGINS` | Pencil Asset Backend CORS origins，逗号分隔 | `*` | 否 |
+| `PENCIL_HANDOFF_STORAGE_ROOT` | Pencil Handoff Studio 存储根目录 | `services/pencil-handoff-studio/storage` | 否 |
+| `PENCIL_HANDOFF_MAX_FILES` | Pencil Handoff Studio 单项目最大图片数；`0` 表示不限制 | `0` | 否 |
+| `PENCIL_HANDOFF_MAX_UPLOAD_BYTES` | Pencil Handoff Studio 单图片上传大小上限 | `10485760` | 否 |
+| `PENCIL_HANDOFF_CORS_ALLOW_ORIGINS` | Pencil Handoff Studio CORS origins，逗号分隔 | `*` | 否 |
+| `PENCIL_HANDOFF_YOLO_MODEL` | Pencil Handoff Studio YOLOv8 UI 检测模型路径；缺失时只 warning，允许人工画框 | 兼容读取 `PENCIL_ASSET_YOLO_MODEL` | 否 |
+| `PENCIL_HANDOFF_YOLO_CONF` | Pencil Handoff Studio YOLOv8 候选置信度阈值 | `0.18` | 否 |
+| `PENCIL_HANDOFF_YOLO_IOU` | Pencil Handoff Studio YOLOv8 NMS IoU 阈值 | `0.45` | 否 |
+| `PENCIL_HANDOFF_YOLO_IMGSZ` | Pencil Handoff Studio YOLOv8 推理输入尺寸 | `640` | 否 |
+| `PENCIL_HANDOFF_YOLO_DEVICE` | Pencil Handoff Studio YOLOv8 推理设备 | `auto` | 否 |
+| `PENCIL_HANDOFF_M29EXTRACT` | Pencil Handoff Studio 调用的 `m29extract` 路径 | 兼容读取 `PENCIL_ASSET_M29EXTRACT`，否则自动查找 | 否 |
+| `PENCIL_HANDOFF_PSDLIKE_ROOT` | Pencil Handoff Studio 调用的 PSD-like Python 服务目录 | 兼容读取 `PENCIL_ASSET_PSDLIKE_ROOT`，否则自动查找 `services/psdlike-python` | 否 |
 | `PENCIL_SERVER_ADDR` | Go Pencil project server 监听地址，已被 Python Pencil backend 取代 | `127.0.0.1:8100` | legacy |
 | `PENCIL_SERVER_STORAGE_ROOT` | Go Pencil project server 存储根目录，已被 Python Pencil backend 取代 | `./storage/pencil_server` | legacy |
 | `PENCIL_SERVER_MAX_UPLOAD_BYTES` | Go Pencil project server 单 PNG 上传大小上限，已被 Python Pencil backend 取代 | `10485760` | legacy |

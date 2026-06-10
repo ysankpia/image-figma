@@ -1,0 +1,8 @@
+storage/
+.venv/
+.pytest_cache/
+__pycache__/
+app/**/__pycache__/
+tests/**/__pycache__/
+web/node_modules/
+web/dist/

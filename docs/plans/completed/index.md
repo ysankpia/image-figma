@@ -142,5 +142,6 @@
 - [Pencil Asset Review Candidate Correction](153-pencil-asset-review-candidate-correction.md) — `completed`
 - [Pencil Asset Explicit Draw Tool](154-pencil-asset-explicit-draw-tool.md) — `completed`
 - [Pencil Asset Review Workbench Interaction Completion](155-pencil-asset-review-workbench-interaction-completion.md) — `completed`
+- [Pencil Handoff Studio](156-pencil-handoff-studio.md) — `completed`
 - [Mainline Legacy Code Inventory And Cleanup](150-mainline-legacy-code-inventory-and-cleanup.md) — `completed`
 - [Pencil Asset Handoff Slim Backend](151-pencil-asset-handoff-slim-backend.md) — `completed`

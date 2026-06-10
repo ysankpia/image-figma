@@ -1,0 +1,146 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #111827;
+  color: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.appShell {
+  display: grid;
+  grid-template-columns: 260px minmax(420px, 1fr) 260px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar,
+.rightPanel {
+  background: #0f172a;
+  border-right: 1px solid #263244;
+  padding: 14px;
+  overflow: auto;
+}
+
+.rightPanel {
+  border-left: 1px solid #263244;
+  border-right: none;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0 0 14px;
+}
+
+h2 {
+  font-size: 13px;
+  color: #93c5fd;
+  margin: 18px 0 8px;
+}
+
+.uploadForm {
+  display: grid;
+  gap: 8px;
+}
+
+input,
+select {
+  width: 100%;
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+
+button {
+  border: 1px solid #334155;
+  background: #182235;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+  text-align: left;
+}
+
+button:hover,
+button.active {
+  background: #1d4ed8;
+  border-color: #60a5fa;
+}
+
+.projectList,
+.assetList {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.projectList button,
+.rightPanel > button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.projectList span,
+small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 64px 1fr;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #263244;
+  background: #111827;
+}
+
+.toolbar button {
+  width: auto;
+}
+
+.toolbar span {
+  margin-left: auto;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.canvasWrap {
+  overflow: hidden;
+  background: #1f2937;
+}
+
+.asset {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #111827;
+}
+
+.asset.active {
+  border-color: #d946ef;
+}
+
+.asset button {
+  text-align: center;
+}

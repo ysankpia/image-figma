@@ -1,3 +1,4 @@
 packages:
   - "figma-plugin"
   - "packages/*"
+  - "services/pencil-handoff-studio/web"
