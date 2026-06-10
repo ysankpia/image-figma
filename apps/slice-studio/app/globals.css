@@ -1077,23 +1077,29 @@ h1 {
 
 .inspectorInner {
   display: grid;
-  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
   height: 100%;
   min-width: 0;
+  min-height: 0;
   padding: 12px;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
+}
+
+.inspectorControls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .inspectorHeader {
   display: grid;
-  gap: 2px;
+  gap: 0;
   padding-right: 32px;
 }
 
 .inspectorHeader h2 {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.2;
 }
 
@@ -1117,11 +1123,11 @@ h1 {
 .cutModePanel,
 .boxColorPanel {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
 }
 
@@ -1129,14 +1135,11 @@ h1 {
   gap: 6px;
 }
 
-.pageInfoPanel {
-  gap: 7px;
-}
-
 .cutModePanel {
-  gap: 8px;
+  gap: 6px;
 }
 
+.pageInfoHeader,
 .cutModePanelHeader,
 .boxColorHeader {
   display: flex;
@@ -1150,19 +1153,24 @@ h1 {
   font-size: 13px;
 }
 
+.pageInfoHeader > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .cutModeSegmented {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  border-radius: 10px;
-  padding: 4px;
+  border-radius: 9px;
+  padding: 3px;
   background: var(--surface-alt);
 }
 
 .cutModeSegmented button {
-  min-height: 30px;
+  min-height: 28px;
   border-color: transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   padding: 0 8px;
   background: transparent;
   font-size: 12px;
@@ -1178,23 +1186,29 @@ h1 {
 }
 
 .boxColorHeader button {
-  min-height: 26px;
+  min-height: 24px;
   border-radius: 8px;
   padding: 0 8px;
   font-size: 12px;
 }
 
+.boxColorFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .boxColorPanel label {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
+  grid-template-columns: minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .boxColorPanel input[type="color"] {
-  width: 42px;
-  height: 28px;
-  min-height: 28px;
+  width: 34px;
+  height: 24px;
+  min-height: 24px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 2px;
@@ -1212,14 +1226,14 @@ h1 {
 
 .pageNameField {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
 .pageNameField input {
   width: 100%;
   min-width: 0;
-  min-height: 32px;
+  min-height: 30px;
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 0 9px;
@@ -1239,7 +1253,7 @@ h1 {
   place-items: center;
   gap: 4px;
   min-width: 0;
-  min-height: 30px;
+  min-height: 28px;
   border-radius: 8px;
   padding: 0 7px;
   font-size: 12px;
@@ -1273,6 +1287,29 @@ h1 {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.activeAssetEditRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.activeAssetEditRow input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 9px;
+  background: var(--surface);
+}
+
+.activeAssetEditRow span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .activeAssetHeader div {
@@ -1328,9 +1365,16 @@ h1 {
 
 .assetList {
   min-height: 0;
+  height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 2px;
+  scrollbar-width: none;
+}
+
+.assetList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .assetItem {

@@ -776,90 +776,94 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         </button>
         {!inspectorCollapsed && (
           <div className="inspectorInner">
-            <header className="inspectorHeader">
-              <h2>Assets</h2>
-              <span>{activePageAssetCount} assets</span>
-            </header>
-            <section className="cutModePanel">
-              <div className="cutModePanelHeader">
-                <strong>裁切模式</strong>
-                <span>{pageCutMode === "mixed" ? "混合" : pageCutMode === "shape" ? "透明底" : "矩形"}</span>
-              </div>
-              <div className="cutModeSegmented" role="group" aria-label="裁切模式">
-                <button
-                  type="button"
-                  className={pageCutMode === "rect" ? "active" : ""}
-                  aria-pressed={pageCutMode === "rect"}
-                  onClick={() => applyPageCutMode("rect")}
-                >
-                  矩形
-                </button>
-                <button
-                  type="button"
-                  className={pageCutMode === "shape" ? "active" : ""}
-                  aria-pressed={pageCutMode === "shape"}
-                  onClick={() => applyPageCutMode("shape")}
-                >
-                  透明底
-                </button>
-              </div>
-            </section>
-            <section className="pageInfoPanel">
-              <strong>{activePage ? `P${pageIndex + 1}` : "No page"}</strong>
-              {activePage ? (
-                <label className="pageNameField">
-                  <span>页面名称</span>
-                  <input
-                    name={`pageName-${activePage.id}`}
-                    aria-label="页面名称"
-                    placeholder={`Page ${pageIndex + 1}`}
-                    value={activePage.displayName}
-                    onChange={(event) => commitPageName(activePage.id, event.target.value)}
-                  />
-                </label>
-              ) : null}
-              <span>{activePage ? `${activePage.width}x${activePage.height} · ${activePage.originalName}` : "上传 UI 截图后开始切图"}</span>
-              {activePage ? (
-                <div className="pageActionGrid">
-                  <button type="button" onClick={() => replaceInputRef.current?.click()}>
-                    <Upload aria-hidden="true" />
-                    替换
+            <div className="inspectorControls">
+              <header className="inspectorHeader">
+                <h2>Assets</h2>
+                <span>{activePageAssetCount} assets</span>
+              </header>
+              <section className="cutModePanel">
+                <div className="cutModePanelHeader">
+                  <strong>裁切模式</strong>
+                  <span>{pageCutMode === "mixed" ? "混合" : pageCutMode === "shape" ? "透明底" : "矩形"}</span>
+                </div>
+                <div className="cutModeSegmented" role="group" aria-label="裁切模式">
+                  <button
+                    type="button"
+                    className={pageCutMode === "rect" ? "active" : ""}
+                    aria-pressed={pageCutMode === "rect"}
+                    onClick={() => applyPageCutMode("rect")}
+                  >
+                    矩形
                   </button>
-                  <button type="button" className="dangerButton" onClick={() => setPageConfirmAction({ type: "delete", pageId: activePage.id })}>
-                    <Trash2 aria-hidden="true" />
-                    删除
+                  <button
+                    type="button"
+                    className={pageCutMode === "shape" ? "active" : ""}
+                    aria-pressed={pageCutMode === "shape"}
+                    onClick={() => applyPageCutMode("shape")}
+                  >
+                    透明底
                   </button>
                 </div>
-              ) : null}
-            </section>
-            <section className="boxColorPanel">
-              <div className="boxColorHeader">
-                <strong>框颜色</strong>
-                <button type="button" onClick={resetBoxColors}>重置</button>
-              </div>
-              <label>
-                <span>普通框</span>
-                <input type="color" value={boxColors.slice} onChange={(event) => updateBoxColor("slice", event.target.value)} aria-label="普通框颜色" />
-              </label>
-              <label>
-                <span>选中框</span>
-                <input type="color" value={boxColors.active} onChange={(event) => updateBoxColor("active", event.target.value)} aria-label="选中框颜色" />
-              </label>
-            </section>
-            {activeSlice ? (
-              <section className="activeAssetPanel">
-                <div className="activeAssetHeader">
-                  <div>
-                    <span>Active asset</span>
-                    <strong>{activeSlice.name || "Untitled"}</strong>
+              </section>
+              <section className="pageInfoPanel">
+                <div className="pageInfoHeader">
+                  <strong>{activePage ? `P${pageIndex + 1}` : "No page"}</strong>
+                  <span>{activePage ? `${activePage.width}x${activePage.height}` : "无页面"}</span>
+                </div>
+                {activePage ? (
+                  <label className="pageNameField">
+                    <span>页面名称</span>
+                    <input
+                      name={`pageName-${activePage.id}`}
+                      aria-label="页面名称"
+                      placeholder={`Page ${pageIndex + 1}`}
+                      value={activePage.displayName}
+                      onChange={(event) => commitPageName(activePage.id, event.target.value)}
+                    />
+                  </label>
+                ) : null}
+                <span>{activePage ? activePage.originalName : "上传 UI 截图后开始切图"}</span>
+                {activePage ? (
+                  <div className="pageActionGrid">
+                    <button type="button" onClick={() => replaceInputRef.current?.click()}>
+                      <Upload aria-hidden="true" />
+                      替换
+                    </button>
+                    <button type="button" className="dangerButton" onClick={() => setPageConfirmAction({ type: "delete", pageId: activePage.id })}>
+                      <Trash2 aria-hidden="true" />
+                      删除
+                    </button>
                   </div>
-                  <button className="assetDangerButton" type="button" aria-label="删除当前资产" title="删除当前资产" onClick={() => deleteActiveSlice(activeSlice.id)}>
-                    <Trash2 aria-hidden="true" />
-                  </button>
+                ) : null}
+              </section>
+              <section className="boxColorPanel">
+                <div className="boxColorHeader">
+                  <strong>框颜色</strong>
+                  <button type="button" onClick={resetBoxColors}>重置</button>
                 </div>
-                <div className="compactFields">
-                  <label className="nameField">
-                    <span>名称</span>
+                <div className="boxColorFields">
+                  <label>
+                    <span>普通</span>
+                    <input type="color" value={boxColors.slice} onChange={(event) => updateBoxColor("slice", event.target.value)} aria-label="普通框颜色" />
+                  </label>
+                  <label>
+                    <span>选中</span>
+                    <input type="color" value={boxColors.active} onChange={(event) => updateBoxColor("active", event.target.value)} aria-label="选中框颜色" />
+                  </label>
+                </div>
+              </section>
+              {activeSlice ? (
+                <section className="activeAssetPanel">
+                  <div className="activeAssetHeader">
+                    <div>
+                      <span>Active asset</span>
+                      <strong>{activeSlice.name || "Untitled"}</strong>
+                    </div>
+                    <button className="assetDangerButton" type="button" aria-label="删除当前资产" title="删除当前资产" onClick={() => deleteActiveSlice(activeSlice.id)}>
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="activeAssetEditRow">
                     <input
                       name={`activeSliceName-${activeSlice.id}`}
                       aria-label="资产名称"
@@ -870,23 +874,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       }}
                       onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
-                  </label>
-                </div>
-                <div className="bboxGrid">
-                  <span>x {activeSlice.bbox.x}</span>
-                  <span>y {activeSlice.bbox.y}</span>
-                  <span>w {activeSlice.bbox.width}</span>
-                  <span>h {activeSlice.bbox.height}</span>
-                </div>
-              </section>
-            ) : (
-              <section className="inspectorSummary">
-                <span>{activePage ? `${activePageAssetCount} assets on this page · ${totalAssets} total` : "顶部按钮可上传 1..N 张图片"}</span>
-                {activePageAssetCount === 0 && (
-                  <span>{activePage ? "使用画框工具创建资产，选择工具调整资产。" : "画布保持纯黑，不显示白色空态卡片。"}</span>
-                )}
-              </section>
-            )}
+                    <span>{activeSlice.bbox.width}x{activeSlice.bbox.height}</span>
+                  </div>
+                </section>
+              ) : (
+                <section className="inspectorSummary">
+                  <span>{activePage ? `${activePageAssetCount} assets on this page · ${totalAssets} total` : "顶部按钮可上传 1..N 张图片"}</span>
+                  {activePageAssetCount === 0 && (
+                    <span>{activePage ? "使用画框工具创建资产，选择工具调整资产。" : "画布保持纯黑，不显示白色空态卡片。"}</span>
+                  )}
+                </section>
+              )}
+            </div>
             <div className="assetList">
               {activePage?.slices.map((slice, index) => (
                 <div
