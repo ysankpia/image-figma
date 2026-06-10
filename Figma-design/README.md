@@ -1,5 +1,7 @@
 # Manual UI Slice Workbench
 
+> Status: prototype/reference. 正式产品主线已经迁到 `apps/slice-studio/`，后续项目制手动切图功能优先在 Slice Studio 中迭代。这个目录保留为已验证交互和旧 Figma 插件能力参考。
+
 Manual UI Slice Workbench 是一个本地项目制截图资产切图工具，也可以继续作为 Figma 插件页面运行。当前默认入口只做一件事：上传 1..N 张 UI 截图，用户手动画出开发要用的 image/icon 资产，保存到本地项目，导出 `assets.zip`。
 
 旧版 AI 生图、图生图、透明底、SVG、H5 reconstruction 代码仍保留在 `ui.html` 和 `server.js` 里作为参考能力，但不再是默认产品入口。
