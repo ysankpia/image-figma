@@ -29,13 +29,13 @@ async function main() {
           {
             pageId: "page_0001",
             slices: [
-              { id: "page_0001__slice_a", name: "hero", kind: "image", bbox: { x: 1, y: 1, width: 8, height: 8 }, selected: true }
+              { id: "page_0001__slice_a", name: "hero", kind: "image", cutMode: "rect", bbox: { x: 1, y: 1, width: 8, height: 8 }, selected: true }
             ]
           },
           {
             pageId: "page_0002",
             slices: [
-              { id: "page_0002__slice_a", name: "tab_asset", kind: "image", bbox: { x: 3, y: 3, width: 6, height: 6 }, selected: true }
+              { id: "page_0002__slice_a", name: "tab_asset", kind: "image", cutMode: "shape", bbox: { x: 3, y: 3, width: 6, height: 6 }, selected: true }
             ]
           },
           { pageId: "page_0003", slices: [] }
@@ -81,6 +81,9 @@ async function main() {
     }
     if (manifest.pages[0]?.slices.length !== 1 || manifest.pages[1]?.slices.length !== 0) {
       throw new Error("manifest slices do not match replace/delete flow");
+    }
+    if (manifest.pages[0]?.slices[0]?.cutMode !== "shape") {
+      throw new Error(`expected remaining slice cutMode shape, got ${manifest.pages[0]?.slices[0]?.cutMode}`);
     }
     console.log(JSON.stringify({ ok: true, projectId, assetCount: exported.assetCount, pages: manifest.pages.map((page) => page.pageDirectory) }));
   } finally {
@@ -162,7 +165,7 @@ type ProjectDetail = {
 type ExportManifest = {
   pages: Array<{
     pageDirectory: string;
-    slices: unknown[];
+    slices: Array<{ cutMode: string }>;
   }>;
 };
 

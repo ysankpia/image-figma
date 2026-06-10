@@ -19,6 +19,7 @@ export function buildExportManifest(detail: ProjectDetail, exportedAt = new Date
           id: slice.id,
           name: slice.name,
           kind: slice.kind,
+          cutMode: slice.cutMode,
           filename: `slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
           placement: { ...slice.bbox },
           selected: true

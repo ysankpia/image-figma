@@ -432,6 +432,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       sliceIndex: index,
       name: `slice_${String(index).padStart(2, "0")}`,
       kind: "image",
+      cutMode: "rect",
       bbox: normalizeBox(bbox, activePage),
       selected: true
     };
@@ -450,7 +451,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     sliceEditUndoRef.current = sliceId;
   }
 
-  function commitSlicePatch(sliceId: string, patch: Partial<Pick<SliceRecord, "name" | "bbox">>, undoLabel = "编辑资产", options: { pushUndo?: boolean } = { pushUndo: true }) {
+  function commitSlicePatch(sliceId: string, patch: Partial<Pick<SliceRecord, "name" | "bbox" | "cutMode">>, undoLabel = "编辑资产", options: { pushUndo?: boolean } = { pushUndo: true }) {
     if (!activePage) return;
     const nextPages = pages.map((page) => page.id === activePage.id ? {
       ...page,
@@ -826,6 +827,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
                   </label>
+                  <label className="toggleField">
+                    <span>透明形状</span>
+                    <input
+                      type="checkbox"
+                      checked={activeSlice.cutMode === "shape"}
+                      onChange={(event) => commitSlicePatch(activeSlice.id, { cutMode: event.target.checked ? "shape" : "rect" }, "切换裁切模式")}
+                    />
+                  </label>
                 </div>
                 <div className="bboxGrid">
                   <span>x {activeSlice.bbox.x}</span>
@@ -865,6 +874,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
+                    {slice.cutMode === "shape" && <span className="cutModeBadge">透明</span>}
                   </span>
                   <button className="assetItemDelete" type="button" aria-label={`删除 ${slice.name}`} title="删除资产" onClick={(event) => {
                     event.stopPropagation();
@@ -936,6 +946,7 @@ function serializeSlices(pages: WorkbenchPage[], activePageId: string | null) {
         id: slice.id,
         name: slice.name,
         kind: slice.kind,
+        cutMode: slice.cutMode,
         bbox: slice.bbox,
         selected: true as const
       }))

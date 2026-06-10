@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import sharp from "sharp";
 import { projectsRoot } from "./config";
 import { httpError } from "./errors";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
+import { cropSliceToPng } from "./shape-cutout";
 import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
@@ -36,15 +36,7 @@ export async function exportAssets(projectId: string): Promise<{ ok: true; asset
       data: originalBuffer
     });
     for (const [sliceIndex, slice] of page.slices.entries()) {
-      const sliceBuffer = await sharp(originalBuffer)
-        .extract({
-          left: slice.bbox.x,
-          top: slice.bbox.y,
-          width: slice.bbox.width,
-          height: slice.bbox.height
-        })
-        .png()
-        .toBuffer();
+      const sliceBuffer = await cropSliceToPng(originalBuffer, slice);
       files.push({
         name: `slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
         data: sliceBuffer

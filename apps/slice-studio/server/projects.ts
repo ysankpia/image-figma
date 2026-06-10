@@ -5,7 +5,7 @@ import { db, transaction, type PageRow, type ProjectRow, type SliceRow } from ".
 import { maxBatchUploadBytes, maxUploadBytes, projectsRoot, storageRoot } from "./config";
 import { httpError } from "./errors";
 import { assertInside, randomHex, sanitizeFileName, sanitizeName } from "./utils";
-import { assertSafeId, assertSafeSliceId, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
+import { assertSafeId, assertSafeSliceId, normalizeCutMode, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
 import type { PageRecord, ProjectDetail, ProjectListItem, ProjectSummary, SaveSlicesRequest, SliceRecord } from "../shared/types";
 
 export function listProjects(): ProjectSummary[] {
@@ -272,11 +272,12 @@ export function saveSlices(projectId: string, payload: SaveSlicesRequest): Proje
         seenPageSliceIds.add(slice.id);
         seenProjectSliceIds.add(slice.id);
         const kind = normalizeSliceKind(slice.kind);
+        const cutMode = normalizeCutMode(slice.cutMode);
         const box = normalizeSliceBox(slice.bbox, { width: page.width, height: page.height });
         db.query(`
-          INSERT INTO slices (id, project_id, page_id, slice_index, name, kind, x, y, width, height, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(slice.id, projectId, pageId, sliceIndex + 1, sanitizeName(slice.name, `slice_${String(sliceIndex + 1).padStart(2, "0")}`), kind, box.x, box.y, box.width, box.height, now, now);
+          INSERT INTO slices (id, project_id, page_id, slice_index, name, kind, cut_mode, x, y, width, height, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(slice.id, projectId, pageId, sliceIndex + 1, sanitizeName(slice.name, `slice_${String(sliceIndex + 1).padStart(2, "0")}`), kind, cutMode, box.x, box.y, box.width, box.height, now, now);
       }
     }
     updateProjectCounts(projectId);
@@ -401,6 +402,7 @@ function formatSlice(row: SliceRow): SliceRecord {
     sliceIndex: row.slice_index,
     name: row.name,
     kind: row.kind,
+    cutMode: row.cut_mode === "shape" ? "shape" : "rect",
     bbox: { x: row.x, y: row.y, width: row.width, height: row.height },
     selected: true
   };

@@ -1,5 +1,5 @@
 import { normalizeBox } from "./bbox";
-import type { BBox, SliceKind } from "./types";
+import type { BBox, CutMode, SliceKind } from "./types";
 
 export function assertSafeId(value: string, label: string): void {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) {
@@ -18,6 +18,10 @@ export function normalizeSliceKind(value: unknown): SliceKind {
     throw new Error("slice kind must be image");
   }
   return value;
+}
+
+export function normalizeCutMode(value: unknown): CutMode {
+  return value === "shape" ? "shape" : "rect";
 }
 
 export function normalizeSliceBox(box: BBox, bounds: { width: number; height: number }): BBox {

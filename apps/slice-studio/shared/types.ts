@@ -1,4 +1,5 @@
 export type SliceKind = "image";
+export type CutMode = "rect" | "shape";
 
 export type BBox = {
   x: number;
@@ -38,6 +39,7 @@ export type SliceRecord = {
   sliceIndex: number;
   name: string;
   kind: SliceKind;
+  cutMode: CutMode;
   bbox: BBox;
   selected: true;
 };
@@ -55,6 +57,7 @@ export type SaveSlicesRequest = {
       id: string;
       name: string;
       kind: SliceKind;
+      cutMode?: CutMode;
       bbox: BBox;
       selected: true;
     }>;
@@ -77,6 +80,7 @@ export type ExportManifest = {
       id: string;
       name: string;
       kind: SliceKind;
+      cutMode: CutMode;
       filename: string;
       placement: BBox;
       selected: true;

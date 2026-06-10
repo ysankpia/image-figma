@@ -40,6 +40,7 @@ export function initDatabase(): void {
       slice_index INTEGER NOT NULL,
       name TEXT NOT NULL,
       kind TEXT NOT NULL CHECK (kind IN ('image')),
+      cut_mode TEXT NOT NULL DEFAULT 'rect' CHECK (cut_mode IN ('rect', 'shape')),
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
       width INTEGER NOT NULL,
@@ -51,7 +52,9 @@ export function initDatabase(): void {
     );
   `);
   ensureColumn("pages", "display_name", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("slices", "cut_mode", "TEXT NOT NULL DEFAULT 'rect'");
   db.query("UPDATE slices SET kind = 'image' WHERE kind != 'image'").run();
+  db.query("UPDATE slices SET cut_mode = 'rect' WHERE cut_mode NOT IN ('rect', 'shape')").run();
 }
 
 function ensureColumn(tableName: string, columnName: string, definition: string): void {
@@ -101,6 +104,7 @@ export type SliceRow = {
   slice_index: number;
   name: string;
   kind: "image";
+  cut_mode: "rect" | "shape";
   x: number;
   y: number;
   width: number;

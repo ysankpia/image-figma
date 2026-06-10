@@ -155,3 +155,4 @@
 - [165 Slice Studio Persistence And Page Management Hardening](165-slice-studio-persistence-and-page-management-hardening.md)
 - [166 Slice Studio Page Rail Drag Reorder](166-slice-studio-page-rail-drag-reorder.md)
 - [167 Slice Studio Image Only Assets And Box Color](167-slice-studio-image-only-and-box-color.md)
+- [168 Slice Studio Shape Cutout Mode](168-slice-studio-shape-cutout-mode.md)

@@ -85,6 +85,8 @@ Undo is session-local. Slice creation, move, resize, delete, rename, page rename
 
 Box colors are local Review UI preferences. Use the color controls in the right inspector to change normal and active slice outline colors; the preference is kept in browser local storage and does not affect exported assets.
 
+Each slice exports in `rect` mode by default. The active asset panel has a `透明形状` switch; when enabled, export still uses the user's bbox, but the backend estimates the local background inside that bbox and writes a transparent PNG. This is a fast icon/simple-shape cutout aid, not SVG vectorization and not AI segmentation. If the detected foreground is obviously invalid, export falls back to the rectangular crop.
+
 ## Storage
 
 ```text
