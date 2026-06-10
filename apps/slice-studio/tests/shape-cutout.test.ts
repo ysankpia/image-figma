@@ -75,4 +75,82 @@ describe("shape cutout", () => {
     expect(raw[3]).toBe(0);
     expect(raw[(5 * width + 5) * 4 + 3]).toBe(255);
   });
+
+  it("keeps enclosed dark content even when it matches the outside background", () => {
+    const width = 18;
+    const height = 18;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 12;
+      rgba[offset + 1] = 10;
+      rgba[offset + 2] = 48;
+      rgba[offset + 3] = 255;
+    }
+    for (let y = 4; y < 14; y += 1) {
+      for (let x = 4; x < 14; x += 1) {
+        const isBorder = x === 4 || x === 13 || y === 4 || y === 13;
+        const offset = (y * width + x) * 4;
+        if (isBorder) {
+          rgba[offset] = 160;
+          rgba[offset + 1] = 54;
+          rgba[offset + 2] = 255;
+        }
+      }
+    }
+
+    const cutout = applyShapeCutout(rgba, width, height);
+    expect(cutout[3]).toBe(0);
+    expect(cutout[(8 * width + 8) * 4 + 3]).toBe(255);
+  });
+
+  it("uses surrounding context for tight shape crops and returns the requested bbox size", async () => {
+    const width = 40;
+    const height = 40;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 10;
+      rgba[offset + 1] = 9;
+      rgba[offset + 2] = 54;
+      rgba[offset + 3] = 255;
+    }
+
+    const left = 10;
+    const top = 10;
+    const right = 29;
+    const bottom = 25;
+    const radius = 5;
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x <= right; x += 1) {
+        const innerX = x < left + radius ? left + radius : x > right - radius ? right - radius : x;
+        const innerY = y < top + radius ? top + radius : y > bottom - radius ? bottom - radius : y;
+        const dx = x - innerX;
+        const dy = y - innerY;
+        const inside = dx * dx + dy * dy <= radius * radius;
+        if (!inside) continue;
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 14;
+        rgba[offset + 1] = 12;
+        rgba[offset + 2] = 62;
+        if (x <= left + 1 || x >= right - 1 || y <= top + 1 || y >= bottom - 1) {
+          rgba[offset] = 136;
+          rgba[offset + 1] = 42;
+          rgba[offset + 2] = 250;
+        }
+      }
+    }
+
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+    const png = await cropSliceToPng(source, {
+      cutMode: "shape",
+      bbox: { x: left, y: top, width: right - left + 1, height: bottom - top + 1 }
+    });
+    const result = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+
+    expect(result.info.width).toBe(right - left + 1);
+    expect(result.info.height).toBe(bottom - top + 1);
+    expect(result.data[3]).toBe(0);
+    expect(result.data[(8 * result.info.width + 10) * 4 + 3]).toBe(255);
+  });
 });

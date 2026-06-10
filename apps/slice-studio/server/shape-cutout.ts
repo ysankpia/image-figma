@@ -13,35 +13,53 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
     width: Math.round(slice.bbox.width),
     height: Math.round(slice.bbox.height)
   };
+
+  if (slice.cutMode === "shape") {
+    const metadata = await sharp(originalBuffer).metadata();
+    const imageWidth = metadata.width ?? box.left + box.width;
+    const imageHeight = metadata.height ?? box.top + box.height;
+    const expandedBox = expandBox(box, imageWidth, imageHeight);
+    const cropped = await sharp(originalBuffer)
+      .extract(expandedBox)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const cutout = applyShapeCutout(cropped.data, cropped.info.width, cropped.info.height);
+    const left = box.left - expandedBox.left;
+    const top = box.top - expandedBox.top;
+    return sharp(cutout, { raw: { width: cropped.info.width, height: cropped.info.height, channels: 4 } })
+      .extract({ left, top, width: box.width, height: box.height })
+      .png()
+      .toBuffer();
+  }
+
   const cropped = await sharp(originalBuffer)
     .extract(box)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  const width = cropped.info.width;
-  const height = cropped.info.height;
-  const data = slice.cutMode === "shape"
-    ? applyShapeCutout(cropped.data, width, height)
-    : Buffer.from(cropped.data);
-
-  return sharp(data, { raw: { width, height, channels: 4 } }).png().toBuffer();
+  return sharp(cropped.data, { raw: { width: cropped.info.width, height: cropped.info.height, channels: 4 } })
+    .png()
+    .toBuffer();
 }
 
 export function applyShapeCutout(source: Uint8Array, width: number, height: number): Buffer {
   if (width < 4 || height < 4) return Buffer.from(source);
 
   const background = estimateBackground(source, width, height);
-  const threshold = 32;
-  const feather = 24;
+  const threshold = background.threshold;
+  const backgroundMask = new Uint8Array(width * height);
+  const outsideMask = new Uint8Array(width * height);
+  const queue: number[] = [];
   const result = Buffer.from(source);
-  let foregroundPixels = 0;
 
   for (let index = 0; index < width * height; index += 1) {
     const offset = index * 4;
     const originalAlpha = source[offset + 3];
     if (originalAlpha < 10) {
-      result[offset + 3] = 0;
+      backgroundMask[index] = 1;
       continue;
     }
 
@@ -54,24 +72,73 @@ export function applyShapeCutout(source: Uint8Array, width: number, height: numb
       background.blue
     );
 
-    if (distance <= threshold) {
-      result[offset + 3] = 0;
-    } else if (distance < threshold + feather) {
-      const alphaRatio = (distance - threshold) / feather;
-      result[offset + 3] = Math.round(originalAlpha * alphaRatio);
-      foregroundPixels += alphaRatio > 0.35 ? 1 : 0;
-    } else {
-      result[offset + 3] = originalAlpha;
-      foregroundPixels += 1;
-    }
+    if (distance <= threshold) backgroundMask[index] = 1;
   }
 
-  const foregroundRatio = foregroundPixels / (width * height);
-  if (foregroundRatio < 0.01 || foregroundRatio > 0.95) return Buffer.from(source);
+  for (let x = 0; x < width; x += 1) {
+    pushFloodSeed(x, 0, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x, height - 1, width, height, backgroundMask, outsideMask, queue);
+  }
+  for (let y = 0; y < height; y += 1) {
+    pushFloodSeed(0, y, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(width - 1, y, width, height, backgroundMask, outsideMask, queue);
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const index = queue[cursor];
+    const x = index % width;
+    const y = Math.floor(index / width);
+    pushFloodSeed(x + 1, y, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x - 1, y, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x, y + 1, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x, y - 1, width, height, backgroundMask, outsideMask, queue);
+  }
+
+  const outsideRatio = queue.length / (width * height);
+  if (outsideRatio < 0.003 || outsideRatio > 0.92) return Buffer.from(source);
+
+  for (const index of queue) {
+    result[index * 4 + 3] = 0;
+  }
+
   return result;
 }
 
-function estimateBackground(source: Uint8Array, width: number, height: number): { red: number; green: number; blue: number } {
+function expandBox(
+  box: { left: number; top: number; width: number; height: number },
+  imageWidth: number,
+  imageHeight: number
+): { left: number; top: number; width: number; height: number } {
+  const padding = Math.min(96, Math.max(12, Math.round(Math.min(box.width, box.height) * 0.28)));
+  const left = Math.max(0, box.left - padding);
+  const top = Math.max(0, box.top - padding);
+  const right = Math.min(imageWidth, box.left + box.width + padding);
+  const bottom = Math.min(imageHeight, box.top + box.height + padding);
+  return {
+    left,
+    top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top)
+  };
+}
+
+function pushFloodSeed(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  backgroundMask: Uint8Array,
+  outsideMask: Uint8Array,
+  queue: number[]
+): void {
+  if (x < 0 || y < 0 || x >= width || y >= height) return;
+  const index = y * width + x;
+  if (!backgroundMask[index] || outsideMask[index]) return;
+  outsideMask[index] = 1;
+  queue.push(index);
+}
+
+function estimateBackground(source: Uint8Array, width: number, height: number): { red: number; green: number; blue: number; threshold: number } {
   const samples: Array<[number, number, number]> = [];
   const stride = Math.max(1, Math.floor(Math.max(width, height) / 64));
 
@@ -84,11 +151,12 @@ function estimateBackground(source: Uint8Array, width: number, height: number): 
     pushSample(samples, source, width, width - 1, y);
   }
 
-  return {
-    red: median(samples.map((sample) => sample[0])),
-    green: median(samples.map((sample) => sample[1])),
-    blue: median(samples.map((sample) => sample[2]))
-  };
+  const red = median(samples.map((sample) => sample[0]));
+  const green = median(samples.map((sample) => sample[1]));
+  const blue = median(samples.map((sample) => sample[2]));
+  const distances = samples.map((sample) => colorDistance(sample[0], sample[1], sample[2], red, green, blue));
+  const threshold = clamp(percentile(distances, 0.82) + 24, 36, 76);
+  return { red, green, blue, threshold };
 }
 
 function pushSample(samples: Array<[number, number, number]>, source: Uint8Array, width: number, x: number, y: number): void {
@@ -101,6 +169,17 @@ function median(values: number[]): number {
   if (!values.length) return 255;
   const sorted = [...values].sort((left, right) => left - right);
   return sorted[Math.floor(sorted.length / 2)];
+}
+
+function percentile(values: number[], ratio: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)));
+  return sorted[index];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function colorDistance(redA: number, greenA: number, blueA: number, redB: number, greenB: number, blueB: number): number {
