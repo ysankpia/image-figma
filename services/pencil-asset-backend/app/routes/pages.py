@@ -137,6 +137,16 @@ REVIEW_HTML = r"""<!doctype html>
     .slice input{width:100%;box-sizing:border-box;margin-top:7px}
     .small{font-size:12px;color:#94a3b8}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+    .color-field{display:grid;grid-template-columns:1fr 40px;gap:6px;align-items:center;font-size:12px;color:#94a3b8}
+    input[type=color]{width:40px;height:32px;padding:2px}
+    #contextMenu{position:fixed;z-index:10;display:none;min-width:210px;border:1px solid #334155;border-radius:8px;background:#101820;box-shadow:0 18px 48px rgba(0,0,0,.42);padding:7px}
+    #contextMenu .group{padding:5px 0;border-top:1px solid #25313d}
+    #contextMenu .group:first-child{border-top:0}
+    #contextMenu .label{font-size:11px;color:#94a3b8;padding:4px 6px}
+    #contextMenu button{display:block;width:100%;text-align:left;background:transparent;color:#e5e7eb;padding:7px 8px;border-radius:5px;font-weight:550}
+    #contextMenu button:hover{background:#1f2a37}
+    #contextMenu button.danger{color:#fecaca;background:transparent}
+    #contextMenu button.danger:hover{background:#4c1d1d}
     #message{font-size:12px;color:#fbbf24;max-width:38vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   </style>
 </head>
@@ -161,19 +171,28 @@ REVIEW_HTML = r"""<!doctype html>
   <main id="stage"><canvas id="canvas"></canvas></main>
   <aside id="side">
     <div class="panel-title">Selected image/icon assets</div>
-    <div class="small">选择：左键确认候选，Alt+点击或右键隐藏错误候选。画框：拖拽任意区域创建手动资产。拖动：拖动画布。滚轮缩放。</div>
+    <div class="small">选择：左键确认候选；右键打开菜单隐藏候选或删除资产。画框：拖拽任意区域创建手动资产。选中资产后可拖动和缩放。</div>
     <div class="row"><button id="delete" class="danger">删除选中</button><button id="fit" class="secondary">适应屏幕</button><button id="actual" class="secondary">100%</button></div>
     <div class="row"><button id="toggleRejected" class="secondary">显示已隐藏候选</button><button id="restoreRejected" class="secondary">恢复本页隐藏</button></div>
+    <div class="panel-title">Frame colors</div>
+    <div class="row">
+      <label class="color-field">候选 image<input id="colorCandidateImage" data-color-key="candidateImage" type="color"></label>
+      <label class="color-field">候选 icon<input id="colorCandidateIcon" data-color-key="candidateIcon" type="color"></label>
+      <label class="color-field">已选<input id="colorSlice" data-color-key="slice" type="color"></label>
+      <label class="color-field">选中<input id="colorActive" data-color-key="activeSlice" type="color"></label>
+    </div>
     <div id="pageStats" class="small"></div>
     <div id="slices"></div>
   </aside>
 </div>
+<div id="contextMenu"></div>
 <script>
 const projectId = "__PROJECT_ID__";
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const stage = document.getElementById('stage');
 const msg = document.getElementById('message');
+const contextMenu = document.getElementById('contextMenu');
 let project, candidatesDoc, manualDoc;
 let reviewState = null;
 let pageIndex = 0;
@@ -184,6 +203,15 @@ let activeSliceId = null;
 let showRejected = false;
 let reviewSavePromise = null;
 let toolMode = 'select';
+const defaultColors = {
+  candidateImage:'#22c55e',
+  candidateIcon:'#38bdf8',
+  rejected:'#64748b',
+  slice:'#facc15',
+  activeSlice:'#f97316',
+  handle:'#111827',
+  draft:'#ffffff'
+};
 
 async function api(url, opts={}) {
   const res = await fetch(url, opts);
@@ -196,6 +224,8 @@ async function init() {
   candidatesDoc = await api(`/api/asset-projects/${projectId}/candidates`);
   manualDoc = await api(`/api/asset-projects/${projectId}/manual-slices`);
   reviewState = await api(`/api/asset-projects/${projectId}/review-state`);
+  ensureColors();
+  syncColorInputs();
   syncExportLinks(project);
   renderPages();
   await loadPage(0);
@@ -215,7 +245,21 @@ function currentReviewPage(){
   page.lastFilter ||= {};
   return page;
 }
+function ensureColors(){
+  reviewState ||= {schema:'pencil_asset.review_state.v1',projectId,pages:[],filters:{}};
+  reviewState.filters ||= {};
+  reviewState.filters.colors = {...defaultColors, ...(reviewState.filters.colors || {})};
+  return reviewState.filters.colors;
+}
+function colors(){return ensureColors()}
+function syncColorInputs(){
+  const c = colors();
+  for (const input of document.querySelectorAll('input[data-color-key]')) {
+    input.value = c[input.dataset.colorKey] || defaultColors[input.dataset.colorKey] || '#ffffff';
+  }
+}
 async function loadPage(index) {
+  hideContextMenu();
   pageIndex = index;
   if (reviewState) reviewState.lastActivePageId = currentCandidatePage().pageId;
   const p = currentCandidatePage();
@@ -252,7 +296,7 @@ function renderSlices() {
       <input value="${escapeHtml(s.displayName || s.name)}" data-id="${s.id}">
       <div class="small">${s.bbox.x}, ${s.bbox.y} -> ${s.name}</div>`;
     div.onclick = ()=>{activeSliceId=s.id; draw(); renderSlices();};
-    div.querySelector('input').onchange = (e)=>{s.displayName=e.target.value;s.name=slug(e.target.value)||s.name;};
+    div.querySelector('input').onchange = (e)=>{s.displayName=e.target.value;s.name=slug(e.target.value)||s.name;markManualDirty('资产名称已修改，记得保存');renderSlices();};
     el.appendChild(div);
   });
 }
@@ -289,6 +333,7 @@ function resizeCanvas(){
   return {width: cssWidth, height: cssHeight, dpr};
 }
 function draw() {
+  const color = colors();
   const size = resizeCanvas();
   ctx.clearRect(0,0,size.width,size.height);
   ctx.imageSmoothingEnabled = view.scale < 1;
@@ -303,30 +348,149 @@ function draw() {
     const isRejected = rejected.has(c.id);
     if (isRejected && !showRejected) continue;
     if (isRejected) {
-      dashedStroke(c.bbox, '#64748b', 2 / view.scale);
+      drawBox(c.bbox, color.rejected, '', false, true);
     } else {
-      stroke(c.bbox, c.kind === 'icon' ? '#38bdf8' : '#22c55e', 2 / view.scale);
+      drawBox(c.bbox, c.kind === 'icon' ? color.candidateIcon : color.candidateImage, '', false, false);
     }
   }
   for (const s of currentManualPage().slices || []) {
-    stroke(s.bbox, s.id===activeSliceId ? '#f97316' : '#facc15', 3 / view.scale);
+    drawSelectedSlice(s);
   }
-  if (drag?.mode === 'draw') stroke(dragBox(), '#ffffff', 2 / view.scale);
+  if (drag?.mode === 'draw') drawDraftBox(dragBox());
   ctx.restore();
-  canvas.style.cursor = drag?.mode === 'pan' || toolMode === 'pan' ? 'grab' : toolMode === 'draw' ? 'crosshair' : 'default';
+  canvas.style.cursor = canvasCursor();
 }
 function stroke(b,c,w){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.strokeRect(b.x,b.y,b.width,b.height)}
-function dashedStroke(b,c,w){ctx.save();ctx.setLineDash([6 / view.scale, 4 / view.scale]);stroke(b,c,w);ctx.restore()}
+function drawBox(b,c,label,active=false,dashed=false){
+  ctx.save();
+  if (dashed) ctx.setLineDash([6 / view.scale, 4 / view.scale]);
+  stroke(b,'#000000', (active ? 5 : 4) / view.scale);
+  stroke(b,c, (active ? 3 : 2) / view.scale);
+  if (label) {
+    ctx.font = `${12 / view.scale}px sans-serif`;
+    const text = String(label);
+    const w = Math.min(150, Math.max(36, text.length * 12 + 10)) / view.scale;
+    const h = 18 / view.scale;
+    const y = Math.max(0, b.y - h);
+    ctx.fillStyle = 'rgba(0,0,0,.78)';
+    ctx.fillRect(b.x, y, w, h);
+    ctx.fillStyle = c;
+    ctx.fillText(text, b.x + 4 / view.scale, y + 13 / view.scale);
+  }
+  ctx.restore();
+}
+function drawSelectedSlice(s){
+  const color = colors();
+  const active = s.id === activeSliceId;
+  drawBox(s.bbox, active ? color.activeSlice : color.slice, active ? '已选' : '', active, false);
+  if (!active) return;
+  ctx.save();
+  const size = 9 / view.scale;
+  ctx.fillStyle = color.handle;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2 / view.scale;
+  for (const handle of handlesFor(s.bbox)) {
+    ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
+    ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
+  }
+  ctx.restore();
+}
+function drawDraftBox(b){
+  ctx.save();
+  stroke(b,'#000000', 5 / view.scale);
+  stroke(b,'#ffffff', 3 / view.scale);
+  ctx.restore();
+}
 function screenToImage(ev){const r=canvas.getBoundingClientRect();return {x:(ev.clientX-r.left-view.x)/view.scale,y:(ev.clientY-r.top-view.y)/view.scale}}
-function candidateAt(pt) {
+function boxContains(b, pt){return pt.x>=b.x && pt.y>=b.y && pt.x<=b.x+b.width && pt.y<=b.y+b.height}
+function candidateAt(pt, includeRejected=false) {
   const rejected = rejectedCandidateSet();
-  return [...(currentCandidatePage().candidates || [])].reverse().find(c => {
+  const matches = (currentCandidatePage().candidates || []).filter(c => {
     if (!['strong','normal'].includes(c.level || 'normal')) return false;
-    if (rejected.has(c.id) && !showRejected) return false;
-    return pt.x>=c.bbox.x && pt.y>=c.bbox.y && pt.x<=c.bbox.x+c.bbox.width && pt.y<=c.bbox.y+c.bbox.height;
+    if (rejected.has(c.id) && !(includeRejected || showRejected)) return false;
+    return boxContains(c.bbox, pt);
   });
+  matches.sort((a,b) => {
+    const areaA = a.bbox.width * a.bbox.height;
+    const areaB = b.bbox.width * b.bbox.height;
+    if (areaA !== areaB) return areaA - areaB;
+    const confA = Number(a.confidence || 0);
+    const confB = Number(b.confidence || 0);
+    if (confA !== confB) return confB - confA;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return matches[0] || null;
+}
+function sliceAt(pt) {
+  return [...(currentManualPage().slices || [])].reverse().find(s => s.selected !== false && boxContains(s.bbox, pt)) || null;
+}
+function activeSlice(){return (currentManualPage().slices || []).find(s => s.id === activeSliceId) || null}
+function handlesFor(b) {
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.x + b.width, bt = b.y + b.height;
+  return [
+    {name:'nw',x:b.x,y:b.y},{name:'n',x:cx,y:b.y},{name:'ne',x:r,y:b.y},
+    {name:'e',x:r,y:cy},{name:'se',x:r,y:bt},{name:'s',x:cx,y:bt},
+    {name:'sw',x:b.x,y:bt},{name:'w',x:b.x,y:cy}
+  ];
+}
+function hitHandle(slice, pt) {
+  if (!slice) return null;
+  const threshold = 10 / view.scale;
+  for (const handle of handlesFor(slice.bbox)) {
+    if (Math.abs(pt.x - handle.x) <= threshold && Math.abs(pt.y - handle.y) <= threshold) return handle.name;
+  }
+  return null;
+}
+function hitTargetsAt(pt, includeRejected=false){
+  const active = activeSlice();
+  const handle = active ? hitHandle(active, pt) : null;
+  const slice = handle ? active : sliceAt(pt);
+  const candidate = candidateAt(pt, includeRejected);
+  return {handle, slice, candidate};
+}
+function resizeBox(original, handle, dx, dy) {
+  let x = original.x, y = original.y, right = original.x + original.width, bottom = original.y + original.height;
+  if (handle.includes('w')) x += dx;
+  if (handle.includes('e')) right += dx;
+  if (handle.includes('n')) y += dy;
+  if (handle.includes('s')) bottom += dy;
+  const p = currentCandidatePage();
+  x = Math.max(0, Math.min(x, right - 1));
+  y = Math.max(0, Math.min(y, bottom - 1));
+  right = Math.max(x + 1, Math.min(p.width, right));
+  bottom = Math.max(y + 1, Math.min(p.height, bottom));
+  return {x:Math.round(x), y:Math.round(y), width:Math.round(right - x), height:Math.round(bottom - y)};
+}
+function moveBox(original, dx, dy) {
+  const p = currentCandidatePage();
+  return {
+    x:Math.round(Math.max(0, Math.min(p.width - original.width, original.x + dx))),
+    y:Math.round(Math.max(0, Math.min(p.height - original.height, original.y + dy))),
+    width:original.width,
+    height:original.height
+  };
+}
+function canvasCursor(){
+  if (drag?.mode === 'pan' || toolMode === 'pan') return 'grab';
+  if (drag?.mode === 'resize') return `${drag.handle}-resize`;
+  if (drag?.mode === 'move') return 'move';
+  if (toolMode === 'draw') return 'crosshair';
+  return 'default';
+}
+function hoverCursor(pt){
+  if (toolMode === 'draw') return 'crosshair';
+  if (toolMode === 'pan') return 'grab';
+  const hit = hitTargetsAt(pt);
+  if (hit.handle) return `${hit.handle}-resize`;
+  if (hit.slice) return 'move';
+  if (hit.candidate) return 'pointer';
+  return 'default';
+}
+function markManualDirty(message='已修改，记得保存') {
+  msg.textContent = message;
 }
 canvas.onmousedown = (ev) => {
+  hideContextMenu();
   const pt = screenToImage(ev);
   if (ev.button === 2) return;
   if (ev.button === 1 || ev.shiftKey || ev.getModifierState('Space') || toolMode === 'pan') {
@@ -338,29 +502,53 @@ canvas.onmousedown = (ev) => {
     draw();
     return;
   }
-  const c = candidateAt(pt);
-  if (c) {
+  const hit = hitTargetsAt(pt);
+  if (hit.slice) {
+    activeSliceId = hit.slice.id;
+    drag = {mode:hit.handle ? 'resize' : 'move', handle:hit.handle, start:pt, original:{...hit.slice.bbox}, sliceId:hit.slice.id};
+    draw(); renderSlices();
+    return;
+  }
+  if (hit.candidate) {
     if (ev.altKey) {
-      rejectCandidate(c.id);
+      rejectCandidate(hit.candidate.id);
       return;
     }
-    addSliceFromCandidate(c);
+    addSliceFromCandidate(hit.candidate);
     draw(); renderSlices(); renderPages();
     return;
   }
+  activeSliceId = null;
+  draw(); renderSlices();
 };
 canvas.oncontextmenu = (ev) => {
   ev.preventDefault();
-  const c = candidateAt(screenToImage(ev));
-  if (c) rejectCandidate(c.id);
+  const hit = hitTargetsAt(screenToImage(ev), showRejected);
+  showContextMenu(ev.clientX, ev.clientY, hit);
 };
 canvas.onmousemove = (ev) => {
-  if (!drag) return;
+  if (!drag) {
+    canvas.style.cursor = hoverCursor(screenToImage(ev));
+    return;
+  }
   if (drag.mode === 'pan') { view.x = drag.vx + ev.clientX - drag.sx; view.y = drag.vy + ev.clientY - drag.sy; }
   if (drag.mode === 'draw') drag.end = screenToImage(ev);
+  if (drag.mode === 'move' || drag.mode === 'resize') {
+    const s = (currentManualPage().slices || []).find(item => item.id === drag.sliceId);
+    if (s) {
+      const pt = screenToImage(ev);
+      const dx = pt.x - drag.start.x;
+      const dy = pt.y - drag.start.y;
+      s.bbox = drag.mode === 'resize' ? resizeBox(drag.original, drag.handle, dx, dy) : moveBox(drag.original, dx, dy);
+    }
+  }
   draw();
 };
 window.onmouseup = () => {
+  if (drag?.mode === 'move' || drag?.mode === 'resize') {
+    markManualDirty('资产框已调整，记得保存');
+    renderSlices(); renderPages();
+  }
   if (drag?.mode === 'draw') {
     const b = dragBox();
     if (b.width >= 4 && b.height >= 4) {
@@ -386,10 +574,16 @@ function dragBox(){const a=drag.start,b=drag.end;return normBox({x:Math.min(a.x,
 function normBox(b){const p=currentCandidatePage();let x=Math.max(0,Math.round(b.x));let y=Math.max(0,Math.round(b.y));let w=Math.max(1,Math.round(b.width));let h=Math.max(1,Math.round(b.height));w=Math.min(w,p.width-x);h=Math.min(h,p.height-y);return {x,y,width:w,height:h}}
 function addSliceFromCandidate(c) {
   const p = currentManualPage();
-  if ((p.slices || []).some(s => (s.candidateIds || []).includes(c.id))) return;
+  const existing = (p.slices || []).find(s => (s.candidateIds || []).includes(c.id));
+  if (existing) {
+    activeSliceId = existing.id;
+    msg.textContent = '该候选已加入资产，已选中现有资产';
+    return;
+  }
   const id = `${p.pageId}__slice_${String((p.slices || []).length + 1).padStart(4,'0')}`;
   p.slices.push({id, name:id, displayName:c.kind, kind:c.kind === 'icon' ? 'icon':'image', bbox:c.bbox, selected:true, exportMode:'rect', source:'candidate_confirmed', candidateIds:[c.id], tags:[]});
   activeSliceId = id;
+  markManualDirty('已加入候选资产，记得保存');
 }
 function addManualSlice(bbox) {
   const p = currentManualPage();
@@ -397,6 +591,7 @@ function addManualSlice(bbox) {
   const kind = document.getElementById('kind').value;
   p.slices.push({id, name:id, displayName:kind, kind, bbox, selected:true, exportMode:'rect', source:'manual', candidateIds:[], tags:[]});
   activeSliceId = id;
+  markManualDirty('已创建手动资产，记得保存');
 }
 document.getElementById('delete').onclick = () => {
   deleteActiveSlice();
@@ -406,6 +601,7 @@ function deleteActiveSlice() {
   const p = currentManualPage();
   p.slices = (p.slices || []).filter(s => s.id !== activeSliceId);
   activeSliceId = null;
+  markManualDirty('已删除资产，记得保存');
   draw(); renderSlices(); renderPages();
 }
 document.getElementById('fit').onclick = fit;
@@ -427,10 +623,17 @@ document.getElementById('restoreRejected').onclick = () => {
   autosaveReviewState(`已恢复 ${count} 个候选`);
   draw(); renderSlices(); renderPages();
 };
+for (const input of document.querySelectorAll('input[data-color-key]')) {
+  input.oninput = () => {
+    colors()[input.dataset.colorKey] = input.value;
+    draw();
+  };
+  input.onchange = () => autosaveReviewState('已保存框颜色');
+}
 document.getElementById('preview').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export-preview`,{method:'POST'}); msg.innerHTML=`预览 ${data.assetCount} 个资产 <a style="color:#93c5fd" href="${data.previewHtmlUrl}" target="_blank">打开</a>`};
 document.getElementById('export').onclick = async()=>{await save(); const data=await api(`/api/asset-projects/${projectId}/export`,{method:'POST'}); document.getElementById('projectZip').style.display='inline-flex';document.getElementById('assetsZip').style.display='inline-flex';document.getElementById('projectZip').href=data.projectZipUrl;document.getElementById('assetsZip').href=data.selectedAssetsZipUrl;msg.textContent=`已导出 ${data.selectedAssetCount} 个资产`};
 function syncExportLinks(p){if(!p?.exported)return;document.getElementById('projectZip').style.display='inline-flex';document.getElementById('assetsZip').style.display='inline-flex';document.getElementById('projectZip').href=p.downloadUrl;document.getElementById('assetsZip').href=p.selectedAssetsDownloadUrl}
-async function save(){const data=await api(`/api/asset-projects/${projectId}/manual-slices`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(manualDoc)}); msg.textContent=`已保存 ${data.selectedSliceCount} 个资产`; return data}
+async function save(){hideContextMenu(); const data=await api(`/api/asset-projects/${projectId}/manual-slices`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(manualDoc)}); msg.textContent=`已保存 ${data.selectedSliceCount} 个资产`; return data}
 function rejectedCandidateSet(){const page=currentReviewPage();return new Set([...(page.rejectedCandidateIds || []), ...(page.hiddenCandidateIds || [])])}
 function rejectCandidate(candidateId) {
   const page = currentReviewPage();
@@ -447,6 +650,48 @@ function rejectCandidate(candidateId) {
   }
   draw(); renderSlices(); renderPages();
 }
+function showContextMenu(x, y, hit) {
+  contextMenu.innerHTML = '';
+  if (!hit.slice && !hit.candidate) {
+    hideContextMenu();
+    return;
+  }
+  if (hit.slice) {
+    const group = document.createElement('div');
+    group.className = 'group';
+    group.innerHTML = `<div class="label">已选资产 ${escapeHtml(hit.slice.displayName || hit.slice.name)}</div>`;
+    const setImage = menuButton('设为 image', () => {hit.slice.kind = 'image'; markManualDirty('资产已设为 image，记得保存'); hideContextMenu(); draw(); renderSlices();});
+    const setIcon = menuButton('设为 icon', () => {hit.slice.kind = 'icon'; markManualDirty('资产已设为 icon，记得保存'); hideContextMenu(); draw(); renderSlices();});
+    const del = menuButton('删除资产', () => {activeSliceId = hit.slice.id; deleteActiveSlice(); hideContextMenu();}, 'danger');
+    group.append(setImage, setIcon, del);
+    contextMenu.appendChild(group);
+  }
+  if (hit.candidate) {
+    const rejected = rejectedCandidateSet().has(hit.candidate.id);
+    const group = document.createElement('div');
+    group.className = 'group';
+    group.innerHTML = `<div class="label">候选框 ${escapeHtml(hit.candidate.id)}</div>`;
+    const add = menuButton('加入资产', () => {addSliceFromCandidate(hit.candidate); hideContextMenu(); draw(); renderSlices(); renderPages();});
+    const hide = menuButton(rejected ? '恢复候选' : '隐藏候选', () => {rejectCandidate(hit.candidate.id); hideContextMenu();});
+    group.append(add, hide);
+    contextMenu.appendChild(group);
+  }
+  contextMenu.style.left = `${Math.min(x, window.innerWidth - 230)}px`;
+  contextMenu.style.top = `${Math.min(y, window.innerHeight - 160)}px`;
+  contextMenu.style.display = 'block';
+}
+function menuButton(text, onClick, className='') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = text;
+  if (className) button.className = className;
+  button.onclick = onClick;
+  return button;
+}
+function hideContextMenu(){contextMenu.style.display='none';contextMenu.innerHTML=''}
+document.addEventListener('click', (ev) => {
+  if (!contextMenu.contains(ev.target)) hideContextMenu();
+});
 function autosaveReviewState(message) {
   reviewSavePromise = api(`/api/asset-projects/${projectId}/review-state`, {
     method:'PUT',
@@ -470,6 +715,7 @@ window.onkeydown = (ev) => {
   }
 };
 function setToolMode(mode) {
+  hideContextMenu();
   toolMode = mode;
   for (const [id, value] of [['toolSelect','select'], ['toolDraw','draw'], ['toolPan','pan']]) {
     const button = document.getElementById(id);

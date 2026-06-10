@@ -55,7 +55,17 @@ def test_create_manual_export_and_download(tmp_path: Path, monkeypatch) -> None:
     assert 'id="toolDraw"' in review.text
     assert "画框" in review.text
     assert "toolMode === 'draw'" in review.text
-    assert "Alt+点击或右键隐藏错误候选" in review.text
+    assert "右键打开菜单隐藏候选或删除资产" in review.text
+    assert 'id="contextMenu"' in review.text
+    assert "function handlesFor" in review.text
+    assert "function hitHandle" in review.text
+    assert "function resizeBox" in review.text
+    assert "function moveBox" in review.text
+    assert "function hitTargetsAt" in review.text
+    assert "const areaA = a.bbox.width * a.bbox.height" in review.text
+    assert 'data-color-key="candidateImage"' in review.text
+    assert "reviewState.filters.colors" in review.text
+    assert "drawDraftBox" in review.text
 
     candidates = client.get(f"/api/asset-projects/{project_id}/candidates").json()["data"]
     candidate = candidates["pages"][0]["candidates"][0]
@@ -187,11 +197,21 @@ def test_review_state_validation_and_recovery(tmp_path: Path, monkeypatch) -> No
     state_doc = client.get(f"/api/asset-projects/{project_id}/review-state").json()["data"]
     state_doc["pages"][0]["rejectedCandidateIds"] = [candidate_id]
     state_doc["pages"][0]["hiddenCandidateIds"] = [candidate_id]
-    state_doc["filters"] = {"showRejected": True}
+    state_doc["filters"] = {
+        "showRejected": True,
+        "colors": {
+            "candidateImage": "#00ff00",
+            "candidateIcon": "#00aaff",
+            "slice": "#ffff00",
+            "activeSlice": "#ff6600",
+        },
+    }
     response = client.put(f"/api/asset-projects/{project_id}/review-state", json=state_doc)
     assert response.status_code == 200
     persisted = client.get(f"/api/asset-projects/{project_id}/review-state").json()["data"]
     assert persisted["filters"]["showRejected"] is True
+    assert persisted["filters"]["colors"]["candidateImage"] == "#00ff00"
+    assert persisted["filters"]["colors"]["activeSlice"] == "#ff6600"
     assert persisted["pages"][0]["rejectedCandidateIds"] == [candidate_id]
     assert persisted["pages"][0]["hiddenCandidateIds"] == [candidate_id]
 
