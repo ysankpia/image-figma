@@ -153,3 +153,4 @@
 - [163 Slice Studio Review Editor Density](163-slice-studio-review-editor-density.md)
 - [164 Slice Studio Page Naming And Asset List Density](164-slice-studio-page-naming-and-asset-list-density.md)
 - [165 Slice Studio Persistence And Page Management Hardening](165-slice-studio-persistence-and-page-management-hardening.md)
+- [166 Slice Studio Page Rail Drag Reorder](166-slice-studio-page-rail-drag-reorder.md)

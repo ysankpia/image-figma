@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Download, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Square, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Download, GripHorizontal, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { apiBaseUrl, apiGet, apiPost, deletePage, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
@@ -49,6 +49,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [pageConfirmAction, setPageConfirmAction] = useState<PageConfirmAction | null>(null);
+  const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -67,8 +68,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const activePageAssetCount = activePage?.slices.length || 0;
   const saveLabel = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "error" ? "保存失败" : "就绪";
   const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
-  const canMovePageUp = Boolean(activePage && pageIndex > 0);
-  const canMovePageDown = Boolean(activePage && pageIndex >= 0 && pageIndex < pages.length - 1);
 
   const loadProject = useCallback(async () => {
     const projectDetail = await apiGet<ProjectDetail>(`/api/projects/${projectId}`);
@@ -466,26 +465,34 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     }, "缩放资产");
   }
 
-  async function moveActivePage(direction: -1 | 1) {
-    if (!activePage || pageIndex < 0) return;
-    const nextIndex = pageIndex + direction;
-    if (nextIndex < 0 || nextIndex >= pages.length) return;
+  async function commitPageOrder(nextPages: WorkbenchPage[], activePageIdAfterOrder = activePageId) {
+    if (nextPages.map((page) => page.id).join("|") === pages.map((page) => page.id).join("|")) return;
     setSaveState("saving");
     try {
       await flushPageRename();
       await saveNow();
       pushUndo("调整页面顺序");
-      const nextPages = [...pages];
-      [nextPages[pageIndex], nextPages[nextIndex]] = [nextPages[nextIndex], nextPages[pageIndex]];
       setPages(nextPages);
       const projectDetail = await reorderPages(projectId, nextPages.map((page) => page.id));
-      await applyProjectDetail(projectDetail, activePage.id, activeSliceId);
+      await applyProjectDetail(projectDetail, activePageIdAfterOrder, activeSliceId);
       setSaveState("saved");
       setStatus("页面顺序已保存。");
     } catch (error) {
       setSaveState("error");
       setStatus(`页面排序失败：${error instanceof Error ? error.message : "unknown error"}`);
     }
+  }
+
+  function reorderPageList(sourcePageId: string, targetPageId: string, insertAfterTarget: boolean): WorkbenchPage[] {
+    if (sourcePageId === targetPageId) return pages;
+    const fromIndex = pages.findIndex((page) => page.id === sourcePageId);
+    const toIndex = pages.findIndex((page) => page.id === targetPageId);
+    if (fromIndex < 0 || toIndex < 0) return pages;
+    const nextPages = [...pages];
+    const [movedPage] = nextPages.splice(fromIndex, 1);
+    const targetIndexAfterRemoval = nextPages.findIndex((page) => page.id === targetPageId);
+    nextPages.splice(targetIndexAfterRemoval + (insertAfterTarget ? 1 : 0), 0, movedPage);
+    return nextPages;
   }
 
   function requestReplaceActivePage(fileList: FileList | null) {
@@ -564,7 +571,42 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         <div className="pageRailHeader">Pages</div>
         <div className="pageRailList">
           {pages.map((page, index) => (
-            <div key={page.id} className={`pageThumbCard ${page.id === activePageId ? "active" : ""}`}>
+            <div
+              key={page.id}
+              className={`pageThumbCard ${page.id === activePageId ? "active" : ""} ${page.id === draggingPageId ? "dragging" : ""}`}
+              onDragOver={(event) => {
+                const sourcePageId = draggingPageId || event.dataTransfer.getData("text/plain");
+                if (!sourcePageId || sourcePageId === page.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const sourcePageId = draggingPageId || event.dataTransfer.getData("text/plain");
+                if (!sourcePageId) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                const insertAfterTarget = event.clientY > rect.top + rect.height / 2;
+                const nextPages = reorderPageList(sourcePageId, page.id, insertAfterTarget);
+                setDraggingPageId(null);
+                void commitPageOrder(nextPages, sourcePageId);
+              }}
+            >
+              <div
+                className="pageDragHandle"
+                draggable
+                role="button"
+                tabIndex={0}
+                aria-label={`拖拽调整 P${index + 1} 顺序`}
+                title="拖拽调整页面顺序"
+                onDragStart={(event) => {
+                  setDraggingPageId(page.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", page.id);
+                }}
+                onDragEnd={() => setDraggingPageId(null)}
+              >
+                <GripHorizontal aria-hidden="true" />
+              </div>
               <button type="button" className="pageThumbButton" title={page.originalName} onClick={() => {
                 setActivePageId(page.id);
                 setActiveSliceId(null);
@@ -576,22 +618,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 <span className="pageThumbName">{page.displayName || page.originalName}</span>
                 <span className="pageThumbCount">{page.slices.length}</span>
               </button>
-              {page.id === activePageId && (
-                <div className="pageThumbActions">
-                  <button type="button" aria-label="上移页面" title="上移页面" disabled={index === 0} onClick={() => void moveActivePage(-1)}>
-                    <ArrowUp aria-hidden="true" />
-                  </button>
-                  <button type="button" aria-label="下移页面" title="下移页面" disabled={index === pages.length - 1} onClick={() => void moveActivePage(1)}>
-                    <ArrowDown aria-hidden="true" />
-                  </button>
-                  <button type="button" aria-label="替换页面" title="替换页面" onClick={() => replaceInputRef.current?.click()}>
-                    <Upload aria-hidden="true" />
-                  </button>
-                  <button type="button" aria-label="删除页面" title="删除页面" onClick={() => setPageConfirmAction({ type: "delete", pageId: page.id })}>
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </div>
-              )}
             </div>
           ))}
           {!pages.length && (
@@ -716,14 +742,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               <span>{activePage ? `${activePage.width}x${activePage.height} · ${activePage.originalName}` : "上传 UI 截图后开始切图"}</span>
               {activePage ? (
                 <div className="pageActionGrid">
-                  <button type="button" disabled={!canMovePageUp} onClick={() => void moveActivePage(-1)}>
-                    <ArrowUp aria-hidden="true" />
-                    上移
-                  </button>
-                  <button type="button" disabled={!canMovePageDown} onClick={() => void moveActivePage(1)}>
-                    <ArrowDown aria-hidden="true" />
-                    下移
-                  </button>
                   <button type="button" onClick={() => replaceInputRef.current?.click()}>
                     <Upload aria-hidden="true" />
                     替换

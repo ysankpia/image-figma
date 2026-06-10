@@ -56,7 +56,7 @@ The right inspector owns page naming and active asset details:
 
 ```text
 page name: editable display name, shown with current order P1/P2
-page actions: move up, move down, replace source image, delete page
+page actions: replace source image, delete page
 asset list: #number, name, kind, delete only
 active asset: name, kind, bbox x/y/w/h
 ```
@@ -66,7 +66,7 @@ Page management rules:
 ```text
 delete page: removes the page source image and all slices on that page
 replace page: uploads one new source image for the current page and clears that page's slices
-move page: changes the current business order; export regenerates P1/P2 from that order
+move page: drag the horizontal handle in the left page rail; export regenerates P1/P2 from that order
 ```
 
 Shortcuts:
