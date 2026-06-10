@@ -145,3 +145,5 @@
 - [Pencil Handoff Studio](156-pencil-handoff-studio.md) — `completed`
 - [Mainline Legacy Code Inventory And Cleanup](150-mainline-legacy-code-inventory-and-cleanup.md) — `completed`
 - [Pencil Asset Handoff Slim Backend](151-pencil-asset-handoff-slim-backend.md) — `completed`
+
+- [157 Figma Design Manual Slice Workbench](157-figma-design-manual-slice-workbench.md)
