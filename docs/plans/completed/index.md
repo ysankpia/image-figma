@@ -147,3 +147,4 @@
 - [Pencil Asset Handoff Slim Backend](151-pencil-asset-handoff-slim-backend.md) — `completed`
 
 - [157 Figma Design Manual Slice Workbench](157-figma-design-manual-slice-workbench.md)
+- [160 Slice Studio Canvas-First UI](160-slice-studio-canvas-first-ui.md)

@@ -178,92 +178,236 @@ h1 {
 
 .reviewShell {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail stage inspector";
+  grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr) 300px;
   height: 100dvh;
   overflow: hidden;
+  background: #000;
 }
 
-.sidebar,
-.rightbar {
+.reviewShell.inspectorCollapsed {
+  grid-template-columns: 88px minmax(0, 1fr) 44px;
+}
+
+.reviewTopbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   min-width: 0;
-  overflow: auto;
-  border-color: var(--border);
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
   background: var(--surface-alt);
 }
 
-.sidebar {
-  border-right: 1px solid var(--border);
+.topbarProject,
+.topbarActions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
-.rightbar {
-  border-left: 1px solid var(--border);
+.topbarProject {
+  gap: 10px;
 }
 
-.panel {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-}
-
-.backLink {
-  color: var(--blue);
-  font-size: 13px;
-  text-decoration: none;
-}
-
-.uploadBox {
-  display: grid;
+.topbarActions {
   gap: 8px;
-  padding: 14px;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+}
+
+.topbarBack,
+.toolbarButton {
+  display: inline-grid;
+  grid-auto-flow: column;
+  place-items: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 9999px;
+  padding: 0 12px;
   background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbarBack {
+  width: 34px;
+  padding: 0;
+}
+
+.topbarBack svg,
+.toolbarButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.projectTitleBlock {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.projectTitleBlock strong {
+  overflow: hidden;
+  max-width: 280px;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectTitleBlock span,
+.zoomReadout {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.uploadButton {
+  position: relative;
   cursor: pointer;
 }
 
-.uploadBox input {
-  width: 100%;
+.uploadButton input {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  opacity: 0;
 }
 
-.pageList,
+.exportButton {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.exportButton:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: #0057b8;
+  color: #fff;
+}
+
+.toolbarButton:hover:not(:disabled),
+.uploadButton:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.pageRail {
+  grid-area: rail;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface-alt);
+  scrollbar-gutter: stable;
+}
+
+.pageRailHeader {
+  padding: 12px 8px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.pageRailList,
 .assetList {
   display: grid;
   gap: 8px;
 }
 
-.pageList button {
-  display: grid;
-  gap: 3px;
-  width: 100%;
-  min-height: 54px;
-  border-color: transparent;
-  border-radius: 12px;
-  background: transparent;
-  text-align: left;
+.pageRailList {
+  padding: 0 8px 12px;
 }
 
-.pageList button.active {
+.pageThumbButton {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 74px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.pageThumbButton.active {
   border-color: var(--blue);
   background: var(--blue-soft);
-  color: var(--blue);
+}
+
+.pageThumbImage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #111;
+}
+
+.pageThumbImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pageThumbMeta,
+.pageThumbCount {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+}
+
+.pageThumbCount {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 10px;
+}
+
+.pageRailEmpty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 92px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.pageRailEmpty svg {
+  width: 18px;
+  height: 18px;
 }
 
 .stageArea {
   position: relative;
-  display: grid;
-  grid-template-rows: 50px minmax(0, 1fr);
+  grid-area: stage;
   min-width: 0;
   min-height: 0;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-alt);
+  background: #000;
+  contain: layout style paint;
 }
 
 .saveState {
@@ -281,43 +425,71 @@ h1 {
 
 .floatingTools {
   position: absolute;
-  top: 68px;
+  top: 50%;
   left: 18px;
+  transform: translateY(-45%);
   z-index: 2;
   display: grid;
-  gap: 8px;
-  width: 58px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 42px rgba(29, 29, 31, 0.16);
+  gap: 7px;
+  width: 44px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: #000;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
 }
 
 .floatingTools button {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
-  border-radius: 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #000;
+  color: #fff;
+}
+
+.floatingTools button svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.9;
+}
+
+.floatingTools button:hover:not(:disabled) {
+  background: #1f1f1f;
+  color: #fff;
 }
 
 .floatingTools button.active {
-  border-color: var(--blue);
   background: var(--blue);
   color: #fff;
 }
 
+.floatingTools button:disabled {
+  color: rgba(255, 255, 255, 0.32);
+  opacity: 1;
+}
+
 .stageWrap {
   position: relative;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  background:
-    linear-gradient(90deg, rgba(29, 29, 31, 0.075) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(29, 29, 31, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(29, 29, 31, 0.045) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(29, 29, 31, 0.045) 1px, transparent 1px),
-    var(--bg);
-  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background: #000;
+}
+
+.canvasHint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 15px;
+  letter-spacing: 0;
+  pointer-events: none;
 }
 
 .konvaStage.tool-draw {
@@ -326,6 +498,119 @@ h1 {
 
 .konvaStage.tool-pan {
   cursor: grab;
+}
+
+.assetInspector {
+  position: relative;
+  grid-area: inspector;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.inspectorToggle {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.inspectorToggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.inspectorInner {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 14px;
+  height: 100%;
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.inspectorHeader {
+  display: grid;
+  gap: 2px;
+  padding-right: 32px;
+}
+
+.inspectorHeader h2 {
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.inspectorHeader span,
+.inspectorSummary span,
+.fieldStack label > span,
+.assetItem span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.activeAssetPanel,
+.inspectorSummary {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.inspectorSummary {
+  gap: 6px;
+}
+
+.fieldStack {
+  display: grid;
+  gap: 10px;
+}
+
+.fieldStack label {
+  display: grid;
+  gap: 5px;
+}
+
+.fieldStack input,
+.fieldStack select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 9px;
+  background: var(--surface);
+}
+
+.bboxGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bboxGrid span {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assetList {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .assetItem {
@@ -354,10 +639,19 @@ h1 {
 
 @media (max-width: 980px) {
   .reviewShell {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 76px minmax(0, 1fr) 44px;
   }
 
-  .rightbar {
+  .assetInspector .inspectorInner {
+    display: none;
+  }
+
+  .projectTitleBlock strong {
+    max-width: 170px;
+  }
+
+  .toolbarButton span,
+  .saveState {
     display: none;
   }
 }

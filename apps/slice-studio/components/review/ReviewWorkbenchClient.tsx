@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Download, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, Square, Trash2, Upload } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { apiBaseUrl, apiGet, apiPost, saveSlices, uploadPages } from "@/components/api";
@@ -34,6 +35,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [status, setStatus] = useState("正在读取项目。");
   const [stageSize, setStageSize] = useState({ width: 1000, height: 700 });
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -64,8 +66,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       if (rect) setStageSize({ width: Math.max(480, rect.width), height: Math.max(360, rect.height) });
     };
     resize();
+    const observer = typeof ResizeObserver !== "undefined" && stageWrapRef.current ? new ResizeObserver(resize) : null;
+    if (stageWrapRef.current) observer?.observe(stageWrapRef.current);
     window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resize);
+    };
   }, []);
 
   useEffect(() => {
@@ -262,6 +269,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     scheduleSave(nextPages);
   }
 
+  function activateTool(nextTool: ToolMode) {
+    setTool((currentTool) => currentTool === nextTool ? currentTool : nextTool);
+  }
+
   function updateSliceBox(pageId: string, sliceId: string, bbox: BBox) {
     setPages((current) => current.map((page) => page.id === pageId ? {
       ...page,
@@ -308,51 +319,87 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     if (!drag || drag.type !== "draw" || !activePage) return null;
     return draftToBox(drag.start, drag.current, activePage);
   }, [drag, activePage]);
+  const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
 
   return (
-    <main className="reviewShell">
-      <aside className="sidebar">
-        <div className="panel">
-          <a className="backLink" href="/projects">← Projects</a>
-          <h1>{detail?.project.name || "Slice Studio"}</h1>
-          <label className="uploadBox">
-              <input id="pageUpload" name="pageUpload" type="file" multiple accept="image/*" onChange={(event) => void handleUpload(event.target.files)} />
-            <span>上传 UI 截图</span>
-          </label>
-        </div>
-        <div className="panel">
-          <h2>Pages</h2>
-          <div className="pageList">
-            {pages.map((page) => (
-              <button key={page.id} type="button" className={page.id === activePageId ? "active" : ""} onClick={() => {
-                setActivePageId(page.id);
-                setActiveSliceId(null);
-              }}>
-                <strong>{page.originalName}</strong>
-                <span>{page.width}x{page.height} · {page.slices.length} assets</span>
-              </button>
-            ))}
-            {!pages.length && <div className="emptyState">还没有图片。</div>}
+    <main className={`reviewShell ${inspectorCollapsed ? "inspectorCollapsed" : ""}`}>
+      <header className="reviewTopbar">
+        <div className="topbarProject">
+          <a className="topbarBack" href="/projects" aria-label="返回项目列表">
+            <ArrowLeft aria-hidden="true" />
+          </a>
+          <div className="projectTitleBlock">
+            <strong>{detail?.project.name || "Slice Studio"}</strong>
+            <span>{pages.length} pages · {pages.reduce((total, page) => total + page.slices.length, 0)} assets</span>
           </div>
+        </div>
+        <div className="topbarActions">
+          <label className="toolbarButton uploadButton">
+            <Upload aria-hidden="true" />
+            <span>上传 UI 截图</span>
+            <input id="pageUpload" name="pageUpload" type="file" multiple accept="image/*" onChange={(event) => void handleUpload(event.target.files)} />
+          </label>
+          <button className="toolbarButton" type="button" onClick={fitPage}>Fit</button>
+          <button className="toolbarButton" type="button" onClick={() => setScale(1)}>100%</button>
+          <span className="zoomReadout">{Math.round(scale * 100)}%</span>
+          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
+            <Download aria-hidden="true" />
+            <span>导出 assets.zip</span>
+          </button>
+          <span className={`saveState ${saveState}`}>{status}</span>
+        </div>
+      </header>
+
+      <aside className="pageRail" aria-label="页面">
+        <div className="pageRailHeader">Pages</div>
+        <div className="pageRailList">
+          {pages.map((page, index) => (
+            <button key={page.id} type="button" className={`pageThumbButton ${page.id === activePageId ? "active" : ""}`} title={page.originalName} onClick={() => {
+              setActivePageId(page.id);
+              setActiveSliceId(null);
+            }}>
+              <span className="pageThumbImage">
+                <img src={`${apiBaseUrl}${page.sourceUrl}`} alt="" />
+              </span>
+              <span className="pageThumbMeta">P{index + 1}</span>
+              <span className="pageThumbCount">{page.slices.length}</span>
+            </button>
+          ))}
+          {!pages.length && (
+            <div className="pageRailEmpty">
+              <Images aria-hidden="true" />
+              <span>无页面</span>
+            </div>
+          )}
         </div>
       </aside>
 
       <section className="stageArea">
-        <header className="topbar">
-          <button type="button" onClick={fitPage}>Fit</button>
-          <button type="button" onClick={() => setScale(1)}>100%</button>
-          <span>{Math.round(scale * 100)}%</span>
-          <button type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>导出 assets.zip</button>
-          <span className={`saveState ${saveState}`}>{status}</span>
-        </header>
-        <nav className="floatingTools" aria-label="tools">
-          <button className={tool === "select" ? "active" : ""} type="button" title="选择 V" onClick={() => setTool("select")}>V</button>
-          <button className={tool === "draw" ? "active" : ""} type="button" title="画框 B" onClick={() => setTool("draw")}>B</button>
-          <button className={tool === "pan" ? "active" : ""} type="button" title="手形 H" onClick={() => setTool("pan")}>H</button>
-          <button type="button" disabled={!activeSlice} title="删除" onClick={() => deleteActiveSlice()}>⌫</button>
+        <nav className="floatingTools" aria-label="切图工具">
+          <button className={tool === "select" ? "active" : ""} type="button" title="选择（V）" aria-label="选择工具，快捷键 V" onPointerDown={(event) => {
+            event.preventDefault();
+            activateTool("select");
+          }} onClick={() => activateTool("select")}>
+            <MousePointer2 aria-hidden="true" />
+          </button>
+          <button className={tool === "draw" ? "active" : ""} type="button" title="画框（B）" aria-label="画框工具，快捷键 B" onPointerDown={(event) => {
+            event.preventDefault();
+            activateTool("draw");
+          }} onClick={() => activateTool("draw")}>
+            <Square aria-hidden="true" />
+          </button>
+          <button className={tool === "pan" ? "active" : ""} type="button" title="移动画布（H）" aria-label="移动画布工具，快捷键 H" onPointerDown={(event) => {
+            event.preventDefault();
+            activateTool("pan");
+          }} onClick={() => activateTool("pan")}>
+            <Hand aria-hidden="true" />
+          </button>
+          <button type="button" disabled={!activeSlice} title="删除选中资产" aria-label="删除选中资产" onClick={() => deleteActiveSlice()}>
+            <Trash2 aria-hidden="true" />
+          </button>
         </nav>
         <div ref={stageWrapRef} className="stageWrap">
-          {!activePage && <div className="emptyState">上传图片后开始切图。</div>}
+          {!activePage && <div className="canvasHint">上传 UI 截图开始切图</div>}
           {activePage && (
             <Stage
               ref={stageRef}
@@ -416,27 +463,67 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         </div>
       </section>
 
-      <aside className="rightbar">
-        <div className="panel">
-          <h2>Selected Assets</h2>
-          {!activePage?.slices.length && <div className="emptyState">还没有资产。按 B 连续画框。</div>}
-          <div className="assetList">
-            {activePage?.slices.map((slice) => (
-              <div key={slice.id} className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`} onClick={() => setActiveSliceId(slice.id)}>
-                <input name={`sliceName-${slice.id}`} aria-label="资产名称" value={slice.name} onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value })} />
-                <select name={`sliceKind-${slice.id}`} aria-label="资产类型" value={slice.kind} onChange={(event) => commitSlicePatch(slice.id, { kind: event.target.value === "icon" ? "icon" : "image" })}>
-                  <option value="image">image</option>
-                  <option value="icon">icon</option>
-                </select>
-                <span>{slice.bbox.width}x{slice.bbox.height} · x{slice.bbox.x} y{slice.bbox.y}</span>
-                <button type="button" onClick={(event) => {
-                  event.stopPropagation();
-                  deleteActiveSlice(slice.id);
-                }}>删除</button>
-              </div>
-            ))}
+      <aside className="assetInspector" aria-label="资产检查器">
+        <button className="inspectorToggle" type="button" aria-label={inspectorCollapsed ? "展开资产检查器" : "折叠资产检查器"} title={inspectorCollapsed ? "展开资产检查器" : "折叠资产检查器"} onClick={() => setInspectorCollapsed((value) => !value)}>
+          {inspectorCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
+        </button>
+        {!inspectorCollapsed && (
+          <div className="inspectorInner">
+            <header className="inspectorHeader">
+              <h2>Assets</h2>
+              <span>{activePage?.slices.length || 0} selected</span>
+            </header>
+            {activeSlice ? (
+              <section className="activeAssetPanel">
+                <div className="fieldStack">
+                  <label>
+                    <span>名称</span>
+                    <input name={`activeSliceName-${activeSlice.id}`} aria-label="资产名称" value={activeSlice.name} onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value })} />
+                  </label>
+                  <label>
+                    <span>类型</span>
+                    <select name={`activeSliceKind-${activeSlice.id}`} aria-label="资产类型" value={activeSlice.kind} onChange={(event) => commitSlicePatch(activeSlice.id, { kind: event.target.value === "icon" ? "icon" : "image" })}>
+                      <option value="image">image</option>
+                      <option value="icon">icon</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="bboxGrid">
+                  <span>x {activeSlice.bbox.x}</span>
+                  <span>y {activeSlice.bbox.y}</span>
+                  <span>w {activeSlice.bbox.width}</span>
+                  <span>h {activeSlice.bbox.height}</span>
+                </div>
+                <button className="dangerButton" type="button" onClick={() => deleteActiveSlice(activeSlice.id)}>
+                  删除选中资产
+                </button>
+              </section>
+            ) : (
+              <section className="inspectorSummary">
+                <strong>{activePage ? `Page ${pageIndex + 1}` : "No page"}</strong>
+                <span>{activePage ? `${activePage.width}x${activePage.height}` : "上传 UI 截图后开始切图"}</span>
+                <span>{activePage ? `${activePage.slices.length} selected assets` : "顶部按钮可上传 1..N 张图片"}</span>
+                <span>{activePage ? "使用画框工具创建资产，选择工具调整资产。" : "画布保持纯黑，不显示白色空态卡片。"}</span>
+              </section>
+            )}
+            <div className="assetList">
+              {activePage?.slices.map((slice) => (
+                <div key={slice.id} className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`} onClick={() => setActiveSliceId(slice.id)}>
+                  <input name={`sliceName-${slice.id}`} aria-label="资产名称" value={slice.name} onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value })} />
+                  <select name={`sliceKind-${slice.id}`} aria-label="资产类型" value={slice.kind} onChange={(event) => commitSlicePatch(slice.id, { kind: event.target.value === "icon" ? "icon" : "image" })}>
+                    <option value="image">image</option>
+                    <option value="icon">icon</option>
+                  </select>
+                  <span>{slice.bbox.width}x{slice.bbox.height} · x{slice.bbox.x} y{slice.bbox.y}</span>
+                  <button type="button" onClick={(event) => {
+                    event.stopPropagation();
+                    deleteActiveSlice(slice.id);
+                  }}>删除</button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </aside>
     </main>
   );

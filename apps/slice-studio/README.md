@@ -27,6 +27,28 @@ Elysia API: http://127.0.0.1:4110
 -> assets.zip
 ```
 
+## Review Workbench
+
+Review uses a canvas-first layout:
+
+```text
+topbar: project, upload, zoom, save state, export
+left rail: page thumbnails
+center: black Konva canvas with floating tools
+right inspector: selected asset editing, collapsible
+```
+
+Shortcuts:
+
+```text
+V: select and adjust slices
+B: continuously draw slices
+H: pan canvas
+Delete/Backspace: delete active slice
+Cmd/Ctrl+S: save immediately
+Cmd/Ctrl + wheel: zoom around cursor
+```
+
 ## Storage
 
 ```text
