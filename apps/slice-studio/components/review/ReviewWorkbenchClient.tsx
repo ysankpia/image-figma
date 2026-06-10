@@ -6,7 +6,7 @@ import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "reac
 import type Konva from "konva";
 import { apiBaseUrl, apiGet, apiPost, deletePage, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
 import { draftToBox, normalizeBox } from "@/shared/bbox";
-import type { BBox, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
+import type { BBox, CutMode, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
 
 type WorkbenchPage = PageRecord & {
   slices: SliceRecord[];
@@ -56,6 +56,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [pageConfirmAction, setPageConfirmAction] = useState<PageConfirmAction | null>(null);
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
   const [boxColors, setBoxColors] = useState(defaultBoxColors);
+  const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -74,6 +75,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const activePageAssetCount = activePage?.slices.length || 0;
   const saveLabel = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "error" ? "保存失败" : "就绪";
   const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
+  const pageCutMode = getPageCutMode(activePage, defaultCutMode);
 
   const loadProject = useCallback(async () => {
     const projectDetail = await apiGet<ProjectDetail>(`/api/projects/${projectId}`);
@@ -432,7 +434,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       sliceIndex: index,
       name: `slice_${String(index).padStart(2, "0")}`,
       kind: "image",
-      cutMode: "rect",
+      cutMode: pageCutMode === "mixed" ? defaultCutMode : pageCutMode,
       bbox: normalizeBox(bbox, activePage),
       selected: true
     };
@@ -458,6 +460,24 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       slices: page.slices.map((slice) => slice.id === sliceId ? { ...slice, ...patch } : slice)
     } : page);
     scheduleSave(nextPages, { pushUndo: options.pushUndo, undoLabel });
+  }
+
+  function applyPageCutMode(cutMode: CutMode) {
+    setDefaultCutMode(cutMode);
+    if (!activePage) return;
+    if (!activePage.slices.length) {
+      setStatus(cutMode === "shape" ? "后续新建资产将使用透明底。" : "后续新建资产将使用矩形。");
+      return;
+    }
+    if (activePage.slices.every((slice) => slice.cutMode === cutMode)) {
+      setStatus(cutMode === "shape" ? "当前页已是透明底模式。" : "当前页已是矩形模式。");
+      return;
+    }
+    const nextPages = pages.map((page) => page.id === activePage.id ? {
+      ...page,
+      slices: page.slices.map((slice) => ({ ...slice, cutMode }))
+    } : page);
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: "批量切换裁切模式" });
   }
 
   function updateBoxColor(key: keyof typeof defaultBoxColors, value: string) {
@@ -760,6 +780,30 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               <h2>Assets</h2>
               <span>{activePageAssetCount} assets</span>
             </header>
+            <section className="cutModePanel">
+              <div className="cutModePanelHeader">
+                <strong>裁切模式</strong>
+                <span>{pageCutMode === "mixed" ? "混合" : pageCutMode === "shape" ? "透明底" : "矩形"}</span>
+              </div>
+              <div className="cutModeSegmented" role="group" aria-label="裁切模式">
+                <button
+                  type="button"
+                  className={pageCutMode === "rect" ? "active" : ""}
+                  aria-pressed={pageCutMode === "rect"}
+                  onClick={() => applyPageCutMode("rect")}
+                >
+                  矩形
+                </button>
+                <button
+                  type="button"
+                  className={pageCutMode === "shape" ? "active" : ""}
+                  aria-pressed={pageCutMode === "shape"}
+                  onClick={() => applyPageCutMode("shape")}
+                >
+                  透明底
+                </button>
+              </div>
+            </section>
             <section className="pageInfoPanel">
               <strong>{activePage ? `P${pageIndex + 1}` : "No page"}</strong>
               {activePage ? (
@@ -827,14 +871,6 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
                   </label>
-                  <label className="toggleField">
-                    <span>透明形状</span>
-                    <input
-                      type="checkbox"
-                      checked={activeSlice.cutMode === "shape"}
-                      onChange={(event) => commitSlicePatch(activeSlice.id, { cutMode: event.target.checked ? "shape" : "rect" }, "切换裁切模式")}
-                    />
-                  </label>
                 </div>
                 <div className="bboxGrid">
                   <span>x {activeSlice.bbox.x}</span>
@@ -874,8 +910,20 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
                     />
-                    {slice.cutMode === "shape" && <span className="cutModeBadge">透明</span>}
                   </span>
+                  <button
+                    className={`assetCutModeButton ${slice.cutMode === "shape" ? "shape" : "rect"}`}
+                    type="button"
+                    aria-label={`${slice.name} 裁切模式：${slice.cutMode === "shape" ? "透明底" : "矩形"}`}
+                    title={slice.cutMode === "shape" ? "点击改为矩形" : "点击改为透明底"}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setActiveSliceId(slice.id);
+                      commitSlicePatch(slice.id, { cutMode: slice.cutMode === "shape" ? "rect" : "shape" }, "切换裁切模式");
+                    }}
+                  >
+                    {slice.cutMode === "shape" ? "透明" : "矩形"}
+                  </button>
                   <button className="assetItemDelete" type="button" aria-label={`删除 ${slice.name}`} title="删除资产" onClick={(event) => {
                     event.stopPropagation();
                     deleteActiveSlice(slice.id);
@@ -952,6 +1000,12 @@ function serializeSlices(pages: WorkbenchPage[], activePageId: string | null) {
       }))
     }))
   };
+}
+
+function getPageCutMode(page: WorkbenchPage | null, fallback: CutMode): CutMode | "mixed" {
+  if (!page || !page.slices.length) return fallback;
+  const first = page.slices[0].cutMode;
+  return page.slices.every((slice) => slice.cutMode === first) ? first : "mixed";
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

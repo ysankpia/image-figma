@@ -156,3 +156,4 @@
 - [166 Slice Studio Page Rail Drag Reorder](166-slice-studio-page-rail-drag-reorder.md)
 - [167 Slice Studio Image Only Assets And Box Color](167-slice-studio-image-only-and-box-color.md)
 - [168 Slice Studio Shape Cutout Mode](168-slice-studio-shape-cutout-mode.md)
+- [169 Slice Studio Cut Mode UI Cleanup](169-slice-studio-cut-mode-ui-cleanup.md)

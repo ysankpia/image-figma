@@ -1077,7 +1077,7 @@ h1 {
 
 .inspectorInner {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   gap: 12px;
   height: 100%;
   min-width: 0;
@@ -1100,9 +1100,9 @@ h1 {
 .inspectorHeader span,
 .inspectorSummary span,
 .pageInfoPanel span,
+.cutModePanel span,
 .boxColorPanel label > span,
 .pageNameField span,
-.toggleField span,
 .compactFields label > span,
 .fieldStack label > span,
 .activeAssetHeader span,
@@ -1114,6 +1114,7 @@ h1 {
 .activeAssetPanel,
 .pageInfoPanel,
 .inspectorSummary,
+.cutModePanel,
 .boxColorPanel {
   display: grid;
   gap: 10px;
@@ -1132,6 +1133,11 @@ h1 {
   gap: 7px;
 }
 
+.cutModePanel {
+  gap: 8px;
+}
+
+.cutModePanelHeader,
 .boxColorHeader {
   display: flex;
   align-items: center;
@@ -1139,8 +1145,36 @@ h1 {
   gap: 8px;
 }
 
+.cutModePanelHeader strong,
 .boxColorHeader strong {
   font-size: 13px;
+}
+
+.cutModeSegmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border-radius: 10px;
+  padding: 4px;
+  background: var(--surface-alt);
+}
+
+.cutModeSegmented button {
+  min-height: 30px;
+  border-color: transparent;
+  border-radius: 8px;
+  padding: 0 8px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.cutModeSegmented button.active {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
 }
 
 .boxColorHeader button {
@@ -1265,27 +1299,9 @@ h1 {
   gap: 5px;
 }
 
-.compactFields .toggleField {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 32px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-alt);
-}
-
-.toggleField input[type="checkbox"] {
-  width: 34px;
-  height: 20px;
-  min-height: 20px;
-  accent-color: var(--blue);
-}
-
 .fieldStack input,
 .fieldStack select,
-.compactFields input:not([type="checkbox"]),
+.compactFields input,
 .compactFields select {
   width: 100%;
   min-height: 32px;
@@ -1319,7 +1335,7 @@ h1 {
 
 .assetItem {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-columns: 28px minmax(0, 1fr) 54px 28px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -1361,21 +1377,6 @@ h1 {
   overflow: hidden;
 }
 
-.cutModeBadge {
-  width: fit-content;
-  max-width: 100%;
-  overflow: hidden;
-  border-radius: 999px;
-  padding: 2px 6px;
-  background: #eef6ff;
-  color: var(--blue);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .assetItem input,
 .assetItem select {
   width: 100%;
@@ -1408,6 +1409,25 @@ h1 {
   overflow: hidden;
   padding-right: 4px;
   text-overflow: ellipsis;
+}
+
+.assetCutModeButton {
+  min-width: 0;
+  min-height: 28px;
+  border-radius: 8px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.assetCutModeButton.rect {
+  color: var(--muted);
+}
+
+.assetCutModeButton.shape {
+  border-color: #b8d6ff;
+  background: #eef6ff;
+  color: var(--blue);
 }
 
 .assetItemDelete,
