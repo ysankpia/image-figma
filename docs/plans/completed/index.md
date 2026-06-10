@@ -148,3 +148,4 @@
 
 - [157 Figma Design Manual Slice Workbench](157-figma-design-manual-slice-workbench.md)
 - [160 Slice Studio Canvas-First UI](160-slice-studio-canvas-first-ui.md)
+- [161 Slice Studio Projects Home UI](161-slice-studio-projects-home-ui.md)

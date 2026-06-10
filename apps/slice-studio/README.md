@@ -27,6 +27,17 @@ Elysia API: http://127.0.0.1:4110
 -> assets.zip
 ```
 
+## Project Home
+
+`/projects` is the local project browser:
+
+```text
+topbar: product filters, project name input, new project
+content controls: search, recent/all/with-assets filters, sort, grid/list view
+content grid: Figma-like project cards with first-page previews
+controls: search, sort, grid/list view, rename, delete
+```
+
 ## Review Workbench
 
 Review uses a canvas-first layout:
