@@ -60,7 +60,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
-  const activeRectRef = useRef<Konva.Rect | null>(null);
+  const sliceNodeRefs = useRef<Record<string, Konva.Rect | null>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRenameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPageRenameRef = useRef<{ pageId: string; displayName: string } | null>(null);
@@ -121,10 +121,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   }, []);
 
   useEffect(() => {
-    if (transformerRef.current && activeRectRef.current && tool === "select") {
-      transformerRef.current.nodes([activeRectRef.current]);
-      transformerRef.current.getLayer()?.batchDraw();
-    }
+    const transformer = transformerRef.current;
+    if (!transformer) return;
+    const activeNode = activeSliceId ? sliceNodeRefs.current[activeSliceId] : null;
+    transformer.nodes(tool === "select" && activeNode ? [activeNode] : []);
+    transformer.getLayer()?.batchDraw();
   }, [activeSliceId, tool, pages]);
 
   useEffect(() => {
@@ -390,12 +391,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       return;
     }
     const target = event.target;
+    if (isTransformerTarget(target)) return;
     const sliceId = target.attrs.sliceId as string | undefined;
     if (sliceId) {
       setActiveSliceId(sliceId);
       return;
     }
-    setActiveSliceId(null);
+    if (target === target.getStage()) setActiveSliceId(null);
   }
 
   function onMouseMove(event: Konva.KonvaEventObject<MouseEvent>) {
@@ -506,6 +508,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
 
   function onTransformEnd(slice: SliceRecord, node: Konva.Rect) {
     if (!activePage) return;
+    setActiveSliceId(slice.id);
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     node.scaleX(1);
@@ -725,7 +728,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                   return (
                     <Rect
                       key={slice.id}
-                      ref={isActive ? activeRectRef : undefined}
+                      ref={(node) => {
+                        sliceNodeRefs.current[slice.id] = node;
+                      }}
                       sliceId={slice.id}
                       x={slice.bbox.x}
                       y={slice.bbox.y}
@@ -736,18 +741,30 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       fill={colorWithAlpha(boxColors.slice, tool === "draw" ? 0.02 : 0.08)}
                       draggable={tool === "select"}
                       listening={tool === "select"}
+                      onMouseDown={(event) => {
+                        if (tool !== "select") return;
+                        event.cancelBubble = true;
+                        setActiveSliceId(slice.id);
+                      }}
+                      onDragStart={() => {
+                        if (tool === "select") setActiveSliceId(slice.id);
+                      }}
                       onDragEnd={(event) => {
+                        setActiveSliceId(slice.id);
                         commitSlicePatch(slice.id, { bbox: normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage) }, "移动资产");
                       }}
                       onTransformEnd={(event) => onTransformEnd(slice, event.target as Konva.Rect)}
                     />
                   );
                 })}
-                {tool === "select" && activeSlice && activeRectRef.current && (
+                {tool === "select" && activeSlice && (
                   <Transformer
                     ref={transformerRef}
                     rotateEnabled={false}
                     enabledAnchors={transformerAnchors}
+                    onMouseDown={(event) => {
+                      event.cancelBubble = true;
+                    }}
                     boundBoxFunc={(_, newBox) => ({
                       ...newBox,
                       width: Math.max(8, newBox.width),
@@ -982,6 +999,12 @@ function colorWithAlpha(hex: string, alpha: number): string {
   const green = Number.parseInt(normalized.slice(3, 5), 16);
   const blue = Number.parseInt(normalized.slice(5, 7), 16);
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function isTransformerTarget(node: Konva.Node): boolean {
+  if (node.className === "Transformer") return true;
+  const parent = node.getParent();
+  return parent?.className === "Transformer";
 }
 
 function serializeSlices(pages: WorkbenchPage[], activePageId: string | null) {
