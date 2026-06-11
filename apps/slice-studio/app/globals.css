@@ -1185,7 +1185,7 @@ h1 {
 
 .cutModeSegmented {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   border-radius: 9px;
   padding: 3px;
@@ -1493,10 +1493,16 @@ h1 {
   color: var(--muted);
 }
 
-.assetCutModeButton.shape {
+.assetCutModeButton.subject {
   border-color: #b8d6ff;
   background: #eef6ff;
   color: var(--blue);
+}
+
+.assetCutModeButton.card {
+  border-color: #b8e7cf;
+  background: #eefbf4;
+  color: #157347;
 }
 
 .assetItemDelete,

@@ -8,7 +8,9 @@ describe("slice validation", () => {
   });
 
   it("defaults unknown cut modes to rect", () => {
-    expect(normalizeCutMode("shape")).toBe("shape");
+    expect(normalizeCutMode("shape")).toBe("subject");
+    expect(normalizeCutMode("subject")).toBe("subject");
+    expect(normalizeCutMode("card")).toBe("card");
     expect(normalizeCutMode("rect")).toBe("rect");
     expect(normalizeCutMode("old")).toBe("rect");
     expect(normalizeCutMode(undefined)).toBe("rect");

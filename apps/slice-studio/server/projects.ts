@@ -414,7 +414,7 @@ function formatSlice(row: SliceRow): SliceRecord {
     sliceIndex: row.slice_index,
     name: row.name,
     kind: row.kind,
-    cutMode: row.cut_mode === "shape" ? "shape" : "rect",
+    cutMode: normalizeCutMode(row.cut_mode),
     bbox: { x: row.x, y: row.y, width: row.width, height: row.height },
     selected: true
   };

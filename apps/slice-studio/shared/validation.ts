@@ -21,7 +21,9 @@ export function normalizeSliceKind(value: unknown): SliceKind {
 }
 
 export function normalizeCutMode(value: unknown): CutMode {
-  return value === "shape" ? "shape" : "rect";
+  if (value === "shape" || value === "subject") return "subject";
+  if (value === "card") return "card";
+  return "rect";
 }
 
 export function normalizeSliceBox(box: BBox, bounds: { width: number; height: number }): BBox {

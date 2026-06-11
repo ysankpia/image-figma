@@ -85,7 +85,15 @@ Undo is session-local. Slice creation, move, resize, delete, rename, page rename
 
 Box colors are local Review UI preferences. Use the color controls in the right inspector to change normal and active slice outline colors; the preference is kept in browser local storage and does not affect exported assets.
 
-Each slice exports in `rect` mode by default. The active asset panel has a `透明形状` switch; when enabled, export still returns the user's bbox size, but the backend temporarily expands the crop for context, estimates the local edge background, and only removes background pixels connected to the crop boundary. Interior content is kept even when its color is close to the outside background. This is a fast icon/simple-shape cutout aid, not SVG vectorization and not AI segmentation. It does not split multiple overlapping objects inside one bbox; draw separate boxes for separate assets. If the detected outside background is obviously invalid, export falls back to the rectangular crop.
+Each slice supports three export modes:
+
+```text
+rect: rectangular crop
+subject: remove local background and keep the foreground icon/logo/badge
+card: remove only outside/edge background and preserve internal photo/card/button content
+```
+
+Use `subject` for assets like icons, logos, badges, plus buttons, cart buttons, and similar foreground shapes. Use `card` for product photos, banners, full cards, or buttons where internal fills/textures/text must remain intact. These modes are deterministic local image processing, not SVG vectorization and not AI segmentation. If one bbox contains several independent objects, draw separate boxes for separate assets.
 
 ## Storage
 

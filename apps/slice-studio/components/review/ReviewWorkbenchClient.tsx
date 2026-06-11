@@ -495,11 +495,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     setDefaultCutMode(cutMode);
     if (!activePage) return;
     if (!activePage.slices.length) {
-      setStatus(cutMode === "shape" ? "后续新建资产将使用透明底。" : "后续新建资产将使用矩形。");
+      setStatus(`后续新建资产将使用${cutModeLabel(cutMode)}。`);
       return;
     }
     if (activePage.slices.every((slice) => slice.cutMode === cutMode)) {
-      setStatus(cutMode === "shape" ? "当前页已是透明底模式。" : "当前页已是矩形模式。");
+      setStatus(`当前页已是${cutModeLabel(cutMode)}模式。`);
       return;
     }
     const nextPages = pages.map((page) => page.id === activePage.id ? {
@@ -516,6 +516,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     };
     setBoxColors(nextColors);
     window.localStorage.setItem(reviewColorStorageKey, JSON.stringify(nextColors));
+  }
+
+  function cycleSliceCutMode(current: CutMode): CutMode {
+    if (current === "rect") return "subject";
+    if (current === "subject") return "card";
+    return "rect";
   }
 
   function resetBoxColors() {
@@ -834,25 +840,20 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               <section className="cutModePanel">
                 <div className="cutModePanelHeader">
                   <strong>裁切模式</strong>
-                  <span>{pageCutMode === "mixed" ? "混合" : pageCutMode === "shape" ? "透明底" : "矩形"}</span>
+                  <span>{pageCutMode === "mixed" ? "混合" : cutModeLabel(pageCutMode)}</span>
                 </div>
                 <div className="cutModeSegmented" role="group" aria-label="裁切模式">
-                  <button
-                    type="button"
-                    className={pageCutMode === "rect" ? "active" : ""}
-                    aria-pressed={pageCutMode === "rect"}
-                    onClick={() => applyPageCutMode("rect")}
-                  >
-                    矩形
-                  </button>
-                  <button
-                    type="button"
-                    className={pageCutMode === "shape" ? "active" : ""}
-                    aria-pressed={pageCutMode === "shape"}
-                    onClick={() => applyPageCutMode("shape")}
-                  >
-                    透明底
-                  </button>
+                  {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={pageCutMode === mode ? "active" : ""}
+                      aria-pressed={pageCutMode === mode}
+                      onClick={() => applyPageCutMode(mode)}
+                    >
+                      {cutModeLabel(mode)}
+                    </button>
+                  ))}
                 </div>
               </section>
               <section className="pageInfoPanel">
@@ -964,17 +965,17 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                     />
                   </span>
                   <button
-                    className={`assetCutModeButton ${slice.cutMode === "shape" ? "shape" : "rect"}`}
+                    className={`assetCutModeButton ${slice.cutMode}`}
                     type="button"
-                    aria-label={`${slice.name} 裁切模式：${slice.cutMode === "shape" ? "透明底" : "矩形"}`}
-                    title={slice.cutMode === "shape" ? "点击改为矩形" : "点击改为透明底"}
+                    aria-label={`${slice.name} 裁切模式：${cutModeLabel(slice.cutMode)}`}
+                    title="点击切换：矩形 / 抠主体 / 保内图"
                     onClick={(event) => {
                       event.stopPropagation();
                       selectSlice(slice.id);
-                      commitSlicePatch(slice.id, { cutMode: slice.cutMode === "shape" ? "rect" : "shape" }, "切换裁切模式");
+                      commitSlicePatch(slice.id, { cutMode: cycleSliceCutMode(slice.cutMode) }, "切换裁切模式");
                     }}
                   >
-                    {slice.cutMode === "shape" ? "透明" : "矩形"}
+                    {cutModeLabel(slice.cutMode)}
                   </button>
                   <button className="assetItemDelete" type="button" aria-label={`删除 ${slice.name}`} title="删除资产" onClick={(event) => {
                     event.stopPropagation();
@@ -1054,7 +1055,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                   >
                     <span className="assetGalleryCardHeader">
                       <strong>#{index + 1}</strong>
-                      <span>{slice.cutMode === "shape" ? "透明" : "矩形"}</span>
+                      <span>{cutModeLabel(slice.cutMode)}</span>
                     </span>
                     <span className="assetGalleryPreview">
                       <img src={slicePreviewUrl(projectId, slice)} alt="" draggable={false} />
@@ -1090,6 +1091,12 @@ function slicePreviewUrl(projectId: string, slice: SliceRecord): string {
   const box = slice.bbox;
   const version = [slice.cutMode, box.x, box.y, box.width, box.height, slice.name].join("-");
   return `${apiBaseUrl}/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`;
+}
+
+function cutModeLabel(mode: CutMode): string {
+  if (mode === "subject") return "抠主体";
+  if (mode === "card") return "保内图";
+  return "矩形";
 }
 
 function isTransformerTarget(node: Konva.Node): boolean {

@@ -7,6 +7,7 @@ type CropSlice = {
 };
 
 type ShapeCutoutOptions = {
+  mode?: "subject" | "card";
   targetBox?: {
     left: number;
     top: number;
@@ -23,7 +24,7 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
     height: Math.round(slice.bbox.height)
   };
 
-  if (slice.cutMode === "shape") {
+  if (slice.cutMode === "subject" || slice.cutMode === "card") {
     const metadata = await sharp(originalBuffer).metadata();
     const imageWidth = metadata.width ?? box.left + box.width;
     const imageHeight = metadata.height ?? box.top + box.height;
@@ -37,6 +38,7 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
     const left = box.left - expandedBox.left;
     const top = box.top - expandedBox.top;
     const cutout = applyShapeCutout(cropped.data, cropped.info.width, cropped.info.height, {
+      mode: slice.cutMode,
       targetBox: { left, top, width: box.width, height: box.height }
     });
     return sharp(cutout, { raw: { width: cropped.info.width, height: cropped.info.height, channels: 4 } })
@@ -62,7 +64,7 @@ export function applyShapeCutout(source: Uint8Array, width: number, height: numb
   const background = estimateBackground(source, width, height);
   const threshold = background.threshold;
   const backgroundMask = new Uint8Array(width * height);
-  const blockedMask = buildInteriorGuard(width, height, options.targetBox);
+  const blockedMask = options.mode === "card" ? buildInteriorGuard(width, height, options.targetBox) : new Uint8Array(width * height);
   const outsideMask = new Uint8Array(width * height);
   const queue: number[] = [];
   const result = Buffer.from(source);

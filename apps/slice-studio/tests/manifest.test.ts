@@ -69,7 +69,7 @@ describe("manifest", () => {
           sliceIndex: 1,
           name: "banner",
           kind: "image",
-          cutMode: "shape",
+          cutMode: "subject",
           bbox: { x: 1, y: 2, width: 30, height: 20 },
           selected: true
         }]
@@ -80,7 +80,7 @@ describe("manifest", () => {
     expect(manifest.pages[0].pageDirectory).toBe("P1-首页");
     expect(manifest.pages[0].original).toBe("originals/P1-首页.png");
     expect(manifest.pages[0].slices[0].filename).toBe("slices/P1-首页/slice_0001.png");
-    expect(manifest.pages[0].slices[0].cutMode).toBe("shape");
+    expect(manifest.pages[0].slices[0].cutMode).toBe("subject");
   });
 
   it("uses current page indexes instead of stable page ids for export order", () => {

@@ -46,7 +46,7 @@ describe("shape cutout", () => {
     expect(raw[3]).toBe(255);
   });
 
-  it("writes transparent pixels in shape mode", async () => {
+  it("writes transparent pixels in subject mode", async () => {
     const width = 10;
     const height = 10;
     const rgba = Buffer.alloc(width * height * 4);
@@ -68,7 +68,7 @@ describe("shape cutout", () => {
     const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
 
     const png = await cropSliceToPng(source, {
-      cutMode: "shape",
+      cutMode: "subject",
       bbox: { x: 0, y: 0, width, height }
     });
     const raw = await sharp(png).ensureAlpha().raw().toBuffer();
@@ -104,7 +104,7 @@ describe("shape cutout", () => {
     expect(cutout[(8 * width + 8) * 4 + 3]).toBe(255);
   });
 
-  it("uses surrounding context for tight shape crops and returns the requested bbox size", async () => {
+  it("uses surrounding context for tight subject crops and returns the requested bbox size", async () => {
     const width = 40;
     const height = 40;
     const rgba = Buffer.alloc(width * height * 4);
@@ -143,7 +143,7 @@ describe("shape cutout", () => {
 
     const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
     const png = await cropSliceToPng(source, {
-      cutMode: "shape",
+      cutMode: "subject",
       bbox: { x: left, y: top, width: right - left + 1, height: bottom - top + 1 }
     });
     const result = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -154,7 +154,7 @@ describe("shape cutout", () => {
     expect(result.data[(8 * result.info.width + 10) * 4 + 3]).toBe(255);
   });
 
-  it("does not let outside background flood through large image-card interiors", async () => {
+  it("does not let outside background flood through card interiors", async () => {
     const width = 180;
     const height = 140;
     const rgba = Buffer.alloc(width * height * 4);
@@ -195,7 +195,7 @@ describe("shape cutout", () => {
 
     const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
     const png = await cropSliceToPng(source, {
-      cutMode: "shape",
+      cutMode: "card",
       bbox: { x: card.left, y: card.top, width: card.right - card.left + 1, height: card.bottom - card.top + 1 }
     });
     const result = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });

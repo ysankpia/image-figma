@@ -1,5 +1,5 @@
 export type SliceKind = "image";
-export type CutMode = "rect" | "shape";
+export type CutMode = "rect" | "subject" | "card";
 
 export type BBox = {
   x: number;
