@@ -58,11 +58,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [boxColors, setBoxColors] = useState(defaultBoxColors);
   const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const sliceNodeRefs = useRef<Record<string, Konva.Rect | null>>({});
   const assetItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveSequenceRef = useRef(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRenameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPageRenameRef = useRef<{ pageId: string; displayName: string } | null>(null);
@@ -285,14 +288,24 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    const saveSequence = ++saveSequenceRef.current;
+    const payload = serializeSlices(pagesToSave, activePageId);
     setSaveState("saving");
+    const queuedSave = saveQueueRef.current.then(async () => {
+      await saveSlices(projectId, payload);
+    });
+    saveQueueRef.current = queuedSave.catch(() => undefined);
     try {
-      await saveSlices(projectId, serializeSlices(pagesToSave, activePageId));
-      setSaveState("saved");
-      setStatus("已保存。");
+      await queuedSave;
+      if (saveSequence === saveSequenceRef.current) {
+        setSaveState("saved");
+        setStatus("已保存。");
+      }
     } catch (error) {
-      setSaveState("error");
-      setStatus(`保存失败：${error instanceof Error ? error.message : "unknown error"}`);
+      if (saveSequence === saveSequenceRef.current) {
+        setSaveState("error");
+        setStatus(`保存失败：${error instanceof Error ? error.message : "unknown error"}`);
+      }
       throw error;
     }
   }
@@ -482,13 +495,28 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     sliceEditUndoRef.current = sliceId;
   }
 
-  function commitSlicePatch(sliceId: string, patch: Partial<Pick<SliceRecord, "name" | "bbox" | "cutMode">>, undoLabel = "编辑资产", options: { pushUndo?: boolean } = { pushUndo: true }) {
+  function commitSlicePatch(
+    sliceId: string,
+    patch: Partial<Pick<SliceRecord, "name" | "bbox" | "cutMode">>,
+    undoLabel = "编辑资产",
+    options: { pushUndo?: boolean; saveImmediately?: boolean } = { pushUndo: true }
+  ) {
     if (!activePage) return;
     const nextPages = pages.map((page) => page.id === activePage.id ? {
       ...page,
       slices: page.slices.map((slice) => slice.id === sliceId ? { ...slice, ...patch } : slice)
     } : page);
     scheduleSave(nextPages, { pushUndo: options.pushUndo, undoLabel });
+    if (options.saveImmediately) {
+      void saveNow(nextPages)
+        .then(() => {
+          setPreviewRevisionBySliceId((current) => ({
+            ...current,
+            [sliceId]: (current[sliceId] || 0) + 1
+          }));
+        })
+        .catch(() => undefined);
+    }
   }
 
   function applyPageCutMode(cutMode: CutMode) {
@@ -1060,7 +1088,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                         setGalleryOpen(false);
                       }}
                     >
-                      <img src={slicePreviewUrl(projectId, slice)} alt="" draggable={false} />
+                      <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
                     </button>
                     <span className="assetGalleryCutModes" role="group" aria-label={`${slice.name} 裁切模式`}>
                       {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
@@ -1072,7 +1100,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                           onClick={(event) => {
                             event.stopPropagation();
                             selectSlice(slice.id);
-                            if (slice.cutMode !== mode) commitSlicePatch(slice.id, { cutMode: mode }, "切换裁切模式");
+                            if (slice.cutMode !== mode) commitSlicePatch(slice.id, { cutMode: mode }, "切换裁切模式", { saveImmediately: true });
                           }}
                         >
                           {cutModeLabel(mode)}
@@ -1106,9 +1134,9 @@ function colorWithAlpha(hex: string, alpha: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-function slicePreviewUrl(projectId: string, slice: SliceRecord): string {
+function slicePreviewUrl(projectId: string, slice: SliceRecord, previewRevision: number): string {
   const box = slice.bbox;
-  const version = [slice.cutMode, box.x, box.y, box.width, box.height, slice.name].join("-");
+  const version = [slice.cutMode, box.x, box.y, box.width, box.height, slice.name, previewRevision].join("-");
   return `${apiBaseUrl}/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`;
 }
 
