@@ -1,198 +1,122 @@
 # API Contracts
 
-Current product runtime is Pencil assisted slice, documented in
-[../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md).
+Current product runtime is Slice Studio in `apps/slice-studio`.
 
-This file records historical/deferred Draft Preview contracts served by the Go
-backend. Use it only when explicitly working on `/api/draft-preview`.
-
-## Base URL
-
-Development default:
+Development defaults:
 
 ```text
-http://localhost:8000/api
+Next web:  http://127.0.0.1:3010
+Elysia API: http://127.0.0.1:4110
 ```
 
-## Response Shape
+## Slice Studio API Surface
 
-Success:
+```text
+GET    /api/health
+GET    /api/ai-slice-settings
+GET    /api/projects
+POST   /api/projects
+GET    /api/projects/:projectId
+PATCH  /api/projects/:projectId
+DELETE /api/projects/:projectId
+POST   /api/projects/:projectId/pages
+PATCH  /api/projects/:projectId/pages/order
+PATCH  /api/projects/:projectId/pages/:pageId
+POST   /api/projects/:projectId/pages/:pageId/replace
+DELETE /api/projects/:projectId/pages/:pageId
+POST   /api/projects/:projectId/pages/:pageId/ai-boxes
+GET    /api/projects/:projectId/pages/:pageId/source
+PUT    /api/projects/:projectId/slices
+GET    /api/projects/:projectId/slices/:sliceId/preview.png
+POST   /api/projects/:projectId/export-assets
+GET    /api/projects/:projectId/assets.zip
+POST   /api/projects/:projectId/export-project
+GET    /api/projects/:projectId/project.zip
+```
+
+## Contract Rules
+
+Saved projects, pages, and slices are the live truth source. Export reads persisted slices and original source images; it must not crop from browser thumbnails, canvas state, AI raw output, or OCR/M29 evidence.
+
+AI boxes are a calculation result from `/ai-boxes`. The route does not write database state. The Review Workbench converts accepted boxes into ordinary `SliceRecord` entries and saves them through `PUT /api/projects/:projectId/slices`.
+
+OCR and M29 evidence only affect Pencil text overlays in `project.zip`. They must not modify saved slice boxes or visible raster asset ownership.
+
+Delete project/page routes remove local project/page data. Do not call them from automation unless the user explicitly requests deletion or a test fixture owns the storage.
+
+## AI Boxes Response
+
+`POST /api/projects/:projectId/pages/:pageId/ai-boxes` returns short-lived boxes:
 
 ```json
 {
-  "success": true,
-  "data": {}
-}
-```
-
-Failure:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "UPLOAD_FAILED",
-    "message": "PNG upload failed.",
-    "detail": "Internal debug detail",
-    "stage": "draft_upload",
-    "taskId": "task_001"
-  }
-}
-```
-
-## Required Draft Endpoints
-
-### `GET /api/health`
-
-Returns backend liveness:
-
-```text
-status
-version
-time
-```
-
-Draft server should report a Draft-specific version string.
-
-### `POST /api/draft-preview`
-
-Uploads one PNG and starts a Draft task.
-
-Request:
-
-```text
-multipart/form-data
-file: image/png
-```
-
-Validation:
-
-- MIME must be `image/png`.
-- PNG signature must be valid.
-- IHDR dimensions must be readable.
-- File size must be <= `DRAFT_SERVER_MAX_UPLOAD_BYTES`.
-
-Immediate success response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "taskId": "task_abc",
-    "status": "queued",
-    "stage": "draft_queued",
-    "progress": 1,
-    "file": {
-      "filename": "upload.png",
-      "mimeType": "image/png",
-      "size": 1234,
-      "width": 390,
-      "height": 844
+  "ok": true,
+  "pageId": "page_abc",
+  "boxes": [
+    {
+      "bbox": { "x": 10, "y": 20, "width": 80, "height": 48 },
+      "name": "icon",
+      "confidence": 0.82,
+      "reason": "standalone visual asset",
+      "sourceTileId": "tile_001"
     }
+  ],
+  "diagnostics": {
+    "tileCount": 6,
+    "rawBoxCount": 20,
+    "acceptedBoxCount": 12,
+    "rejectedBoxCount": 8
   }
 }
 ```
 
-### `GET /api/draft-preview/{taskId}`
+Returned boxes are not persistent proposals. They become durable only after the frontend saves them as normal slices.
 
-Returns task status:
+## Export Contracts
 
-```json
-{
-  "success": true,
-  "data": {
-    "taskId": "task_abc",
-    "status": "running",
-    "stage": "draft_assemble",
-    "progress": 60,
-    "message": "Assembling editable layers.",
-    "warnings": [
-      {
-        "code": "DRAFT_VISION_FALLBACK",
-        "message": "missing detector API key: set VISION_API_KEY",
-        "stage": "vision_detector",
-        "artifact": "vision/vision_detector_fallback.v1.json"
-      }
-    ]
-  }
-}
-```
-
-Status values:
+`assets.zip` contains:
 
 ```text
-queued
-running
-completed
-failed
+originals/*
+slices/*
+manifest.json
+project.json
 ```
 
-Stage values should be Draft-specific:
+`project.zip` contains:
 
 ```text
-draft_queued
-ocr
-m29_physical_evidence
-vision_detector
-vision_review
-draft_assemble
-draft_assets
-draft_validate
-draft_export
-draft_completed
-draft_failed
+design.pen
+manifest.json
+project.json
+assets/originals/*
+assets/visible/remainders/*
+assets/visible/slices/*
 ```
 
-### `GET /api/draft-preview/{taskId}/dsl`
+Visible refs inside `design.pen` must be package-local and must not reference absolute paths, debug artifacts, `source.png`, or `../`.
 
-Returns `draft_runtime.dsl.v1.json` only after task completion.
+## Historical APIs
 
-If the task is not completed, return `DSL_NOT_READY`.
+The old Pencil Python caller contract remains in [../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md). Use it only when explicitly maintaining `services/pencil-python-backend`.
 
-The DSL must be derived from `editable_layer_graph.v1.json`; exporter code must not make ownership decisions.
-
-### `GET /api/draft-preview/{taskId}/assets/{assetId}.png`
-
-Returns a local raster asset referenced by the Draft DSL.
-
-Completed tasks must not expose visible raster layers with unresolved asset IDs.
-
-### `GET /api/draft-preview/{taskId}/artifacts`
-
-Optional development endpoint returning artifact paths and summary metadata. It is not required by the renderer.
-
-Typical artifact keys:
+The old Go Draft Preview contract remains historical/deferred:
 
 ```text
-m29PhysicalEvidence
-evidenceTokens
-visionCandidates
-visionReport
-visionOverlay
-visionRawResponses
-visionFallback
-editableLayerGraph
-validationReport
-assetManifest
-runtimeDsl
+POST /api/draft-preview
+GET  /api/draft-preview/{taskId}
+GET  /api/draft-preview/{taskId}/dsl
+GET  /api/draft-preview/{taskId}/assets/{assetId}.png
 ```
 
-Vision artifact keys are optional. If optional vision fails, `visionFallback` and a task warning must be returned; the completed Draft task should still expose `editableLayerGraph`, `runtimeDsl`, `assetManifest`, and `validationReport`.
-
-## Removed Product Endpoints
-
-The following endpoints are not product runtime contracts on this branch:
+Removed or historical product endpoints:
 
 ```text
 POST /api/codia-preview
-GET /api/codia-preview/{taskId}
-GET /api/codia-preview/{taskId}/dsl
+GET  /api/codia-preview/{taskId}
+GET  /api/codia-preview/{taskId}/dsl
 POST /api/upload-preview
-GET /api/tasks/{taskId}/dsl
+GET  /api/tasks/{taskId}/dsl
 ```
 
-`/api/codia-preview` has been removed from the Go product server. Python `/api/upload-preview` may remain in historical/reference code, but new product work must target `/api/draft-preview`.
-
-## Contract Ownership
-
-Backend and Figma plugin jointly own this contract. Any endpoint, response shape, task state, stage, or error-code change must update this document and the active plan.
+Do not restore these as current product routes without a new active plan and validation contract.

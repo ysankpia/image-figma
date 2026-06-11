@@ -1,10 +1,18 @@
 # Vision Provider
 
-Vision provider is a candidate and review subsystem. It is not the final UI tree builder.
+Vision/AI providers are candidate and review subsystems. In current Slice Studio, the only default provider-backed product feature is AI rectangular slice boxes under `apps/slice-studio/server/ai-slice-boxes/`.
+
+Providers are not final UI tree builders and do not bypass saved SliceRecord truth.
 
 ## Role
 
-Vision models can help with:
+Current Slice Studio AI models can help with:
+
+- proposing rectangular boxes for visual assets from compressed tiles;
+- identifying cross-tile large assets through an overview review;
+- returning confidence and short reasons for candidate boxes.
+
+Historical Draft vision models can help with:
 
 - semantic labels for local image/icon/avatar/cover candidates;
 - identifying missing visual objects from M29 evidence;
@@ -17,13 +25,20 @@ Vision models must not:
 
 - generate final Figma trees;
 - generate final Draft Runtime DSL;
+- write Slice Studio database state directly;
 - read Codia golden during generation;
 - become bbox authority without physical evidence or explicit review reason;
 - create Button/ListView/ActionBar/BottomNavigation as structural owners.
 
 ## Contracts
 
-First-pass detector output:
+Current Slice Studio output:
+
+```text
+/api/projects/:projectId/pages/:pageId/ai-boxes response
+```
+
+Historical first-pass detector output:
 
 ```text
 ui_detector_candidates.v1.json
@@ -46,11 +61,22 @@ keep_candidate
 classify_semantic_tag
 ```
 
-Review decisions are inputs to Draft assembly. They are not final layers.
+Slice Studio AI boxes become durable only when the frontend saves them as ordinary slices. Historical review decisions are inputs to Draft assembly. They are not final layers.
 
 ## Provider Configuration
 
-Use provider-neutral environment variables:
+Use Slice Studio provider-neutral environment variables for current AI boxes:
+
+```text
+SLICE_STUDIO_AI_SLICE_PROVIDER=openai_responses
+SLICE_STUDIO_AI_SLICE_BASE_URL=https://api.openai.com
+SLICE_STUDIO_AI_SLICE_MODEL=...
+SLICE_STUDIO_AI_SLICE_API_KEY=...
+SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
+SLICE_STUDIO_AI_SLICE_TILE_COUNT=6
+```
+
+Historical Draft vision variables:
 
 ```text
 VISION_PROVIDER=openai-compatible
@@ -69,7 +95,7 @@ Provider, base URL, model id, and API key must never be hardcoded. Local credent
 
 ## Multi-Pass Execution
 
-Detector passes are independent crop/prompt/model calls. They should run concurrently with a bounded semaphore:
+Current Slice Studio AI uses tiled image requests plus optional overview review. Historical detector passes are independent crop/prompt/model calls. They should run concurrently with a bounded semaphore:
 
 ```text
 default concurrency: 3
@@ -85,7 +111,7 @@ Requirements:
 
 ## BBox Authority
 
-Vision can propose bbox, but Draft assembly should prefer M29/OCR bbox when available.
+Vision can propose bbox. In Slice Studio, a proposed bbox is only a normal slice candidate until saved through the existing slice state. In historical Draft, assembly should prefer M29/OCR bbox when available.
 
 Good pattern:
 
@@ -123,3 +149,5 @@ missing compact image/icon candidates
 merge/suppress/refine decisions
 short reasons
 ```
+
+Current Slice Studio prompt strategy is recorded in [../reference/slice-studio-ai-slice-prompt-strategies.md](../reference/slice-studio-ai-slice-prompt-strategies.md).

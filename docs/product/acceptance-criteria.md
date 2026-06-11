@@ -1,95 +1,64 @@
 # 验收标准
 
-验收只看当前 Draft MVP 是否证明主链路可行，不看商业化完整度。
+验收只看当前 Slice Studio 是否能稳定产出用户确认后的 `assets.zip` 和 `project.zip/design.pen`。
 
 ## P0 Must Pass
 
-P0 全部通过，才算一期主链路成立：
-
-- 插件能选择单张 PNG。
-- 非 PNG 会被拒绝。
-- 上传成功后能获得 `taskId`。
-- 任务状态可查询。
-- 完成后能获取 Draft Runtime DSL。
-- DSL 能通过基础校验。
-- Renderer 能创建 root Frame。
-- Renderer 能渲染 Text、Shape、Image。
-- 主要文字在 Figma 中可编辑。
-- 主要图片资产能加载。
-- 单个元素失败不导致整页失败。
-- 失败时能看到 `errorCode`、`stage`、`taskId`。
+- 可以新建项目。
+- 可以上传多张页面图片。
+- 项目刷新后页面和 slices 仍存在。
+- 可以手动画框、选择、移动、缩放、删除、重命名。
+- 可以选择 `rect | subject | card` cut mode。
+- 自动保存成功，失败时有提示。
+- 页面可重命名、替换、删除、拖拽重排。
+- `assets.zip` 能导出并包含 originals、slices、manifest、project metadata。
+- `project.zip` 能导出并包含 `design.pen`、manifest、project metadata、originals、remainders、visible slices。
+- `.pen` visible refs 无绝对路径、无 `../`、无 `source.png`、无 raw/debug/mask refs。
+- 导出裁切来自原始 source image，不来自前端 canvas 或 thumbnails。
 
 ## P1 Should Pass
 
-P1 是一期体验质量，不阻塞最小链路：
-
-- Icon 基础可用。
-- Line 可用。
-- 原图参考层可生成且默认隐藏。
-- fallback 区域可显示。
-- 基础圆角、描边、阴影可用。
-- 字体加载失败有降级。
-- Renderer 返回 warning 列表。
+- AI 当前页能生成普通 rect slices，并保存进现有 slice state。
+- AI 全部页能逐页处理，失败页不影响已完成页面。
+- AI 结果与已有 slices 高重叠时不会大量重复追加。
+- AI batch progress 对长项目可见。
+- 大型跨 tile 资产不会稳定切成多个半块。
+- OCR 可在有 provider token 时生成 editable text nodes。
+- 默认 TypeScript M29 physical evidence 不依赖 Go binary。
+- OCR/M29 失败不阻塞 `project.zip` 导出。
 
 ## P2 Later
 
-P2 后续优化：
+- Slice Studio deployment smoke。
+- 更多真实样本自动 artifact inspection。
+- AI prompt strategy UI 或可配置 profile。
+- `.pen` 视觉截图自动对比。
+- 更强的 repeated AI run replace/refresh 机制。
 
-- 复杂渐变。
-- 复杂阴影。
-- SVG 精准改色。
-- 更多图标。
-- 更精细 OCR 纠错。
-- 更好视觉评分。
+## Real Sample Acceptance
 
-## 样例验收
+对真实项目至少检查：
 
-MVP 收敛时至少准备这些样例：
-
-- 简单 App 首页。
-- 小程序首页。
-- 商品列表页。
-- 商品详情页。
-- 登录或表单页。
-- 带底部 TabBar 页面。
-- 弹窗页面。
-- 长截图页面。
-- 简单后台页面。
-
-每张图检查：
-
-- 是否成功上传。
-- 是否生成 DSL。
-- DSL 是否通过校验。
-- Figma 是否生成 root Frame。
-- 主要文字是否可编辑。
-- 主要图片是否显示。
-- 布局是否接近。
-- 复杂区域是否 fallback。
-- 是否有隐藏原图层。
-- 生成时间是否可接受。
-- 失败时是否有日志。
-
-## Performance Targets
-
-- 简单移动端页面：15 到 30 秒。
-- 中等复杂页面：30 到 60 秒。
-- 复杂页面：60 到 90 秒。
-- 超过 120 秒应返回超时或失败提示，不应无限等待。
+- projectCreated=true；
+- pageCount 等于上传页数；
+- slice save/readback 正常；
+- AI batch 完成页数、失败页数、新增/跳过数量可见；
+- `assets.zip` 存在且 manifest 与 slice 文件数量一致；
+- `project.zip` 存在且 `design.pen` 可打开；
+- visible asset refs 全部 package-local；
+- OCR/M29 metadata 记录 provider、textLayerCount、fallback/skip reason；
+- 刷新页面后项目仍可继续编辑。
 
 ## Not Acceptance Items
 
-这些不作为 v0.1 验收项：
+这些不作为当前验收项：
 
-- 代码生成。
-- 真正 Figma Component。
 - Auto Layout。
-- 一键组件化。
-- 批量上传。
-- 历史记录。
-- 质量报告。
-- 差异热力图。
-- 多模型对比。
-- 账号、额度、支付。
-- Web 深度支持。
-- 复杂图表结构化。
+- Figma Component/Instance。
+- 完整 semantic tree。
+- 代码生成。
+- Codia JSON clone。
+- 旧 Draft DSL 通过。
+- 旧 Figma plugin render 通过。
+- YOLO/M29/OCR/AI 自动 ownership 完全正确。
+- 商业化账号、权限、额度、支付。

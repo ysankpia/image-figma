@@ -2,7 +2,7 @@
 
 Figma 插件分为 UI 和 Main 两层。本文件记录历史/延后 `Generate Draft` 路线：上传 PNG 到 Go `/api/draft-preview`，获取 Draft Runtime DSL 和 assets，并通过 Renderer 写入 Figma。
 
-当前分支的可交付主线是 Pencil assisted slice workspace，不经过 Figma 插件。插件文档只有在明确恢复 Go Draft 自动可编辑稿路线时才作为当前实现参考。
+当前分支的可交付主线是 Slice Studio，不经过 Figma 插件。插件文档只有在明确恢复 Go Draft 自动可编辑稿路线时才作为当前实现参考。
 
 ## Plugin UI
 

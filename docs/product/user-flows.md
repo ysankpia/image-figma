@@ -1,62 +1,80 @@
 # 用户流程
 
-一期只有一条主流程：插件上传单张 PNG，生成 Figma 可编辑稿。
+当前主流程是 Slice Studio 本地项目制切图，不是 Figma 插件上传单张 PNG。
 
-## 主流程
+## 项目流程
 
 ```text
-打开 Figma 插件
--> 选择 PNG
--> 插件显示预览和文件信息
--> 用户点击开始生成
--> 插件上传图片并创建任务
--> 插件轮询任务状态
--> 后端返回 DSL
--> Plugin Main 调用 Renderer
--> Renderer 写入 Figma 画布
--> 插件显示完成
+打开 /projects
+-> 新建项目
+-> 进入 Review Workbench
+-> 上传一张或多张页面图片
+-> 页面显示在左侧缩略图 rail
+-> 在画布中手动画框或运行 AI 当前页/全部页
+-> 调整、删除、命名 slices
+-> 选择 rect/subject/card cut mode
+-> 自动保存
+-> 导出 assets.zip 或 project.zip
+```
+
+## AI 画框流程
+
+```text
+点击 AI 当前页或 AI 全部页
+-> API 将原图切成重叠 tile 并压缩
+-> provider 返回 bbox JSON
+-> 服务端裁边、过滤、去重、合并
+-> 前端把 boxes 转成普通 rect SliceRecord
+-> 走现有 saveSlices 保存
+-> 用户继续人工删改
+```
+
+AI 不创建独立 proposal 状态。进入工作台后的 AI box 就是普通 slice。
+
+## 导出流程
+
+`assets.zip`：
+
+```text
+读取 SQLite 项目和 saved slices
+-> 按页面顺序读取 original PNG
+-> 按 slice bbox 和 cut mode 裁切
+-> 写 originals / slices / manifest.json / project.json
+```
+
+`project.zip`：
+
+```text
+读取同一批 saved slices
+-> 生成 remainder.png
+-> 放置 slice PNG 到 source-image 坐标
+-> 可选 OCR + M29 physical bbox 生成 editable text nodes
+-> 写 design.pen / manifest.json / project.json / assets
 ```
 
 ## 页面状态
 
-插件 v0.1 只需要五个状态：
+- Project home：项目列表、搜索、筛选、排序、grid/list、新建、重命名、删除。
+- Review Workbench：左侧页面 rail、中间 Konva canvas、右侧 asset inspector 和 asset gallery。
+- AI progress：批量运行时显示完成页数、失败页数、新增/跳过框数量，可最小化或关闭。
+- Save state：自动保存中、已保存、保存失败。
 
-- `UploadView`：选择 PNG。
-- `PreviewView`：显示图片预览、文件名、尺寸、大小和风险提示。
-- `ProgressView`：显示生成中状态。
-- `DoneView`：显示生成完成。
-- `ErrorView`：显示失败原因和重试入口。
+## 修复路径
 
-普通用户不看 OCR、AI、DSL、模型调用、质量评分等内部术语。
+用户通过 Review Workbench 修复：
+
+- 增删改 slice；
+- 调整 bbox；
+- 改名称；
+- 改 cut mode；
+- 删除或替换页面；
+- 重排页面；
+- 重新导出。
 
 ## 失败流程
 
-上传前失败：
-
-- 非 PNG：拒绝。
-- 文件过大：拒绝。
-- 图片无法读取：拒绝。
-
-处理中失败：
-
-- 后端返回 `failed`。
-- 插件进入 `ErrorView`。
-- 错误文案使用用户语言，调试信息进入日志或开发模式。
-
-渲染中局部失败：
-
-- 单个元素失败不影响整页。
-- Renderer 收集 warning。
-- 能 fallback 的区域用图片兜底。
-
-## 生成位置
-
-一期默认生成到当前 Figma 页面。Renderer 创建一个 root Frame，内部包含生成图层。原图参考层默认隐藏，但保留在 root Frame 内。
-
-## 轮询策略
-
-插件查询任务状态：
-
-- 默认间隔：1 到 2 秒。
-- 超过合理时间后提示超时。
-- 不做 WebSocket、队列面板、历史任务列表。
+- 上传失败：显示错误，不创建不完整页面。
+- 保存失败：保留当前 UI 状态并提示。
+- AI 失败：当前页或失败页记录状态；批量继续处理其他页。
+- OCR/M29 失败：`project.zip` 仍可导出，文字层缺失或 fallback 记录在 manifest/metadata。
+- 导出失败：返回明确错误，用户保存的 slices 不丢。

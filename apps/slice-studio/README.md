@@ -161,6 +161,8 @@ BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
 
 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency and follows the Go no-OCR physical evidence behavior. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 
+AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. The model sees compressed tiles and an optional compressed overview, returns rectangular boxes, and the Review Workbench saves accepted boxes as ordinary `SliceRecord` entries. AI does not create a separate proposal database or export path.
+
 ## Scope
 
-v1 supports manual `image` slicing plus Pencil project export with optional OCR text overlays and optional M29 text bbox evidence. AI, YOLO, PSD-like, automatic visual ownership, Figma import, auth, and cloud sync are intentionally out of scope.
+v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, and optional M29 text bbox evidence. YOLO, PSD-like, automatic semantic UI ownership, Figma import, auth, billing, team collaboration, and cloud sync are intentionally out of scope.

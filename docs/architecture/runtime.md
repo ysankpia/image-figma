@@ -1,10 +1,13 @@
 # Draft Runtime
 
-Draft runtime 是历史/延后自动化路线。当前分支的可交付产品主线是
-`services/pencil-python-backend` assisted slice workspace：
+Draft runtime 是历史/延后自动化路线。当前分支的可交付产品主线是 Slice Studio：
 
 ```text
-images -> candidates.v1.json -> manual_slices.v1.json -> project.zip + selected-assets.zip
+1..N UI screenshots/design images
+-> apps/slice-studio
+-> saved SliceRecord boxes
+-> assets.zip
+-> project.zip / design.pen
 ```
 
 本文件保留 Draft 路线的接口和合同说明，只有在显式恢复 Go Draft 时才作为实现参考。

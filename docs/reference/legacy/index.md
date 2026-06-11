@@ -2,7 +2,7 @@
 
 本目录保存文档 harness 整理前的原始草稿。它们是背景材料，不是当前正式规范。正式规范以 `docs/product/`、`docs/architecture/`、`docs/engineering/`、`docs/runbooks/`、`docs/reference/`、`docs/decisions/` 中的文档为准。
 
-另有 Codia 逆向探索旧文档已归档到 [codia-exploration/](codia-exploration/)。这些文档记录旧阶段对 Codia API、`.fig`、VisualElement 和早期 reverse spec 的理解，不能覆盖当前 source truth。当前产品主线是 Pencil assisted slice workspace；Codia 资料只保留为 eval/reference，可参考 [../codia/codia_compiler_buildability_audit_zh.md](../codia/codia_compiler_buildability_audit_zh.md)、raw Codia `.canvas.json` samples 和 `internal/eval/codia`。
+另有 Codia 逆向探索旧文档已归档到 [codia-exploration/](codia-exploration/)。这些文档记录旧阶段对 Codia API、`.fig`、VisualElement 和早期 reverse spec 的理解，不能覆盖当前 source truth。当前产品主线是 Slice Studio；Codia 资料只保留为 eval/reference，可参考 [../codia/codia_compiler_buildability_audit_zh.md](../codia/codia_compiler_buildability_audit_zh.md)、raw Codia `.canvas.json` samples 和历史 `internal/eval/codia`。
 
 | 原文件 | 归档文件 | 主题 | 已提炼进正式文档 |
 | --- | --- | --- | --- |

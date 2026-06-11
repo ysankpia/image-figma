@@ -2,7 +2,7 @@
 
 本目录记录 shipped bug、根因、修复和回归保护。
 
-当前分支的主线是 Pencil Assisted Slice Workspace。Codia Beta 和 Go Draft 质量债已经归档为 superseded，不再作为 open product bug 跟踪。
+当前分支的主线是 Slice Studio。Codia Beta、Go Draft、旧 Python Pencil 路线的质量债已经归档为 superseded 或 reference，除非明确影响当前 Slice Studio 交付，否则不再作为 open product bug 跟踪。
 
 ## 当前 Open Bugs
 
@@ -11,7 +11,7 @@
 
 ## Superseded Bugs
 
-- [017-codia-like-beta-ui-role-detector-gap.md](archive/superseded/017-codia-like-beta-ui-role-detector-gap.md)：旧 Go Codia Beta / Codia-like tree 路径质量债。先被 [093 Editable Draft Layer Pipeline Rebuild](../plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md) 取代；当前可交付主线进一步切到 Pencil assisted slice workspace。
+- [017-codia-like-beta-ui-role-detector-gap.md](archive/superseded/017-codia-like-beta-ui-role-detector-gap.md)：旧 Go Codia Beta / Codia-like tree 路径质量债。先被 [093 Editable Draft Layer Pipeline Rebuild](../plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md) 取代；当前可交付主线进一步切到 Slice Studio。
 
 ## 最近 Resolved Bugs
 

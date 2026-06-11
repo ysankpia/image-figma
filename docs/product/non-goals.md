@@ -1,67 +1,59 @@
-# 一期不做事项
+# 当前不做事项
 
-本文档是硬边界。没有明确升级计划前，以下功能不得塞进 v0.1。
+本文档是当前 Slice Studio 主线边界。没有新的 active plan 前，不要把这些功能塞回默认路径。
 
 ## Product Non-Goals
 
-一期不做：
+当前不做：
 
-- 批量上传。
-- 历史记录。
-- 最近任务。
-- 用户账号。
+- 账号系统。
 - 团队协作。
-- 权限系统。
+- 云同步。
 - 额度、计费、支付。
-- 完整质量报告。
-- 插件内原图和生成结果对比。
-- 差异热力图。
-- 多模型对比平台。
-- 完整评分看板。
-- 复杂用户教程。
-- 开发者平台。
+- 正式 SaaS 多租户。
+- 长期在线任务队列。
+- 质量评分看板。
+- 复杂用户教程平台。
 
-## Design And Figma Non-Goals
+## Design / Figma Non-Goals
 
-一期不做：
+当前不做：
 
-- 代码生成。
 - 真正 Figma Component。
 - Figma Instance。
-- 一键组件化。
 - Auto Layout 自动推断。
 - Responsive Layout。
 - Hug Content / Fill Container 推断。
 - 完整设计系统还原。
-- 复杂图标库。
-- 完整 Assets 管理面板。
+- 前端代码生成。
+- 官方 Codia JSON byte-for-byte clone。
+- 自动 semantic UI control tree 作为产品合同。
 
-原因很简单：输入是 PNG，系统无法可靠知道设计师真实布局意图。强行推断只会把 MVP 拖进不可控复杂度。
+原因：输入是截图/设计稿图片，系统无法可靠知道真实布局意图。当前可交付目标是用户确认后的切图和 Pencil/Figma handoff，不是全自动设计系统重建。
 
-## Recognition Non-Goals
+## Recognition / AI Non-Goals
 
-一期不做：
+当前不做：
 
-- 多轮 AI 复杂分析。
-- 自动低分修复闭环。
-- 完整图表结构化。
-- 复杂后台系统深度识别。
-- Web / Landing Page 深度支持。
-- 自动切长图为多个页面。
-- 复杂图片重生成。
+- 让 AI 直接生成最终 Figma tree。
+- 让 M29/OCR/YOLO/VLM 直接决定 visible ownership。
+- 将 AI boxes 作为单独持久 proposal 系统。
+- 给 AI 输入 M29/OCR evidence 做二次复杂判断。
+- 自动判断 `rect | subject | card`。
+- 用样本名、固定坐标、品牌、可见文案写规则。
 
-复杂区域可以 fallback。Fallback 是质量策略，不是失败。
+AI 只是批量画框工具。多切可删，漏切更贵；最终仍由用户确认的 saved slices 决定。
 
-## Engineering Non-Goals
+## Legacy Non-Goals
 
-一期不做：
+当前不恢复：
 
-- 微服务。
-- 复杂队列系统。
-- 复杂缓存系统。
-- 正式商业化存储策略。
-- 完整隐私合规系统。
-- 生产级监控平台。
-- 多租户隔离。
+- Go Draft 作为默认 delivery route。
+- Python `/api/upload-preview` 作为默认 route。
+- `services/pencil-python-backend` 作为默认主线。
+- `services/pencil-go` revival。
+- Figma plugin runtime revival。
+- Codia assembly/control/tree/emitter 作为产品生成路径。
+- M29 Direct Replay 作为默认交付。
 
-MVP 阶段优先本地文件存储、SQLite 和清晰日志。
+旧代码保留为 reference/research/fallback。恢复前必须先写新的 active plan、truth source 和验证门。

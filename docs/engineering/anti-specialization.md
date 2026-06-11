@@ -1,6 +1,6 @@
 # Anti-Specialization Rules
 
-The Draft pipeline must generalize across screenshots. Do not trade broad correctness for one good sample.
+Slice Studio and historical Draft logic must generalize across screenshots. Do not trade broad correctness for one good sample.
 
 ## Forbidden Inputs For Generation Logic
 
@@ -20,7 +20,7 @@ Figma page name
 Codia golden node id
 ```
 
-This applies to M29, vision, Draft assembly, asset export, renderer, plugin, and validation gates.
+This applies to Slice Studio AI boxes, cutout/export, OCR, M29 text placement, historical vision, Draft assembly, asset export, renderer, plugin, and validation gates.
 
 ## Allowed Evidence
 
@@ -31,10 +31,12 @@ source image pixels
 OCR text/bbox/confidence
 M29 primitives/tokens/measurements
 vision candidates/review decisions
+AI tile/overview bbox candidates
 relative geometry
 image-scale-normalized thresholds
 local color/edge/texture measurements
 artifact validation results
+saved SliceRecord data
 ```
 
 ## Heuristic Requirements
@@ -75,7 +77,7 @@ training-label extraction happens outside runtime generation
 Before committing visible-output logic, run:
 
 ```bash
-rg -n "腾讯|动漫|荔枝|闲鱼|tencent|lizhi|xianyu|018|022|011|PixPin|ChatGPT_Image|task_" services/backend-go packages figma-plugin
+rg -n "腾讯|动漫|荔枝|闲鱼|东方|茉莉|山野|乌龙|去结算|首页|点单|tencent|lizhi|xianyu|018|022|011|PixPin|ChatGPT_Image|task_|project_mq" apps/slice-studio services/backend-go packages figma-plugin
 ```
 
 Any match in generation code needs a strong reason or removal.

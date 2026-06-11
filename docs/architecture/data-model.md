@@ -1,8 +1,16 @@
 # 数据模型
 
-当前 Draft runtime 不依赖数据库作为产品主状态源。Go `draftserver` 使用进程内 task map 保存运行中状态，并把每个任务的输入、证据、Draft graph、DSL、asset 和报告写到本地文件系统。
+当前产品数据模型属于 Slice Studio：
 
-这是开发期合理约束：没有真实用户、没有跨进程恢复要求，优先保持链路简单、可审计、容易删除重建。
+```text
+apps/slice-studio/storage/app.sqlite
+apps/slice-studio/storage/projects/{projectId}/originals/
+apps/slice-studio/storage/projects/{projectId}/exports/
+```
+
+Saved projects, pages, and SliceRecord rows are the live edit/export truth. `assets.zip` and `project.zip/design.pen` are derived artifacts.
+
+下面的 Draft task model 是历史/延后 Go Draft route 记录。只有明确恢复 `/api/draft-preview` 时才作为实现参考。
 
 ## Runtime State
 
@@ -81,9 +89,9 @@ compile/
 
 Vision artifacts 是可选证据。Vision 成功时写入 candidates/report/overlay/raw responses；Vision 失败时写入 `vision_detector_fallback.v1.json` 并把 warning 暴露到 task status。Completed task 必须有 Draft graph、Draft Runtime DSL、validation report 和可解析 assets。
 
-## Product Contracts
+## Historical Draft Product Contracts
 
-当前跨模块合同是文件/JSON 合同，不是数据库表：
+历史 Draft 跨模块合同是文件/JSON 合同，不是数据库表：
 
 ```text
 m29_physical_evidence.v1.json
@@ -107,7 +115,7 @@ draft_validation_report.md
 
 `backend/` 里的 SQLite schema、`tasks/assets/dsl_results/ocr_results/error_logs`、`storage/upload_previews/{taskId}` 等属于历史 Python `/api/upload-preview` preview path。
 
-它们不是当前 Draft runtime 的数据模型。除非任务明确针对 Python preview，否则不要以这些表、路径或 stage 名称作为新功能依据。
+它们不是当前 Slice Studio 数据模型。除非任务明确针对 Python preview，否则不要以这些表、路径或 stage 名称作为新功能依据。
 
 ## Non-Goals
 

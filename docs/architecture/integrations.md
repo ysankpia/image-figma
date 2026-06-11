@@ -1,10 +1,24 @@
 # Integrations
 
-Current integrations support the Editable Draft pipeline.
+Current product integrations support Slice Studio. Historical Figma plugin, Renderer, and Draft integrations remain documented here only for explicit deferred-runtime work.
+
+## Slice Studio
+
+Slice Studio integrates with:
+
+- local browser UI through Next.js;
+- local Elysia API;
+- local SQLite and project file storage;
+- Sharp for image decode/crop/compression;
+- optional Baidu OCR for editable text content;
+- TypeScript M29 physical evidence for tighter OCR text bboxes;
+- OpenAI-compatible Responses API for AI slice boxes when configured.
+
+These integrations produce or refine normal Slice Studio slices and export artifacts. They must not bypass saved SliceRecord truth.
 
 ## Figma
 
-The plugin writes Draft Runtime DSL into Figma through `packages/image-to-figma-renderer`.
+The historical plugin writes Draft Runtime DSL into Figma through `packages/image-to-figma-renderer`.
 
 Figma integration boundaries:
 
@@ -15,19 +29,22 @@ Figma integration boundaries:
 
 ## OCR
 
-OCR is an evidence source for Draft. It provides text, bbox, and confidence.
+OCR is an evidence source. In current Slice Studio it provides text content and raw bbox for Pencil text overlays. In historical Draft it provides text evidence for TextLayer creation.
 
 OCR evidence is used by:
 
-- M29 text mask exclusion.
-- Draft TextLayer creation.
-- Vision review context.
+- Slice Studio editable text overlays.
+- Slice Studio M29 text bbox matching.
+- Historical Draft TextLayer creation.
+- Historical vision review context.
 
 OCR does not own final grouping, z-order, or raster suppression decisions.
 
 ## Vision Models
 
-Vision models are provider-neutral. OpenAI-compatible Responses, Chat Completions, and local HTTP adapters are valid as long as they produce the configured candidate/review contracts.
+Current Slice Studio AI slice boxes use `SLICE_STUDIO_AI_SLICE_*` configuration and return transient bbox suggestions.
+
+Historical Draft vision models are provider-neutral. OpenAI-compatible Responses, Chat Completions, and local HTTP adapters are valid as long as they produce the configured candidate/review contracts.
 
 Provider configuration:
 
@@ -43,11 +60,13 @@ VISION_STREAM
 VISION_REVIEW_ENABLED
 ```
 
-Vision models provide candidates and review decisions. They do not generate final Figma trees.
+Vision models provide candidates and review decisions. They do not generate final Figma trees and do not replace saved Slice Studio slices.
 
 ## Local Assets
 
-The Go backend writes local crop assets for `RasterLayer` nodes.
+Current Slice Studio writes local originals and export packages under `apps/slice-studio/storage`.
+
+The historical Go backend writes local crop assets for `RasterLayer` nodes.
 
 Renderer fetches them from:
 

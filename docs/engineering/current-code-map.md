@@ -1,312 +1,142 @@
 # Current Code Map
 
-This document maps the current `main` branch. It describes where new work should land. It is authoritative for new product code.
+This document maps the current `main` branch. It describes where new product work should land.
 
 ## Product Mainline
 
 ```text
-1..N images
--> services/pencil-python-backend
--> candidates.v1.json
--> HTML Canvas assisted slice workspace
--> manual_slices.v1.json
--> export-preview
--> project.zip + selected-assets.zip
+1..N UI screenshots/design images
+-> apps/slice-studio
+-> project workspace
+-> original source images
+-> saved SliceRecord boxes in SQLite
+-> assets.zip
+-> project.zip / design.pen
 ```
 
-The current product truth source is `manual_slices.v1.json`. Automatic evidence
-from PSD-like, M29, OCR, foreground audit, or model experiments only creates
-candidates/debug data.
-
-## Pencil Asset Handoff Surface
-
-`services/pencil-asset-backend` is the slim 151 product surface for image/icon
-asset handoff. It intentionally does less than the assisted slice workspace:
-it produces only PNG `image` and `icon` assets, writes a single
-`pencil-handoff` `design.pen`, and leaves non-asset UI reconstruction to Pencil
-MCP/manual follow-up. The `.pen` includes a source screenshot reference layer so
-reviewers can judge selected slices in context; that reference is not a selected
-asset and is excluded from `selected-assets.zip`.
-
-Current asset handoff flow:
+New product work defaults to:
 
 ```text
-POST /api/asset-projects
--> save uploaded source images
--> collect YOLO/M29/PSD-like/OCR evidence
--> normalize image/icon candidates
--> serve /api/asset-projects/{projectId}/review
--> user confirms image/icon slices
--> PUT /api/asset-projects/{projectId}/manual-slices
--> POST /api/asset-projects/{projectId}/export-preview
--> POST /api/asset-projects/{projectId}/export
--> GET project.zip and selected-assets.zip
+apps/slice-studio/
 ```
+
+Saved Slice Studio pages and slices are the current product truth source. AI boxes, OCR, TypeScript M29 physical evidence, Go M29 fallback, and old automatic candidates are evidence only.
+
+## Slice Studio Surface
 
 Primary files:
 
 ```text
-services/pencil-asset-backend/app/projects.py
-services/pencil-asset-backend/app/evidence.py
-services/pencil-asset-backend/app/exporter.py
-services/pencil-asset-backend/app/routes/asset_projects.py
-services/pencil-asset-backend/app/routes/pages.py
-services/pencil-asset-backend/scripts/asset_acceptance.py
-services/pencil-asset-backend/tests/test_asset_projects.py
+apps/slice-studio/app/
+apps/slice-studio/components/
+apps/slice-studio/server/
+apps/slice-studio/shared/
+apps/slice-studio/tests/
+apps/slice-studio/README.md
+apps/slice-studio/.env.example
 ```
 
-Hard asset handoff rules:
+Runtime:
 
 ```text
-manual_slices.v1.json is the final truth source
-only image/icon slices are exported
-assets are cropped from source.png
-design.pen selected slice refs must be ./assets/visible/...
-design.pen source reference refs must be ./assets/reference/page_XXXX/source.png
-selected-assets.zip must not contain source reference images
-no Codia-like tree, Draft graph, TextLayer knockout, SVG, or auto ownership judge
+Next web:  http://127.0.0.1:3010
+Elysia API: http://127.0.0.1:4110
+SQLite:    apps/slice-studio/storage/app.sqlite
+Originals: apps/slice-studio/storage/projects/{projectId}/originals/
+Exports:   apps/slice-studio/storage/projects/{projectId}/exports/
 ```
 
-## Pencil Assisted Slice Surface
-
-`services/pencil-python-backend` is the current product delivery route. It is
-separate from the Draft runtime packages and does not import the renderer/plugin
-packages. It uses the already-validated Python Pencil exporter plus a plain HTML
-Canvas review workspace.
-
-Current assisted slice flow:
+Current API:
 
 ```text
-POST /api/pencil/slice-projects
--> save uploaded source images
--> normalize PSD-like/M29/OCR/audit evidence into candidates.v1.json
--> serve /api/pencil/slice-projects/{projectId}/review
--> user confirms or draws slices
--> PUT /api/pencil/slice-projects/{projectId}/manual-slices
--> POST /api/pencil/slice-projects/{projectId}/export-preview
--> POST /api/pencil/slice-projects/{projectId}/export
--> GET project.zip and selected-assets.zip
+GET    /api/health
+GET    /api/ai-slice-settings
+GET    /api/projects
+POST   /api/projects
+GET    /api/projects/:projectId
+PATCH  /api/projects/:projectId
+DELETE /api/projects/:projectId
+POST   /api/projects/:projectId/pages
+PATCH  /api/projects/:projectId/pages/order
+PATCH  /api/projects/:projectId/pages/:pageId
+POST   /api/projects/:projectId/pages/:pageId/replace
+DELETE /api/projects/:projectId/pages/:pageId
+POST   /api/projects/:projectId/pages/:pageId/ai-boxes
+GET    /api/projects/:projectId/pages/:pageId/source
+PUT    /api/projects/:projectId/slices
+GET    /api/projects/:projectId/slices/:sliceId/preview.png
+POST   /api/projects/:projectId/export-assets
+GET    /api/projects/:projectId/assets.zip
+POST   /api/projects/:projectId/export-project
+GET    /api/projects/:projectId/project.zip
 ```
 
-Primary files:
+## Slice Studio Module Responsibilities
 
 ```text
-services/pencil-python-backend/app/slice_projects.py
-services/pencil-python-backend/app/routes/slice_projects.py
-services/pencil-python-backend/app/routes/slice_project_pages.py
-services/pencil-python-backend/scripts/slice_workspace_acceptance.py
-services/pencil-python-backend/tests/test_api.py
+server/index.ts             Elysia route surface
+server/projects.ts          project/page/slice persistence
+server/db.ts                SQLite setup and queries
+server/exporter.ts          assets.zip export
+server/pencil-exporter.ts   project.zip/design.pen export
+server/pencil-package.ts    Pencil package assembly helpers
+server/shape-cutout.ts      rect/subject/card crop output
+server/text-ocr.ts          OCR provider integration
+server/text-reconstruction.ts editable Pencil text nodes
+server/m29-text-locator.ts  OCR line to physical bbox matching
+server/m29-physical-evidence/ TypeScript M29 physical evidence kernel
+server/ai-slice-boxes/      AI tile/overview bbox proposal
+shared/types.ts             public TypeScript data contracts
+shared/manifest.ts          export manifest builder
+shared/ai-slices.ts         merge AI boxes into normal slices
+components/workspace/       project home
+components/review/          Review Workbench
 ```
 
-Operational files:
+## Hard Product Rules
 
 ```text
-services/pencil-python-backend/Makefile
-services/pencil-python-backend/README.md
-services/pencil-python-backend/deploy/pencil-python-backend.env.example
-services/pencil-python-backend/deploy/pencil-python-backend.service
-services/pencil-python-backend/scripts/http_smoke.py
-services/pencil-python-backend/scripts/server_smoke.py
-docs/reference/pencil-python-backend-api.md
-docs/runbooks/pencil-python-backend-handoff.md
-docs/runbooks/pencil-python-backend-deploy.md
+saved SliceRecord boxes are the export truth
+AI boxes are transient suggestions
+OCR text does not rebuild UI backgrounds
+M29 evidence does not create visible layers
+exports crop from original source images
+visible .pen refs must be package-local
 ```
 
-For non-mainline directories, read [legacy-code-inventory.md](legacy-code-inventory.md) before editing or deleting code.
+`assets.zip` and `project.zip` use the same confirmed slice assets and cut-mode logic. There is no second visible asset ownership pipeline.
 
-## Automatic Pencil Export Surface
+## Reference And Superseded Surfaces
 
-The older automatic Pencil package route remains available for explicit
-batch/diagnostic use. It is not the current product judge.
+These directories are retained but are not the default product entrypoint:
 
-The default HTTP/CLI boundary source is `psdlike`; explicit `m29` and `hybrid`
-remain available.
+| Path | Current status | Rule |
+| --- | --- | --- |
+| `services/pencil-python-backend/` | superseded product/reference | Do not send new default product work here. Keep for historical Pencil assisted slice reference and deployment notes. |
+| `services/pencil-asset-backend/` | superseded slim handoff/reference | Keep as image/icon handoff reference. Do not merge its YOLO/M29/PSD-like candidate logic into Slice Studio by default. |
+| `services/pencil-handoff-studio/` | superseded handoff prototype/reference | Keep as prior batch handoff reference. |
+| `services/backend-go/cmd/m29extract/` and `services/backend-go/internal/m29/` | reference/fallback tooling | Slice Studio default uses TypeScript M29 physical evidence. Go is explicit fallback/reference only. |
+| `services/backend-go/internal/draft/`, `cmd/draft*`, `internal/vision/`, `internal/app/` | legacy research/deferred runtime | Do not revive without a new active plan and validation gate. |
+| `backend/` | legacy Python upload-preview research | Not a current runtime. |
+| `services/backend-python/` | legacy model/PSD-like experiment | Reference only. |
+| `services/psdlike-python/` | legacy/reference dependency for old Python routes | Not used by default Slice Studio runtime. |
+| `services/pencil-go/` | legacy experiment | Do not revive by default. |
+| `figma-plugin/`, `packages/dsl-schema/`, `packages/image-to-figma-renderer/` | deferred Draft/plugin assets | Maintain only when explicitly working on old Draft/plugin runtime. |
 
-```text
-1..N PNG
--> PSD-like boundary source by default
--> Python Pencil exporter
--> project ZIP builder
--> clean-editable / visual-fidelity / visual-ocr .pen ZIP
-```
-
-Automatic project endpoints:
-
-```text
-POST /api/pencil/projects
-GET  /api/pencil/projects/{taskId}
-GET  /api/pencil/projects/{taskId}/manifest
-GET  /api/pencil/projects/{taskId}/download.zip
-```
-
-`services/pencil-go` is retained as a superseded experiment and should not be extended as the current product delivery path.
-
-## PSD-like And M29 Dependency Boundary
-
-Some older-looking code is still a current dependency:
-
-```text
-services/psdlike-python/
-services/backend-go/cmd/m29extract/
-services/backend-go/internal/m29/
-```
-
-`services/pencil-python-backend/app/psdlike_runner.py` invokes `services/psdlike-python/tools/run_one.py` for `boundarySource=psdlike`. `services/pencil-python-backend` also supports `boundarySource=m29/hybrid`, and the deploy bundle includes `m29extract` plus the Go M29 kernel. These directories are not dead code.
-
-They remain evidence/candidate dependencies. They do not decide final visible assets; `manual_slices.v1.json` does.
-
-## Go Draft / M29 Surface
-
-`services/backend-go` is split:
-
-- `cmd/m29extract` and `internal/m29` are retained current diagnostic/dependency code for Pencil boundary evidence.
-- Draft server/compiler/vision/app packages are historical/deferred as a product delivery route on this branch.
-
-New current-product work should not land in the deferred Draft packages unless a new active plan explicitly resumes the Draft runtime.
-
-```text
-services/backend-go/
-  cmd/
-    draftserver/
-    draftcompile/
-    draftdetect/
-    drafteval/
-    m29extract/
-    m29trace/
-
-  internal/
-    app/
-      server/
-      storage/
-      task/
-
-    image/
-      crop/
-      geometry/
-      pngio/
-      color/
-      mask/
-
-    m29/
-      primitive/
-      evidence/
-      relation/
-      visualtree/
-      ocr/
-      pipeline/
-
-    vision/
-      detector/
-      provider/
-      prompt/
-      review/
-
-    draft/
-      contract/
-      assemble/
-      asset/
-      group/
-      exportdsl/
-      validate/
-      report/
-
-    eval/
-      codia/
-      metrics/
-```
-
-## Removed Legacy Generation
-
-The old `services/backend-go/internal/codia/*` generation tree has been removed. Do not recreate Codia assembly/control/tree/emitter/compiler/leaf/DSL 0.2 packages as product-generation paths.
-
-Codia comparison-only code lives under:
-
-```text
-services/backend-go/internal/eval/codia
-```
-
-## Frozen Research Assets
-
-These directories are intentionally retained but are not current product entrypoints:
-
-```text
-backend/
-services/backend-python/
-services/pencil-go/
-packages/dsl-schema/
-packages/image-to-figma-renderer/
-figma-plugin/
-docs/reference/legacy/
-docs/plans/archive/
-docs/code-reviews*/
-docs/reports/
-docs/prototypes/
-```
-
-Treat them as historical, deferred runtime, eval, or research assets according to [legacy-code-inventory.md](legacy-code-inventory.md). Do not delete or revive them by default.
+For full classification, read [legacy-code-inventory.md](legacy-code-inventory.md).
 
 ## Package Responsibilities
 
-`internal/app` owns HTTP, task lifecycle, storage paths, safe file names, and panic recovery.
+Current active implementation responsibility lives in `apps/slice-studio`.
 
-`internal/image` owns generic image math and file handling. It must not know about UI roles, Draft layer kinds, Codia roles, or providers.
-
-`internal/m29` owns physical evidence and source measurements.
-
-`internal/vision` owns provider-neutral model configuration, detector passes, response parsing, bounded concurrency, and review decisions.
-
-`internal/draft` owns the product contract: layer ownership, asset references, group hints, z-order, validation, report output, and runtime DSL export.
-
-`internal/eval` owns Codia/golden comparison and metrics. Generation packages must not import it.
-
-## Command Responsibilities
-
-`cmd/draftserver` is the historical/deferred Draft HTTP runtime.
-
-`cmd/draftcompile` is the local CLI for one PNG to Draft artifacts.
-
-`cmd/draftdetect` is the detector-only CLI.
-
-`cmd/drafteval` is the eval CLI and may read Codia golden samples. It supports Codia canvas analysis, Codia IR diff, and failure audit only; it does not generate Draft output.
-
-`cmd/m29extract` and `cmd/m29trace` remain M29 diagnostic commands.
-
-## Artifact Names
-
-Draft artifact names:
+Historical Go package responsibilities remain useful only when explicitly working on Go Draft/M29:
 
 ```text
-m29_physical_evidence.v1.json
-ui_detector_candidates.v1.json
-ui_candidate_review.v1.json
-editable_layer_graph.v1.json
-draft_runtime.dsl.v1.json
-draft_validation_report.md
-asset_manifest.json
+internal/image  -> generic image math
+internal/m29    -> physical evidence
+internal/vision -> model providers and candidate/review logic
+internal/draft  -> deferred editable layer graph / runtime DSL
+internal/eval   -> Codia/golden comparison only
 ```
 
-Artifact names should include a version when they are contracts.
-
-## Import Rules
-
-Allowed high-level direction:
-
-```text
-app -> m29 / vision / draft
-draft -> image / m29 / vision contract types
-vision -> image
-m29 -> image
-eval -> draft / m29 / vision / Codia samples
-renderer/plugin -> DSL only
-```
-
-Forbidden:
-
-```text
-draft -> eval
-vision -> eval
-m29 -> eval
-renderer -> backend
-plugin UI -> Figma API
-generation -> Codia golden
-```
+Generation code must not import Codia eval packages or read official Codia golden data.

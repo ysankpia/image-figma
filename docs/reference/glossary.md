@@ -2,23 +2,63 @@
 
 ## Image-to-Figma Design
 
-本项目名称，当前分支把 PNG 截图或设计稿转换成用户确认后的 Pencil/Figma 交付包。
+本项目名称。当前分支把 UI 截图或设计稿转换成用户确认后的 Pencil/Figma 交付包和前端切图资源。
+
+## Slice Studio
+
+当前产品主线。它从 1..N 张 UI 图创建本地项目，保存原图、页面和 SliceRecord，导出 `assets.zip` 与 `project.zip/design.pen`。
+
+## SliceRecord
+
+当前编辑和导出的 truth source。它记录 page、bbox、name、cut mode 等信息，保存在 Slice Studio SQLite 项目状态里。
+
+## manual_ui_slices.v1
+
+Slice Studio export manifest schema。它描述导出包里的页面、已确认 slices、源图和 package-local asset refs。
+
+## AI Slice Boxes
+
+Slice Studio AI 批量画框结果。AI 只返回短生命周期 bbox；前端把它们合并成普通 SliceRecord 并通过现有保存路径落库。
+
+## Cut Mode
+
+Slice Studio slice export mode：
+
+```text
+rect
+subject
+card
+```
+
+`rect` 是矩形裁切，`subject` 去掉局部背景保留主体，`card` 去掉外边背景并保留内部图文内容。
+
+## OCR Text
+
+OCR 提供 editable text content 和原始 bbox。OCR 不重建按钮、卡片、图标、图片或 Auto Layout。
+
+## M29 Physical Evidence
+
+从 PNG 像素提取的物理证据。在当前 Slice Studio 中，TypeScript M29 只服务 OCR text bbox placement。Go `m29extract` 是显式 fallback/reference。
+
+## Pencil Project Package
+
+Slice Studio 导出的 `project.zip`，内部包含 `design.pen`、manifest、project metadata、originals、remainders 和 visible slice assets。
 
 ## Pencil Assisted Slice Workspace
 
-当前产品主线。它从 1..N 张图片生成 `candidates.v1.json`，让用户在 HTML Canvas 工作台确认或手动画框，保存 `manual_slices.v1.json`，再导出 `project.zip` 和 `selected-assets.zip`。
+旧 Python Pencil route。它从 1..N 张图片生成 `candidates.v1.json`，让用户在 HTML Canvas 工作台确认或手动画框，保存 `manual_slices.v1.json`，再导出 `project.zip` 和 `selected-assets.zip`。当前只作为 superseded product/reference。
 
-## Manual Slices
+## manual_slices.v1.json
 
-当前交付真相源，文件名为 `manual_slices.v1.json`。它记录用户确认后的 selected slices、source-image bbox、名称、kind 和导出模式。自动候选不能覆盖它。
+旧 Python Pencil route 的交付真相源，不是当前 Slice Studio manifest schema。
 
 ## Slice Candidates
 
-自动候选文件，文件名为 `candidates.v1.json`。PSD-like、M29、OCR、foreground audit 和模型证据都只能进入候选/调试层，不能直接决定最终 visible asset。
+旧 Python Pencil route 的自动候选文件，文件名为 `candidates.v1.json`。PSD-like、M29、OCR、foreground audit 和模型证据都只能进入候选/调试层，不能直接决定最终 visible asset。
 
 ## Review State
 
-工作台状态文件，文件名为 `review_state.v1.json`。它记录 rejected candidates、筛选和最后处理页等 UI 状态，不参与最终交付真相。
+旧 Python Pencil route 的工作台状态文件，文件名为 `review_state.v1.json`。它记录 rejected candidates、筛选和最后处理页等 UI 状态，不参与最终交付真相。
 
 ## Editable Draft Layer Pipeline
 
@@ -36,54 +76,14 @@ Renderer 输入合同，文件名为 `draft_runtime.dsl.v1.json`。它由 Editab
 
 把 Draft Runtime DSL 转成 Figma 节点的 TypeScript 包。Renderer 不运行 OCR、M29、vision、裁图、ownership 或 Codia eval。
 
-## Plugin UI
+## Figma Plugin
 
-Figma 插件里的用户界面，负责选择 PNG、触发 Draft 生成、显示进度、完成和失败状态。
-
-## Plugin Main
-
-Figma 插件主线程，负责调用 `/api/draft-preview`、获取 DSL/assets、调用 Renderer、操作 Figma Plugin API。
-
-## ReferenceImage
-
-保留在 Draft graph 中的原始 PNG 诊断参考。它必须 hidden/locked 或仅存在于 artifact 中，不能作为 visible full-page backing。
-
-## TextLayer
-
-可编辑文字层。普通 OCR 文字默认应保留为 TextLayer，并在同区域 ShapeLayer/RasterLayer 上方。
-
-## RasterLayer
-
-由源图裁切出的图片层，用于局部媒体、图标、头像、封面、缩略图或复杂 fallback 区域。RasterLayer 必须引用可解析 asset。
-
-## ShapeLayer
-
-背景、卡片、分割线、简单几何和基础视觉支撑层。ShapeLayer 不应携带前景文字像素。
-
-## GroupLayer
-
-组织移动和选择的分组层。GroupLayer 不拥有像素。
-
-## M29 Physical Evidence
-
-从 PNG 像素和 OCR 中提取的物理证据，例如 bbox、颜色、边缘、纹理、OCR mask、relation 和 source fragments。M29 提供证据，不直接创建最终 Draft layer。
-
-## Vision Provider
-
-OpenAI-compatible 视觉模型 provider。它提供 UI detector candidates 和可选 review decisions，不直接生成 DSL 或 Figma tree。
+历史/延后 Draft route 的交互入口。当前 Slice Studio handoff 通过 `project.zip/design.pen`，不依赖插件作为默认交付路径。
 
 ## Codia Eval
 
-官方 Codia JSON/golden 样本的比较和审计用途。Codia eval 只能在 `internal/eval/codia` 和 `cmd/drafteval` 中使用，不能被 generation packages import。
-
-## Asset
-
-RasterLayer 引用的本地 PNG 文件。每个 completed task 的 visible image node 必须能通过 `/api/draft-preview/{taskId}/assets/{assetId}.png` 解析。
-
-## Task
-
-一次单张 PNG 处理任务，用 `taskId` 串联上传、状态、artifact、DSL、asset 和日志。
+官方 Codia JSON/golden 样本的比较和审计用途。Codia eval 只能作为 reference/eval，不能被当前生成路径读取。
 
 ## Fallback
 
-将复杂或低置信度区域裁切为 RasterLayer 放回 Figma。Fallback 是质量策略，不是失败；但它不能变成整页 visible backing。
+当某条自动路线无法可靠重建结构时，保留更简单、更可修的输出。当前产品的主要 repair path 是 Slice Studio 手工/AI 画框后人工确认，而不是继续追求全自动树。

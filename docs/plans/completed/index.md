@@ -162,5 +162,8 @@
 - [177 Slice Studio Pencil Editable Text Layer V1](177-slice-studio-pencil-editable-text-layer-v1.md)
 - [178 Slice Studio Baidu OCR Provider And Text Quality Gate](178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md)
 - [179 Slice Studio M29 Text Position And Handoff Fixes](179-slice-studio-m29-text-position-and-handoff-fixes.md)
-- [180 Slice Studio Text Node Render Box Fix](180-slice-studio-text-node-render-box-fix.md)
-- [181 Slice Studio TS M29 Physical Evidence](181-slice-studio-m29-physical-evidence-ts.md)
+- [180 Slice Studio Text Node Render Box Fix](180-slice-studio-text-node-render-box-fix.md) — `completed`
+- [181 Slice Studio TS M29 Physical Evidence](181-slice-studio-m29-physical-evidence-ts.md) — `completed`
+- [182 Slice Studio AI Rect Slice Assist](182-slice-studio-ai-rect-slice-assist.md) — `completed`
+- [183 Slice Studio AI Tile Merge And Progress](183-slice-studio-ai-tile-merge-and-progress.md) — `completed`
+- [184 Slice Studio Documentation Harness Sync](184-slice-studio-doc-harness-sync.md) — `completed`

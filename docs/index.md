@@ -1,89 +1,81 @@
 # 文档地图
 
-本目录是 Image-to-Figma Design 的事实来源。当前分支的可交付产品主线是 **Pencil Assisted Slice Workspace**：从 1..N 张图片生成自动候选，由用户在 Canvas 工作台确认切片，然后导出 Pencil/Figma 项目包和前端资源包。151 之后新增的 **Pencil Asset Backend** 是更瘦的 image/icon 资产 handoff 路线，默认只交付工程切图 PNG 和单一 `pencil-handoff` `.pen`。156 新增的 **Pencil Handoff Studio** 是干净的新服务，面向批量 UI 设计稿切图和 Pencil handoff，输出 `assets.zip` 与 `project.zip`。旧 Codia Beta、Go Draft `/api/draft-preview`、Python `/api/upload-preview`、历史 ADR、completed plans 和 legacy drafts 只作参考，不能覆盖当前主线。
+本目录是 Image-to-Figma Design 的事实来源。当前默认可交付产品是 **Slice Studio**，不是旧 Pencil Python Backend、Go Draft、Python upload-preview、Figma plugin runtime 或 Codia-like 自动生成路线。
+
+当前主线：
+
+```text
+1..N UI screenshots/design images
+-> apps/slice-studio
+-> project workspace
+-> saved SliceRecord boxes in SQLite
+-> assets.zip
+-> project.zip / design.pen
+```
+
+旧代码和历史文档保留为 reference、fallback、deferred runtime 或 legacy research。它们不能覆盖 `AGENTS.md`、`PROGRESS.md`、`docs/product/direction-contract.md`、本文件和当前 code map。
 
 ## Start Here
 
 按顺序阅读：
 
 1. [../AGENTS.md](../AGENTS.md)：仓库规则、当前主线、禁止项。
-2. [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)：当前 Pencil assisted slice 服务运行、工作台和验收命令。
-3. [../services/pencil-asset-backend/README.md](../services/pencil-asset-backend/README.md)：瘦 image/icon 资产 handoff 服务、单一 `.pen` 输出和验收命令。
-4. [../services/pencil-handoff-studio/README.md](../services/pencil-handoff-studio/README.md)：批量设计稿切图、Konva Review、Pencil handoff 和 `assets.zip`。
-5. [reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)：当前 HTTP/API 合同。
-6. [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)：当前交付、验收和部署交接。
-7. [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)：部署 Runbook。
-8. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
-9. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：非主线代码、冷冻资产和可删除产物边界。
-10. [engineering/validation.md](engineering/validation.md)：验证策略。
-11. [plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)：manual slices 真相源切换。
-12. [plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)：批量项目工作台。
-13. [plans/completed/156-pencil-handoff-studio.md](plans/completed/156-pencil-handoff-studio.md)：新 Pencil Handoff Studio 服务。
+2. [../PROGRESS.md](../PROGRESS.md)：当前目标、active plan、验证日志和 checkpoint。
+3. [product/direction-contract.md](product/direction-contract.md)：最终产物、truth source、repair path、non-goals 和验证产物。
+4. [roadmap.md](roadmap.md)：当前阶段、下一步和开放问题。
+5. [../apps/slice-studio/README.md](../apps/slice-studio/README.md)：Slice Studio 运行、产品行为、配置和存储。
+6. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
+7. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：旧代码分类和恢复规则。
+8. [engineering/validation.md](engineering/validation.md)：验证策略。
+9. [reference/env-vars.md](reference/env-vars.md)：环境变量。
+10. [reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md)：当前 AI 画框 prompt 策略记录。
 
 ## Current Runtime
 
-当前主线：
+Slice Studio local runtime:
 
 ```text
-1..N images
--> services/pencil-python-backend
--> candidates.v1.json
--> HTML Canvas assisted slice workspace
--> user-confirmed manual_slices.v1.json
--> export-preview
--> project.zip + selected-assets.zip
+Next web:  http://127.0.0.1:3010
+Elysia API: http://127.0.0.1:4110
 ```
 
-瘦资产 handoff 路线：
+Primary API surface:
 
 ```text
-1..N images
--> services/pencil-asset-backend
--> YOLO/M29/PSD-like/OCR evidence
--> image/icon candidates
--> Canvas Review
--> user-confirmed manual_slices.v1.json
--> PNG assets
--> pencil-handoff project.zip + selected-assets.zip
+GET    /api/projects
+POST   /api/projects
+GET    /api/projects/:projectId
+POST   /api/projects/:projectId/pages
+PUT    /api/projects/:projectId/slices
+POST   /api/projects/:projectId/pages/:pageId/ai-boxes
+POST   /api/projects/:projectId/export-assets
+GET    /api/projects/:projectId/assets.zip
+POST   /api/projects/:projectId/export-project
+GET    /api/projects/:projectId/project.zip
 ```
 
-Pencil Handoff Studio 路线：
+Primary contracts:
 
-```text
-1..N UI design images
--> services/pencil-handoff-studio
--> originals
--> image/icon/basic candidates
--> Konva Review
--> user-confirmed manual_slices.v1.json
--> assets.zip + project.zip
-```
-
-旧路径状态：
-
-- Codia Beta / `Generate Beta`：产品入口已撤掉，只能作为 legacy/eval reference，不再作为新功能落点。
-- Go Draft `/api/draft-preview`：历史/延后自动可编辑稿路线，不是当前可交付产品主线。
-- Python `/api/upload-preview`：historical/reference preview path，不是 Draft runtime。
-- Official Codia JSON：eval/reference/training-label material only，禁止 generation 读取。
-- YOLO/M29/PSD-like/foreground ownership 自动裁判：只作为候选、debug、eval 或未来研究输入；不能覆盖 `manual_slices.v1.json`。
+- saved Slice Studio slices: live edit/export truth;
+- `manual_ui_slices.v1`: export manifest schema;
+- `assets.zip`: frontend asset output;
+- `project.zip/design.pen`: Pencil/Figma handoff output;
+- AI boxes: transient suggestions converted into normal slices;
+- OCR/M29: editable text evidence only.
 
 ## By Task Type
 
-- 做当前产品范围：读 [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
-- 做瘦 image/icon 资产 handoff：读 [../services/pencil-asset-backend/README.md](../services/pencil-asset-backend/README.md)、[engineering/current-code-map.md](engineering/current-code-map.md)、[reference/env-vars.md](reference/env-vars.md)。
-- 做批量设计稿切图和 Pencil handoff studio：读 [../services/pencil-handoff-studio/README.md](../services/pencil-handoff-studio/README.md)、[plans/completed/156-pencil-handoff-studio.md](plans/completed/156-pencil-handoff-studio.md)、[reference/env-vars.md](reference/env-vars.md)。
-- 做 assisted slice 工作台/API/导出：读 [engineering/current-code-map.md](engineering/current-code-map.md)、[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)、[reference/env-vars.md](reference/env-vars.md)、[plans/completed/141-pencil-assisted-slice-review-and-export.md](plans/completed/141-pencil-assisted-slice-review-and-export.md)、[plans/completed/144-assisted-slice-project-workspace.md](plans/completed/144-assisted-slice-project-workspace.md)。
-- 做部署：读 [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md) 和 [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)。
-- 做 Draft graph / Go Draft 历史恢复：读 [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)、[architecture/runtime.md](architecture/runtime.md) 和 [plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md](plans/archive/superseded/093-editable-draft-layer-pipeline-rebuild.md)，并先写新的 active plan。
-- 做视觉模型接入实验：读 [architecture/vision-provider.md](architecture/vision-provider.md) 和 [reference/env-vars.md](reference/env-vars.md)，但模型输出不能成为当前 assisted slice 的最终 visible owner。
-- 做 M29 物理证据：读 [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)，默认只作为候选/证据输入。
-- 判断旧代码能不能删、能不能改、能不能恢复为产品路径：读 [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)。
-- 做插件/Renderer：读 [architecture/plugin-rendering.md](architecture/plugin-rendering.md)、[architecture/dsl.md](architecture/dsl.md) 和 [engineering/validation.md](engineering/validation.md)，但它们不是当前 assisted slice 交付路径。
-- 做 bug 修复：读 [bugs/index.md](bugs/index.md)、相关 bug record 和 [engineering/validation.md](engineering/validation.md)。
-- 做历史对比：读 [reference/codia-samples/](reference/codia-samples/) 和 `internal/eval/codia`，不要把 eval 数据接入 generation。
+- Slice Studio UI/API/export work: read [../apps/slice-studio/README.md](../apps/slice-studio/README.md), [architecture/overview.md](architecture/overview.md), [architecture/api-contracts.md](architecture/api-contracts.md), [engineering/validation.md](engineering/validation.md).
+- AI slice boxes: read [reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md), [plans/completed/182-slice-studio-ai-rect-slice-assist.md](plans/completed/182-slice-studio-ai-rect-slice-assist.md), [plans/completed/183-slice-studio-ai-tile-merge-and-progress.md](plans/completed/183-slice-studio-ai-tile-merge-and-progress.md).
+- OCR / editable text / M29 physical evidence: read [plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md](plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md), [plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md](plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md), [plans/completed/181-slice-studio-m29-physical-evidence-ts.md](plans/completed/181-slice-studio-m29-physical-evidence-ts.md).
+- Old code classification or cleanup: read [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md) first; do not delete or revive old directories by default.
+- Historical Pencil Python work: read [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md) only when explicitly targeting that service.
+- Historical Go Draft / Renderer / plugin work: read [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md), [architecture/runtime.md](architecture/runtime.md), [architecture/plugin-rendering.md](architecture/plugin-rendering.md), and create a new active plan before implementation.
+- Bugs: read [bugs/index.md](bugs/index.md), the related bug record, and [engineering/validation.md](engineering/validation.md).
 
 ## Product
 
+- [product/direction-contract.md](product/direction-contract.md)
 - [product/vision.md](product/vision.md)
 - [product/requirements.md](product/requirements.md)
 - [product/user-flows.md](product/user-flows.md)
@@ -93,17 +85,10 @@ Pencil Handoff Studio 路线：
 ## Architecture
 
 - [architecture/overview.md](architecture/overview.md)
-- [architecture/runtime.md](architecture/runtime.md)
-- [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md)
 - [architecture/api-contracts.md](architecture/api-contracts.md)
-- [architecture/dsl.md](architecture/dsl.md)
-- [architecture/renderer.md](architecture/renderer.md)
-- [architecture/plugin-rendering.md](architecture/plugin-rendering.md)
-- [architecture/vision-provider.md](architecture/vision-provider.md)
 - [architecture/m29-physical-evidence.md](architecture/m29-physical-evidence.md)
-- [architecture/security.md](architecture/security.md)
-- [architecture/reliability.md](architecture/reliability.md)
-- [architecture/observability.md](architecture/observability.md)
+- [architecture/vision-provider.md](architecture/vision-provider.md)
+- Historical/deferred: [architecture/runtime.md](architecture/runtime.md), [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md), [architecture/dsl.md](architecture/dsl.md), [architecture/renderer.md](architecture/renderer.md), [architecture/plugin-rendering.md](architecture/plugin-rendering.md)
 
 ## Engineering
 
@@ -129,7 +114,7 @@ Pencil Handoff Studio 路线：
 ## Reference
 
 - 环境变量：[reference/env-vars.md](reference/env-vars.md)
-- Pencil Python Backend API：[reference/pencil-python-backend-api.md](reference/pencil-python-backend-api.md)
+- AI prompt 策略：[reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md)
 - 外部接口：[reference/external-apis.md](reference/external-apis.md)
 - 术语表：[reference/glossary.md](reference/glossary.md)
 - Codia golden samples：[reference/codia-samples/](reference/codia-samples/)
@@ -138,5 +123,4 @@ Pencil Handoff Studio 路线：
 ## Runbooks
 
 - [runbooks/local-setup.md](runbooks/local-setup.md)
-- [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md)
-- [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)
+- Historical Pencil Python deployment: [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md), [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)

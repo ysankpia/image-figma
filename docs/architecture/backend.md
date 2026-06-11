@@ -1,12 +1,12 @@
 # 后端架构
 
-当前分支的可交付后端主线是 `services/pencil-python-backend` assisted slice workspace。它接收 1..N 张图片，生成 `candidates.v1.json`，由用户确认 `manual_slices.v1.json`，再导出 `project.zip` 和 `selected-assets.zip`。
+当前分支的可交付后端主线是 `apps/slice-studio/server`。它接收 1..N 张 UI 图，保存项目、页面和 SliceRecord，导出 `assets.zip` 与 `project.zip/design.pen`。
 
-本文件下面记录的是历史/延后 Go Draft backend 架构。只有明确恢复 `/api/draft-preview` 自动可编辑稿路线时，才把它作为实现参考。
+本文件下面主要记录历史/延后 Go Draft backend 架构。当前 Slice Studio 后端入口、API 和验证以 [overview.md](overview.md)、[api-contracts.md](api-contracts.md)、[../engineering/current-code-map.md](../engineering/current-code-map.md) 为准。只有明确恢复 `/api/draft-preview` 自动可编辑稿路线时，才把本文件的 Draft 细节作为实现参考。
 
 ## Runtime Surface
 
-当前产品 API：
+历史 Draft API：
 
 ```text
 GET  /api/health

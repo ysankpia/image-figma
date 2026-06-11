@@ -1,101 +1,100 @@
-# 一期需求
+# 产品需求
 
-本文档记录历史 Draft MVP 的产品能力。当前分支的一期可交付产品已经切到 Pencil assisted slice workspace：
-
-```text
-1..N images
--> candidates.v1.json
--> Canvas 工作台人工确认
--> manual_slices.v1.json
--> project.zip + selected-assets.zip
-```
-
-新的当前产品需求以 [../services/pencil-python-backend/README.md](../../services/pencil-python-backend/README.md)、[../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md) 和 completed plans `141`-`145` 为准。本文件只在显式恢复 Go Draft 自动化路线时作为历史参考。
+本文档记录当前 Slice Studio 产品需求。历史 Draft MVP 需求只作背景，不能覆盖当前主线。
 
 ## Scope
 
-历史 Draft MVP 一期只支持单张 PNG 转 Figma 可编辑稿：
+当前支持本地项目制 UI 切图和 Pencil/Figma handoff：
 
 ```text
-单张 PNG
--> Go Draft backend task
--> Editable Layer Graph
--> Draft Runtime DSL
--> Figma Renderer
--> 当前 Figma 画布生成结果
+1..N UI screenshots/design images
+-> project workspace
+-> manual or AI-assisted slice boxes
+-> SQLite-backed saved project state
+-> assets.zip
+-> project.zip / design.pen
 ```
 
-输入限制：
+输入：
 
-- 只支持 PNG。
-- 单次只处理一张图。
-- 优先支持 App、小程序、移动端高保真设计稿。
-- 基础兼容简单后台和简单 Web 截图。
-- 不重点优化长 Landing Page、复杂报表、复杂图表、低清图片。
+- PNG/JPEG/WebP 等浏览器和 Sharp 可读图片。
+- 单项目可包含多张页面图片。
+- 目标样本以 App、小程序、移动端和 UI 设计稿为主，也允许简单 Web/后台截图。
 
 ## Core Capabilities
 
 P0 能力：
 
-- 插件内选择 PNG。
-- 插件内预览上传图片。
-- 用户确认后开始生成。
-- 后端创建任务并返回 `taskId`。
-- 后端保存原图并生成 Editable Layer Graph、Draft Runtime DSL 和 raster assets。
-- 后端提供任务状态、DSL 和资产访问接口。
-- Renderer 消费 DSL 并在 Figma 当前画布生成 root Frame。
-- Renderer 支持 `text`、`shape`、`image`、`frame`、`group` 的基础渲染。
-- Renderer 返回渲染数量和 warnings。
-- 生成完成或失败时插件给出明确状态。
+- 创建、重命名、删除本地项目。
+- 上传多张页面图片。
+- 页面缩略图、页面切换、页面重命名、替换、删除、拖拽重排。
+- Canvas review：选择、连续画框、移动、缩放、删除、撤销、pan/zoom。
+- Slice 属性：名称、bbox、`rect | subject | card` cut mode。
+- 自动保存 slices，并在刷新后恢复。
+- `assets.zip` 导出原图、slice PNG、`manifest.json`、`project.json`。
+- `project.zip` 导出 `design.pen`、原图、remainder、slice PNG、manifest 和 project metadata。
+- Exporter 从原始 source image 裁切，不从 canvas thumbnail 或 debug artifact 裁切。
 
 P1 能力：
 
-- 基础 `icon` 和 `line` 渲染。
-- 原图隐藏参考层。
-- fallback 图片区域。
-- 基础圆角、描边、阴影。
-- 字体加载失败时降级但不中断整页。
+- OCR editable text layer：在 Pencil package 中添加普通可编辑文字节点。
+- TypeScript M29 physical evidence：默认给 OCR text 提供更紧的 physical bbox，不依赖 Go binary。
+- AI 当前页/全部页画框：模型只返回矩形 bbox，前端转换为普通 slice 并走现有保存路径。
+- AI batch progress overlay。
+- AI overview review：减少跨 tile 大资产被切半。
+- 项目 home：搜索、筛选、排序、grid/list 视图和首图预览。
 
-P2 能力：
+P2 后续能力：
 
-- 复杂渐变。
-- 更精细图标矢量化。
-- 更完整 OCR 纠错。
-- 更好的视觉质量评估。
+- 更好的 AI 重复运行策略。
+- 可选“干净模式/全切模式”AI prompt 策略 UI。
+- Slice Studio 部署 runbook。
+- 更自动化的 `.pen` 视觉验收。
 
 ## Output Requirements
 
-Figma 输出必须包含：
+`assets.zip` 必须包含：
 
-- 一个 root Frame。
-- 可编辑主文字。
-- 基础 shape/card/background。
-- 图片资产节点。
-- 必要分组或 frame 层级。
-- 可隐藏的原图参考层。
-- 对复杂区域的 fallback 图片。
+- `originals/` 页面原图；
+- `slices/` 用户确认 slice PNG；
+- `manifest.json`；
+- `project.json`。
 
-输出不要求：
+`project.zip` 必须包含：
 
-- 100% 像素级一致。
-- 100% 可编辑。
-- 自动生成 Auto Layout。
-- 生成 Figma Component。
-- 生成前端代码。
+- `design.pen`；
+- `manifest.json`；
+- `project.json`；
+- package-local originals；
+- package-local visible remainders；
+- package-local visible slice PNG；
+- optional editable text nodes when OCR succeeds.
+
+Visible refs 不得包含：
+
+```text
+absolute paths
+../
+source.png as visible ref
+raw crops
+masks
+debug assets
+local storage paths
+```
 
 ## Error Requirements
 
-所有失败必须能归到明确阶段：
+失败要能归到明确阶段：
 
-- `upload`
-- `preprocess`
-- `ocr`
-- `m29`
-- `vision`
-- `draft_assemble`
-- `asset_crop`
-- `draft_export`
-- `draft_validate`
-- `render`
+- project create/list/detail;
+- page upload/replace/delete/reorder;
+- slice save;
+- preview crop;
+- assets export;
+- project export;
+- OCR provider;
+- M29 physical evidence;
+- AI slice provider;
+- ZIP/Pencil packaging.
 
-用户看到友好错误文案。开发者能看到 `errorCode`、`stage`、`taskId` 和调试 detail。
+AI、OCR、M29 失败不得破坏已有用户保存的 slices。导出应尽量继续并在 manifest/metadata 中记录跳过或 fallback 原因。

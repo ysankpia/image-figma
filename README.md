@@ -1,105 +1,87 @@
 # Image-to-Figma Design
 
-Image-to-Figma Design 当前分支的可交付目标已经收敛为：把单张或多张截图转换成可人工确认的 Pencil/Figma 交付包，而不是继续追求全自动一次性切图全对。
+Image-to-Figma Design 当前可交付主线已经收敛为 **Slice Studio**：本地项目制 UI 切图工具。它把 1..N 张截图/设计稿变成用户确认后的 `assets.zip` 和 Pencil/Figma handoff `project.zip`，而不是继续追求全自动 Codia-like tree、Go Draft 可编辑图层或插件一键还原。
 
-当前分支的产品主线是 **Pencil Assisted Slice Workspace**。默认后端是 Python `services/pencil-python-backend`，默认浏览器入口是 `/api/pencil/slice-projects/workspace`。旧 Codia 生成路径、Go Draft `/api/draft-preview`、Python upload-preview、YOLO/PSD-like 自动 ownership 计划只保留作历史参考、候选证据或显式调试目标，不能作为当前新功能落点。
+当前默认产品入口：
 
-旧代码不是默认删除对象。`backend/`、`services/backend-python/`、`services/pencil-go/`、Draft/Renderer/Plugin 包和历史 Codia-like/M29 文档都可能是未来研究资产。判断某个目录能不能删、能不能改、能不能恢复为产品路径，先读 [docs/engineering/legacy-code-inventory.md](docs/engineering/legacy-code-inventory.md)。
+```text
+apps/slice-studio
+```
 
 ## 当前主链
 
 ```text
-1..N images
--> services/pencil-python-backend
--> candidates.v1.json
--> HTML Canvas assisted slice workspace
--> 用户点选 / 手动画框 / 调整 / 删除 / 命名
--> manual_slices.v1.json
--> export-preview
--> project.zip + selected-assets.zip
+1..N UI screenshots/design images
+-> Slice Studio project workspace
+-> source images stored under apps/slice-studio/storage
+-> user-drawn or AI-assisted rect slices
+-> optional rect/subject/card cut modes
+-> SQLite-backed project state
+-> assets.zip for frontend assets
+-> project.zip / design.pen for Pencil/Figma handoff
 ```
 
 核心合同：
 
-- `candidates.v1.json`：自动候选，只是建议，不是最终裁判。
-- `review_state.v1.json`：工作台状态，例如 rejected candidates、筛选、最后处理页。
-- `manual_slices.v1.json`：最终交付真相源。
-- `project.zip`：给 Pencil 打开，再导入 Figma。
-- `selected-assets.zip`：给前端开发使用的确认后切图资源。
+- `SliceRecord` / SQLite project state：当前编辑和导出真相源。
+- `manual_ui_slices.v1` manifest：导出包真相源。
+- AI boxes：临时画框建议，进入前端后就是普通 slice，不单独持久化。
+- OCR：只提供 editable text content。
+- TypeScript M29 physical evidence：只辅助 OCR text bbox 定位，不创建 visible layers。
+- Go `m29extract`：只作为显式 fallback/reference，不是默认部署依赖。
 
-当前不做：
+## 运行 Slice Studio
+
+```bash
+cd apps/slice-studio
+bun install
+bun run dev
+```
+
+默认端口：
 
 ```text
-官方 Codia JSON byte-for-byte 复刻
-全自动 semantic UI control tree 作为产品主合同
-Auto Layout
-Figma Component/Instance
-响应式布局编译
-YOLO / VLM / M29 / PSD-like 作为最终 visible ownership 裁判
-services/pencil-go 复活为产品路径
-账号/支付/额度
+Next web:  http://127.0.0.1:3010
+Elysia API: http://127.0.0.1:4110
 ```
 
-## 运行
-
-Pencil assisted slice 后端：
-
-```bash
-cd services/pencil-python-backend
-PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
-OCR_PROVIDER=none \
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
-```
-
-打开工作台：
+打开：
 
 ```text
-http://127.0.0.1:8100/api/pencil/slice-projects/workspace
+http://127.0.0.1:3010/projects
 ```
 
-如果需要真实 OCR，在本地未提交 env 中配置：
+## 配置
 
-```bash
-OCR_PROVIDER=baidu_ppocrv5
-BAIDU_PADDLE_OCR_TOKEN=...
-```
+Slice Studio 默认读取 `apps/slice-studio/.env.local`，不要把密钥提交到仓库。
 
-保留的 Go Draft 路径只在明确恢复或调试历史 Draft runtime 时使用：
+常用变量见：
 
-```bash
-cd services/backend-go
-DRAFT_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/draftserver
-```
+- [apps/slice-studio/.env.example](apps/slice-studio/.env.example)
+- [docs/reference/env-vars.md](docs/reference/env-vars.md)
 
-保留的 Python/FastAPI preview 路径只在明确调试历史 upload-preview 时使用：
+关键变量：
 
-```bash
-cd backend
-uv sync
-UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```text
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+SLICE_STUDIO_API_PORT=4110
+SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
+SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
+SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence
+SLICE_STUDIO_AI_SLICE_PROVIDER=openai_responses
+SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
+SLICE_STUDIO_AI_SLICE_TILE_COUNT=6
+SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW=true
 ```
 
 ## 验证
 
-当前 Pencil backend：
+Slice Studio 基线检查：
 
 ```bash
-cd services/pencil-python-backend
-make check
-make slice-acceptance \
-  IMAGE=/absolute/path/to/image-or-dir \
-  OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
-```
-
-如果显式改 Go Draft / 插件 / Renderer，再运行对应检查：
-
-```bash
-cd services/backend-go
-go test ./...
-
-pnpm -r run test
-pnpm -r run typecheck
-pnpm --filter @image-figma/figma-plugin run build
+pnpm --dir apps/slice-studio run check
+pnpm --dir apps/slice-studio run build
 ```
 
 仓库级检查：
@@ -109,18 +91,35 @@ git diff --check
 git status --short --branch
 ```
 
+当改动导出、OCR、M29 text bbox、AI slicing、Pencil package 时，还需要真实样本验证：上传多页图片，保存 slices，导出 `assets.zip` 和 `project.zip`，检查 `manifest.json` 和 `.pen` 可打开。
+
+## 旧代码状态
+
+旧代码不是默认删除对象。这个仓库保留了多条历史路线：Pencil Python Backend、Pencil Asset Backend、Pencil Handoff Studio、Go M29/Draft、Python upload-preview、Renderer、Figma plugin、PSD-like、Codia eval 等。它们有研究价值，但不能覆盖当前 Slice Studio 主线。
+
+判断旧目录能不能删、改、恢复为产品路径，先读：
+
+- [docs/engineering/legacy-code-inventory.md](docs/engineering/legacy-code-inventory.md)
+- [docs/engineering/current-code-map.md](docs/engineering/current-code-map.md)
+
+默认规则：
+
+```text
+new product work -> apps/slice-studio
+old services -> reference/fallback/legacy research unless a new active plan says otherwise
+manual/saved Slice Studio slices -> final export truth
+```
+
 ## 文档入口
 
-从 [docs/index.md](docs/index.md) 开始阅读。关键当前事实文档：
+从这里开始：
 
 - [AGENTS.md](AGENTS.md)
-- [services/pencil-python-backend/README.md](services/pencil-python-backend/README.md)
-- [docs/reference/pencil-python-backend-api.md](docs/reference/pencil-python-backend-api.md)
-- [docs/runbooks/pencil-python-backend-handoff.md](docs/runbooks/pencil-python-backend-handoff.md)
-- [docs/runbooks/pencil-python-backend-deploy.md](docs/runbooks/pencil-python-backend-deploy.md)
+- [PROGRESS.md](PROGRESS.md)
+- [docs/index.md](docs/index.md)
+- [docs/product/direction-contract.md](docs/product/direction-contract.md)
+- [docs/roadmap.md](docs/roadmap.md)
+- [apps/slice-studio/README.md](apps/slice-studio/README.md)
 - [docs/engineering/current-code-map.md](docs/engineering/current-code-map.md)
 - [docs/engineering/legacy-code-inventory.md](docs/engineering/legacy-code-inventory.md)
 - [docs/engineering/validation.md](docs/engineering/validation.md)
-- [docs/plans/completed/141-pencil-assisted-slice-review-and-export.md](docs/plans/completed/141-pencil-assisted-slice-review-and-export.md)
-- [docs/plans/completed/144-assisted-slice-project-workspace.md](docs/plans/completed/144-assisted-slice-project-workspace.md)
-- [docs/plans/completed/145-assisted-slice-workspace-acceptance-hardening.md](docs/plans/completed/145-assisted-slice-workspace-acceptance-hardening.md)
