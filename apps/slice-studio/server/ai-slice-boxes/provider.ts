@@ -71,16 +71,27 @@ async function callResponses(payload: Record<string, unknown>): Promise<string> 
   throw httpError(502, "AI slice provider failed");
 }
 
-function buildPrompt(tile: PreparedTile): string {
+export function buildPrompt(tile: PreparedTile): string {
   return [
     "You are an asset slicing assistant for a UI screenshot tile.",
-    "Return ONLY strict JSON. Do not use markdown.",
-    "Find rectangular image assets that a designer would crop as raster assets.",
-    "Include product photos, thumbnails, complex icons, logos, illustrations, badges, decorative images, and small visual assets that need raster fidelity.",
-    "Exclude plain text, button text, button backgrounds, search bars, ordinary cards, dividers, full-page backgrounds, status bars, bottom navigation labels, and generic UI containers.",
+    "Return ONLY strict JSON. Do not use markdown wrappers.",
+    "",
+    "TASK:",
+    "Identify visual assets that should be exported as raster images. Be active in capturing distinct icons, including stylized bottom navigation icons and feature icons, but strict about avoiding structural UI containers.",
+    "",
+    "DECISION GUIDELINE:",
+    "- INCLUDE: Product photos, thumbnails, avatars, illustrations, brand logos, stylized UI icons, decorative graphics, navigation icons, and distinct action button icons.",
+    "- EXCLUDE: Plain text, button backgrounds, search bar fields, ordinary cards, generic containers, background grids, status bars, dividers, or plain button rectangles.",
+    "- Do not slice a plain text label together with its icon. Crop ONLY the visual icon itself, with a tight box.",
+    "- Avoid slicing micro-utility controls like simple chevrons, close symbols, or simple checkboxes unless they carry unique brand stylization.",
+    "",
+    "COORDINATES & SIZE:",
     "Coordinates must be in the provided tile image pixel space, not the original full page.",
-    "Use tight rectangles around the visible asset. Do not include large unrelated card/container padding.",
-    "If uncertain, omit the box.",
+    "Use tight, minimal bounding boxes around the visible asset. Do not include empty padding, labels, or container cards.",
+    "",
+    "CONFIDENCE DEFINITION:",
+    "The confidence score must reflect how important it is to export this as an independent raster asset, not just whether a graphic is visible.",
+    "",
     "Return shape: {\"boxes\":[{\"x\":0,\"y\":0,\"width\":100,\"height\":100,\"label\":\"asset\",\"confidence\":0.8,\"reason\":\"short reason\"}]}",
     `Tile id: ${tile.id}`,
     `Tile sent size: ${tile.sentWidth}x${tile.sentHeight}`,
@@ -88,18 +99,27 @@ function buildPrompt(tile: PreparedTile): string {
   ].join("\n");
 }
 
-function buildOverviewPrompt(tile: PreparedTile): string {
+export function buildOverviewPrompt(tile: PreparedTile): string {
   return [
-    "You are reviewing a compressed full-page UI screenshot after a tiled asset slicing pass.",
-    "Return ONLY strict JSON. Do not use markdown.",
-    "Find only large or medium visual assets that may span multiple tiles and should be one rectangular raster crop.",
-    "Include large hero artwork, large product photos, large album/record artwork, waveform/art panels, large illustrations, and medium visual thumbnails.",
-    "Exclude plain text, button text, button backgrounds, search bars, ordinary cards, dividers, full-page backgrounds, status bars, bottom navigation labels, and generic UI containers.",
-    "Do not return tiny standalone icons in this overview pass unless they are part of a medium visual asset.",
-    "Use one tight rectangle for the whole visible asset when it crosses an imagined tile boundary. Do not split it into top/bottom halves.",
-    "If an asset is mostly the full page background or cannot be separated from the page background, omit it.",
+    "You are reviewing a compressed full-page UI screenshot to identify large and medium visual assets that span across multiple tiles.",
+    "Return ONLY strict JSON. Do not use markdown wrappers.",
+    "",
+    "TASK:",
+    "Find large or medium visual assets that should be captured as one single, continuous rectangular raster crop.",
+    "",
+    "CRITICAL CONSTRAINTS:",
+    "1. Return large or medium visual assets, including large artwork, product photos, album covers, medium thumbnails, rich visual panels, and stylized decorative graphics.",
+    "2. Do not return plain text, button backgrounds, ordinary containers, or status/navigation bars.",
+    "3. Small standalone icons are still out of scope for overview unless they are part of a medium visual asset.",
+    "4. If an asset is a full-page background inseparable from text/content overlaying it, omit it to avoid exporting the whole screen.",
+    "",
+    "COORDINATES & SIZE:",
     "Coordinates must be in the provided compressed full-page image pixel space.",
-    "If uncertain, omit the box.",
+    "Use one single, tight rectangle covering the entire unified asset.",
+    "",
+    "CONFIDENCE DEFINITION:",
+    "The confidence score reflects how critical it is to treat this as a single merged visual asset.",
+    "",
     "Return shape: {\"boxes\":[{\"x\":0,\"y\":0,\"width\":100,\"height\":100,\"label\":\"asset\",\"confidence\":0.8,\"reason\":\"short reason\"}]}",
     `Tile id: ${tile.id}`,
     `Tile sent size: ${tile.sentWidth}x${tile.sentHeight}`,

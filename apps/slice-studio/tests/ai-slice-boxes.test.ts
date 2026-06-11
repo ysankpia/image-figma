@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { mergeAiBoxesIntoSlices } from "../shared/ai-slices";
 import { filterAiBoxes, parseAiBoxResponse } from "../server/ai-slice-boxes/boxes";
+import { buildOverviewPrompt, buildPrompt } from "../server/ai-slice-boxes/provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "../server/ai-slice-boxes/tiles";
 import type { PageRecord, SliceRecord } from "../shared/types";
 
@@ -59,6 +60,29 @@ describe("AI slice boxes", () => {
     expect(parseAiBoxResponse('{"boxes":[{"x":1,"y":2,"width":30,"height":40,"label":"logo"}]}').boxes[0]?.name).toBe("logo");
     expect(parseAiBoxResponse("```json\n{\"boxes\":[]}\n```").boxes).toEqual([]);
     expect(parseAiBoxResponse("not json").error).toMatch(/^json_parse_error/);
+  });
+
+  it("uses the inclusive-icons prompt as the default AI slice strategy", () => {
+    const tile = { id: "tile_0001", bbox: { x: 0, y: 0, width: 320, height: 640 }, sentWidth: 320, sentHeight: 640, dataUrl: "data:image/jpeg;base64," };
+    const prompt = buildPrompt(tile);
+
+    expect(prompt).toContain("stylized UI icons");
+    expect(prompt).toContain("navigation icons");
+    expect(prompt).toContain("distinct action button icons");
+    expect(prompt).toContain("Plain text");
+    expect(prompt).toContain("button backgrounds");
+    expect(prompt).toContain("generic containers");
+  });
+
+  it("keeps overview review focused on merged medium and large assets", () => {
+    const tile = { id: "overview_0001", bbox: { x: 0, y: 0, width: 941, height: 1672 }, sentWidth: 720, sentHeight: 1280, dataUrl: "data:image/jpeg;base64," };
+    const prompt = buildOverviewPrompt(tile);
+
+    expect(prompt).toContain("large artwork");
+    expect(prompt).toContain("medium thumbnails");
+    expect(prompt).toContain("stylized decorative graphics");
+    expect(prompt).toContain("Small standalone icons are still out of scope for overview");
+    expect(prompt).toContain("ordinary containers");
   });
 
   it("filters invalid, huge, duplicate, and existing-overlap boxes", () => {
