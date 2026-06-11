@@ -2,7 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { projectsRoot } from "./config";
 import { httpError } from "./errors";
-import { buildPencilManifest, createRemainderPng, type PencilPageTextManifest } from "./pencil-package";
+import {
+  buildPencilManifest,
+  createRemainderPng,
+  frameLayoutXPositions,
+  preparePencilSliceImage,
+  type PencilPageTextManifest,
+  type PencilSlicePlacementManifest
+} from "./pencil-package";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
 import { runOcr } from "./text-ocr";
@@ -60,11 +67,11 @@ export async function exportPencilProject(projectId: string): Promise<{ ok: true
     pages: detail.pages
   };
   const files: ZipFile[] = [];
-  const { document, textByPageId } = await buildPencilDocument(detail, files, exportedAt);
+  const { document, textByPageId, slicePlacements } = await buildPencilDocument(detail, files, exportedAt);
 
   files.unshift(
     { name: "design.pen", data: Buffer.from(JSON.stringify(document, null, 2)) },
-    { name: "manifest.json", data: Buffer.from(JSON.stringify(buildPencilManifest(detail, exportedAt, textByPageId), null, 2)) },
+    { name: "manifest.json", data: Buffer.from(JSON.stringify(buildPencilManifest(detail, exportedAt, textByPageId, slicePlacements), null, 2)) },
     { name: "project.json", data: Buffer.from(JSON.stringify(projectJson, null, 2)) }
   );
   validatePencilPackage(document, files);
@@ -86,15 +93,26 @@ async function buildPencilDocument(
   detail: ProjectDetail,
   files: ZipFile[],
   exportedAt: string
-): Promise<{ document: PencilDocument; textByPageId: Map<string, PencilPageTextManifest> }> {
+): Promise<{
+  document: PencilDocument;
+  textByPageId: Map<string, PencilPageTextManifest>;
+  slicePlacements: Map<string, PencilSlicePlacementManifest>;
+}> {
   const frames: PencilNode[] = [];
   const textByPageId = new Map<string, PencilPageTextManifest>();
+  const slicePlacements = new Map<string, PencilSlicePlacementManifest>();
+  const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
     const originalBuffer = fs.readFileSync(getPageOriginalPath(detail.project.id, page.id));
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
+    const pencilSliceImages = await Promise.all(page.slices.map((slice, sliceIndex) => preparePencilSliceImage(
+      slicePngs[sliceIndex],
+      slice.bbox,
+      slice.cutMode
+    )));
     const textReconstruction = await reconstructTextLayers({
       pageId: page.id,
       width: page.width,
@@ -131,12 +149,18 @@ async function buildPencilDocument(
 
     for (const [sliceIndex, slice] of page.slices.entries()) {
       const slicePath = `assets/visible/slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`;
-      files.push({ name: slicePath, data: slicePngs[sliceIndex] });
+      const pencilSlice = pencilSliceImages[sliceIndex];
+      slicePlacements.set(slice.id, {
+        placement: { ...pencilSlice.placement },
+        originalBBox: roundBBox(slice.bbox),
+        alphaTrim: pencilSlice.alphaTrim ? { ...pencilSlice.alphaTrim } : undefined
+      });
+      files.push({ name: slicePath, data: pencilSlice.data });
       children.push(imageNode({
         id: `${page.id}__slice_${String(sliceIndex + 1).padStart(4, "0")}`,
         name: `${String(sliceIndex + 1).padStart(2, "0")} ${slice.name || `slice_${String(sliceIndex + 1).padStart(2, "0")}`}`,
         url: `./${slicePath}`,
-        bbox: slice.bbox,
+        bbox: pencilSlice.placement,
         metadata: {
           type: "slice_studio_asset",
           pageId: page.id,
@@ -145,6 +169,8 @@ async function buildPencilDocument(
           kind: slice.kind,
           cutMode: slice.cutMode,
           originalBBox: { ...slice.bbox },
+          visibleBBox: { ...pencilSlice.placement },
+          alphaTrim: pencilSlice.alphaTrim,
           z: sliceIndex + 1
         }
       }));
@@ -161,7 +187,7 @@ async function buildPencilDocument(
       id: `${page.id}__frame`,
       type: "frame",
       name: pageDirectory,
-      x: pageIndex * (page.width + 160),
+      x: frameXs[pageIndex],
       y: 0,
       width: page.width,
       height: page.height,
@@ -186,7 +212,8 @@ async function buildPencilDocument(
       version: penVersion,
       children: frames
     },
-    textByPageId
+    textByPageId,
+    slicePlacements
   };
 }
 
@@ -206,6 +233,15 @@ function imageNode(input: { id: string; name: string; url: string; bbox: BBox; m
       mode: "stretch"
     },
     metadata: input.metadata
+  };
+}
+
+function roundBBox(bbox: BBox): BBox {
+  return {
+    x: Math.round(bbox.x),
+    y: Math.round(bbox.y),
+    width: Math.round(bbox.width),
+    height: Math.round(bbox.height)
   };
 }
 

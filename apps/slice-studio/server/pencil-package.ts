@@ -5,6 +5,8 @@ import { normalizeDefaultSliceNames } from "../shared/slice-names";
 import { cropSliceToPng } from "./shape-cutout";
 import type { TextReconstruction } from "./text-reconstruction";
 
+const pageFrameGap = 160;
+
 export type PencilPageTextManifest = {
   ocr: TextReconstruction["ocr"];
   textLayerCount: number;
@@ -19,6 +21,12 @@ export type PencilPageTextManifest = {
     color: string;
     confidence: number;
   }>;
+};
+
+export type PencilSlicePlacementManifest = {
+  placement: BBox;
+  originalBBox: BBox;
+  alphaTrim?: BBox;
 };
 
 type Rgb = { r: number; g: number; b: number };
@@ -48,10 +56,52 @@ export async function createRemainderPng(originalBuffer: Buffer, slices: Remaind
     .toBuffer();
 }
 
+export function frameLayoutXPositions(pages: Array<{ width: number }>): number[] {
+  const positions: number[] = [];
+  let cursor = 0;
+  for (const page of pages) {
+    positions.push(cursor);
+    cursor += Math.round(page.width) + pageFrameGap;
+  }
+  return positions;
+}
+
+export async function preparePencilSliceImage(slicePng: Buffer, sourceBBox: BBox, cutMode: CutMode): Promise<{
+  data: Buffer;
+  placement: BBox;
+  alphaTrim?: BBox;
+}> {
+  if (cutMode === "rect") {
+    return { data: slicePng, placement: roundBBox(sourceBBox) };
+  }
+  const raw = await sharp(slicePng).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const trim = alphaContentBBox(raw.data, raw.info.width, raw.info.height);
+  if (!trim) return { data: slicePng, placement: roundBBox(sourceBBox) };
+  const roundedSource = roundBBox(sourceBBox);
+  if (trim.x === 0 && trim.y === 0 && trim.width === raw.info.width && trim.height === raw.info.height) {
+    return { data: slicePng, placement: roundedSource };
+  }
+  const data = await sharp(slicePng)
+    .extract({ left: trim.x, top: trim.y, width: trim.width, height: trim.height })
+    .png()
+    .toBuffer();
+  return {
+    data,
+    placement: {
+      x: roundedSource.x + trim.x,
+      y: roundedSource.y + trim.y,
+      width: trim.width,
+      height: trim.height
+    },
+    alphaTrim: trim
+  };
+}
+
 export function buildPencilManifest(
   detail: ProjectDetail,
   exportedAt: string,
-  textByPageId: Map<string, PencilPageTextManifest> = new Map()
+  textByPageId: Map<string, PencilPageTextManifest> = new Map(),
+  slicePlacements: Map<string, PencilSlicePlacementManifest> = new Map()
 ) {
   return {
     schema: "slice_studio_pencil_project_manifest.v1",
@@ -73,15 +123,20 @@ export function buildPencilManifest(
         remainder: `assets/visible/remainders/${pageDirectory}/remainder.png`,
         width: page.width,
         height: page.height,
-        slices: normalizeDefaultSliceNames(page.slices).map((slice, sliceIndex) => ({
-          id: slice.id,
-          name: slice.name,
-          kind: slice.kind,
-          cutMode: slice.cutMode,
-          filename: `assets/visible/slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
-          placement: { ...slice.bbox },
-          selected: true
-        })),
+        slices: normalizeDefaultSliceNames(page.slices).map((slice, sliceIndex) => {
+          const placement = slicePlacements.get(slice.id);
+          return {
+            id: slice.id,
+            name: slice.name,
+            kind: slice.kind,
+            cutMode: slice.cutMode,
+            filename: `assets/visible/slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
+            placement: placement ? { ...placement.placement } : { ...slice.bbox },
+            originalBBox: placement ? { ...placement.originalBBox } : { ...slice.bbox },
+            alphaTrim: placement?.alphaTrim ? { ...placement.alphaTrim } : undefined,
+            selected: true
+          };
+        }),
         ocr: textByPageId.get(page.id)?.ocr || {
           provider: "baidu_ppocrv5",
           status: "skipped",
@@ -137,6 +192,34 @@ function roundedBox(bbox: BBox, width: number, height: number): { left: number; 
   const right = clamp(Math.round(bbox.x + bbox.width), left, width);
   const bottom = clamp(Math.round(bbox.y + bbox.height), top, height);
   return { left, top, width: right - left, height: bottom - top };
+}
+
+function alphaContentBBox(data: Buffer, width: number, height: number): BBox | null {
+  let left = width;
+  let top = height;
+  let right = -1;
+  let bottom = -1;
+  for (let y = 0; y < height; y += 1) {
+    const row = y * width;
+    for (let x = 0; x < width; x += 1) {
+      if (data[(row + x) * 4 + 3] < 10) continue;
+      if (x < left) left = x;
+      if (y < top) top = y;
+      if (x > right) right = x;
+      if (y > bottom) bottom = y;
+    }
+  }
+  if (right < left || bottom < top) return null;
+  return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+}
+
+function roundBBox(bbox: BBox): BBox {
+  return {
+    x: Math.round(bbox.x),
+    y: Math.round(bbox.y),
+    width: Math.round(bbox.width),
+    height: Math.round(bbox.height)
+  };
 }
 
 function paintBackgroundRect(data: Buffer, width: number, height: number, bbox: BBox): void {

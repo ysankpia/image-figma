@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { buildPencilManifest, createRemainderPng } from "../server/pencil-package";
+import { buildPencilManifest, createRemainderPng, frameLayoutXPositions, preparePencilSliceImage } from "../server/pencil-package";
 import { parseBaiduPpocrv5Rows, parseTesseractTsv } from "../server/text-ocr";
 import { reconstructTextLayers, remainingRatio, textGeometryLooksEditable } from "../server/text-reconstruction";
 import { locateTextLinesFromM29 } from "../server/m29-text-locator";
@@ -192,6 +192,89 @@ describe("pencil exporter", () => {
     expect(manifest.pages[0].ocr.sourceLineCount).toBe(2);
     expect(manifest.pages[0].textLayerCount).toBe(1);
     expect(manifest.pages[0].textLayers[0].text).toBe("去结算");
+  });
+
+  it("lays out variable-width Pencil frames without overlap", () => {
+    expect(frameLayoutXPositions([
+      { width: 941 },
+      { width: 1092 },
+      { width: 853 }
+    ])).toEqual([0, 1101, 2353]);
+  });
+
+  it("trims transparent subject assets before placing them in Pencil", async () => {
+    const width = 10;
+    const height = 10;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let y = 3; y < 9; y += 1) {
+      for (let x = 2; x < 8; x += 1) {
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 20;
+        rgba[offset + 1] = 30;
+        rgba[offset + 2] = 40;
+        rgba[offset + 3] = 255;
+      }
+    }
+    const png = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+    const prepared = await preparePencilSliceImage(png, { x: 100, y: 200, width, height }, "subject");
+    const metadata = await sharp(prepared.data).metadata();
+
+    expect(prepared.placement).toEqual({ x: 102, y: 203, width: 6, height: 6 });
+    expect(prepared.alphaTrim).toEqual({ x: 2, y: 3, width: 6, height: 6 });
+    expect(metadata.width).toBe(6);
+    expect(metadata.height).toBe(6);
+  });
+
+  it("records alpha-trimmed Pencil slice placement in the manifest", () => {
+    const detail: ProjectDetail = {
+      project: {
+        id: "project_1",
+        name: "Demo",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        pageCount: 1,
+        sliceCount: 1
+      },
+      pages: [{
+        id: "page_0001",
+        projectId: "project_1",
+        pageIndex: 1,
+        originalName: "home.png",
+        displayName: "",
+        width: 100,
+        height: 80,
+        sourceUrl: "/source",
+        slices: [{
+          id: "slice_1",
+          projectId: "project_1",
+          pageId: "page_0001",
+          sliceIndex: 1,
+          name: "avatar",
+          kind: "image",
+          cutMode: "subject",
+          bbox: { x: 10, y: 20, width: 30, height: 30 },
+          selected: true
+        }]
+      }]
+    };
+
+    const manifest = buildPencilManifest(
+      detail,
+      "2026-01-02T00:00:00.000Z",
+      new Map(),
+      new Map([[
+        "slice_1",
+        {
+          placement: { x: 13, y: 24, width: 22, height: 20 },
+          originalBBox: { x: 10, y: 20, width: 30, height: 30 },
+          alphaTrim: { x: 3, y: 4, width: 22, height: 20 }
+        }
+      ]])
+    );
+
+    expect(manifest.pages[0].slices[0].placement).toEqual({ x: 13, y: 24, width: 22, height: 20 });
+    expect(manifest.pages[0].slices[0].originalBBox).toEqual({ x: 10, y: 20, width: 30, height: 30 });
+    expect(manifest.pages[0].slices[0].alphaTrim).toEqual({ x: 3, y: 4, width: 22, height: 20 });
   });
 
   it("parses Baidu PP-OCRv5 JSONL rows into OCR lines", () => {
