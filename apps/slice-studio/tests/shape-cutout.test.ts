@@ -153,4 +153,56 @@ describe("shape cutout", () => {
     expect(result.data[3]).toBe(0);
     expect(result.data[(8 * result.info.width + 10) * 4 + 3]).toBe(255);
   });
+
+  it("does not let outside background flood through large image-card interiors", async () => {
+    const width = 180;
+    const height = 140;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 250;
+      rgba[offset + 1] = 248;
+      rgba[offset + 2] = 242;
+      rgba[offset + 3] = 255;
+    }
+
+    const card = { left: 28, top: 24, right: 151, bottom: 115 };
+    const radius = 14;
+    for (let y = card.top; y <= card.bottom; y += 1) {
+      for (let x = card.left; x <= card.right; x += 1) {
+        const innerX = x < card.left + radius ? card.left + radius : x > card.right - radius ? card.right - radius : x;
+        const innerY = y < card.top + radius ? card.top + radius : y > card.bottom - radius ? card.bottom - radius : y;
+        const dx = x - innerX;
+        const dy = y - innerY;
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 246;
+        rgba[offset + 1] = 244;
+        rgba[offset + 2] = 236;
+      }
+    }
+
+    // Internal content resembles the outside background and would be removed by
+    // pure color-threshold flood fill if the card interior were not protected.
+    for (let y = 70; y < 98; y += 1) {
+      for (let x = 36; x < 112; x += 1) {
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 251;
+        rgba[offset + 1] = 249;
+        rgba[offset + 2] = 243;
+      }
+    }
+
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+    const png = await cropSliceToPng(source, {
+      cutMode: "shape",
+      bbox: { x: card.left, y: card.top, width: card.right - card.left + 1, height: card.bottom - card.top + 1 }
+    });
+    const result = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+
+    const centerOffset = (58 * result.info.width + 44) * 4;
+    const cornerOffset = 0;
+    expect(result.data[centerOffset + 3]).toBe(255);
+    expect(result.data[cornerOffset + 3]).toBe(0);
+  });
 });

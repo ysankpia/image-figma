@@ -6,6 +6,15 @@ type CropSlice = {
   cutMode: CutMode;
 };
 
+type ShapeCutoutOptions = {
+  targetBox?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+};
+
 export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): Promise<Buffer> {
   const box = {
     left: Math.round(slice.bbox.x),
@@ -25,9 +34,11 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    const cutout = applyShapeCutout(cropped.data, cropped.info.width, cropped.info.height);
     const left = box.left - expandedBox.left;
     const top = box.top - expandedBox.top;
+    const cutout = applyShapeCutout(cropped.data, cropped.info.width, cropped.info.height, {
+      targetBox: { left, top, width: box.width, height: box.height }
+    });
     return sharp(cutout, { raw: { width: cropped.info.width, height: cropped.info.height, channels: 4 } })
       .extract({ left, top, width: box.width, height: box.height })
       .png()
@@ -45,12 +56,13 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
     .toBuffer();
 }
 
-export function applyShapeCutout(source: Uint8Array, width: number, height: number): Buffer {
+export function applyShapeCutout(source: Uint8Array, width: number, height: number, options: ShapeCutoutOptions = {}): Buffer {
   if (width < 4 || height < 4) return Buffer.from(source);
 
   const background = estimateBackground(source, width, height);
   const threshold = background.threshold;
   const backgroundMask = new Uint8Array(width * height);
+  const blockedMask = buildInteriorGuard(width, height, options.targetBox);
   const outsideMask = new Uint8Array(width * height);
   const queue: number[] = [];
   const result = Buffer.from(source);
@@ -76,22 +88,22 @@ export function applyShapeCutout(source: Uint8Array, width: number, height: numb
   }
 
   for (let x = 0; x < width; x += 1) {
-    pushFloodSeed(x, 0, width, height, backgroundMask, outsideMask, queue);
-    pushFloodSeed(x, height - 1, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x, 0, width, height, backgroundMask, blockedMask, outsideMask, queue);
+    pushFloodSeed(x, height - 1, width, height, backgroundMask, blockedMask, outsideMask, queue);
   }
   for (let y = 0; y < height; y += 1) {
-    pushFloodSeed(0, y, width, height, backgroundMask, outsideMask, queue);
-    pushFloodSeed(width - 1, y, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(0, y, width, height, backgroundMask, blockedMask, outsideMask, queue);
+    pushFloodSeed(width - 1, y, width, height, backgroundMask, blockedMask, outsideMask, queue);
   }
 
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const index = queue[cursor];
     const x = index % width;
     const y = Math.floor(index / width);
-    pushFloodSeed(x + 1, y, width, height, backgroundMask, outsideMask, queue);
-    pushFloodSeed(x - 1, y, width, height, backgroundMask, outsideMask, queue);
-    pushFloodSeed(x, y + 1, width, height, backgroundMask, outsideMask, queue);
-    pushFloodSeed(x, y - 1, width, height, backgroundMask, outsideMask, queue);
+    pushFloodSeed(x + 1, y, width, height, backgroundMask, blockedMask, outsideMask, queue);
+    pushFloodSeed(x - 1, y, width, height, backgroundMask, blockedMask, outsideMask, queue);
+    pushFloodSeed(x, y + 1, width, height, backgroundMask, blockedMask, outsideMask, queue);
+    pushFloodSeed(x, y - 1, width, height, backgroundMask, blockedMask, outsideMask, queue);
   }
 
   const outsideRatio = queue.length / (width * height);
@@ -128,14 +140,44 @@ function pushFloodSeed(
   width: number,
   height: number,
   backgroundMask: Uint8Array,
+  blockedMask: Uint8Array,
   outsideMask: Uint8Array,
   queue: number[]
 ): void {
   if (x < 0 || y < 0 || x >= width || y >= height) return;
   const index = y * width + x;
-  if (!backgroundMask[index] || outsideMask[index]) return;
+  if (!backgroundMask[index] || blockedMask[index] || outsideMask[index]) return;
   outsideMask[index] = 1;
   queue.push(index);
+}
+
+function buildInteriorGuard(
+  width: number,
+  height: number,
+  targetBox?: { left: number; top: number; width: number; height: number }
+): Uint8Array {
+  const guard = new Uint8Array(width * height);
+  if (!targetBox) return guard;
+
+  const minSide = Math.min(targetBox.width, targetBox.height);
+  const area = targetBox.width * targetBox.height;
+  if (minSide < 72 || area < 4096) return guard;
+
+  const inset = clamp(Math.round(minSide * 0.06), 8, 16);
+  const left = Math.max(0, Math.round(targetBox.left + inset));
+  const top = Math.max(0, Math.round(targetBox.top + inset));
+  const right = Math.min(width, Math.round(targetBox.left + targetBox.width - inset));
+  const bottom = Math.min(height, Math.round(targetBox.top + targetBox.height - inset));
+  if (right <= left || bottom <= top) return guard;
+
+  for (let y = top; y < bottom; y += 1) {
+    const row = y * width;
+    for (let x = left; x < right; x += 1) {
+      guard[row + x] = 1;
+    }
+  }
+
+  return guard;
 }
 
 function estimateBackground(source: Uint8Array, width: number, height: number): { red: number; green: number; blue: number; threshold: number } {
