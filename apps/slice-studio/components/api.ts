@@ -1,6 +1,6 @@
 import type { AiSliceBoxesResponse, AiSliceSettingsResponse, PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_SLICE_STUDIO_API_URL || "http://127.0.0.1:4110";
+export const apiBaseUrl = process.env.NEXT_PUBLIC_SLICE_STUDIO_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:4110");
 
 export async function apiGet<T>(path: string): Promise<T> {
   return request<T>(path, { method: "GET" });

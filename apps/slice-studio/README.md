@@ -16,6 +16,20 @@ Next web: http://127.0.0.1:3010
 Elysia API: http://127.0.0.1:4110
 ```
 
+Local Docker self-use:
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:51230/projects
+```
+
+Docker storage is mounted to `storage/`.
+
 ## Product Flow
 
 ```text

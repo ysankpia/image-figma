@@ -1,0 +1,25 @@
+services:
+  slice-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: image-figma/slice-studio:local
+    container_name: slice-studio-local
+    restart: unless-stopped
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      NEXT_PUBLIC_SLICE_STUDIO_API_URL: ""
+      SLICE_STUDIO_INTERNAL_API_URL: "http://127.0.0.1:4110"
+      SLICE_STUDIO_API_HOST: "0.0.0.0"
+      SLICE_STUDIO_API_PORT: "4110"
+      SLICE_STUDIO_WEB_PORT: "3010"
+      SLICE_STUDIO_ALLOWED_ORIGIN: "http://127.0.0.1:51230"
+      SLICE_STUDIO_PUBLIC_API_URL: "http://127.0.0.1:51230"
+      SLICE_STUDIO_STORAGE_ROOT: "/data/slice-studio"
+      SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER: "ts_m29_physical_evidence"
+    ports:
+      - "127.0.0.1:51230:3010"
+    volumes:
+      - ./storage:/data/slice-studio

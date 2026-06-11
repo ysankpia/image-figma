@@ -15,6 +15,7 @@ apps/slice-studio/.env.local
 | 名称 | 用途 | 默认值 | 是否必需 |
 | --- | --- | --- | --- |
 | `NEXT_PUBLIC_SLICE_STUDIO_API_URL` | Next.js browser client 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
+| `SLICE_STUDIO_INTERNAL_API_URL` | Docker/production Next rewrite 的内部 API URL；设置后 `/api/*` 会代理到这里 | 无 | Docker/production 同源部署需要 |
 | `SLICE_STUDIO_API_URL` | smoke/scripts 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
 | `SLICE_STUDIO_LOAD_LOCAL_ENV` | API 是否读取 `apps/slice-studio/.env.local` | `true` | 否 |
 | `SLICE_STUDIO_API_HOST` | Elysia API host | `127.0.0.1` | 否 |
@@ -84,6 +85,19 @@ SLICE_STUDIO_AI_SLICE_MODEL=gpt-5.5
 SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
 BAIDU_PADDLE_OCR_TOKEN=
 ```
+
+## Docker Local Notes
+
+`apps/slice-studio/docker-compose.local.yml` intentionally overrides:
+
+```text
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=
+SLICE_STUDIO_INTERNAL_API_URL=http://127.0.0.1:4110
+SLICE_STUDIO_API_HOST=0.0.0.0
+SLICE_STUDIO_STORAGE_ROOT=/data/slice-studio
+```
+
+This makes the browser use same-origin `/api` through the Next rewrite while the API runs inside the same container. Storage is mounted back to `apps/slice-studio/storage`.
 
 ## Historical Variable Groups
 
