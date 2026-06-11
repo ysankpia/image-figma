@@ -4,6 +4,7 @@ import {
   aiSliceJpegQuality,
   aiSliceMaxBoxesPerPage,
   aiSliceMaxTileSide,
+  aiSliceOverviewReview,
   aiSliceProvider,
   aiSliceTileCount,
   aiSliceTileOverlap
@@ -12,7 +13,7 @@ import { httpError } from "../errors";
 import { getPageOriginalPath, getProjectDetail } from "../projects";
 import type { AiSliceBoxesResponse } from "../../shared/types";
 import { filterAiBoxes, parseAiBoxResponse } from "./boxes";
-import { callAiSliceProvider } from "./provider";
+import { callAiSliceOverviewProvider, callAiSliceProvider } from "./provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "./tiles";
 import type { RawAiBox } from "./types";
 
@@ -42,10 +43,15 @@ export async function generateAiSliceBoxes(projectId: string, pageId: string): P
     return parsed.boxes.map((box): RawAiBox => ({
       ...box,
       bbox: mapTileBoxToPage(box.bbox, prepared),
-      sourceTileId: tile.id
+      sourceTileId: tile.id,
+      sourceKind: "tile"
     }));
   }));
-  const rawBoxes = tileResults.flat();
+  const overviewAttempted = aiSliceOverviewReview;
+  const overviewBoxes = overviewAttempted
+    ? await generateOverviewBoxes(imageBuffer, { width, height }).catch(() => [])
+    : [];
+  const rawBoxes = [...overviewBoxes, ...tileResults.flat()];
 
   const filtered = filterAiBoxes({
     boxes: rawBoxes,
@@ -59,10 +65,29 @@ export async function generateAiSliceBoxes(projectId: string, pageId: string): P
     pageId,
     boxes: filtered.boxes,
     diagnostics: {
-      tileCount: tiles.length,
+      tileCount: tiles.length + (overviewAttempted ? 1 : 0),
       rawBoxCount: rawBoxes.length,
       acceptedBoxCount: filtered.boxes.length,
       rejectedBoxCount: filtered.rejectedCount
     }
   };
+}
+
+async function generateOverviewBoxes(imageBuffer: Buffer, bounds: { width: number; height: number }): Promise<RawAiBox[]> {
+  const tile = { id: "overview_0001", bbox: { x: 0, y: 0, width: bounds.width, height: bounds.height } };
+  const prepared = await prepareTileImage({
+    imageBuffer,
+    tile,
+    maxSide: aiSliceMaxTileSide,
+    jpegQuality: aiSliceJpegQuality
+  });
+  const text = await callAiSliceOverviewProvider(prepared);
+  const parsed = parseAiBoxResponse(text);
+  if (parsed.error) return [];
+  return parsed.boxes.map((box): RawAiBox => ({
+    ...box,
+    bbox: mapTileBoxToPage(box.bbox, prepared),
+    sourceTileId: tile.id,
+    sourceKind: "overview"
+  }));
 }

@@ -17,6 +17,7 @@ export type RawAiBox = {
   confidence?: number;
   reason?: string;
   sourceTileId: string;
+  sourceKind?: "tile" | "overview";
 };
 
 export type AiBoxDiagnostics = {

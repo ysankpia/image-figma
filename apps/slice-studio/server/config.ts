@@ -39,6 +39,7 @@ export const aiSliceTileOverlap = normalizeNumber(process.env.SLICE_STUDIO_AI_SL
 export const aiSliceMaxTileSide = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_MAX_TILE_SIDE, 1280);
 export const aiSliceJpegQuality = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_JPEG_QUALITY, 75);
 export const aiSliceMaxBoxesPerPage = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE, 80);
+export const aiSliceOverviewReview = normalizeBool(process.env.SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW, true);
 
 function loadLocalEnv(): void {
   if (process.env.SLICE_STUDIO_LOAD_LOCAL_ENV === "false") return;

@@ -6,6 +6,8 @@ const minBoxSize = 8;
 const duplicateIouThreshold = 0.72;
 const existingIouThreshold = 0.6;
 const maxPageAreaRatio = 0.82;
+const overviewContainmentThreshold = 0.72;
+const overviewMinAreaRatio = 0.01;
 
 export function parseAiBoxResponse(text: string): { boxes: Array<Omit<RawAiBox, "sourceTileId">>; error: string } {
   const cleaned = cleanJsonText(text);
@@ -47,13 +49,13 @@ export function filterAiBoxes(input: {
   const accepted: AiSliceBox[] = [];
   let rejectedCount = 0;
   const pageArea = input.bounds.width * input.bounds.height;
+  const candidates = normalizeRawBoxes(input.boxes, input.bounds);
+  const overviewCandidates = candidates.filter((raw) => raw.sourceKind === "overview" && isUsableOverviewBox(raw.bbox, pageArea));
 
-  for (const raw of input.boxes) {
-    if (!isFiniteBox(raw.bbox)) {
-      rejectedCount += 1;
-      continue;
-    }
-    const bbox = normalizeBox(raw.bbox, input.bounds, 1);
+  rejectedCount += input.boxes.length - candidates.length;
+
+  for (const raw of preferOverviewBoxes(candidates, overviewCandidates)) {
+    const bbox = raw.bbox;
     if (bbox.width < minBoxSize || bbox.height < minBoxSize) {
       rejectedCount += 1;
       continue;
@@ -84,6 +86,35 @@ export function filterAiBoxes(input: {
   return { boxes: accepted, rejectedCount };
 }
 
+function normalizeRawBoxes(boxes: RawAiBox[], bounds: { width: number; height: number }): RawAiBox[] {
+  const normalized: RawAiBox[] = [];
+  for (const raw of boxes) {
+    if (!isFiniteBox(raw.bbox)) continue;
+    normalized.push({
+      ...raw,
+      bbox: normalizeBox(raw.bbox, bounds, 1)
+    });
+  }
+  return normalized;
+}
+
+function preferOverviewBoxes(boxes: RawAiBox[], overviewBoxes: RawAiBox[]): RawAiBox[] {
+  if (!overviewBoxes.length) return boxes;
+  return boxes.filter((box) => {
+    if (box.sourceKind === "overview") return true;
+    return !overviewBoxes.some((overview) => containmentRatio(box.bbox, overview.bbox) >= overviewContainmentThreshold);
+  }).sort((a, b) => {
+    if (a.sourceKind === b.sourceKind) return 0;
+    return a.sourceKind === "overview" ? -1 : 1;
+  });
+}
+
+function isUsableOverviewBox(bbox: BBox, pageArea: number): boolean {
+  if (bbox.width < minBoxSize || bbox.height < minBoxSize) return false;
+  const areaRatio = bbox.width * bbox.height / pageArea;
+  return areaRatio >= overviewMinAreaRatio && areaRatio <= maxPageAreaRatio;
+}
+
 export function iou(a: BBox, b: BBox): number {
   const left = Math.max(a.x, b.x);
   const top = Math.max(a.y, b.y);
@@ -94,6 +125,16 @@ export function iou(a: BBox, b: BBox): number {
   const areaA = a.width * a.height;
   const areaB = b.width * b.height;
   return intersection / (areaA + areaB - intersection);
+}
+
+function containmentRatio(inner: BBox, outer: BBox): number {
+  const left = Math.max(inner.x, outer.x);
+  const top = Math.max(inner.y, outer.y);
+  const right = Math.min(inner.x + inner.width, outer.x + outer.width);
+  const bottom = Math.min(inner.y + inner.height, outer.y + outer.height);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  if (intersection <= 0) return 0;
+  return intersection / Math.max(1, inner.width * inner.height);
 }
 
 function cleanJsonText(text: string): string {

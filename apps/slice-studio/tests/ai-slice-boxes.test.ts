@@ -80,6 +80,43 @@ describe("AI slice boxes", () => {
     expect(result.rejectedCount).toBe(4);
   });
 
+  it("prefers usable overview boxes over contained tile fragments", () => {
+    const result = filterAiBoxes({
+      bounds: { width: 1000, height: 1600 },
+      existingSlices: [],
+      maxBoxes: 10,
+      boxes: [
+        { bbox: { x: 160, y: 300, width: 650, height: 620 }, sourceTileId: "overview_0001", sourceKind: "overview" },
+        { bbox: { x: 170, y: 330, width: 640, height: 260 }, sourceTileId: "tile_0002", sourceKind: "tile" },
+        { bbox: { x: 170, y: 525, width: 600, height: 340 }, sourceTileId: "tile_0003", sourceKind: "tile" },
+        { bbox: { x: 40, y: 1200, width: 42, height: 42 }, sourceTileId: "tile_0005", sourceKind: "tile" }
+      ]
+    });
+
+    expect(result.boxes.map((box) => box.bbox)).toEqual([
+      { x: 160, y: 300, width: 650, height: 620 },
+      { x: 40, y: 1200, width: 42, height: 42 }
+    ]);
+    expect(result.rejectedCount).toBe(2);
+  });
+
+  it("does not let unusable overview boxes suppress valid tile boxes", () => {
+    const result = filterAiBoxes({
+      bounds: { width: 1000, height: 1600 },
+      existingSlices: [],
+      maxBoxes: 10,
+      boxes: [
+        { bbox: { x: 0, y: 0, width: 1000, height: 1500 }, sourceTileId: "overview_0001", sourceKind: "overview" },
+        { bbox: { x: 170, y: 330, width: 640, height: 260 }, sourceTileId: "tile_0002", sourceKind: "tile" }
+      ]
+    });
+
+    expect(result.boxes.map((box) => box.bbox)).toEqual([
+      { x: 170, y: 330, width: 640, height: 260 }
+    ]);
+    expect(result.rejectedCount).toBe(1);
+  });
+
   it("merges AI boxes as ordinary rect slices without deleting existing slices", () => {
     const page = pageRecord();
     const result = mergeAiBoxesIntoSlices({

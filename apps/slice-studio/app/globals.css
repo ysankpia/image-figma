@@ -785,6 +785,111 @@ h1 {
   color: #fff;
 }
 
+.aiProgressPanel {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: min(440px, calc(100vw - 40px));
+  border: 1px solid rgba(17, 24, 39, 0.14);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 70px rgba(15, 23, 42, 0.18);
+  transform: translateX(-50%);
+}
+
+.aiProgressPanel.minimized {
+  gap: 8px;
+  width: min(320px, calc(100vw - 40px));
+  padding: 10px;
+}
+
+.aiProgressHeader,
+.aiProgressActions,
+.aiProgressStats {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.aiProgressHeader {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aiProgressHeader > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aiProgressHeader strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiProgressHeader span,
+.aiProgressStats {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.aiProgressHeader span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiProgressActions {
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.aiProgressActions button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  padding: 0;
+}
+
+.aiProgressActions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.aiProgressTrack {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #ebeef5;
+}
+
+.aiProgressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b5cf6, #0066cc);
+  transition: width 180ms ease;
+}
+
+.aiProgressStats {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.aiProgressStats span {
+  white-space: nowrap;
+}
+
 .pageRail {
   grid-area: rail;
   min-width: 0;

@@ -35,6 +35,7 @@
 | `SLICE_STUDIO_AI_SLICE_MAX_TILE_SIDE` | 发送给 AI 前 tile 最长边上限 | `1280` | 否 |
 | `SLICE_STUDIO_AI_SLICE_JPEG_QUALITY` | 发送给 AI 的 tile JPEG 质量 | `75` | 否 |
 | `SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE` | 单页 AI 接受框数量上限 | `80` | 否 |
+| `SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW` | 是否额外发送压缩全页 overview，用于减少跨 tile 大资产被切半 | `true` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |

@@ -33,6 +33,19 @@ type PageConfirmAction =
   | { type: "delete"; pageId: string }
   | { type: "replace"; pageId: string; file: File };
 
+type AiProgress = {
+  mode: "page" | "batch";
+  total: number;
+  completed: number;
+  failed: number;
+  added: number;
+  skipped: number;
+  currentLabel: string;
+  message: string;
+  minimized: boolean;
+  hidden: boolean;
+};
+
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
 const defaultBoxColors = {
@@ -60,6 +73,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
+  const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
   const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -506,8 +520,21 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
 
   async function runAiForCurrentPage() {
     if (!activePage || aiBusy) return;
+    const label = `P${pageIndex + 1}`;
     setAiRunning("page");
-    setStatus(`AI 正在画 P${pageIndex + 1}。`);
+    setAiProgress({
+      mode: "page",
+      total: 1,
+      completed: 0,
+      failed: 0,
+      added: 0,
+      skipped: 0,
+      currentLabel: label,
+      message: `AI 正在画 ${label}`,
+      minimized: false,
+      hidden: false
+    });
+    setStatus(`AI 正在画 ${label}。`);
     try {
       await flushPageRename();
       const response = await generateAiBoxes(projectId, activePage.id);
@@ -521,8 +548,16 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         cutMode: "rect",
         idSeed: `p${pageIndex + 1}_${Date.now().toString(36)}`
       });
+      const skipped = merged.skippedCount + response.diagnostics.rejectedBoxCount;
       if (!merged.addedCount) {
-        setStatus(`AI 未新增框。已跳过 ${merged.skippedCount + response.diagnostics.rejectedBoxCount} 个重复或无效框。`);
+        setAiProgress((current) => current ? {
+          ...current,
+          completed: 1,
+          added: 0,
+          skipped,
+          message: `AI 未新增框，跳过 ${skipped} 个`
+        } : current);
+        setStatus(`AI 未新增框。已跳过 ${skipped} 个重复或无效框。`);
         return;
       }
       pushUndo("AI 画框");
@@ -530,9 +565,22 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       setPages(nextPages);
       selectSlice(merged.lastAddedSliceId);
       await savePagesWithActive(nextPages, currentPage.id);
-      setStatus(`AI 已新增 ${merged.addedCount} 个矩形框，跳过 ${merged.skippedCount + response.diagnostics.rejectedBoxCount} 个。`);
+      setAiProgress((current) => current ? {
+        ...current,
+        completed: 1,
+        added: merged.addedCount,
+        skipped,
+        message: `AI 已新增 ${merged.addedCount} 个，跳过 ${skipped} 个`
+      } : current);
+      setStatus(`AI 已新增 ${merged.addedCount} 个矩形框，跳过 ${skipped} 个。`);
     } catch (error) {
       setSaveState("error");
+      setAiProgress((current) => current ? {
+        ...current,
+        completed: 1,
+        failed: 1,
+        message: `AI 画框失败：${error instanceof Error ? error.message : "unknown error"}`
+      } : current);
       setStatus(`AI 画框失败：${error instanceof Error ? error.message : "unknown error"}`);
     } finally {
       setAiRunning(null);
@@ -542,6 +590,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   async function runAiForAllPages() {
     if (!pages.length || aiBusy) return;
     setAiRunning("batch");
+    setAiProgress({
+      mode: "batch",
+      total: pages.length,
+      completed: 0,
+      failed: 0,
+      added: 0,
+      skipped: 0,
+      currentLabel: "",
+      message: `AI 批量画框 0/${pages.length}`,
+      minimized: false,
+      hidden: false
+    });
     setStatus(`AI 批量画框 0/${pages.length}。`);
     let workingPages = pages;
     let completed = 0;
@@ -561,6 +621,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           cursor += 1;
           const page = pages[index];
           if (!page) continue;
+          const currentLabel = `P${index + 1}`;
+          setAiProgress((current) => current ? {
+            ...current,
+            currentLabel,
+            message: `AI 正在画 ${currentLabel}`
+          } : current);
           setStatus(`AI 批量画框 P${index + 1} · ${completed + failed}/${pages.length}`);
           try {
             const response = await generateAiBoxes(projectId, page.id);
@@ -582,23 +648,56 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               completed += 1;
               addedTotal += merged.addedCount;
               skippedTotal += merged.skippedCount + response.diagnostics.rejectedBoxCount;
+              setAiProgress((current) => current ? {
+                ...current,
+                completed,
+                failed,
+                added: addedTotal,
+                skipped: skippedTotal,
+                currentLabel,
+                message: `AI 批量画框 ${completed + failed}/${pages.length}`
+              } : current);
               setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
             });
             await mergeQueue;
           } catch {
             failed += 1;
+            setAiProgress((current) => current ? {
+              ...current,
+              completed,
+              failed,
+              currentLabel,
+              message: `AI 批量画框 ${completed + failed}/${pages.length}`
+            } : current);
           }
           setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
         }
       };
       await Promise.all(Array.from({ length: Math.min(concurrency, pages.length) }, () => worker()));
+      setAiProgress((current) => current ? {
+        ...current,
+        completed,
+        failed,
+        added: addedTotal,
+        skipped: skippedTotal,
+        currentLabel: "",
+        message: `AI 批量完成：成功 ${completed} 页，失败 ${failed} 页`
+      } : current);
       setStatus(`AI 批量完成：成功 ${completed} 页，失败 ${failed} 页，新增 ${addedTotal} 个，跳过 ${skippedTotal} 个。`);
     } catch (error) {
       setSaveState("error");
+      setAiProgress((current) => current ? {
+        ...current,
+        message: `AI 批量画框失败：${error instanceof Error ? error.message : "unknown error"}`
+      } : current);
       setStatus(`AI 批量画框失败：${error instanceof Error ? error.message : "unknown error"}`);
     } finally {
       setAiRunning(null);
     }
+  }
+
+  function updateAiProgress(patch: Partial<AiProgress>) {
+    setAiProgress((current) => current ? { ...current, ...patch } : current);
   }
 
   function goToRelativePage(delta: number) {
@@ -1169,6 +1268,35 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         )}
       </aside>
       <input ref={replaceInputRef} className="hiddenFileInput" type="file" accept="image/*" onChange={(event) => requestReplaceActivePage(event.target.files)} />
+      {aiProgress && !aiProgress.hidden ? (
+        <section className={`aiProgressPanel ${aiProgress.minimized ? "minimized" : ""}`} aria-label="AI 画框进度" aria-live="polite">
+          <header className="aiProgressHeader">
+            <div>
+              <strong>{aiProgress.mode === "batch" ? "AI 批量画框" : "AI 当前页"}</strong>
+              <span>{aiProgress.message}</span>
+            </div>
+            <div className="aiProgressActions">
+              <button type="button" aria-label={aiProgress.minimized ? "展开 AI 进度" : "最小化 AI 进度"} title={aiProgress.minimized ? "展开" : "最小化"} onClick={() => updateAiProgress({ minimized: !aiProgress.minimized })}>
+                <GripHorizontal aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="隐藏 AI 进度" title="隐藏" onClick={() => updateAiProgress({ hidden: true })}>
+                <X aria-hidden="true" />
+              </button>
+            </div>
+          </header>
+          <div className="aiProgressTrack" aria-hidden="true">
+            <span style={{ width: `${aiProgressPercent(aiProgress)}%` }} />
+          </div>
+          {!aiProgress.minimized ? (
+            <div className="aiProgressStats">
+              <span>{aiProgress.completed + aiProgress.failed}/{aiProgress.total} 页</span>
+              <span>新增 {aiProgress.added}</span>
+              <span>跳过 {aiProgress.skipped}</span>
+              <span>失败 {aiProgress.failed}</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       {pageConfirmAction ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => setPageConfirmAction(null)}>
           <section
@@ -1309,6 +1437,10 @@ function cutModeLabel(mode: CutMode): string {
   if (mode === "subject") return "抠主体";
   if (mode === "card") return "保内图";
   return "矩形";
+}
+
+function aiProgressPercent(progress: AiProgress): number {
+  return Math.round(Math.min(100, Math.max(0, (progress.completed + progress.failed) / Math.max(1, progress.total) * 100)));
 }
 
 function isTransformerTarget(node: Konva.Node): boolean {
