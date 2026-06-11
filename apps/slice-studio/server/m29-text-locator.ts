@@ -2,7 +2,8 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { m29extractPath, textBBoxSource } from "./config";
+import { m29extractPath, physicalEvidenceProvider, textBBoxSource } from "./config";
+import { extractPhysicalEvidence } from "./m29-physical-evidence";
 import type { OcrLine, OcrResult } from "./text-ocr";
 import type { BBox } from "../shared/types";
 
@@ -47,14 +48,39 @@ type Match = {
 
 const minMatchScore = 0.42;
 
-export function locateTextLinesWithM29(input: {
+export async function locateTextLinesWithM29(input: {
+  imageBuffer: Buffer;
+  width: number;
+  height: number;
+  ocr: OcrResult;
+}): Promise<TextLocationResult> {
+  if (input.ocr.status !== "ok" || input.ocr.lines.length === 0) return fallbackToOcr(input.ocr.lines, "ocr_not_ok_or_empty");
+  if (textBBoxSource !== "m29_ocr_hybrid") return fallbackToOcr(input.ocr.lines, "text_bbox_source_ocr");
+  if (physicalEvidenceProvider === "ocr") return fallbackToOcr(input.ocr.lines, "physical_evidence_provider_ocr");
+  if (physicalEvidenceProvider === "ts_m29_physical_evidence") return locateWithTsPhysicalEvidence(input);
+  return locateWithGoM29Extract(input);
+}
+
+async function locateWithTsPhysicalEvidence(input: {
+  imageBuffer: Buffer;
+  width: number;
+  height: number;
+  ocr: OcrResult;
+}): Promise<TextLocationResult> {
+  try {
+    const doc = await extractPhysicalEvidence({ imageBuffer: input.imageBuffer });
+    return locateTextLinesFromM29(input.ocr.lines, doc);
+  } catch (error) {
+    return fallbackToOcr(input.ocr.lines, `ts_m29_physical_evidence_failed:${normalizeReason(error instanceof Error ? error.message : String(error))}`);
+  }
+}
+
+function locateWithGoM29Extract(input: {
   imageBuffer: Buffer;
   width: number;
   height: number;
   ocr: OcrResult;
 }): TextLocationResult {
-  if (input.ocr.status !== "ok" || input.ocr.lines.length === 0) return fallbackToOcr(input.ocr.lines, "ocr_not_ok_or_empty");
-  if (textBBoxSource !== "m29_ocr_hybrid") return fallbackToOcr(input.ocr.lines, "text_bbox_source_ocr");
   if (!fs.existsSync(m29extractPath)) return fallbackToOcr(input.ocr.lines, "m29extract_not_found");
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "slice-studio-m29-text-"));
@@ -175,7 +201,7 @@ function matchScore(ocrBBox: BBox, physicalBBox: BBox): number {
 
 function fallbackToOcr(lines: OcrLine[], reason: string): TextLocationResult {
   return {
-    status: reason === "text_bbox_source_ocr" || reason === "ocr_not_ok_or_empty" ? "skipped" : "failed",
+    status: reason === "text_bbox_source_ocr" || reason === "ocr_not_ok_or_empty" || reason === "physical_evidence_provider_ocr" ? "skipped" : "failed",
     source: "ocr",
     reason,
     lines: lines.map((line) => ({

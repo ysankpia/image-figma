@@ -17,7 +17,8 @@
 | `SLICE_STUDIO_OCR_PROVIDER` | Slice Studio Pencil export OCR provider，支持 `baidu_ppocrv5`、显式诊断 `tesseract` | `baidu_ppocrv5` | 否 |
 | `SLICE_STUDIO_OCR_MIN_CONFIDENCE` | Slice Studio Pencil export OCR 最低置信度；未设置时读取 `OCR_MIN_CONFIDENCE` | `0.70` | 否 |
 | `SLICE_STUDIO_TEXT_BBOX_SOURCE` | Slice Studio editable text bbox 来源；`m29_ocr_hybrid` 表示 OCR 识字、M29 只提供物理定位，`ocr` 表示只用 OCR bbox | `m29_ocr_hybrid` | 否 |
-| `SLICE_STUDIO_M29EXTRACT_PATH` | Slice Studio Pencil export 调用的本地 `m29extract` 路径，仅作为文字 bbox evidence | `../../services/backend-go/bin/m29extract` | 否 |
+| `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` | Slice Studio editable text 物理定位证据 provider；支持 `ts_m29_physical_evidence`、`go_m29extract`、`ocr` | `ts_m29_physical_evidence` | 否 |
+| `SLICE_STUDIO_M29EXTRACT_PATH` | Slice Studio 显式使用 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract` 时调用的本地 `m29extract` 路径 | `../../services/backend-go/bin/m29extract` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |

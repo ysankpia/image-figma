@@ -20,6 +20,8 @@ export const baiduPaddleOcrModel = process.env.BAIDU_PADDLE_OCR_MODEL || "PP-OCR
 export const baiduPaddleOcrPollIntervalSeconds = Number(process.env.BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS || 5);
 export const baiduPaddleOcrTimeoutSeconds = Number(process.env.BAIDU_PADDLE_OCR_TIMEOUT_SECONDS || 120);
 export const textBBoxSource = process.env.SLICE_STUDIO_TEXT_BBOX_SOURCE || "m29_ocr_hybrid";
+export type PhysicalEvidenceProvider = "ts_m29_physical_evidence" | "go_m29extract" | "ocr";
+export const physicalEvidenceProvider = normalizePhysicalEvidenceProvider(process.env.SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER);
 export const m29extractPath = path.resolve(process.env.SLICE_STUDIO_M29EXTRACT_PATH || path.join(process.cwd(), "../../services/backend-go/bin/m29extract"));
 
 function loadLocalEnv(): void {
@@ -43,4 +45,9 @@ function stripEnvQuotes(value: string): string {
     return value.slice(1, -1);
   }
   return value;
+}
+
+function normalizePhysicalEvidenceProvider(value: string | undefined): PhysicalEvidenceProvider {
+  if (value === "go_m29extract" || value === "ocr" || value === "ts_m29_physical_evidence") return value;
+  return "ts_m29_physical_evidence";
 }

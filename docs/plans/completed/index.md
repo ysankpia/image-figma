@@ -163,3 +163,4 @@
 - [178 Slice Studio Baidu OCR Provider And Text Quality Gate](178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md)
 - [179 Slice Studio M29 Text Position And Handoff Fixes](179-slice-studio-m29-text-position-and-handoff-fixes.md)
 - [180 Slice Studio Text Node Render Box Fix](180-slice-studio-text-node-render-box-fix.md)
+- [181 Slice Studio TS M29 Physical Evidence](181-slice-studio-m29-physical-evidence-ts.md)

@@ -132,7 +132,7 @@ assets/visible/slices/P1-首页/slice_0001.png
 
 `design.pen` contains one frame per page. Each frame has a visible `remainder.png` layer plus the confirmed slice PNG layers placed at their original source-image coordinates. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline.
 
-Pencil export also runs a conservative OCR pass. By default it uses the existing Baidu AI Studio PP-OCRv5 async API when `BAIDU_PADDLE_OCR_TOKEN` is available from the repository `.env.local`, process env, or app env. OCR remains the text-content authority. When `SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid`, Slice Studio also calls the local `m29extract` binary and uses M29 physical foreground evidence to place editable text boxes more tightly. M29 evidence never creates visible layers and never overrides confirmed manual slice assets.
+Pencil export also runs a conservative OCR pass. By default it uses the existing Baidu AI Studio PP-OCRv5 async API when `BAIDU_PADDLE_OCR_TOKEN` is available from the repository `.env.local`, process env, or app env. OCR remains the text-content authority. When `SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid`, Slice Studio uses M29 physical foreground evidence to place editable text boxes more tightly. The default physical evidence provider is the internal TypeScript `m29-physical-evidence` extractor. It ports the Go `m29extract --ocr-provider none` physical kernel used by Slice Studio, so text pixels remain ordinary physical foreground fragments and OCR is matched to them later. The Go `m29extract` binary is retained only as an explicit reference/fallback with `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract`. M29 evidence never creates visible layers and never overrides confirmed manual slice assets.
 
 OCR output only adds editable text nodes above the remainder and slice layers; it does not rebuild button backgrounds, card shapes, images, icons, or Auto Layout. OCR text lines that are mostly covered by confirmed manual slice boxes, low confidence, or oversized/noisy are skipped so product images, icons, and manually extracted raster assets do not get accidental text overlays. If OCR or M29 fails, `project.zip` still exports and `manifest.json` records the skip/failure status. Tesseract is available only as an explicit diagnostic fallback with `SLICE_STUDIO_OCR_PROVIDER=tesseract`.
 
@@ -148,6 +148,7 @@ SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_OCR_MIN_CONFIDENCE=0.70
 SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
+SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence
 SLICE_STUDIO_M29EXTRACT_PATH=/absolute/path/to/services/backend-go/bin/m29extract
 BAIDU_PADDLE_OCR_TOKEN=
 BAIDU_PADDLE_OCR_JOB_URL=https://paddleocr.aistudio-app.com/api/v2/ocr/jobs
@@ -157,6 +158,8 @@ BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
 ```
 
 `NEXT_PUBLIC_SLICE_STUDIO_API_URL` is used by the Next.js browser client. `SLICE_STUDIO_API_URL` is used by scripts such as `bun run smoke`.
+
+`SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency and follows the Go no-OCR physical evidence behavior. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 
 ## Scope
 
