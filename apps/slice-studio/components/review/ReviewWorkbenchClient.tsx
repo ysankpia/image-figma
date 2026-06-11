@@ -1044,27 +1044,46 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               {activePage.slices.map((slice, index) => {
                 const isActive = slice.id === activeSliceId;
                 return (
-                  <button
+                  <article
                     key={slice.id}
-                    type="button"
                     className={`assetGalleryCard ${isActive ? "active" : ""}`}
-                    onClick={() => {
-                      selectSlice(slice.id);
-                      setGalleryOpen(false);
-                    }}
                   >
                     <span className="assetGalleryCardHeader">
                       <strong>#{index + 1}</strong>
-                      <span>{cutModeLabel(slice.cutMode)}</span>
+                      <span>{slice.bbox.width}x{slice.bbox.height}</span>
                     </span>
-                    <span className="assetGalleryPreview">
+                    <button
+                      type="button"
+                      className="assetGalleryPreview"
+                      onClick={() => {
+                        selectSlice(slice.id);
+                        setGalleryOpen(false);
+                      }}
+                    >
                       <img src={slicePreviewUrl(projectId, slice)} alt="" draggable={false} />
+                    </button>
+                    <span className="assetGalleryCutModes" role="group" aria-label={`${slice.name} 裁切模式`}>
+                      {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={`assetGalleryCutMode ${slice.cutMode === mode ? "active" : ""}`}
+                          aria-pressed={slice.cutMode === mode}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectSlice(slice.id);
+                            if (slice.cutMode !== mode) commitSlicePatch(slice.id, { cutMode: mode }, "切换裁切模式");
+                          }}
+                        >
+                          {cutModeLabel(mode)}
+                        </button>
+                      ))}
                     </span>
                     <span className="assetGalleryMeta">
                       <strong>{slice.name}</strong>
-                      <span>{slice.bbox.width}x{slice.bbox.height}</span>
+                      <span>{cutModeLabel(slice.cutMode)}</span>
                     </span>
-                  </button>
+                  </article>
                 );
               })}
             </div>
