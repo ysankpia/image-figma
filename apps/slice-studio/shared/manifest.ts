@@ -1,3 +1,4 @@
+import { normalizeDefaultSliceNames } from "./slice-names";
 import type { ExportManifest, ProjectDetail } from "./types";
 
 export function buildExportManifest(detail: ProjectDetail, exportedAt = new Date().toISOString()): ExportManifest {
@@ -15,7 +16,7 @@ export function buildExportManifest(detail: ProjectDetail, exportedAt = new Date
         original: `originals/${pageDirectory}.png`,
         width: page.width,
         height: page.height,
-        slices: page.slices.map((slice, sliceIndex) => ({
+        slices: normalizeDefaultSliceNames(page.slices).map((slice, sliceIndex) => ({
           id: slice.id,
           name: slice.name,
           kind: slice.kind,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { buildPencilManifest, createRemainderPng } from "../server/pencil-package";
+import { parseBaiduPpocrv5Rows, parseTesseractTsv } from "../server/text-ocr";
+import { reconstructTextLayers, remainingRatio, textGeometryLooksEditable } from "../server/text-reconstruction";
+import { locateTextLinesFromM29 } from "../server/m29-text-locator";
 import type { ProjectDetail } from "../shared/types";
 
 describe("pencil exporter", () => {
@@ -21,6 +24,74 @@ describe("pencil exporter", () => {
     expect(raw.info.height).toBe(8);
     expect(raw.data[(2 * raw.info.width + 2) * 4 + 3]).toBe(0);
     expect(raw.data[(6 * raw.info.width + 6) * 4 + 3]).toBe(255);
+  });
+
+  it("paints accepted OCR text regions out of the remainder without changing slice alpha behavior", async () => {
+    const source = await sharp({
+      create: {
+        width: 24,
+        height: 16,
+        channels: 4,
+        background: { r: 246, g: 242, b: 232, alpha: 1 }
+      }
+    })
+      .composite([{
+        input: await sharp({
+          create: {
+            width: 8,
+            height: 4,
+            channels: 4,
+            background: { r: 10, g: 10, b: 10, alpha: 1 }
+          }
+        }).png().toBuffer(),
+        left: 8,
+        top: 6
+      }])
+      .png()
+      .toBuffer();
+
+    const png = await createRemainderPng(
+      source,
+      [{ bbox: { x: 2, y: 2, width: 3, height: 3 } }],
+      [{ x: 8, y: 6, width: 8, height: 4 }]
+    );
+    const raw = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const textOffset = (7 * raw.info.width + 10) * 4;
+    const sliceOffset = (3 * raw.info.width + 3) * 4;
+
+    expect(raw.data[textOffset]).toBeGreaterThan(220);
+    expect(raw.data[textOffset + 1]).toBeGreaterThan(210);
+    expect(raw.data[textOffset + 2]).toBeGreaterThan(200);
+    expect(raw.data[textOffset + 3]).toBe(255);
+    expect(raw.data[sliceOffset + 3]).toBe(0);
+  });
+
+  it("keeps remainder pixels under transparent subject slice areas", async () => {
+    const width = 24;
+    const height = 24;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 248;
+      rgba[offset + 1] = 242;
+      rgba[offset + 2] = 232;
+      rgba[offset + 3] = 255;
+    }
+    for (let y = 8; y < 16; y += 1) {
+      for (let x = 8; x < 16; x += 1) {
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 20;
+        rgba[offset + 1] = 20;
+        rgba[offset + 2] = 20;
+      }
+    }
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const png = await createRemainderPng(source, [{ cutMode: "subject", bbox: { x: 0, y: 0, width, height } }]);
+    const raw = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+
+    expect(raw.data[3]).toBe(255);
+    expect(raw.data[(10 * width + 10) * 4 + 3]).toBe(0);
   });
 
   it("builds project.zip manifest paths for Pencil visible assets", () => {
@@ -63,5 +134,390 @@ describe("pencil exporter", () => {
     expect(manifest.pages[0].remainder).toBe("assets/visible/remainders/P1-首页/remainder.png");
     expect(manifest.pages[0].slices[0].filename).toBe("assets/visible/slices/P1-首页/slice_0001.png");
     expect(manifest.pages[0].slices[0].cutMode).toBe("card");
+    expect(manifest.pages[0].ocr.status).toBe("skipped");
+    expect(manifest.pages[0].textLayerCount).toBe(0);
+    expect(manifest.pages[0].textLayers).toEqual([]);
+  });
+
+  it("records OCR text layers in the Pencil manifest", () => {
+    const detail: ProjectDetail = {
+      project: {
+        id: "project_1",
+        name: "Demo",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        pageCount: 1,
+        sliceCount: 0
+      },
+      pages: [{
+        id: "page_0001",
+        projectId: "project_1",
+        pageIndex: 1,
+        originalName: "home.png",
+        displayName: "首页",
+        width: 100,
+        height: 80,
+        sourceUrl: "/source",
+        slices: []
+      }]
+    };
+
+    const manifest = buildPencilManifest(detail, "2026-01-02T00:00:00.000Z", new Map([[
+      "page_0001",
+      {
+        ocr: {
+          provider: "baidu_ppocrv5",
+          status: "ok",
+          language: "zh+en",
+          model: "PP-OCRv5",
+          sourceLineCount: 2,
+          textLayerCount: 1
+        },
+        textLayerCount: 1,
+        textLayers: [{
+          id: "page_0001__text_0001",
+          text: "去结算",
+          placement: { x: 10, y: 20, width: 50, height: 16 },
+          originalBBox: { x: 12, y: 22, width: 46, height: 12 },
+          fontSize: 12,
+          fontFamily: "PingFang SC",
+          fontWeight: "400",
+          color: "#111111",
+          confidence: 88
+        }]
+      }
+    ]]));
+
+    expect(manifest.pages[0].ocr.status).toBe("ok");
+    expect(manifest.pages[0].ocr.sourceLineCount).toBe(2);
+    expect(manifest.pages[0].textLayerCount).toBe(1);
+    expect(manifest.pages[0].textLayers[0].text).toBe("去结算");
+  });
+
+  it("parses Baidu PP-OCRv5 JSONL rows into OCR lines", () => {
+    const lines = parseBaiduPpocrv5Rows([{
+      result: {
+        ocrResults: [{
+          prunedResult: {
+            rec_texts: ["东方茉莉鲜奶茶", "低置信"],
+            rec_scores: [0.96, 0.2],
+            rec_boxes: [[100, 200, 280, 236], [1, 1, 10, 10]],
+            rec_polys: []
+          }
+        }]
+      }
+    }], 0.7);
+
+    expect(lines).toEqual([{
+      text: "东方茉莉鲜奶茶",
+      bbox: { x: 100, y: 200, width: 180, height: 36 },
+      confidence: 96,
+      wordCount: 1
+    }]);
+  });
+
+  it("parses tesseract TSV words into readable lines", () => {
+    const tsv = [
+      "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+      "5\t1\t1\t1\t1\t1\t10\t20\t20\t10\t91\tHello",
+      "5\t1\t1\t1\t1\t2\t36\t20\t24\t10\t90\tWorld",
+      "5\t1\t2\t1\t1\t1\t10\t40\t30\t12\t89\t首页"
+    ].join("\n");
+
+    const lines = parseTesseractTsv(tsv);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({
+      text: "Hello World",
+      bbox: { x: 10, y: 20, width: 50, height: 10 },
+      confidence: 91,
+      wordCount: 2
+    });
+    expect(lines[1].text).toBe("首页");
+  });
+
+  it("filters OCR lines covered by confirmed manual slices", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 120,
+        height: 80,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    })
+      .composite([{
+        input: await sharp({
+          create: {
+            width: 40,
+            height: 12,
+            channels: 4,
+            background: { r: 20, g: 20, b: 20, alpha: 1 }
+          }
+        }).png().toBuffer(),
+        left: 10,
+        top: 20
+      }])
+      .png()
+      .toBuffer();
+
+    expect(remainingRatio(
+      { x: 10, y: 20, width: 40, height: 12 },
+      [{ x: 8, y: 18, width: 48, height: 18 }]
+    )).toBe(0);
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 120,
+      height: 80,
+      imageBuffer,
+      slices: [{
+        id: "slice_1",
+        projectId: "project_1",
+        pageId: "page_0001",
+        sliceIndex: 1,
+        name: "button",
+        kind: "image",
+        cutMode: "rect",
+        bbox: { x: 8, y: 18, width: 48, height: 18 },
+        selected: true
+      }],
+      ocr: {
+        provider: "tesseract",
+        status: "ok",
+        language: "chi_sim+eng",
+        lines: [
+          { text: "去结算", bbox: { x: 10, y: 20, width: 40, height: 12 }, confidence: 92, wordCount: 1 },
+          { text: "首页", bbox: { x: 80, y: 50, width: 20, height: 12 }, confidence: 90, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.ocr.sourceLineCount).toBe(2);
+    expect(reconstruction.ocr.textLayerCount).toBe(1);
+    expect(reconstruction.layers.map((layer) => layer.text)).toEqual(["首页"]);
+    expect(reconstruction.layers[0].metadata.safeBoundsPolicy).toBe("slice_studio_text_safe_bounds.v1");
+  });
+
+  it("uses M29 physical evidence for text layer placement when it matches OCR text", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 180,
+        height: 90,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 180,
+      height: 90,
+      imageBuffer,
+      slices: [],
+      locator: () => locateTextLinesFromM29([
+        { text: "去结算", bbox: { x: 40, y: 30, width: 40, height: 16 }, confidence: 96, wordCount: 1 }
+      ], {
+        schemaName: "M29PhysicalEvidence",
+        primitives: [{
+          id: "prim_text",
+          primitiveType: "symbol_region",
+          bbox: { x: 48, y: 31, width: 45, height: 14 }
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "去结算", bbox: { x: 40, y: 30, width: 40, height: 16 }, confidence: 96, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.ocr.bboxProvider).toBe("m29_ocr_hybrid");
+    expect(reconstruction.ocr.bboxProviderStatus).toBe("ok");
+    expect(reconstruction.layers).toHaveLength(1);
+    expect(reconstruction.layers[0].originalBBox).toEqual({ x: 48, y: 31, width: 45, height: 14 });
+    expect(reconstruction.layers[0].fontSize).toBeGreaterThan(10);
+    expect(reconstruction.layers[0].fontSize).toBeLessThan(18);
+    expect(reconstruction.layers[0].metadata.ocrBBox).toEqual({ x: 40, y: 30, width: 40, height: 16 });
+    expect(reconstruction.layers[0].metadata.physicalBBox).toEqual({ x: 48, y: 31, width: 45, height: 14 });
+    expect(reconstruction.layers[0].metadata.bboxSource).toBe("m29_foreground");
+    expect(reconstruction.layers[0].metadata.m29PrimitiveId).toBe("prim_text");
+  });
+
+  it("falls back to OCR bbox when physical evidence does not match", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 180,
+        height: 90,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 180,
+      height: 90,
+      imageBuffer,
+      slices: [],
+      locator: () => locateTextLinesFromM29([
+        { text: "首页", bbox: { x: 40, y: 30, width: 30, height: 16 }, confidence: 92, wordCount: 1 }
+      ], {
+        schemaName: "M29PhysicalEvidence",
+        primitives: [{
+          id: "prim_far",
+          primitiveType: "symbol_region",
+          bbox: { x: 120, y: 70, width: 20, height: 10 }
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "首页", bbox: { x: 40, y: 30, width: 30, height: 16 }, confidence: 92, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers[0].originalBBox).toEqual({ x: 40, y: 30, width: 30, height: 16 });
+    expect(reconstruction.layers[0].metadata.bboxSource).toBe("ocr");
+    expect(reconstruction.layers[0].metadata.physicalBBox).toBeUndefined();
+  });
+
+  it("uses local foreground refinement for white button text when M29 has no text primitive", async () => {
+    const width = 180;
+    const height = 90;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 255;
+      rgba[offset + 1] = 255;
+      rgba[offset + 2] = 255;
+      rgba[offset + 3] = 255;
+    }
+    for (let y = 20; y < 64; y += 1) {
+      for (let x = 50; x < 140; x += 1) {
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 214;
+        rgba[offset + 1] = 47;
+        rgba[offset + 2] = 47;
+      }
+    }
+    for (let y = 34; y < 48; y += 1) {
+      for (let x = 82; x < 118; x += 1) {
+        if ((x - 82) % 9 > 5) continue;
+        const offset = (y * width + x) * 4;
+        rgba[offset] = 255;
+        rgba[offset + 1] = 255;
+        rgba[offset + 2] = 255;
+      }
+    }
+    const imageBuffer = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "去结算", bbox: { x: 70, y: 30, width: 58, height: 24 }, confidence: 94, wordCount: 1 },
+          bbox: { x: 70, y: 30, width: 58, height: 24 },
+          bboxSource: "ocr"
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "去结算", bbox: { x: 70, y: 30, width: 58, height: 24 }, confidence: 94, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers[0].metadata.bboxSource).toBe("local_foreground");
+    expect(reconstruction.layers[0].originalBBox.x).toBeGreaterThan(70);
+    expect(reconstruction.layers[0].originalBBox.width).toBeLessThan(58);
+  });
+
+  it("exports Pencil-compatible text style without oversized bbox-height font sizing", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 220,
+        height: 140,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 220,
+      height: 140,
+      imageBuffer,
+      slices: [],
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "点单", bbox: { x: 50, y: 20, width: 128, height: 73 }, confidence: 96, wordCount: 1 },
+          { text: "茶隐", bbox: { x: 20, y: 20, width: 28, height: 51 }, confidence: 96, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers.map((layer) => layer.text)).toEqual(["点单"]);
+    expect(reconstruction.layers[0].fontFamily).toBe("PingFang SC");
+    expect(reconstruction.layers[0].fontWeight).toBe("600");
+    expect(reconstruction.layers[0].fontSize).toBeLessThan(56);
+    expect(reconstruction.layers[0].bbox.x).toBe(50);
+  });
+
+  it("rejects oversized OCR noise lines before creating Pencil text layers", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 941,
+        height: 200,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    expect(textGeometryLooksEditable(
+      { text: "@ a a @", bbox: { x: 20, y: 20, width: 900, height: 80 }, confidence: 95, wordCount: 4 },
+      941
+    )).toBe(false);
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 941,
+      height: 200,
+      imageBuffer,
+      slices: [],
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "@ a a @", bbox: { x: 20, y: 20, width: 900, height: 80 }, confidence: 95, wordCount: 4 },
+          { text: "首页", bbox: { x: 80, y: 150, width: 36, height: 18 }, confidence: 92, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.ocr.sourceLineCount).toBe(2);
+    expect(reconstruction.layers.map((layer) => layer.text)).toEqual(["首页"]);
   });
 });

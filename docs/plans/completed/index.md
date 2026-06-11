@@ -159,3 +159,7 @@
 - [169 Slice Studio Cut Mode UI Cleanup](169-slice-studio-cut-mode-ui-cleanup.md)
 - [170 Slice Studio Inspector Scroll And Favicon](170-slice-studio-inspector-scroll-and-favicon.md)
 - [176 Slice Studio Pencil Project Export](176-slice-studio-pencil-project-export.md)
+- [177 Slice Studio Pencil Editable Text Layer V1](177-slice-studio-pencil-editable-text-layer-v1.md)
+- [178 Slice Studio Baidu OCR Provider And Text Quality Gate](178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md)
+- [179 Slice Studio M29 Text Position And Handoff Fixes](179-slice-studio-m29-text-position-and-handoff-fixes.md)
+- [180 Slice Studio Text Node Render Box Fix](180-slice-studio-text-node-render-box-fix.md)

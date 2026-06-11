@@ -101,6 +101,7 @@ async function main() {
     assertIncludes(projectEntries, "assets/visible/slices/P1-订单页/slice_0001.png");
     const design = JSON.parse(readZipEntry(projectZipBuffer, "design.pen").toString("utf8")) as PencilDocument;
     assertPenRefsExist(design, projectEntries);
+    assertEditableTextNodesUseNaturalHeight(design);
     const pencilManifest = JSON.parse(readZipEntry(projectZipBuffer, "manifest.json").toString("utf8")) as PencilManifest;
     if (pencilManifest.pencil.designPen !== "design.pen") throw new Error("pencil manifest designPen mismatch");
     if (pencilManifest.pages[0]?.remainder !== "assets/visible/remainders/P1-订单页/remainder.png") {
@@ -108,6 +109,16 @@ async function main() {
     }
     if (pencilManifest.pages[0]?.slices[0]?.filename !== "assets/visible/slices/P1-订单页/slice_0001.png") {
       throw new Error(`unexpected pencil slice path: ${pencilManifest.pages[0]?.slices[0]?.filename}`);
+    }
+    const allowedOcrProviders = new Set(["baidu_ppocrv5", "tesseract"]);
+    for (const [pageIndex, page] of pencilManifest.pages.entries()) {
+      if (!page.ocr || !allowedOcrProviders.has(page.ocr.provider)) throw new Error(`missing pencil OCR manifest on page ${pageIndex + 1}`);
+      if (typeof page.textLayerCount !== "number") throw new Error(`missing pencil textLayerCount on page ${pageIndex + 1}`);
+      if (!Array.isArray(page.textLayers)) throw new Error(`missing pencil textLayers on page ${pageIndex + 1}`);
+      for (const layer of page.textLayers) {
+        if (typeof layer.fontWeight !== "string") throw new Error(`pencil text fontWeight must be string on page ${pageIndex + 1}`);
+        if (typeof layer.fontFamily !== "string") throw new Error(`pencil text fontFamily must be string on page ${pageIndex + 1}`);
+      }
     }
 
     console.log(JSON.stringify({ ok: true, projectId, assetCount: exported.assetCount, pages: manifest.pages.map((page) => page.pageDirectory), projectZip: true }));
@@ -192,6 +203,19 @@ function assertPenRefsExist(document: PencilDocument, entries: string[]): void {
   for (const child of document.children || []) visit(child);
 }
 
+function assertEditableTextNodesUseNaturalHeight(document: PencilDocument): void {
+  const visit = (node: PencilNode) => {
+    if (node.type === "text" && node.metadata?.type === "slice_studio_editable_text") {
+      if (node.textGrowth !== "auto") throw new Error(`editable text must use auto growth: ${node.id}`);
+      if (node.width !== undefined) throw new Error(`editable text must not set fixed width: ${node.id}`);
+      if (node.height !== undefined) throw new Error(`editable text must not set fixed height: ${node.id}`);
+      if (node.textAlignVertical !== undefined) throw new Error(`editable text must not vertically center: ${node.id}`);
+    }
+    for (const child of node.children || []) visit(child);
+  };
+  for (const child of document.children || []) visit(child);
+}
+
 type ProjectDetail = {
   pages: Array<{
     id: string;
@@ -213,6 +237,9 @@ type PencilManifest = {
   pages: Array<{
     remainder: string;
     slices: Array<{ filename: string }>;
+    ocr?: { provider: string; status: string; textLayerCount: number };
+    textLayerCount?: number;
+    textLayers?: Array<{ fontFamily?: unknown; fontWeight?: unknown }>;
   }>;
 };
 
@@ -221,7 +248,14 @@ type PencilDocument = {
 };
 
 type PencilNode = {
+  id?: string;
+  type?: string;
   fill?: { type: "image"; url: string } | string;
+  width?: number;
+  height?: number;
+  textGrowth?: string;
+  textAlignVertical?: string;
+  metadata?: { type?: string };
   children?: PencilNode[];
 };
 

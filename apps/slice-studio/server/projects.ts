@@ -5,6 +5,7 @@ import { db, transaction, type PageRow, type ProjectRow, type SliceRow } from ".
 import { maxBatchUploadBytes, maxUploadBytes, projectsRoot, storageRoot } from "./config";
 import { httpError } from "./errors";
 import { assertInside, randomHex, sanitizeFileName, sanitizeName } from "./utils";
+import { defaultSliceName, isDefaultSliceName, normalizeDefaultSliceNames } from "../shared/slice-names";
 import { assertSafeId, assertSafeSliceId, normalizeCutMode, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
 import type { PageRecord, ProjectDetail, ProjectListItem, ProjectSummary, SaveSlicesRequest, SliceRecord } from "../shared/types";
 
@@ -264,7 +265,16 @@ export function saveSlices(projectId: string, payload: SaveSlicesRequest): Proje
       const page = pageMap.get(pageId);
       if (!page) throw httpError(400, `Unknown pageId: ${pageId}`);
       const seenPageSliceIds = new Set<string>();
-      for (const [sliceIndex, slice] of (pagePayload.slices || []).entries()) {
+      const slices = (pagePayload.slices || []).map((slice, sliceIndex) => {
+        const fallbackName = defaultSliceName(sliceIndex + 1);
+        const name = sanitizeName(slice.name, fallbackName);
+        return {
+          ...slice,
+          sliceIndex: sliceIndex + 1,
+          name: isDefaultSliceName(name) ? fallbackName : name
+        };
+      });
+      for (const slice of slices) {
         assertSafeSliceId(slice.id);
         if (seenPageSliceIds.has(slice.id) || seenProjectSliceIds.has(slice.id)) {
           throw httpError(400, `Duplicate slice id: ${slice.id}`);
@@ -277,7 +287,7 @@ export function saveSlices(projectId: string, payload: SaveSlicesRequest): Proje
         db.query(`
           INSERT INTO slices (id, project_id, page_id, slice_index, name, kind, cut_mode, x, y, width, height, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(slice.id, projectId, pageId, sliceIndex + 1, sanitizeName(slice.name, `slice_${String(sliceIndex + 1).padStart(2, "0")}`), kind, cutMode, box.x, box.y, box.width, box.height, now, now);
+        `).run(slice.id, projectId, pageId, slice.sliceIndex, slice.name, kind, cutMode, box.x, box.y, box.width, box.height, now, now);
       }
     }
     updateProjectCounts(projectId);
@@ -304,7 +314,7 @@ export function getProjectDetail(projectId: string): ProjectDetail {
     project,
     pages: pages.map((page) => ({
       ...formatPage(page),
-      slices: slicesByPage.get(page.id) || []
+      slices: normalizeDefaultSliceNames(slicesByPage.get(page.id) || [])
     }))
   };
 }

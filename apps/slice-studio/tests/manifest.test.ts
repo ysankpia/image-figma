@@ -133,4 +133,65 @@ describe("manifest", () => {
     expect(manifest.pages.map((page) => page.pageDirectory)).toEqual(["P1-订单页", "P2-首页"]);
     expect(manifest.pages[0].slices[0].filename).toBe("slices/P1-订单页/slice_0001.png");
   });
+
+  it("normalizes default slice names in exported manifests", () => {
+    const detail: ProjectDetail = {
+      project: {
+        id: "project_1",
+        name: "Demo",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        pageCount: 1,
+        sliceCount: 3
+      },
+      pages: [{
+        id: "page_0001",
+        projectId: "project_1",
+        pageIndex: 1,
+        originalName: "home.png",
+        displayName: "",
+        width: 100,
+        height: 80,
+        sourceUrl: "/source",
+        slices: [
+          {
+            id: "slice_a",
+            projectId: "project_1",
+            pageId: "page_0001",
+            sliceIndex: 1,
+            name: "slice_25",
+            kind: "image",
+            cutMode: "rect",
+            bbox: { x: 1, y: 2, width: 10, height: 10 },
+            selected: true
+          },
+          {
+            id: "slice_b",
+            projectId: "project_1",
+            pageId: "page_0001",
+            sliceIndex: 2,
+            name: "custom_logo",
+            kind: "image",
+            cutMode: "rect",
+            bbox: { x: 11, y: 2, width: 10, height: 10 },
+            selected: true
+          },
+          {
+            id: "slice_c",
+            projectId: "project_1",
+            pageId: "page_0001",
+            sliceIndex: 3,
+            name: "slice_25",
+            kind: "image",
+            cutMode: "rect",
+            bbox: { x: 21, y: 2, width: 10, height: 10 },
+            selected: true
+          }
+        ]
+      }]
+    };
+
+    const manifest = buildExportManifest(detail, "2026-01-02T00:00:00.000Z");
+    expect(manifest.pages[0].slices.map((slice) => slice.name)).toEqual(["slice_01", "custom_logo", "slice_03"]);
+  });
 });

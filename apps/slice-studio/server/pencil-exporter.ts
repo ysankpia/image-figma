@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { projectsRoot } from "./config";
 import { httpError } from "./errors";
-import { buildPencilManifest, createRemainderPng } from "./pencil-package";
+import { buildPencilManifest, createRemainderPng, type PencilPageTextManifest } from "./pencil-package";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
+import { runOcr } from "./text-ocr";
+import { reconstructTextLayers, type TextLayer, type TextReconstruction } from "./text-reconstruction";
 import { pageExportDirectory } from "../shared/manifest";
 import type { BBox, ProjectDetail } from "../shared/types";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
@@ -13,14 +15,22 @@ const penVersion = "2.11";
 
 type PencilNode = {
   id: string;
-  type: "frame" | "rectangle";
+  type: "frame" | "rectangle" | "text";
   name: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   layout?: "none";
   fill?: string | { type: "image"; enabled: true; url: string; mode: "stretch" };
+  content?: string;
+  textGrowth?: "auto";
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textAlign?: "left";
   clip?: boolean;
   locked?: boolean;
   visible?: boolean;
@@ -50,11 +60,11 @@ export async function exportPencilProject(projectId: string): Promise<{ ok: true
     pages: detail.pages
   };
   const files: ZipFile[] = [];
-  const document = await buildPencilDocument(detail, files, exportedAt);
+  const { document, textByPageId } = await buildPencilDocument(detail, files, exportedAt);
 
   files.unshift(
     { name: "design.pen", data: Buffer.from(JSON.stringify(document, null, 2)) },
-    { name: "manifest.json", data: Buffer.from(JSON.stringify(buildPencilManifest(detail, exportedAt), null, 2)) },
+    { name: "manifest.json", data: Buffer.from(JSON.stringify(buildPencilManifest(detail, exportedAt, textByPageId), null, 2)) },
     { name: "project.json", data: Buffer.from(JSON.stringify(projectJson, null, 2)) }
   );
   validatePencilPackage(document, files);
@@ -72,15 +82,37 @@ export function getProjectZipPath(projectId: string): string {
   return path.join(projectsRoot, projectId, "exports", "project.zip");
 }
 
-async function buildPencilDocument(detail: ProjectDetail, files: ZipFile[], exportedAt: string): Promise<PencilDocument> {
+async function buildPencilDocument(
+  detail: ProjectDetail,
+  files: ZipFile[],
+  exportedAt: string
+): Promise<{ document: PencilDocument; textByPageId: Map<string, PencilPageTextManifest> }> {
   const frames: PencilNode[] = [];
+  const textByPageId = new Map<string, PencilPageTextManifest>();
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
     const originalBuffer = fs.readFileSync(getPageOriginalPath(detail.project.id, page.id));
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
+    const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
+    const textReconstruction = await reconstructTextLayers({
+      pageId: page.id,
+      width: page.width,
+      height: page.height,
+      imageBuffer: originalBuffer,
+      slices: page.slices,
+      ocr: await runOcr(originalBuffer)
+    });
+    textByPageId.set(page.id, textManifest(textReconstruction));
     files.push({ name: originalPath, data: originalBuffer });
-    files.push({ name: remainderPath, data: await createRemainderPng(originalBuffer, page.slices) });
+    files.push({
+      name: remainderPath,
+      data: await createRemainderPng(
+        originalBuffer,
+        page.slices.map((slice, sliceIndex) => ({ ...slice, png: slicePngs[sliceIndex] })),
+        textReconstruction.layers.map((layer) => layer.safeBBox)
+      )
+    });
 
     const children: PencilNode[] = [
       imageNode({
@@ -99,10 +131,10 @@ async function buildPencilDocument(detail: ProjectDetail, files: ZipFile[], expo
 
     for (const [sliceIndex, slice] of page.slices.entries()) {
       const slicePath = `assets/visible/slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`;
-      files.push({ name: slicePath, data: await cropSliceToPng(originalBuffer, slice) });
+      files.push({ name: slicePath, data: slicePngs[sliceIndex] });
       children.push(imageNode({
         id: `${page.id}__slice_${String(sliceIndex + 1).padStart(4, "0")}`,
-        name: slice.name || `slice_${String(sliceIndex + 1).padStart(2, "0")}`,
+        name: `${String(sliceIndex + 1).padStart(2, "0")} ${slice.name || `slice_${String(sliceIndex + 1).padStart(2, "0")}`}`,
         url: `./${slicePath}`,
         bbox: slice.bbox,
         metadata: {
@@ -115,6 +147,13 @@ async function buildPencilDocument(detail: ProjectDetail, files: ZipFile[], expo
           originalBBox: { ...slice.bbox },
           z: sliceIndex + 1
         }
+      }));
+    }
+    for (const [textIndex, layer] of textReconstruction.layers.entries()) {
+      children.push(textNode({
+        layer,
+        name: `text_${String(textIndex + 1).padStart(4, "0")} ${layer.text}`,
+        z: page.slices.length + textIndex + 1
       }));
     }
 
@@ -143,8 +182,11 @@ async function buildPencilDocument(detail: ProjectDetail, files: ZipFile[], expo
   }
 
   return {
-    version: penVersion,
-    children: frames
+    document: {
+      version: penVersion,
+      children: frames
+    },
+    textByPageId
   };
 }
 
@@ -167,6 +209,47 @@ function imageNode(input: { id: string; name: string; url: string; bbox: BBox; m
   };
 }
 
+function textNode(input: { layer: TextLayer; name: string; z: number }): PencilNode {
+  return {
+    id: input.layer.id,
+    type: "text",
+    name: input.name,
+    x: Math.round(input.layer.bbox.x),
+    y: Math.round(input.layer.bbox.y),
+    content: input.layer.text,
+    textGrowth: "auto",
+    fontFamily: input.layer.fontFamily,
+    fontSize: input.layer.fontSize,
+    fontWeight: input.layer.fontWeight,
+    lineHeight: input.layer.lineHeight,
+    letterSpacing: 0,
+    textAlign: "left",
+    fill: input.layer.color,
+    metadata: {
+      ...input.layer.metadata,
+      z: input.z
+    }
+  };
+}
+
+function textManifest(reconstruction: TextReconstruction): PencilPageTextManifest {
+  return {
+    ocr: reconstruction.ocr,
+    textLayerCount: reconstruction.layers.length,
+    textLayers: reconstruction.layers.map((layer) => ({
+      id: layer.id,
+      text: layer.text,
+      placement: { ...layer.bbox },
+      originalBBox: { ...layer.originalBBox },
+      fontSize: layer.fontSize,
+      fontFamily: layer.fontFamily,
+      fontWeight: layer.fontWeight,
+      color: layer.color,
+      confidence: layer.confidence
+    }))
+  };
+}
+
 function validatePencilPackage(document: PencilDocument, files: ZipFile[]): void {
   const fileNames = new Set(files.map((file) => file.name));
   const ids = new Set<string>();
@@ -175,6 +258,14 @@ function validatePencilPackage(document: PencilDocument, files: ZipFile[]): void
     ids.add(node.id);
     if (node.fill && typeof node.fill === "object" && node.fill.type === "image") {
       validateImageRef(node.fill.url, fileNames, node.id);
+    }
+    if (node.type === "text" && node.metadata?.type === "slice_studio_editable_text") {
+      if (node.textGrowth !== "auto" || node.width !== undefined || node.height !== undefined) {
+        throw new Error(`Pencil contract violation: editable text must use natural size on ${node.id}`);
+      }
+      if ("textAlignVertical" in node) {
+        throw new Error(`Pencil contract violation: editable text must not use vertical centering on ${node.id}`);
+      }
     }
     for (const child of node.children || []) visit(child);
   };

@@ -130,7 +130,11 @@ assets/visible/remainders/P1-首页/remainder.png
 assets/visible/slices/P1-首页/slice_0001.png
 ```
 
-`design.pen` contains one frame per page. Each frame has a visible `remainder.png` layer plus the confirmed slice PNG layers placed at their original source-image coordinates. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline. OCR, TextLayer generation, font recognition, and Figma import are intentionally not part of this Pencil export stage.
+`design.pen` contains one frame per page. Each frame has a visible `remainder.png` layer plus the confirmed slice PNG layers placed at their original source-image coordinates. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline.
+
+Pencil export also runs a conservative OCR pass. By default it uses the existing Baidu AI Studio PP-OCRv5 async API when `BAIDU_PADDLE_OCR_TOKEN` is available from the repository `.env.local`, process env, or app env. OCR remains the text-content authority. When `SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid`, Slice Studio also calls the local `m29extract` binary and uses M29 physical foreground evidence to place editable text boxes more tightly. M29 evidence never creates visible layers and never overrides confirmed manual slice assets.
+
+OCR output only adds editable text nodes above the remainder and slice layers; it does not rebuild button backgrounds, card shapes, images, icons, or Auto Layout. OCR text lines that are mostly covered by confirmed manual slice boxes, low confidence, or oversized/noisy are skipped so product images, icons, and manually extracted raster assets do not get accidental text overlays. If OCR or M29 fails, `project.zip` still exports and `manifest.json` records the skip/failure status. Tesseract is available only as an explicit diagnostic fallback with `SLICE_STUDIO_OCR_PROVIDER=tesseract`.
 
 ## Configuration
 
@@ -141,10 +145,19 @@ SLICE_STUDIO_API_PORT=4110
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_MAX_UPLOAD_BYTES=20971520
 SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
+SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
+SLICE_STUDIO_OCR_MIN_CONFIDENCE=0.70
+SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
+SLICE_STUDIO_M29EXTRACT_PATH=/absolute/path/to/services/backend-go/bin/m29extract
+BAIDU_PADDLE_OCR_TOKEN=
+BAIDU_PADDLE_OCR_JOB_URL=https://paddleocr.aistudio-app.com/api/v2/ocr/jobs
+BAIDU_PADDLE_OCR_MODEL=PP-OCRv5
+BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS=5
+BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
 ```
 
 `NEXT_PUBLIC_SLICE_STUDIO_API_URL` is used by the Next.js browser client. `SLICE_STUDIO_API_URL` is used by scripts such as `bun run smoke`.
 
 ## Scope
 
-v1 supports manual `image` slicing plus Pencil project export. AI, OCR, YOLO, M29, PSD-like, TextLayer generation, Figma import, auth, and cloud sync are intentionally out of scope.
+v1 supports manual `image` slicing plus Pencil project export with optional OCR text overlays and optional M29 text bbox evidence. AI, YOLO, PSD-like, automatic visual ownership, Figma import, auth, and cloud sync are intentionally out of scope.
