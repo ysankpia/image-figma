@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, GripHorizontal, Grid2X2, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Square, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Bot, ChevronLeft, ChevronRight, Download, GripHorizontal, Grid2X2, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import { apiBaseUrl, apiGet, apiPost, deletePage, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
+import { apiBaseUrl, apiGet, apiPost, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
+import { mergeAiBoxesIntoSlices } from "@/shared/ai-slices";
 import { draftToBox, normalizeBox } from "@/shared/bbox";
 import type { BBox, CutMode, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
 
@@ -58,6 +59,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [boxColors, setBoxColors] = useState(defaultBoxColors);
   const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
   const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -81,6 +83,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const saveLabel = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "error" ? "保存失败" : "就绪";
   const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
   const pageCutMode = getPageCutMode(activePage, defaultCutMode);
+  const aiBusy = aiRunning !== null;
 
   const loadProject = useCallback(async () => {
     const projectDetail = await apiGet<ProjectDetail>(`/api/projects/${projectId}`);
@@ -310,6 +313,25 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     }
   }
 
+  async function savePagesWithActive(pagesToSave: WorkbenchPage[], nextActivePageId = activePageId) {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const saveSequence = ++saveSequenceRef.current;
+    const payload = serializeSlices(pagesToSave, nextActivePageId);
+    setSaveState("saving");
+    const queuedSave = saveQueueRef.current.then(async () => {
+      await saveSlices(projectId, payload);
+    });
+    saveQueueRef.current = queuedSave.catch(() => undefined);
+    await queuedSave;
+    if (saveSequence === saveSequenceRef.current) {
+      setSaveState("saved");
+      setStatus("已保存。");
+    }
+  }
+
   async function flushPageRename() {
     if (pendingPageRenameRef.current) {
       await savePageName(pendingPageRenameRef.current.pageId, pendingPageRenameRef.current.displayName);
@@ -482,12 +504,117 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     scheduleSave(nextPages, { pushUndo: true, undoLabel: "新建资产" });
   }
 
+  async function runAiForCurrentPage() {
+    if (!activePage || aiBusy) return;
+    setAiRunning("page");
+    setStatus(`AI 正在画 P${pageIndex + 1}。`);
+    try {
+      await flushPageRename();
+      const response = await generateAiBoxes(projectId, activePage.id);
+      const currentPages = pages;
+      const currentPage = currentPages.find((page) => page.id === activePage.id);
+      if (!currentPage) return;
+      const merged = mergeAiBoxesIntoSlices({
+        projectId,
+        page: currentPage,
+        boxes: response.boxes,
+        cutMode: "rect",
+        idSeed: `p${pageIndex + 1}_${Date.now().toString(36)}`
+      });
+      if (!merged.addedCount) {
+        setStatus(`AI 未新增框。已跳过 ${merged.skippedCount + response.diagnostics.rejectedBoxCount} 个重复或无效框。`);
+        return;
+      }
+      pushUndo("AI 画框");
+      const nextPages = currentPages.map((page) => page.id === currentPage.id ? { ...page, slices: merged.slices } : page);
+      setPages(nextPages);
+      selectSlice(merged.lastAddedSliceId);
+      await savePagesWithActive(nextPages, currentPage.id);
+      setStatus(`AI 已新增 ${merged.addedCount} 个矩形框，跳过 ${merged.skippedCount + response.diagnostics.rejectedBoxCount} 个。`);
+    } catch (error) {
+      setSaveState("error");
+      setStatus(`AI 画框失败：${error instanceof Error ? error.message : "unknown error"}`);
+    } finally {
+      setAiRunning(null);
+    }
+  }
+
+  async function runAiForAllPages() {
+    if (!pages.length || aiBusy) return;
+    setAiRunning("batch");
+    setStatus(`AI 批量画框 0/${pages.length}。`);
+    let workingPages = pages;
+    let completed = 0;
+    let failed = 0;
+    let addedTotal = 0;
+    let skippedTotal = 0;
+    let mergeQueue = Promise.resolve();
+    pushUndo("AI 批量画框");
+    try {
+      await flushPageRename();
+      const settings = await getAiSliceSettings().catch(() => ({ ok: true as const, batchConcurrency: 4 }));
+      const concurrency = Math.max(1, Math.min(8, Math.round(settings.batchConcurrency || 4)));
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < pages.length) {
+          const index = cursor;
+          cursor += 1;
+          const page = pages[index];
+          if (!page) continue;
+          setStatus(`AI 批量画框 P${index + 1} · ${completed + failed}/${pages.length}`);
+          try {
+            const response = await generateAiBoxes(projectId, page.id);
+            mergeQueue = mergeQueue.catch(() => undefined).then(async () => {
+              const latestPage = workingPages.find((item) => item.id === page.id);
+              if (!latestPage) return;
+              const merged = mergeAiBoxesIntoSlices({
+                projectId,
+                page: latestPage,
+                boxes: response.boxes,
+                cutMode: "rect",
+                idSeed: `p${index + 1}_${Date.now().toString(36)}`
+              });
+              if (merged.addedCount) {
+                workingPages = workingPages.map((item) => item.id === page.id ? { ...item, slices: merged.slices } : item);
+                setPages(workingPages);
+                await savePagesWithActive(workingPages, activePageId);
+              }
+              completed += 1;
+              addedTotal += merged.addedCount;
+              skippedTotal += merged.skippedCount + response.diagnostics.rejectedBoxCount;
+              setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
+            });
+            await mergeQueue;
+          } catch {
+            failed += 1;
+          }
+          setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(concurrency, pages.length) }, () => worker()));
+      setStatus(`AI 批量完成：成功 ${completed} 页，失败 ${failed} 页，新增 ${addedTotal} 个，跳过 ${skippedTotal} 个。`);
+    } catch (error) {
+      setSaveState("error");
+      setStatus(`AI 批量画框失败：${error instanceof Error ? error.message : "unknown error"}`);
+    } finally {
+      setAiRunning(null);
+    }
+  }
+
+  function goToRelativePage(delta: number) {
+    if (pageIndex < 0) return;
+    const nextPage = pages[pageIndex + delta];
+    if (!nextPage) return;
+    setActivePageId(nextPage.id);
+    selectSlice(null);
+  }
+
   function selectSlice(sliceId: string | null) {
     setActiveSliceId(sliceId);
   }
 
   async function openAssetGallery() {
-    if (!activePage?.slices.length) return;
+    if (!activePage) return;
     try {
       await flushPageRename();
       await saveNow();
@@ -694,6 +821,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             <Download aria-hidden="true" />
             <span>导出 assets.zip</span>
           </button>
+          <button className="toolbarButton aiButton" type="button" disabled={!activePage || aiBusy} onClick={() => void runAiForCurrentPage()}>
+            <Sparkles aria-hidden="true" />
+            <span>{aiRunning === "page" ? "AI 中" : "AI 当前页"}</span>
+          </button>
+          <button className="toolbarButton aiButton" type="button" disabled={!pages.length || aiBusy} onClick={() => void runAiForAllPages()}>
+            <Bot aria-hidden="true" />
+            <span>{aiRunning === "batch" ? "AI 批量中" : "AI 全部页"}</span>
+          </button>
           <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportProject()}>
             <Download aria-hidden="true" />
             <span>导出 project.zip</span>
@@ -876,7 +1011,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                   <h2>Assets</h2>
                   <span>{activePageAssetCount} assets</span>
                 </div>
-                <button className="assetGalleryButton" type="button" disabled={!activePageAssetCount} onClick={() => void openAssetGallery()}>
+                <button className="assetGalleryButton" type="button" disabled={!activePage} onClick={() => void openAssetGallery()}>
                   <Grid2X2 aria-hidden="true" />
                   <span>总览</span>
                 </button>
@@ -1080,12 +1215,26 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 <h2 id="asset-gallery-title">资产总览</h2>
                 <span>P{pageIndex + 1} · {activePage.slices.length} assets · 点击卡片定位资产</span>
               </div>
+              <div className="assetGalleryPageNav" aria-label="资产总览翻页">
+                <button type="button" title="上一页" aria-label="上一页" disabled={pageIndex <= 0} onClick={() => goToRelativePage(-1)}>
+                  <ChevronLeft aria-hidden="true" />
+                </button>
+                <span>{pageIndex + 1}/{pages.length}</span>
+                <button type="button" title="下一页" aria-label="下一页" disabled={pageIndex >= pages.length - 1} onClick={() => goToRelativePage(1)}>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              </div>
               <button type="button" className="dialogCloseButton" aria-label="关闭资产总览" onClick={() => setGalleryOpen(false)}>
                 <X aria-hidden="true" />
               </button>
             </header>
             <div className="assetGalleryGrid">
-              {activePage.slices.map((slice, index) => {
+              {!activePage.slices.length ? (
+                <div className="assetGalleryEmpty">
+                  <Grid2X2 aria-hidden="true" />
+                  <span>当前页暂无资产</span>
+                </div>
+              ) : activePage.slices.map((slice, index) => {
                 const isActive = slice.id === activeSliceId;
                 return (
                   <article

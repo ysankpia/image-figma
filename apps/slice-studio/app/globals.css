@@ -767,10 +767,22 @@ h1 {
   color: #fff;
 }
 
+.aiButton {
+  border-color: #8b5cf6;
+  background: #8b5cf6;
+  color: #fff;
+}
+
 .toolbarButton:hover:not(:disabled),
 .uploadButton:hover {
   border-color: var(--blue);
   color: var(--blue);
+}
+
+.aiButton:hover:not(:disabled) {
+  border-color: #7c3aed;
+  background: #7c3aed;
+  color: #fff;
 }
 
 .pageRail {
@@ -1562,6 +1574,43 @@ h1 {
   font-size: 12px;
 }
 
+.assetGalleryPageNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.assetGalleryPageNav button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  border-color: rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  padding: 0;
+  background: #2b2b2b;
+  color: #fff;
+}
+
+.assetGalleryPageNav button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: #373737;
+  color: #fff;
+}
+
+.assetGalleryPageNav svg {
+  width: 18px;
+  height: 18px;
+}
+
+.assetGalleryPageNav span {
+  min-width: 46px;
+  color: rgba(255, 255, 255, 0.68);
+  text-align: center;
+}
+
 .assetGalleryDialog .dialogCloseButton {
   color: rgba(255, 255, 255, 0.68);
 }
@@ -1578,6 +1627,22 @@ h1 {
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
+}
+
+.assetGalleryEmpty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 280px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.assetGalleryEmpty svg {
+  width: 26px;
+  height: 26px;
 }
 
 .assetGalleryCard {

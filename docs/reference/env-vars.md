@@ -11,15 +11,31 @@
 | `API_BASE_URL` | 插件调用后端 API | `http://localhost:8000/api` | 否 |
 | `PUBLIC_BASE_URL` | 后端生成本地 asset URL 时使用 | `http://localhost:8000` | 否 |
 | `CORS_ALLOW_ORIGINS` | 允许调用后端的 Origin，逗号分隔 | `*` | 否 |
-| `IMAGE_FIGMA_LOAD_LOCAL_ENV` | 是否加载仓库根目录 `.env.local` | `true` | 否 |
+| `IMAGE_FIGMA_LOAD_LOCAL_ENV` | 历史后端是否加载仓库根目录 `.env.local` | `true` | legacy |
+| `SLICE_STUDIO_LOAD_LOCAL_ENV` | Slice Studio 是否加载 `apps/slice-studio/.env.local` | `true` | 否 |
 | `OCR_PROVIDER` | OCR provider，支持 `fake`、`baidu_ppocrv5` | `fake` | 否 |
 | `OCR_MIN_CONFIDENCE` | OCR block 最低置信度 | `0.70` | 否 |
 | `SLICE_STUDIO_OCR_PROVIDER` | Slice Studio Pencil export OCR provider，支持 `baidu_ppocrv5`、显式诊断 `tesseract` | `baidu_ppocrv5` | 否 |
-| `SLICE_STUDIO_OCR_MIN_CONFIDENCE` | Slice Studio Pencil export OCR 最低置信度；未设置时读取 `OCR_MIN_CONFIDENCE` | `0.70` | 否 |
+| `SLICE_STUDIO_OCR_MIN_CONFIDENCE` | Slice Studio Pencil export OCR 最低置信度 | `0.70` | 否 |
 | `SLICE_STUDIO_TEXT_BBOX_SOURCE` | Slice Studio editable text bbox 来源；`m29_ocr_hybrid` 表示 OCR 识字、M29 只提供物理定位，`ocr` 表示只用 OCR bbox | `m29_ocr_hybrid` | 否 |
 | `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` | Slice Studio editable text 物理定位证据 provider；支持 `ts_m29_physical_evidence`、`go_m29extract`、`ocr` | `ts_m29_physical_evidence` | 否 |
 | `SLICE_STUDIO_M29EXTRACT_PATH` | Slice Studio 显式使用 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract` 时调用的本地 `m29extract` 路径 | `../../services/backend-go/bin/m29extract` | 否 |
-| `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `OCR_PROVIDER=baidu_ppocrv5` 时需要 |
+| `SLICE_STUDIO_AI_SLICE_PROVIDER` | Slice Studio AI 批量画框 provider；支持 `openai_responses`、`disabled` | `openai_responses` | 否 |
+| `SLICE_STUDIO_AI_SLICE_BASE_URL` | Slice Studio AI 画框 OpenAI-compatible base URL | `https://api.openai.com` | 仅运行 AI 画框时需要 |
+| `SLICE_STUDIO_AI_SLICE_API_KEY` | Slice Studio AI 画框 API key | 无 | 仅运行 AI 画框时需要 |
+| `SLICE_STUDIO_AI_SLICE_MODEL` | Slice Studio AI 画框模型 id | `gpt-5.5` | 仅运行 AI 画框时需要 |
+| `SLICE_STUDIO_AI_SLICE_WIRE_API` | Slice Studio AI 画框 wire API；当前实现支持 `responses` | `responses` | 否 |
+| `SLICE_STUDIO_AI_SLICE_REASONING_EFFORT` | Responses API reasoning effort | `xhigh` | 否 |
+| `SLICE_STUDIO_AI_SLICE_STORE` | 是否允许 provider 存储 response | `false` | 否 |
+| `SLICE_STUDIO_AI_SLICE_TIMEOUT_SECONDS` | 单 tile provider 请求超时秒数 | `120` | 否 |
+| `SLICE_STUDIO_AI_SLICE_TRANSPORT_RETRIES` | 单 tile transport retry 次数 | `2` | 否 |
+| `SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY` | 前端批量 AI 画框默认并发 | `4` | 否 |
+| `SLICE_STUDIO_AI_SLICE_TILE_COUNT` | 单页发送给 AI 的 tile 数；v1 使用 6 | `6` | 否 |
+| `SLICE_STUDIO_AI_SLICE_TILE_OVERLAP` | tile 重叠像素 | `64` | 否 |
+| `SLICE_STUDIO_AI_SLICE_MAX_TILE_SIDE` | 发送给 AI 前 tile 最长边上限 | `1280` | 否 |
+| `SLICE_STUDIO_AI_SLICE_JPEG_QUALITY` | 发送给 AI 的 tile JPEG 质量 | `75` | 否 |
+| `SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE` | 单页 AI 接受框数量上限 | `80` | 否 |
+| `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5` 时需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | 百度异步 OCR 轮询间隔秒数 | `5` | 否 |

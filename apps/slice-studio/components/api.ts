@@ -1,4 +1,4 @@
-import type { PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
+import type { AiSliceBoxesResponse, AiSliceSettingsResponse, PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_SLICE_STUDIO_API_URL || "http://127.0.0.1:4110";
 
@@ -45,6 +45,14 @@ export async function uploadPages(projectId: string, files: File[]): Promise<{ p
 
 export async function saveSlices(projectId: string, payload: SaveSlicesRequest): Promise<{ ok: true; project: ProjectSummary }> {
   return apiPut(`/api/projects/${projectId}/slices`, payload);
+}
+
+export async function generateAiBoxes(projectId: string, pageId: string): Promise<AiSliceBoxesResponse> {
+  return apiPost(`/api/projects/${projectId}/pages/${pageId}/ai-boxes`, {});
+}
+
+export async function getAiSliceSettings(): Promise<AiSliceSettingsResponse> {
+  return apiGet("/api/ai-slice-settings");
 }
 
 export async function renamePage(projectId: string, pageId: string, displayName: string): Promise<{ page: PageRecord }> {

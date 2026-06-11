@@ -64,6 +64,31 @@ export type SaveSlicesRequest = {
   }>;
 };
 
+export type AiSliceBox = {
+  bbox: BBox;
+  name?: string;
+  confidence?: number;
+  reason?: string;
+  sourceTileId: string;
+};
+
+export type AiSliceBoxesResponse = {
+  ok: true;
+  pageId: string;
+  boxes: AiSliceBox[];
+  diagnostics: {
+    tileCount: number;
+    rawBoxCount: number;
+    acceptedBoxCount: number;
+    rejectedBoxCount: number;
+  };
+};
+
+export type AiSliceSettingsResponse = {
+  ok: true;
+  batchConcurrency: number;
+};
+
 export type ExportManifest = {
   schema: "manual_ui_slices.v1";
   exportedAt: string;

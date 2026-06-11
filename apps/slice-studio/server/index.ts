@@ -7,6 +7,8 @@ import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
 import { exportPencilProject, getProjectZipPath } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
+import { generateAiSliceBoxes } from "./ai-slice-boxes";
+import { aiSliceBatchConcurrency } from "./config";
 import {
   addPages,
   createProject,
@@ -37,6 +39,7 @@ const app = new Elysia()
     return { error: error instanceof Error ? error.message : "Internal server error" };
   })
   .get("/api/health", () => ({ ok: true }))
+  .get("/api/ai-slice-settings", () => ({ ok: true, batchConcurrency: aiSliceBatchConcurrency }))
   .get("/api/projects", () => ({ projects: listProjectCards() }))
   .post("/api/projects", ({ body }) => ({ project: createProject(body) }), {
     body: t.Object({
@@ -78,6 +81,7 @@ const app = new Elysia()
     })
   })
   .delete("/api/projects/:projectId/pages/:pageId", ({ params }) => deletePage(params.projectId, params.pageId))
+  .post("/api/projects/:projectId/pages/:pageId/ai-boxes", async ({ params }) => generateAiSliceBoxes(params.projectId, params.pageId))
   .get("/api/projects/:projectId/pages/:pageId/source", ({ params }) => {
     const filePath = getPageOriginalPath(params.projectId, params.pageId);
     return new Response(Bun.file(filePath), {
