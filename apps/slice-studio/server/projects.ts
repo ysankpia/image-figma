@@ -320,6 +320,18 @@ export function getPageOriginalPath(projectId: string, pageId: string): string {
   return absolutePath;
 }
 
+export function getSliceForPreview(projectId: string, sliceId: string): { originalPath: string; slice: SliceRecord } {
+  assertSafeId(projectId, "projectId");
+  assertSafeSliceId(sliceId);
+  assertProjectExists(projectId);
+  const slice = db.query<SliceRow, [string, string]>("SELECT * FROM slices WHERE project_id = ? AND id = ?").get(projectId, sliceId);
+  if (!slice) throw httpError(404, "Slice not found");
+  return {
+    originalPath: getPageOriginalPath(projectId, slice.page_id),
+    slice: formatSlice(slice)
+  };
+}
+
 function getPageRow(projectId: string, pageId: string): PageRow {
   const page = db.query<PageRow, [string, string]>("SELECT * FROM pages WHERE project_id = ? AND id = ?").get(projectId, pageId);
   if (!page) throw httpError(404, "Page not found");

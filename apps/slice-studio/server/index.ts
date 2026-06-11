@@ -5,6 +5,7 @@ import { allowedOrigin, apiHost, apiPort } from "./config";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
+import { cropSliceToPng } from "./shape-cutout";
 import {
   addPages,
   createProject,
@@ -12,6 +13,7 @@ import {
   deleteProject,
   getPageOriginalPath,
   getProjectDetail,
+  getSliceForPreview,
   listProjectCards,
   renamePage,
   renameProject,
@@ -85,6 +87,17 @@ const app = new Elysia()
     });
   })
   .put("/api/projects/:projectId/slices", ({ params, body }) => ({ ok: true, project: saveSlices(params.projectId, body as SaveSlicesRequest) }))
+  .get("/api/projects/:projectId/slices/:sliceId/preview.png", async ({ params }) => {
+    const { originalPath, slice } = getSliceForPreview(params.projectId, params.sliceId);
+    const png = await cropSliceToPng(fs.readFileSync(originalPath), slice);
+    const body = new Uint8Array(png);
+    return new Response(body, {
+      headers: {
+        "content-type": "image/png",
+        "cache-control": "no-store"
+      }
+    });
+  })
   .post("/api/projects/:projectId/export-assets", async ({ params }) => exportAssets(params.projectId))
   .get("/api/projects/:projectId/assets.zip", ({ params }) => {
     const zipPath = getAssetsZipPath(params.projectId);

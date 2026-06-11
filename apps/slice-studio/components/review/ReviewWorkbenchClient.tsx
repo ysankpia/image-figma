@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, GripHorizontal, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Square, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Download, GripHorizontal, Grid2X2, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { apiBaseUrl, apiGet, apiPost, deletePage, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
@@ -57,10 +57,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
   const [boxColors, setBoxColors] = useState(defaultBoxColors);
   const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const sliceNodeRefs = useRef<Record<string, Konva.Rect | null>>({});
+  const assetItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRenameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPageRenameRef = useRef<{ pageId: string; displayName: string } | null>(null);
@@ -83,7 +85,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     setDetail(projectDetail);
     setPages(hydratedPages);
     setActivePageId(hydratedPages[0]?.id || null);
-    setActiveSliceId(null);
+    selectSlice(null);
     setStatus(hydratedPages.length ? "项目已恢复。继续切图会自动保存。" : "项目已创建。上传 UI 截图开始。");
   }, [projectId]);
 
@@ -130,6 +132,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && galleryOpen) {
+        event.preventDefault();
+        setGalleryOpen(false);
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
@@ -159,6 +166,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  useEffect(() => {
+    if (!activeSliceId) return;
+    assetItemRefs.current[activeSliceId]?.scrollIntoView({ block: "nearest" });
+  }, [activeSliceId]);
+
   async function hydratePage(page: ProjectDetail["pages"][number]): Promise<WorkbenchPage> {
     return {
       ...page,
@@ -179,7 +191,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       : hydratedPages[0]?.id || null;
     setActivePageId(resolvedPageId);
     const activePageForSlice = hydratedPages.find((page) => page.id === resolvedPageId);
-    setActiveSliceId(nextActiveSliceId && activePageForSlice?.slices.some((slice) => slice.id === nextActiveSliceId) ? nextActiveSliceId : null);
+    selectSlice(nextActiveSliceId && activePageForSlice?.slices.some((slice) => slice.id === nextActiveSliceId) ? nextActiveSliceId : null);
   }
 
   function clonePagesForUndo(sourcePages = pages): WorkbenchPage[] {
@@ -217,7 +229,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     const restoredPages = clonePagesForUndo(snapshot.pages);
     setPages(restoredPages);
     setActivePageId(snapshot.activePageId);
-    setActiveSliceId(snapshot.activeSliceId);
+    selectSlice(snapshot.activeSliceId);
     setStatus(`已撤销：${snapshot.label}`);
     setSaveState("saving");
     try {
@@ -394,10 +406,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     if (isTransformerTarget(target)) return;
     const sliceId = target.attrs.sliceId as string | undefined;
     if (sliceId) {
-      setActiveSliceId(sliceId);
+      selectSlice(sliceId);
       return;
     }
-    if (target === target.getStage()) setActiveSliceId(null);
+    if (target === target.getStage()) selectSlice(null);
   }
 
   function onMouseMove(event: Konva.KonvaEventObject<MouseEvent>) {
@@ -441,8 +453,23 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       selected: true
     };
     const nextPages = pages.map((page) => page.id === activePage.id ? { ...page, slices: [...page.slices, slice] } : page);
-    setActiveSliceId(slice.id);
+    selectSlice(slice.id);
     scheduleSave(nextPages, { pushUndo: true, undoLabel: "新建资产" });
+  }
+
+  function selectSlice(sliceId: string | null) {
+    setActiveSliceId(sliceId);
+  }
+
+  async function openAssetGallery() {
+    if (!activePage?.slices.length) return;
+    try {
+      await flushPageRename();
+      await saveNow();
+      setGalleryOpen(true);
+    } catch {
+      return;
+    }
   }
 
   function activateTool(nextTool: ToolMode) {
@@ -502,13 +529,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       ...page,
       slices: page.slices.filter((slice) => slice.id !== sliceId)
     } : page);
-    setActiveSliceId(null);
+    selectSlice(null);
     scheduleSave(nextPages, { pushUndo: true, undoLabel: "删除资产" });
   }
 
   function onTransformEnd(slice: SliceRecord, node: Konva.Rect) {
     if (!activePage) return;
-    setActiveSliceId(slice.id);
+    selectSlice(slice.id);
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     node.scaleX(1);
@@ -667,7 +694,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               </div>
               <button type="button" className="pageThumbButton" title={page.originalName} onClick={() => {
                 setActivePageId(page.id);
-                setActiveSliceId(null);
+                selectSlice(null);
               }}>
                 <span className="pageThumbImage">
                   <img src={`${apiBaseUrl}${page.sourceUrl}`} alt="" />
@@ -744,13 +771,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       onMouseDown={(event) => {
                         if (tool !== "select") return;
                         event.cancelBubble = true;
-                        setActiveSliceId(slice.id);
+                        selectSlice(slice.id);
                       }}
                       onDragStart={() => {
-                        if (tool === "select") setActiveSliceId(slice.id);
+                        if (tool === "select") selectSlice(slice.id);
                       }}
                       onDragEnd={(event) => {
-                        setActiveSliceId(slice.id);
+                        selectSlice(slice.id);
                         commitSlicePatch(slice.id, { bbox: normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage) }, "移动资产");
                       }}
                       onTransformEnd={(event) => onTransformEnd(slice, event.target as Konva.Rect)}
@@ -795,8 +822,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           <div className="inspectorInner">
             <div className="inspectorControls">
               <header className="inspectorHeader">
-                <h2>Assets</h2>
-                <span>{activePageAssetCount} assets</span>
+                <div>
+                  <h2>Assets</h2>
+                  <span>{activePageAssetCount} assets</span>
+                </div>
+                <button className="assetGalleryButton" type="button" disabled={!activePageAssetCount} onClick={() => void openAssetGallery()}>
+                  <Grid2X2 aria-hidden="true" />
+                  <span>总览</span>
+                </button>
               </header>
               <section className="cutModePanel">
                 <div className="cutModePanelHeader">
@@ -908,7 +941,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 <div
                   key={slice.id}
                   className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`}
-                  onClick={() => setActiveSliceId(slice.id)}
+                  ref={(node) => {
+                    assetItemRefs.current[slice.id] = node;
+                  }}
+                  onClick={() => selectSlice(slice.id)}
                 >
                   <span className="assetIndex">#{index + 1}</span>
                   <span className="assetFields">
@@ -917,7 +953,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       aria-label="资产名称"
                       value={slice.name}
                       onFocus={() => {
-                        setActiveSliceId(slice.id);
+                        selectSlice(slice.id);
                         beginSliceEdit(slice.id, "编辑资产");
                       }}
                       onBlur={() => {
@@ -934,7 +970,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                     title={slice.cutMode === "shape" ? "点击改为矩形" : "点击改为透明底"}
                     onClick={(event) => {
                       event.stopPropagation();
-                      setActiveSliceId(slice.id);
+                      selectSlice(slice.id);
                       commitSlicePatch(slice.id, { cutMode: slice.cutMode === "shape" ? "rect" : "shape" }, "切换裁切模式");
                     }}
                   >
@@ -985,6 +1021,55 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           </section>
         </div>
       ) : null}
+      {galleryOpen && activePage ? (
+        <div className="modalBackdrop assetGalleryBackdrop" role="presentation" onMouseDown={() => setGalleryOpen(false)}>
+          <section
+            className="assetGalleryDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="asset-gallery-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="assetGalleryHeader">
+              <div>
+                <h2 id="asset-gallery-title">资产总览</h2>
+                <span>P{pageIndex + 1} · {activePage.slices.length} assets · 点击卡片定位资产</span>
+              </div>
+              <button type="button" className="dialogCloseButton" aria-label="关闭资产总览" onClick={() => setGalleryOpen(false)}>
+                <X aria-hidden="true" />
+              </button>
+            </header>
+            <div className="assetGalleryGrid">
+              {activePage.slices.map((slice, index) => {
+                const isActive = slice.id === activeSliceId;
+                return (
+                  <button
+                    key={slice.id}
+                    type="button"
+                    className={`assetGalleryCard ${isActive ? "active" : ""}`}
+                    onClick={() => {
+                      selectSlice(slice.id);
+                      setGalleryOpen(false);
+                    }}
+                  >
+                    <span className="assetGalleryCardHeader">
+                      <strong>#{index + 1}</strong>
+                      <span>{slice.cutMode === "shape" ? "透明" : "矩形"}</span>
+                    </span>
+                    <span className="assetGalleryPreview">
+                      <img src={slicePreviewUrl(projectId, slice)} alt="" draggable={false} />
+                    </span>
+                    <span className="assetGalleryMeta">
+                      <strong>{slice.name}</strong>
+                      <span>{slice.bbox.width}x{slice.bbox.height}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -999,6 +1084,12 @@ function colorWithAlpha(hex: string, alpha: number): string {
   const green = Number.parseInt(normalized.slice(3, 5), 16);
   const blue = Number.parseInt(normalized.slice(5, 7), 16);
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function slicePreviewUrl(projectId: string, slice: SliceRecord): string {
+  const box = slice.bbox;
+  const version = [slice.cutMode, box.x, box.y, box.width, box.height, slice.name].join("-");
+  return `${apiBaseUrl}/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`;
 }
 
 function isTransformerTarget(node: Konva.Node): boolean {
