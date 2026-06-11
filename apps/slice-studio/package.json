@@ -12,8 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check": "bun run typecheck && bun run test",
-    "smoke": "bun scripts/smoke.ts",
-    "start:prod": "bun server/start-production.ts"
+    "smoke": "bun scripts/smoke.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",

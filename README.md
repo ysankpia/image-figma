@@ -51,19 +51,6 @@ Elysia API: http://127.0.0.1:4110
 http://127.0.0.1:3010/projects
 ```
 
-本机 Docker 自用部署：
-
-```bash
-cd apps/slice-studio
-docker compose -f docker-compose.local.yml up -d --build
-```
-
-Docker 版入口是五位本机端口：
-
-```text
-http://127.0.0.1:51230/projects
-```
-
 ## 配置
 
 Slice Studio 默认读取 `apps/slice-studio/.env.local`，不要把密钥提交到仓库。

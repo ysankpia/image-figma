@@ -30,15 +30,6 @@ Next web:  http://127.0.0.1:3010
 Elysia API: http://127.0.0.1:4110
 ```
 
-For local Docker validation:
-
-```bash
-cd apps/slice-studio
-docker compose -f docker-compose.local.yml up -d --build
-curl http://127.0.0.1:51230/api/health
-curl -I http://127.0.0.1:51230/projects
-```
-
 ## Slice Studio Runtime Validation
 
 For visible workflow, export, OCR, M29, AI boxes, or persistence changes, validate a real project:

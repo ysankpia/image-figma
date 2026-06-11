@@ -58,25 +58,6 @@ Elysia API: http://127.0.0.1:4110
 http://127.0.0.1:3010/projects
 ```
 
-## Run Slice Studio With Docker
-
-本机自用 Docker 启动：
-
-```bash
-cd apps/slice-studio
-docker compose -f docker-compose.local.yml up -d --build
-```
-
-打开同一个入口：
-
-```text
-http://127.0.0.1:51230/projects
-```
-
-Docker 版只向宿主机暴露 `127.0.0.1:51230`，映射到容器内 Web 端口 `3010`。浏览器请求同源 `/api`，Next 在容器内代理到 Elysia API。
-
-详细操作、停止、日志、备份和未来迁服务器步骤见 [slice-studio-local-docker.md](slice-studio-local-docker.md)。
-
 本地数据：
 
 ```text
