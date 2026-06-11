@@ -158,3 +158,4 @@
 - [168 Slice Studio Shape Cutout Mode](168-slice-studio-shape-cutout-mode.md)
 - [169 Slice Studio Cut Mode UI Cleanup](169-slice-studio-cut-mode-ui-cleanup.md)
 - [170 Slice Studio Inspector Scroll And Favicon](170-slice-studio-inspector-scroll-and-favicon.md)
+- [176 Slice Studio Pencil Project Export](176-slice-studio-pencil-project-export.md)

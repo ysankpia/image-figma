@@ -366,6 +366,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     }
   }
 
+  async function exportProject() {
+    try {
+      await flushPageRename();
+      await saveNow();
+      const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, {});
+      window.location.href = `${apiBaseUrl}${result.url}`;
+      setStatus(`已导出 Pencil 项目：${result.pageCount} 页，${result.assetCount} 个图层资产。`);
+    } catch (error) {
+      setStatus(`导出失败：${error instanceof Error ? error.message : "unknown error"}`);
+    }
+  }
+
   function fitPage() {
     if (!activePage) return;
     const fitScale = Math.min((stageSize.width - 160) / activePage.width, (stageSize.height - 160) / activePage.height, 1);
@@ -681,6 +693,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
             <Download aria-hidden="true" />
             <span>导出 assets.zip</span>
+          </button>
+          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportProject()}>
+            <Download aria-hidden="true" />
+            <span>导出 project.zip</span>
           </button>
           <span className={`saveState ${saveState}`} title={status}>{saveLabel}</span>
         </div>

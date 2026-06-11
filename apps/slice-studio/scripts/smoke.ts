@@ -85,7 +85,32 @@ async function main() {
     if (manifest.pages[0]?.slices[0]?.cutMode !== "subject") {
       throw new Error(`expected remaining slice cutMode subject, got ${manifest.pages[0]?.slices[0]?.cutMode}`);
     }
-    console.log(JSON.stringify({ ok: true, projectId, assetCount: exported.assetCount, pages: manifest.pages.map((page) => page.pageDirectory) }));
+
+    const projectExport = await request<{ assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, { method: "POST" });
+    if (projectExport.assetCount !== 1) throw new Error(`expected 1 project asset, got ${projectExport.assetCount}`);
+    if (projectExport.pageCount !== 2) throw new Error(`expected 2 project pages, got ${projectExport.pageCount}`);
+    const projectZip = await fetch(`${apiBaseUrl}${projectExport.url}`);
+    if (!projectZip.ok) throw new Error(`project.zip download failed ${projectZip.status}`);
+    const projectZipBuffer = Buffer.from(await projectZip.arrayBuffer());
+    const projectEntries = readZipEntryNames(projectZipBuffer);
+    assertIncludes(projectEntries, "design.pen");
+    assertIncludes(projectEntries, "manifest.json");
+    assertIncludes(projectEntries, "project.json");
+    assertIncludes(projectEntries, "assets/originals/P1-订单页.png");
+    assertIncludes(projectEntries, "assets/visible/remainders/P1-订单页/remainder.png");
+    assertIncludes(projectEntries, "assets/visible/slices/P1-订单页/slice_0001.png");
+    const design = JSON.parse(readZipEntry(projectZipBuffer, "design.pen").toString("utf8")) as PencilDocument;
+    assertPenRefsExist(design, projectEntries);
+    const pencilManifest = JSON.parse(readZipEntry(projectZipBuffer, "manifest.json").toString("utf8")) as PencilManifest;
+    if (pencilManifest.pencil.designPen !== "design.pen") throw new Error("pencil manifest designPen mismatch");
+    if (pencilManifest.pages[0]?.remainder !== "assets/visible/remainders/P1-订单页/remainder.png") {
+      throw new Error(`unexpected pencil remainder path: ${pencilManifest.pages[0]?.remainder}`);
+    }
+    if (pencilManifest.pages[0]?.slices[0]?.filename !== "assets/visible/slices/P1-订单页/slice_0001.png") {
+      throw new Error(`unexpected pencil slice path: ${pencilManifest.pages[0]?.slices[0]?.filename}`);
+    }
+
+    console.log(JSON.stringify({ ok: true, projectId, assetCount: exported.assetCount, pages: manifest.pages.map((page) => page.pageDirectory), projectZip: true }));
   } finally {
     await request(`/api/projects/${projectId}`, { method: "DELETE" });
   }
@@ -153,6 +178,20 @@ function assertIncludes(values: string[], expected: string): void {
   }
 }
 
+function assertPenRefsExist(document: PencilDocument, entries: string[]): void {
+  const entrySet = new Set(entries);
+  const visit = (node: PencilNode) => {
+    const fill = node.fill;
+    if (fill && typeof fill === "object" && fill.type === "image") {
+      if (!fill.url.startsWith("./assets/visible/")) throw new Error(`bad pen image ref: ${fill.url}`);
+      const entry = fill.url.slice(2);
+      if (!entrySet.has(entry)) throw new Error(`missing pen image ref: ${fill.url}`);
+    }
+    for (const child of node.children || []) visit(child);
+  };
+  for (const child of document.children || []) visit(child);
+}
+
 type ProjectDetail = {
   pages: Array<{
     id: string;
@@ -167,6 +206,23 @@ type ExportManifest = {
     pageDirectory: string;
     slices: Array<{ cutMode: string }>;
   }>;
+};
+
+type PencilManifest = {
+  pencil: { designPen: string };
+  pages: Array<{
+    remainder: string;
+    slices: Array<{ filename: string }>;
+  }>;
+};
+
+type PencilDocument = {
+  children: PencilNode[];
+};
+
+type PencilNode = {
+  fill?: { type: "image"; url: string } | string;
+  children?: PencilNode[];
 };
 
 main().catch((error) => {

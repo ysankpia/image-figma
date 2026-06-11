@@ -24,7 +24,8 @@ Elysia API: http://127.0.0.1:4110
 -> originals saved to storage
 -> manual image slices
 -> SQLite metadata
--> assets.zip
+-> assets.zip for frontend assets
+-> project.zip / design.pen for Pencil handoff
 ```
 
 ## Project Home
@@ -44,7 +45,7 @@ card actions: inline rename, delete confirmation
 Review uses a canvas-first layout:
 
 ```text
-topbar: project, upload, grouped zoom, short save state, export
+topbar: project, upload, grouped zoom, short save state, assets/project export
 left rail: page thumbnails
 center: black Konva canvas with select/draw/pan floating tools
 right inspector: compact active asset editor and asset list, collapsible
@@ -102,6 +103,7 @@ storage/
   app.sqlite
   projects/{projectId}/originals/page_0001.png
   projects/{projectId}/exports/assets.zip
+  projects/{projectId}/exports/project.zip
 ```
 
 `storage/` is local runtime data and must not be committed.
@@ -116,6 +118,19 @@ project.json
 ```
 
 The exporter reads SQLite slices and original PNG files on disk. It does not crop from frontend thumbnails or canvas state. Export fails when no slices exist.
+
+`project.zip` packages the same confirmed slice assets into a Pencil handoff project:
+
+```text
+design.pen
+manifest.json
+project.json
+assets/originals/P1-首页.png
+assets/visible/remainders/P1-首页/remainder.png
+assets/visible/slices/P1-首页/slice_0001.png
+```
+
+`design.pen` contains one frame per page. Each frame has a visible `remainder.png` layer plus the confirmed slice PNG layers placed at their original source-image coordinates. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline. OCR, TextLayer generation, font recognition, and Figma import are intentionally not part of this Pencil export stage.
 
 ## Configuration
 
@@ -132,4 +147,4 @@ SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
 
 ## Scope
 
-v1 only supports manual `image` slicing. AI, OCR, YOLO, M29, PSD-like, Pencil export, Figma import, auth, and cloud sync are intentionally out of scope.
+v1 supports manual `image` slicing plus Pencil project export. AI, OCR, YOLO, M29, PSD-like, TextLayer generation, Figma import, auth, and cloud sync are intentionally out of scope.

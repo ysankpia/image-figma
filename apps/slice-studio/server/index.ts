@@ -5,6 +5,7 @@ import { allowedOrigin, apiHost, apiPort } from "./config";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
+import { exportPencilProject, getProjectZipPath } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
 import {
   addPages,
@@ -106,6 +107,17 @@ const app = new Elysia()
       headers: {
         "content-type": "application/zip",
         "content-disposition": `attachment; filename="${params.projectId}-assets.zip"`
+      }
+    });
+  })
+  .post("/api/projects/:projectId/export-project", async ({ params }) => exportPencilProject(params.projectId))
+  .get("/api/projects/:projectId/project.zip", ({ params }) => {
+    const zipPath = getProjectZipPath(params.projectId);
+    if (!fs.existsSync(zipPath)) throw httpError(404, "project.zip has not been generated");
+    return new Response(Bun.file(zipPath), {
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${params.projectId}-project.zip"`
       }
     });
   })
