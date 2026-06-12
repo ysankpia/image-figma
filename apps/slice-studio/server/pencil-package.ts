@@ -146,7 +146,10 @@ export function buildPencilManifest(
           bboxProviderStatus: "skipped",
           bboxProviderReason: "not_run",
           sourceLineCount: 0,
-          textLayerCount: 0
+          textLayerCount: 0,
+          rasterPreservedTextCount: 0,
+          skippedTextCount: 0,
+          ownershipPolicy: "slice_studio_text_ownership.v1"
         },
         textLayerCount: textByPageId.get(page.id)?.textLayerCount || 0,
         textLayers: textByPageId.get(page.id)?.textLayers || []

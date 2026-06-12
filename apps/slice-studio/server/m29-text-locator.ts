@@ -16,6 +16,7 @@ export type LocatedTextLine = {
   physicalBBox?: BBox;
   bboxMatchScore?: number;
   m29PrimitiveId?: string;
+  bboxFallbackReason?: string;
 };
 
 export type TextLocationResult = {
@@ -118,6 +119,9 @@ export function locateTextLinesFromM29(lines: OcrLine[], doc: M29Document): Text
       ? { primitive: direct, score: 1 }
       : bestPhysicalMatch(line, primitives);
     if (match && match.score >= minMatchScore) {
+      if (physicalTextBoxIsTooBroad(line.bbox, match.primitive.bbox)) {
+        return fallbackLine(line, "m29_bbox_too_broad_for_ocr_line");
+      }
       return {
         line,
         bbox: { ...match.primitive.bbox },
@@ -128,15 +132,13 @@ export function locateTextLinesFromM29(lines: OcrLine[], doc: M29Document): Text
       };
     }
     return {
-      line,
-      bbox: { ...line.bbox },
-      bboxSource: "ocr" as const
+      ...fallbackLine(line, "no_matching_m29_text_bbox")
     };
   });
   return {
     status: "ok",
     source: "m29_ocr_hybrid",
-    lines: located
+    lines: demoteSharedPhysicalMatches(located)
   };
 }
 
@@ -204,12 +206,45 @@ function fallbackToOcr(lines: OcrLine[], reason: string): TextLocationResult {
     status: reason === "text_bbox_source_ocr" || reason === "ocr_not_ok_or_empty" || reason === "physical_evidence_provider_ocr" ? "skipped" : "failed",
     source: "ocr",
     reason,
-    lines: lines.map((line) => ({
-      line,
-      bbox: { ...line.bbox },
-      bboxSource: "ocr"
-    }))
+    lines: lines.map((line) => fallbackLine(line, reason))
   };
+}
+
+function fallbackLine(line: OcrLine, reason: string): LocatedTextLine {
+  return {
+    line,
+    bbox: { ...line.bbox },
+    bboxSource: "ocr",
+    bboxFallbackReason: reason
+  };
+}
+
+function demoteSharedPhysicalMatches(lines: LocatedTextLine[]): LocatedTextLine[] {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    if (line.bboxSource !== "m29_foreground" || !line.m29PrimitiveId) continue;
+    counts.set(line.m29PrimitiveId, (counts.get(line.m29PrimitiveId) || 0) + 1);
+  }
+  return lines.map((line) => {
+    if (line.bboxSource !== "m29_foreground" || !line.m29PrimitiveId) return line;
+    if ((counts.get(line.m29PrimitiveId) || 0) <= 1) return line;
+    return fallbackLine(line.line, "shared_m29_bbox_for_multiple_ocr_lines");
+  });
+}
+
+function physicalTextBoxIsTooBroad(ocrBBox: BBox, physicalBBox: BBox): boolean {
+  const ocrArea = area(ocrBBox);
+  const physicalArea = area(physicalBBox);
+  if (ocrArea <= 0 || physicalArea <= 0) return true;
+
+  const widthRatio = physicalBBox.width / Math.max(1, ocrBBox.width);
+  const heightRatio = physicalBBox.height / Math.max(1, ocrBBox.height);
+  const areaRatio = physicalArea / ocrArea;
+
+  if (heightRatio >= 1.32 && areaRatio >= 1.85) return true;
+  if (widthRatio >= 1.85 && heightRatio >= 1.12) return true;
+  if (widthRatio >= 2.4) return true;
+  return false;
 }
 
 function expandBBox(bbox: BBox, padX: number, padY: number): BBox {

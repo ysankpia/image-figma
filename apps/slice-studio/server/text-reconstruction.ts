@@ -18,6 +18,8 @@ export type TextLayer = {
   metadata: Record<string, unknown>;
 };
 
+export type TextOwnershipDecision = "editable_text" | "raster_preserve" | "skipped";
+
 export type TextReconstruction = {
   ocr: {
     provider: OcrResult["provider"];
@@ -29,6 +31,9 @@ export type TextReconstruction = {
     bboxProviderReason?: string;
     sourceLineCount: number;
     textLayerCount: number;
+    rasterPreservedTextCount: number;
+    skippedTextCount: number;
+    ownershipPolicy: "slice_studio_text_ownership.v1";
   };
   layers: TextLayer[];
 };
@@ -48,9 +53,11 @@ const minTextHeight = 5;
 const minLineConfidence = 70;
 const minRemainingRatio = 0.55;
 const minCoverageOverlapRatio = 0.25;
+const tinyRasterPreserveHeight = 10;
 
 export async function reconstructTextLayers(options: ReconstructOptions): Promise<TextReconstruction> {
   const layers: TextLayer[] = [];
+  const decisions: Array<{ decision: TextOwnershipDecision; reason: string }> = [];
   let textLocation: TextLocationResult | null = null;
   if (options.ocr.status === "ok") {
     const raw = await sharp(options.imageBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -65,21 +72,19 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
     const locatedLines = textLocation.lines.map((located) => canUseLocalForeground
       ? refineWithLocalForeground(raw.data, raw.info.width, raw.info.height, located)
       : located);
-    const accepted = locatedLines
-      .filter((located) => located.line.text.trim().length > 0)
-      .filter((located) => located.line.confidence >= minLineConfidence)
-      .filter((located) => located.bbox.height >= minTextHeight && located.bbox.width > 0)
-      .filter((located) => textGeometryLooksEditable({ ...located.line, bbox: located.bbox }, options.width))
-      .filter((located) => remainingRatio(located.line.bbox, blockers) >= minRemainingRatio)
-      .filter((located) => remainingRatio(located.bbox, blockers) >= minRemainingRatio);
-    for (const [index, located] of accepted.entries()) {
+    const denseTextPage = isDenseTextPage(options.width, options.height, options.ocr.lines.length);
+    for (const located of locatedLines) {
+      const ownership = classifyTextOwnership(located, options.width, blockers, denseTextPage);
+      decisions.push(ownership);
+      if (ownership.decision !== "editable_text") continue;
       layers.push(makeTextLayer({
-        index,
+        index: layers.length,
         located,
         pageId: options.pageId,
         pageWidth: options.width,
         pageHeight: options.height,
-        color: sampleTextColor(raw.data, raw.info.width, raw.info.height, located.bbox)
+        color: sampleTextColor(raw.data, raw.info.width, raw.info.height, located.bbox),
+        ownershipReason: ownership.reason
       }));
     }
   }
@@ -93,10 +98,37 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
       bboxProviderStatus: textLocation?.status,
       bboxProviderReason: textLocation?.reason,
       sourceLineCount: options.ocr.lines.length,
-      textLayerCount: layers.length
+      textLayerCount: layers.length,
+      rasterPreservedTextCount: decisions.filter((decision) => decision.decision === "raster_preserve").length,
+      skippedTextCount: decisions.filter((decision) => decision.decision === "skipped").length,
+      ownershipPolicy: "slice_studio_text_ownership.v1"
     },
     layers
   };
+}
+
+export function classifyTextOwnership(
+  located: LocatedTextLine,
+  pageWidth: number,
+  blockers: BBox[],
+  denseTextPage = false
+): { decision: TextOwnershipDecision; reason: string } {
+  const text = located.line.text.trim();
+  if (!text) return { decision: "skipped", reason: "empty_text" };
+  if (located.line.confidence < minLineConfidence) return { decision: "skipped", reason: "low_confidence" };
+  if (located.bbox.width <= 0 || located.bbox.height < minTextHeight) return { decision: "skipped", reason: "invalid_or_too_small_bbox" };
+  if (looksLikeGeneratedMarkerLabel(text)) return { decision: "raster_preserve", reason: "generated_asset_marker_label" };
+  if (denseTextPage && located.bbox.height <= tinyRasterPreserveHeight) return { decision: "raster_preserve", reason: "tiny_dense_ui_text" };
+  if (!textGeometryLooksEditable({ ...located.line, bbox: located.bbox }, pageWidth)) return { decision: "raster_preserve", reason: "geometry_not_editable" };
+  if (remainingRatio(located.line.bbox, blockers) < minRemainingRatio) return { decision: "raster_preserve", reason: "ocr_text_inside_confirmed_slice" };
+  if (remainingRatio(located.bbox, blockers) < minRemainingRatio) return { decision: "raster_preserve", reason: "physical_text_inside_confirmed_slice" };
+  return { decision: "editable_text", reason: "normal_ocr_text" };
+}
+
+function isDenseTextPage(width: number, height: number, lineCount: number): boolean {
+  if (lineCount >= 120) return true;
+  const megapixels = (width * height) / 1_000_000;
+  return lineCount / Math.max(0.2, megapixels) >= 120;
 }
 
 export function remainingRatio(bbox: BBox, blockers: BBox[]): number {
@@ -117,6 +149,7 @@ function makeTextLayer(input: {
   pageWidth: number;
   pageHeight: number;
   color: string;
+  ownershipReason: string;
 }): TextLayer {
   const line = input.located.line;
   const script = scriptForText(line.text);
@@ -145,12 +178,16 @@ function makeTextLayer(input: {
       physicalBBox: input.located.physicalBBox ? { ...input.located.physicalBBox } : undefined,
       bboxSource: input.located.bboxSource,
       bboxMatchScore: input.located.bboxMatchScore,
+      bboxFallbackReason: input.located.bboxFallbackReason,
       m29PrimitiveId: input.located.m29PrimitiveId,
       safeBBox,
       safeBoundsPolicy: "slice_studio_text_safe_bounds.v1",
       script,
       confidence: line.confidence,
       wordCount: line.wordCount,
+      textOwnershipPolicy: "slice_studio_text_ownership.v1",
+      textOwnershipDecision: "editable_text",
+      textOwnershipReason: input.ownershipReason,
       zRole: "editable_text"
     }
   };
@@ -160,6 +197,7 @@ function refineWithLocalForeground(data: Buffer, width: number, height: number, 
   if (located.bboxSource !== "ocr") return located;
   const physicalBBox = localTextForegroundBBox(data, width, height, located.line.bbox);
   if (!physicalBBox) return located;
+  if (textBoxIsTooBroadForLine(located.line.bbox, physicalBBox)) return located;
   return {
     ...located,
     bbox: physicalBBox,
@@ -167,6 +205,21 @@ function refineWithLocalForeground(data: Buffer, width: number, height: number, 
     physicalBBox,
     bboxMatchScore: 1
   };
+}
+
+function textBoxIsTooBroadForLine(ocrBBox: BBox, physicalBBox: BBox): boolean {
+  const ocrArea = ocrBBox.width * ocrBBox.height;
+  const physicalArea = physicalBBox.width * physicalBBox.height;
+  if (ocrArea <= 0 || physicalArea <= 0) return true;
+
+  const widthRatio = physicalBBox.width / Math.max(1, ocrBBox.width);
+  const heightRatio = physicalBBox.height / Math.max(1, ocrBBox.height);
+  const areaRatio = physicalArea / ocrArea;
+
+  if (heightRatio >= 1.32 && areaRatio >= 1.85) return true;
+  if (widthRatio >= 1.85 && heightRatio >= 1.12) return true;
+  if (widthRatio >= 2.4) return true;
+  return false;
 }
 
 export function textGeometryLooksEditable(line: OcrLine, pageWidth: number): boolean {
@@ -185,10 +238,18 @@ function fitFontSize(text: string, bbox: BBox, bboxSource: LocatedTextLine["bbox
   const units = textVisualUnits(text);
   const isPhysicalBBox = bboxSource === "m29_foreground" || bboxSource === "local_foreground";
   const widthLimit = bbox.width * (isPhysicalBBox ? 1.02 : 0.94) / Math.max(1, units);
-  const physicalHeightRatio = text.length <= 4 ? 0.82 : 0.92;
+  const physicalHeightRatio = script === "latin" ? 0.7 : script === "mixed" ? 0.76 : text.length <= 4 ? 0.82 : 0.86;
   const heightLimit = bbox.height * (isPhysicalBBox ? physicalHeightRatio : script === "latin" ? 0.7 : 0.74);
   const raw = clamp(Math.min(widthLimit, heightLimit), 8, 56);
   return Math.round(raw * 10) / 10;
+}
+
+export function looksLikeGeneratedMarkerLabel(text: string): boolean {
+  const compact = text.trim().replace(/[()［］\[\]{}]/g, "");
+  if (/^(?:img|lmg|ing)[-_]?\d{1,4}$/iu.test(compact)) return true;
+  if (/^[gm][-_]?\d{1,4}$/iu.test(compact)) return true;
+  if (/^m[-_]\d{1,4}$/iu.test(compact)) return true;
+  return false;
 }
 
 function expandedTextBounds(bbox: BBox, pageWidth: number, pageHeight: number, fontSize: number, script: string): BBox {

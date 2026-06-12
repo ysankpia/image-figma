@@ -171,7 +171,10 @@ describe("pencil exporter", () => {
           language: "zh+en",
           model: "PP-OCRv5",
           sourceLineCount: 2,
-          textLayerCount: 1
+          textLayerCount: 1,
+          rasterPreservedTextCount: 0,
+          skippedTextCount: 0,
+          ownershipPolicy: "slice_studio_text_ownership.v1" as const
         },
         textLayerCount: 1,
         textLayers: [{
@@ -427,6 +430,56 @@ describe("pencil exporter", () => {
     expect(reconstruction.layers[0].metadata.physicalBBox).toEqual({ x: 48, y: 31, width: 45, height: 14 });
     expect(reconstruction.layers[0].metadata.bboxSource).toBe("m29_foreground");
     expect(reconstruction.layers[0].metadata.m29PrimitiveId).toBe("prim_text");
+    expect(reconstruction.layers[0].metadata.textOwnershipDecision).toBe("editable_text");
+  });
+
+  it("falls back from over-broad shared M29 text boxes before Pencil font sizing", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 1536,
+        height: 120,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 1536,
+      height: 120,
+      imageBuffer,
+      slices: [],
+      locator: () => locateTextLinesFromM29([
+        { text: "Zoom In", bbox: { x: 1224, y: 24, width: 62, height: 18 }, confidence: 97, wordCount: 2 },
+        { text: "Zoom Out", bbox: { x: 1302, y: 24, width: 74, height: 18 }, confidence: 93, wordCount: 2 }
+      ], {
+        schemaName: "M29PhysicalEvidence",
+        primitives: [{
+          id: "prim_zoom_group",
+          primitiveType: "symbol_region",
+          bbox: { x: 1220, y: 19, width: 161, height: 31 }
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "Zoom In", bbox: { x: 1224, y: 24, width: 62, height: 18 }, confidence: 97, wordCount: 2 },
+          { text: "Zoom Out", bbox: { x: 1302, y: 24, width: 74, height: 18 }, confidence: 93, wordCount: 2 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers).toHaveLength(2);
+    expect(reconstruction.layers.map((layer) => layer.metadata.bboxSource)).toEqual(["ocr", "ocr"]);
+    expect(reconstruction.layers.map((layer) => layer.metadata.bboxFallbackReason)).toEqual([
+      "m29_bbox_too_broad_for_ocr_line",
+      "m29_bbox_too_broad_for_ocr_line"
+    ]);
+    expect(reconstruction.layers[0].fontSize).toBeLessThan(16);
+    expect(reconstruction.layers[1].fontSize).toBeLessThan(16);
   });
 
   it("falls back to OCR bbox when physical evidence does not match", async () => {
@@ -565,6 +618,55 @@ describe("pencil exporter", () => {
     expect(reconstruction.layers[0].fontWeight).toBe("600");
     expect(reconstruction.layers[0].fontSize).toBeLessThan(56);
     expect(reconstruction.layers[0].bbox.x).toBe(50);
+  });
+
+  it("preserves generated asset marker labels as raster instead of editable Pencil text", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 240,
+        height: 160,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 240,
+      height: 160,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [
+          {
+            line: { text: "img-11", bbox: { x: 20, y: 20, width: 34, height: 12 }, confidence: 98, wordCount: 1 },
+            bbox: { x: 20, y: 20, width: 34, height: 12 },
+            bboxSource: "ocr"
+          },
+          {
+            line: { text: "Checkout", bbox: { x: 80, y: 60, width: 70, height: 16 }, confidence: 97, wordCount: 1 },
+            bbox: { x: 80, y: 60, width: 70, height: 16 },
+            bboxSource: "ocr"
+          }
+        ]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "img-11", bbox: { x: 20, y: 20, width: 34, height: 12 }, confidence: 98, wordCount: 1 },
+          { text: "Checkout", bbox: { x: 80, y: 60, width: 70, height: 16 }, confidence: 97, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.ocr.textLayerCount).toBe(1);
+    expect(reconstruction.ocr.rasterPreservedTextCount).toBe(1);
+    expect(reconstruction.layers.map((layer) => layer.text)).toEqual(["Checkout"]);
   });
 
   it("rejects oversized OCR noise lines before creating Pencil text layers", async () => {

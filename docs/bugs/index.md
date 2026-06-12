@@ -6,7 +6,7 @@
 
 ## 当前 Open Bugs
 
-- [024-slice-studio-dense-pc-ui-pencil-layer-coordination.md](open/024-slice-studio-dense-pc-ui-pencil-layer-coordination.md)：密集 PC/Web UI 截图在 Slice Studio Pencil handoff 中触发 remainder、AI slice、OCR text layer 协同缺口，导致预览文字重影、错位和视觉污染。
+当前没有已记录的 open mainline bug。
 
 ## Superseded Bugs
 
@@ -14,6 +14,7 @@
 
 ## 最近 Resolved Bugs
 
+- [024-slice-studio-dense-pc-ui-pencil-layer-coordination.md](resolved/024-slice-studio-dense-pc-ui-pencil-layer-coordination.md)
 - [009-specialization-prone-m29-internal-asset-gates.md](resolved/009-specialization-prone-m29-internal-asset-gates.md)
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](resolved/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)
 - [023-slice-studio-tesseract-ocr-noisy-text-overlays.md](resolved/023-slice-studio-tesseract-ocr-noisy-text-overlays.md)
