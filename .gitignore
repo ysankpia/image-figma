@@ -31,6 +31,8 @@ dist/
 *.egg-info/
 
 # local app storage
+output/
+tmp/
 backend/storage/
 backend/tmp/
 services/backend-go/storage/
