@@ -6,6 +6,7 @@
 
 ## 当前 Open Bugs
 
+- [024-slice-studio-dense-pc-ui-pencil-layer-coordination.md](open/024-slice-studio-dense-pc-ui-pencil-layer-coordination.md)：密集 PC/Web UI 截图在 Slice Studio Pencil handoff 中触发 remainder、AI slice、OCR text layer 协同缺口，导致预览文字重影、错位和视觉污染。
 - [009-specialization-prone-m29-internal-asset-gates.md](open/009-specialization-prone-m29-internal-asset-gates.md)：M29 internal asset chain 已避免硬特化，但仍有 OCR-anchor evidence bias、confidence gate drift 和 anti-specialization guard 缺口。
 - [003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md](open/003-text-replacement-rejects-ui-labels-on-low-complexity-cards.md)：M12 replacement 对部分已 OCR 识别的 UI 文本仍判为 `complex_background`。
 
