@@ -32,6 +32,14 @@ apps/slice-studio
 
 ## 运行 Slice Studio
 
+从仓库根目录启动当前产品：
+
+```bash
+pnpm run dev
+```
+
+等价于：
+
 ```bash
 cd apps/slice-studio
 bun install
@@ -78,6 +86,13 @@ SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW=true
 ## 验证
 
 Slice Studio 基线检查：
+
+```bash
+pnpm run check:slice-studio
+pnpm run build:slice-studio
+```
+
+等价于：
 
 ```bash
 pnpm --dir apps/slice-studio run check

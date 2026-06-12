@@ -38,6 +38,7 @@ anonymous visitor
 - Use OCR only for editable text content.
 - Use TypeScript M29 physical evidence only for tighter OCR text bbox placement.
 - Keep old services and historical Draft/Renderer/plugin code as reference or deferred work.
+- Completed [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md): protected current storage, clarified repo mainline, hardened OpenRouter/OpenAI-compatible provider support, and kept smoke validation repeatable.
 - Execute [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md) as the active production-readiness contract.
 - Treat payment provider selection as undecided; implement entitlement, usage, and verified webhook boundaries before binding to any provider.
 - Treat AI provider replacement as an OpenAI-compatible provider concern; OpenRouter can be evaluated without changing Slice Studio's core workflow contract.

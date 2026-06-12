@@ -5,7 +5,7 @@ This directory is retained as historical/research code for the old Python `/api/
 Current product work belongs in:
 
 ```text
-services/pencil-python-backend/
+apps/slice-studio/
 ```
 
 Current code ownership and legacy classification are documented in:
@@ -15,7 +15,7 @@ docs/engineering/current-code-map.md
 docs/engineering/legacy-code-inventory.md
 ```
 
-Do not use this directory as the starting point for assisted slice workspace, Pencil `.pen` export, `project.zip`, or `selected-assets.zip` work.
+Do not use this directory as the starting point for Slice Studio, assisted slice workspace, Pencil `.pen` export, `project.zip`, or `assets.zip` work.
 
 ## Historical Runtime
 

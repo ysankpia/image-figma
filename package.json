@@ -4,6 +4,12 @@
   "private": true,
   "packageManager": "pnpm@10.33.2",
   "scripts": {
+    "dev": "pnpm --dir apps/slice-studio run dev",
+    "dev:slice-studio": "pnpm --dir apps/slice-studio run dev",
+    "build": "pnpm --dir apps/slice-studio run build",
+    "build:slice-studio": "pnpm --dir apps/slice-studio run build",
+    "check:slice-studio": "pnpm --dir apps/slice-studio run check",
+    "smoke:slice-studio": "pnpm --dir apps/slice-studio run smoke",
     "check": "pnpm -r run check",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test"

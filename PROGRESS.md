@@ -3,23 +3,26 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Plan the formal multi-user production launch for Slice Studio, including landing page, login/register, user ownership, production database/storage, AI provider replaceability, entitlement gates, provider-neutral payment/subscription, deployment, backup, and validation.
+Continue formal multi-user production planning for Slice Studio after completing the prelaunch codebase hardening pass.
 
 ## Active plan
 - Current plan: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
-- Most recently completed: `docs/plans/completed/188-review-workbench-i18n.md`
+- Most recently completed: `docs/plans/completed/190-slice-studio-prelaunch-codebase-hardening.md`
 
 ## Current phase
 Slice Studio multi-user production launch planning
 
 ## Now
-- Current local product is usable as a private Slice Studio workflow, but formal public launch requires a new production product contract.
-- Active plan 189 defines the multi-user production path: landing page, auth/session, project ownership, production database, object storage, entitlement/usage gates, provider-neutral payment, replaceable AI provider, deployment, backup/restore, and full user-view validation.
-- Payment provider is intentionally not fixed yet because account/legal constraints are unresolved; the plan defines the internal entitlement and webhook safety contract first.
-- AI provider selection is treated as a replaceable OpenAI-compatible provider concern; OpenRouter can be evaluated without binding core product logic to it.
-- No business code has been changed for production launch yet.
+- Current local product is usable, and the current repository checks pass.
+- Plan 190 is complete: local storage is backed up, root scripts/docs point to Slice Studio, legacy/reference directories are marked in place, OpenRouter/OpenAI-compatible `chat_completions` provider support is implemented, and repeatable smoke validation passed.
+- Plan 189 remains the formal multi-user launch plan for auth/session, ownership, production database/storage, entitlement, payment, and deployment.
+- Payment provider remains intentionally undecided.
+- Existing local project data must not be deleted, stranded, or hidden by any path cleanup.
 
 ## Done
+- 2026-06-13: completed plan 190 and moved it to `docs/plans/completed/190-slice-studio-prelaunch-codebase-hardening.md`.
+- 2026-06-13: backed up Slice Studio local storage to `backups/slice-studio-storage-20260613-023319` with `projects=17`, `pages=47`, `slices=643`, size `223M`.
+- 2026-06-13: added root Slice Studio scripts, marker READMEs for legacy/reference directories, backup/release/local smoke runbooks, and OpenRouter/OpenAI-compatible chat-completions AI provider support.
 - 2026-06-12: completed Review Workbench i18n plan 188 and moved it to `docs/plans/completed/188-review-workbench-i18n.md`.
 - 2026-06-12: added component-local Chinese/English dictionary, `sliceStudio.reviewLanguage.v1` persistence, and a topbar language switch in `ReviewWorkbenchClient.tsx`.
 - 2026-06-12: localized visible Review Workbench labels, status messages, progress text, modal copy, placeholders, and aria labels while leaving project names, file names, asset names, API enum values, and export contracts unchanged.
@@ -47,10 +50,10 @@ Slice Studio multi-user production launch planning
 - 2026-06-12: moved plan 184 to completed.
 
 ## Next
-- Begin plan 189 implementation by choosing the first production slice: auth/session boundary and route protection, or AI provider replacement if that is prioritized tomorrow.
-- Before implementation, update the direction contract and product docs to stop treating auth/billing/cloud sync as local-phase non-goals for the new production phase.
-- Keep payment provider selection separate from the internal subscription/entitlement model.
-- Keep Review Workbench behavior stable unless auth/app-shell integration requires route changes.
+- Continue plan 189 with auth/session and project ownership.
+- Confirm the first production auth contract: Better Auth as the session/user identity boundary, Chinese default language with browser-language auto selection, and Google login only when provider credentials are configured.
+- Keep physical relocation of legacy code as a later, separately planned action unless there is a strong operational need.
+- Run a real OpenRouter provider smoke after the user provides a key and model.
 
 ## Blocked or deferred
 - Figma shows persistent page processing states, asset lock state, and redo behavior. These are not currently backed by persisted Slice Studio contracts and must be treated as missing interfaces unless implemented later.
@@ -59,6 +62,12 @@ Slice Studio multi-user production launch planning
 - Source images that already contain blue detection boxes/labels still preserve those pixels as raster; this fix prevents double-emitting them as visible OCR text layers.
 
 ## Validation log
+- 2026-06-13: plan 190 completion validation passed: `pnpm --dir apps/slice-studio run check` passed with 8 test files / 60 tests; `pnpm --dir apps/slice-studio run build` passed; `pnpm -r run check` passed across Slice Studio, packages, services, and figma-plugin.
+- 2026-06-13: plan 190 API smoke passed with `pnpm --dir apps/slice-studio run smoke`: created temporary project `project_mqba2sqe_67812ca4`, uploaded pages, saved slices, exported `assets.zip`, exported `project.zip/design.pen`, and deleted the temporary project.
+- 2026-06-13: plan 190 browser smoke passed on `http://127.0.0.1:3010/projects`: existing local projects rendered in the UI, `17` projects were visible, and browser console reported no errors.
+- 2026-06-13: plan 190 browser smoke passed on `http://127.0.0.1:3010/projects/project_mqavhwm7_875518fe/review`: source image loaded at `1672x941`, 7 asset previews loaded, Konva canvas rendered, there was no document horizontal overflow, and browser console reported no errors.
+- 2026-06-13: plan 190 artifact discipline checks passed: `git diff --check` produced no output; tracked runtime artifact grep only matched `apps/slice-studio/storage/.gitkeep` and source files whose path contains `storage`.
+- 2026-06-13: prelaunch codebase hardening plan 190 was created, executed, and archived to `docs/plans/completed/190-slice-studio-prelaunch-codebase-hardening.md`; facts used: Slice Studio checks/build pass, root workspace check passes, current local data lives under `apps/slice-studio/storage/`, and legacy/reference code remains present at root-level paths.
 - 2026-06-13: concrete-analysis production launch planning completed from current docs and code facts: current API is open, project state is SQLite/filesystem-backed, no user ownership/session/payment entitlement exists, and current AI provider config is already OpenAI-compatible enough to support provider replacement planning.
 - 2026-06-12: `pnpm --dir apps/slice-studio run check` passed after Review Workbench i18n: TypeScript passed, Vitest 8 files / 55 tests passed.
 - 2026-06-12: `pnpm --dir apps/slice-studio run build` passed after Review Workbench i18n: Next.js production build completed successfully.

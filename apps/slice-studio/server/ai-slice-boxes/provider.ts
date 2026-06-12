@@ -13,19 +13,23 @@ import type { PreparedTile } from "./types";
 
 export async function callAiSliceProvider(tile: PreparedTile): Promise<string> {
   if (!aiSliceApiKey) throw httpError(400, "AI slice API key is not configured");
-  if (aiSliceWireApi !== "responses") throw httpError(400, `Unsupported AI slice wire API: ${aiSliceWireApi}`);
 
-  return callResponses(buildPayload(buildPrompt(tile), tile));
+  return callProvider(buildPrompt(tile), tile);
 }
 
 export async function callAiSliceOverviewProvider(tile: PreparedTile): Promise<string> {
   if (!aiSliceApiKey) throw httpError(400, "AI slice API key is not configured");
-  if (aiSliceWireApi !== "responses") throw httpError(400, `Unsupported AI slice wire API: ${aiSliceWireApi}`);
 
-  return callResponses(buildPayload(buildOverviewPrompt(tile), tile));
+  return callProvider(buildOverviewPrompt(tile), tile);
 }
 
-function buildPayload(prompt: string, tile: PreparedTile): Record<string, unknown> {
+async function callProvider(prompt: string, tile: PreparedTile): Promise<string> {
+  if (aiSliceWireApi === "responses") return callOpenAiCompatible(buildResponsesPayload(prompt, tile), "/responses", extractResponsesText);
+  if (aiSliceWireApi === "chat_completions") return callOpenAiCompatible(buildChatCompletionsPayload(prompt, tile), "/chat/completions", extractChatCompletionsText);
+  throw httpError(400, `Unsupported AI slice wire API: ${aiSliceWireApi satisfies never}`);
+}
+
+export function buildResponsesPayload(prompt: string, tile: PreparedTile): Record<string, unknown> {
   return {
     model: aiSliceModel,
     input: [
@@ -42,10 +46,26 @@ function buildPayload(prompt: string, tile: PreparedTile): Record<string, unknow
   };
 }
 
-async function callResponses(payload: Record<string, unknown>): Promise<string> {
+export function buildChatCompletionsPayload(prompt: string, tile: PreparedTile): Record<string, unknown> {
+  return {
+    model: aiSliceModel,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: tile.dataUrl } }
+        ]
+      }
+    ],
+    temperature: 0
+  };
+}
+
+async function callOpenAiCompatible(payload: Record<string, unknown>, apiPath: string, extractText: (raw: string) => string): Promise<string> {
   for (let attempt = 0; attempt < Math.max(1, aiSliceTransportRetries); attempt += 1) {
     try {
-      const response = await fetch(requestUrl(aiSliceBaseUrl, "/responses"), {
+      const response = await fetch(requestUrl(aiSliceBaseUrl, apiPath), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -56,8 +76,8 @@ async function callResponses(payload: Record<string, unknown>): Promise<string> 
         signal: AbortSignal.timeout(Math.max(1, aiSliceTimeoutSeconds) * 1000)
       });
       const body = await response.text();
-      if (!response.ok) throw new Error(`provider returned ${response.status}: ${trimForError(body)}`);
-      const text = extractResponseText(body);
+      if (!response.ok) throw new Error(formatProviderError(response.status, body));
+      const text = extractText(body);
       if (!text.trim()) throw new Error("provider returned no text");
       return text;
     } catch (error) {
@@ -127,7 +147,7 @@ export function buildOverviewPrompt(tile: PreparedTile): string {
   ].join("\n");
 }
 
-function requestUrl(baseURL: string, apiPath: string): string {
+export function requestUrl(baseURL: string, apiPath: string): string {
   const base = baseURL.trim().replace(/\/+$/, "");
   const path = `/${apiPath.replace(/^\/+/, "")}`;
   if (base.endsWith("/v1")) return `${base}${path}`;
@@ -135,19 +155,49 @@ function requestUrl(baseURL: string, apiPath: string): string {
   return `${base}/v1${path}`;
 }
 
-function extractResponseText(raw: string): string {
+export function extractResponsesText(raw: string): string {
   let root: unknown;
   try {
     root = JSON.parse(raw);
   } catch {
     return raw;
   }
+  if (isAiBoxesPayload(root)) return raw;
   if (root && typeof root === "object" && typeof (root as { output_text?: unknown }).output_text === "string") {
     return (root as { output_text: string }).output_text;
   }
   const texts: string[] = [];
   collectText(root, texts);
   return texts.join("\n");
+}
+
+export function extractChatCompletionsText(raw: string): string {
+  let root: unknown;
+  try {
+    root = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (isAiBoxesPayload(root)) return raw;
+  const choices = root && typeof root === "object" ? (root as { choices?: unknown }).choices : undefined;
+  if (!Array.isArray(choices)) return "";
+  const texts: string[] = [];
+  for (const choice of choices) {
+    if (!choice || typeof choice !== "object") continue;
+    const message = (choice as { message?: unknown }).message;
+    if (!message || typeof message !== "object") continue;
+    const content = (message as { content?: unknown }).content;
+    if (typeof content === "string") {
+      texts.push(content);
+      continue;
+    }
+    collectChatContent(content, texts);
+  }
+  return texts.join("\n");
+}
+
+function isAiBoxesPayload(value: unknown): boolean {
+  return !!value && typeof value === "object" && Array.isArray((value as { boxes?: unknown }).boxes);
 }
 
 function collectText(value: unknown, texts: string[]): void {
@@ -163,6 +213,30 @@ function collectText(value: unknown, texts: string[]): void {
   for (const child of Object.values(object)) collectText(child, texts);
 }
 
-function trimForError(text: string): string {
-  return text.replace(/\s+/g, " ").trim().slice(0, 500);
+function collectChatContent(value: unknown, texts: string[]): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectChatContent(item, texts);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const object = value as Record<string, unknown>;
+  if ((object.type === "text" || object.type === "output_text") && typeof object.text === "string") {
+    texts.push(object.text);
+  }
+  for (const child of Object.values(object)) collectChatContent(child, texts);
+}
+
+export function formatProviderError(status: number, body: string): string {
+  return `provider returned ${status}: ${redactProviderPayload(body)}`;
+}
+
+export function redactProviderPayload(value: string): string {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+    .replace(/("authorization"\s*:\s*")([^"]+)(")/gi, "$1[REDACTED]$3")
+    .replace(/("api[_-]?key"\s*:\s*")([^"]+)(")/gi, "$1[REDACTED]$3")
+    .replace(/(data:image\/[a-z0-9.+-]+;base64,)[A-Za-z0-9+/=]+/gi, "$1[REDACTED_IMAGE]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
 }

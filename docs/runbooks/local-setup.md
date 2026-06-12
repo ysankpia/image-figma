@@ -117,12 +117,22 @@ bun run test
 1. 启动 Slice Studio。
 2. 打开 `/projects`。
 3. 新建项目并上传多张 UI 图。
-4. 在 Review Workbench 手动画框或点击 `AI 当前页`。
-5. 确认框出现在 canvas 和资产总览里。
-6. 刷新页面，确认已保存的 slices 仍存在。
-7. 导出 `assets.zip`。
-8. 导出 `project.zip`。
-9. 检查 `project.zip` 里有 `design.pen`、`manifest.json`、`project.json` 和 `assets/visible/*`。
+4. 在 Review Workbench 手动画框。
+5. 保存后刷新页面，确认页面和 slices 仍存在。
+6. 导出 `assets.zip`，确认 ZIP 包含 originals、slices、manifest 和 project metadata。
+7. 导出 `project.zip`，确认 ZIP 包含 `design.pen`、manifest、originals、remainders 和 visible slices。
+8. 如果配置了 AI provider，点击 `AI 当前页`，确认返回 boxes 并保存成普通 slices。
+9. 如果项目有多页，点击 `AI 全部页`，确认 batch progress、completed/failed/skipped/new assets 统计正常。
+10. 对重要项目，打开 `project.zip/design.pen` 做一次视觉检查。
+
+本地 API smoke：
+
+```bash
+cd apps/slice-studio
+bun run smoke
+```
+
+`bun run smoke` 会创建临时项目、上传页面、重命名/替换/删除页面、保存 slices、导出 `assets.zip` 和 `project.zip`，最后删除临时项目。它不覆盖真实 AI provider；AI 需要单独用真实 key 做手动 smoke。
 
 ## Historical Python Pencil Route
 

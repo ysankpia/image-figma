@@ -2,7 +2,16 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { mergeAiBoxesIntoSlices } from "../shared/ai-slices";
 import { filterAiBoxes, parseAiBoxResponse } from "../server/ai-slice-boxes/boxes";
-import { buildOverviewPrompt, buildPrompt } from "../server/ai-slice-boxes/provider";
+import {
+  buildChatCompletionsPayload,
+  buildOverviewPrompt,
+  buildPrompt,
+  buildResponsesPayload,
+  extractChatCompletionsText,
+  extractResponsesText,
+  formatProviderError,
+  requestUrl
+} from "../server/ai-slice-boxes/provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "../server/ai-slice-boxes/tiles";
 import type { PageRecord, SliceRecord } from "../shared/types";
 
@@ -83,6 +92,61 @@ describe("AI slice boxes", () => {
     expect(prompt).toContain("stylized decorative graphics");
     expect(prompt).toContain("Small standalone icons are still out of scope for overview");
     expect(prompt).toContain("ordinary containers");
+  });
+
+  it("builds OpenAI-compatible responses and chat-completions image payloads", () => {
+    const tile = { id: "tile_0001", bbox: { x: 0, y: 0, width: 320, height: 640 }, sentWidth: 320, sentHeight: 640, dataUrl: "data:image/jpeg;base64,abc123" };
+
+    const responses = buildResponsesPayload("detect assets", tile);
+    expect(JSON.stringify(responses)).toContain("input_image");
+    expect(JSON.stringify(responses)).toContain(tile.dataUrl);
+
+    const chat = buildChatCompletionsPayload("detect assets", tile);
+    expect(JSON.stringify(chat)).toContain("image_url");
+    expect(JSON.stringify(chat)).toContain(tile.dataUrl);
+    expect(chat).toMatchObject({ temperature: 0 });
+  });
+
+  it("extracts text from responses and chat-completions provider payloads", () => {
+    expect(extractResponsesText(JSON.stringify({ output_text: "{\"boxes\":[]}" }))).toBe("{\"boxes\":[]}");
+    expect(extractResponsesText(JSON.stringify({
+      output: [{ content: [{ type: "output_text", text: "{\"boxes\":[{\"x\":1}]}" }] }]
+    }))).toBe("{\"boxes\":[{\"x\":1}]}");
+
+    expect(extractChatCompletionsText(JSON.stringify({
+      choices: [{ message: { content: "{\"boxes\":[]}" } }]
+    }))).toBe("{\"boxes\":[]}");
+    expect(extractChatCompletionsText(JSON.stringify({
+      choices: [{ message: { content: [{ type: "text", text: "{\"boxes\":[{\"x\":2}]}" }] } }]
+    }))).toBe("{\"boxes\":[{\"x\":2}]}");
+  });
+
+  it("recovers raw provider text when provider payload is not JSON", () => {
+    expect(extractResponsesText("{\"boxes\":[]}")).toBe("{\"boxes\":[]}");
+    expect(extractChatCompletionsText("{\"boxes\":[]}")).toBe("{\"boxes\":[]}");
+  });
+
+  it("normalizes OpenAI-compatible request URLs", () => {
+    expect(requestUrl("https://api.openai.com", "/responses")).toBe("https://api.openai.com/v1/responses");
+    expect(requestUrl("https://api.openai.com/v1", "/responses")).toBe("https://api.openai.com/v1/responses");
+    expect(requestUrl("https://openrouter.ai/api/v1", "/chat/completions")).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(requestUrl("https://example.com/v1/chat/completions", "/chat/completions")).toBe("https://example.com/v1/chat/completions");
+  });
+
+  it("redacts provider diagnostics before surfacing errors", () => {
+    const message = formatProviderError(502, JSON.stringify({
+      error: "bad request",
+      authorization: "Bearer secret-token",
+      api_key: "secret-key",
+      image: "data:image/jpeg;base64,abcdefghijklmnopqrstuvwxyz"
+    }));
+
+    expect(message).toContain("provider returned 502");
+    expect(message).toContain("[REDACTED]");
+    expect(message).toContain("[REDACTED_IMAGE]");
+    expect(message).not.toContain("secret-token");
+    expect(message).not.toContain("secret-key");
+    expect(message).not.toContain("abcdefghijklmnopqrstuvwxyz");
   });
 
   it("filters invalid, huge, duplicate, and existing-overlap boxes", () => {

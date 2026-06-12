@@ -169,3 +169,4 @@
 - [184 Slice Studio Documentation Harness Sync](184-slice-studio-doc-harness-sync.md) — `completed`
 - [185 Slice Studio Dense PC Text Ownership Arbiter](185-slice-studio-dense-pc-text-ownership-arbiter.md) — `completed`
 - [186 Slice Studio Dense Text Editable Policy](186-slice-studio-dense-text-editable-policy.md) — `completed`
+- [190 Slice Studio Prelaunch Codebase Hardening](190-slice-studio-prelaunch-codebase-hardening.md) — `completed`

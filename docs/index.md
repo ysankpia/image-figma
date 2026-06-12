@@ -63,9 +63,21 @@ Primary contracts:
 - AI boxes: transient suggestions converted into normal slices;
 - OCR/M29: editable text evidence only.
 
-## Active Production Plan
+## Active Production Plans
 
-Current production-readiness work is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md).
+Completed prelaunch hardening work is tracked in [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md).
+
+Formal multi-user production-readiness work is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md).
+
+Plan 190 should run before disruptive production implementation:
+
+```text
+protect existing local storage
+-> clarify apps/slice-studio as the mainline
+-> mark legacy/reference code in place
+-> harden OpenRouter/OpenAI-compatible AI provider support
+-> run repeatable smoke validation
+```
 
 This plan changes the next phase from local/private tool hardening to formal multi-user product launch planning:
 
@@ -86,6 +98,7 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 ## By Task Type
 
 - Slice Studio UI/API/export work: read [../apps/slice-studio/README.md](../apps/slice-studio/README.md), [architecture/overview.md](architecture/overview.md), [architecture/api-contracts.md](architecture/api-contracts.md), [engineering/validation.md](engineering/validation.md).
+- Prelaunch codebase hardening: read [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md), [engineering/current-code-map.md](engineering/current-code-map.md), [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md), and [reference/env-vars.md](reference/env-vars.md).
 - Multi-user production launch work: read [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md), [product/direction-contract.md](product/direction-contract.md), [product/requirements.md](product/requirements.md), [product/user-flows.md](product/user-flows.md), [reference/env-vars.md](reference/env-vars.md), and [engineering/validation.md](engineering/validation.md).
 - AI slice boxes: read [reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md), [plans/completed/182-slice-studio-ai-rect-slice-assist.md](plans/completed/182-slice-studio-ai-rect-slice-assist.md), [plans/completed/183-slice-studio-ai-tile-merge-and-progress.md](plans/completed/183-slice-studio-ai-tile-merge-and-progress.md).
 - OCR / editable text / M29 physical evidence: read [plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md](plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md), [plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md](plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md), [plans/completed/181-slice-studio-m29-physical-evidence-ts.md](plans/completed/181-slice-studio-m29-physical-evidence-ts.md).

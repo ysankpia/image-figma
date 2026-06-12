@@ -28,7 +28,8 @@ export const aiSliceProvider = normalizeAiSliceProvider(process.env.SLICE_STUDIO
 export const aiSliceBaseUrl = trimTrailingSlash(process.env.SLICE_STUDIO_AI_SLICE_BASE_URL || "https://api.openai.com");
 export const aiSliceApiKey = process.env.SLICE_STUDIO_AI_SLICE_API_KEY || "";
 export const aiSliceModel = process.env.SLICE_STUDIO_AI_SLICE_MODEL || "gpt-5.5";
-export const aiSliceWireApi = process.env.SLICE_STUDIO_AI_SLICE_WIRE_API || "responses";
+export type AiSliceWireApi = "responses" | "chat_completions";
+export const aiSliceWireApi = normalizeAiSliceWireApi(process.env.SLICE_STUDIO_AI_SLICE_WIRE_API);
 export const aiSliceReasoningEffort = process.env.SLICE_STUDIO_AI_SLICE_REASONING_EFFORT || "xhigh";
 export const aiSliceStore = normalizeBool(process.env.SLICE_STUDIO_AI_SLICE_STORE, false);
 export const aiSliceTimeoutSeconds = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_TIMEOUT_SECONDS, 120);
@@ -71,6 +72,11 @@ function normalizePhysicalEvidenceProvider(value: string | undefined): PhysicalE
 function normalizeAiSliceProvider(value: string | undefined): AiSliceProvider {
   if (value === "disabled") return "disabled";
   return "openai_responses";
+}
+
+function normalizeAiSliceWireApi(value: string | undefined): AiSliceWireApi {
+  if (value === "chat_completions" || value === "chat.completions" || value === "chat-completions") return "chat_completions";
+  return "responses";
 }
 
 function normalizeBool(value: string | undefined, fallback: boolean): boolean {

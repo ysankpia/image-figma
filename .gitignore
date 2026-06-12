@@ -31,6 +31,7 @@ dist/
 *.egg-info/
 
 # local app storage
+backups/
 output/
 tmp/
 backend/storage/

@@ -50,7 +50,7 @@ OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bb
 | `SLICE_STUDIO_AI_SLICE_BASE_URL` | OpenAI-compatible base URL | `https://api.openai.com` | 运行 AI 画框时需要 |
 | `SLICE_STUDIO_AI_SLICE_API_KEY` | AI provider API key | 无 | 运行 AI 画框时需要 |
 | `SLICE_STUDIO_AI_SLICE_MODEL` | AI 画框模型 id | `gpt-5.5` | 运行 AI 画框时需要 |
-| `SLICE_STUDIO_AI_SLICE_WIRE_API` | wire API；当前支持 `responses` | `responses` | 否 |
+| `SLICE_STUDIO_AI_SLICE_WIRE_API` | wire API；支持 `responses`、`chat_completions` | `responses` | 否 |
 | `SLICE_STUDIO_AI_SLICE_REASONING_EFFORT` | Responses API reasoning effort | `xhigh` | 否 |
 | `SLICE_STUDIO_AI_SLICE_STORE` | 是否允许 provider 存储 response | `false` | 否 |
 | `SLICE_STUDIO_AI_SLICE_TIMEOUT_SECONDS` | 单 provider 请求超时秒数 | `120` | 否 |
@@ -64,6 +64,17 @@ OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bb
 | `SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW` | 是否发送压缩全页 overview 做跨 tile 大资产合并 | `true` | 否 |
 
 当前默认 prompt 策略是 `CC = Inclusive-Icons tile + Inclusive-Icons overview`。记录见 [slice-studio-ai-slice-prompt-strategies.md](slice-studio-ai-slice-prompt-strategies.md)。
+
+OpenRouter / OpenAI-compatible chat-completions example:
+
+```text
+SLICE_STUDIO_AI_SLICE_BASE_URL=https://openrouter.ai/api/v1
+SLICE_STUDIO_AI_SLICE_API_KEY=
+SLICE_STUDIO_AI_SLICE_MODEL=<model-name>
+SLICE_STUDIO_AI_SLICE_WIRE_API=chat_completions
+```
+
+`chat_completions` keeps the same Slice Studio prompt and output contract. It only changes the provider wire format to `/v1/chat/completions`.
 
 ## Example `.env.local`
 
@@ -81,6 +92,7 @@ SLICE_STUDIO_AI_SLICE_PROVIDER=openai_responses
 SLICE_STUDIO_AI_SLICE_BASE_URL=https://api.openai.com
 SLICE_STUDIO_AI_SLICE_API_KEY=
 SLICE_STUDIO_AI_SLICE_MODEL=gpt-5.5
+SLICE_STUDIO_AI_SLICE_WIRE_API=responses
 SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
 BAIDU_PADDLE_OCR_TOKEN=
 ```
