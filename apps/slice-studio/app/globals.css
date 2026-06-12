@@ -1640,6 +1640,1181 @@ h1 {
   height: 14px;
 }
 
+/* Figma node 607:207 Review Workbench implementation. */
+.reviewShell {
+  grid-template-rows: 50px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr) 342px;
+  background: #f5f6f8;
+  color: #1f2328;
+}
+
+.reviewShell.assetListCollapsed {
+  grid-template-columns: 320px minmax(0, 1fr) 252px;
+}
+
+.reviewShell.inspectorCollapsed,
+.reviewShell.inspectorCollapsed.assetListCollapsed {
+  grid-template-columns: 320px minmax(0, 1fr) 42px;
+}
+
+.reviewTopbar {
+  gap: 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 #e7e9ee;
+}
+
+.topbarProject {
+  flex: 0 0 340px;
+  gap: 18px;
+}
+
+.topbarBrand {
+  display: inline-grid;
+  align-items: center;
+  min-height: 30px;
+  color: #1459ff;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.projectTitleBlock {
+  padding-left: 16px;
+  border-left: 1px solid #e5e7eb;
+}
+
+.projectTitleBlock strong {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.projectTitleBlock span {
+  max-width: 180px;
+  overflow: hidden;
+  color: #8a9099;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.topbarActions {
+  gap: 8px;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topbarActions::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbarButton,
+.zoomGroup,
+.toolSegment {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.toolbarButton {
+  gap: 6px;
+  padding: 0 12px;
+  color: #3f4652;
+  font-size: 12px;
+}
+
+.toolbarButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.toolbarButton.ghostButton {
+  color: #b9bec7;
+}
+
+.uploadButton,
+.toolbarButton:hover:not(:disabled),
+.uploadButton:hover {
+  border-color: #cfd6e3;
+  color: #1459ff;
+}
+
+.aiButton {
+  border-color: #dbe5ff;
+  background: #f8fbff;
+  color: #315789;
+}
+
+.aiButton:hover:not(:disabled) {
+  border-color: #b6caff;
+  background: #eef4ff;
+  color: #1459ff;
+}
+
+.exportButton {
+  border-color: #dfe3ea;
+  background: #ffffff;
+  color: #3f4652;
+}
+
+.exportButton:hover:not(:disabled) {
+  border-color: #b6caff;
+  background: #f8fbff;
+  color: #1459ff;
+}
+
+.zoomGroup,
+.toolSegment {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.zoomButton,
+.zoomIconButton,
+.toolSegment button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #3f4652;
+}
+
+.zoomButton {
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.zoomIconButton {
+  display: grid;
+  width: 34px;
+  min-width: 34px;
+  place-items: center;
+  padding: 0;
+}
+
+.zoomIconButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.zoomReadout {
+  min-width: 56px;
+  border-inline: 1px solid #edf0f4;
+  color: #777f8b;
+  font-size: 11px;
+  line-height: 30px;
+}
+
+.toolSegment button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.toolSegment button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.toolSegment button.active {
+  background: #eef4ff;
+  color: #1459ff;
+  font-weight: 650;
+}
+
+.saveState {
+  flex: 0 0 auto;
+  min-height: 28px;
+  border-radius: 6px;
+  background: #edf7f1;
+  font-size: 11px;
+}
+
+.pageRail {
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr) 36px;
+  overflow: hidden;
+  background: #fbfcfe;
+}
+
+.pageRailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: #22262d;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  text-transform: none;
+}
+
+.pageRailHeader svg {
+  width: 13px;
+  height: 13px;
+  color: #8b93a1;
+}
+
+.pageRailList {
+  gap: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.pageThumbCard {
+  min-height: 62px;
+  border: 0;
+  border-bottom: 1px solid #edf0f4;
+  border-radius: 0;
+  padding: 0;
+}
+
+.pageThumbCard.active {
+  border-color: #2f6bff;
+  background: #eef4ff;
+  box-shadow: inset 3px 0 0 #2f6bff;
+}
+
+.pageDragHandle {
+  position: absolute;
+  left: 6px;
+  top: 21px;
+  z-index: 1;
+  width: 18px;
+  height: 20px;
+  color: #b7bdc7;
+}
+
+.pageDragHandle svg {
+  width: 16px;
+  height: 12px;
+}
+
+.pageThumbButton {
+  grid-template-columns: 20px 38px minmax(0, 1fr) 64px 76px;
+  align-items: center;
+  gap: 8px;
+  min-height: 62px;
+  border-radius: 0;
+  padding: 8px 10px 8px 28px;
+  text-align: left;
+}
+
+.pageThumbOrdinal {
+  color: #8b93a1;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.pageThumbImage {
+  width: 36px;
+  height: 46px;
+  aspect-ratio: auto;
+  border-color: #e1e5ec;
+  border-radius: 3px;
+  background: #eef0f4;
+}
+
+.pageThumbImage img {
+  object-fit: cover;
+}
+
+.pageThumbBody {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pageThumbName,
+.pageThumbMeta,
+.pageThumbAssets,
+.pageThumbStatus {
+  text-align: left;
+}
+
+.pageThumbName {
+  color: #4b5563;
+  font-size: 11px;
+}
+
+.pageThumbMeta,
+.pageThumbAssets {
+  color: #a0a7b3;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pageThumbStatus {
+  justify-self: end;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pageThumbStatus.completed {
+  color: #13a463;
+}
+
+.pageThumbStatus.reviewing {
+  color: #1459ff;
+}
+
+.pageThumbStatus.skipped {
+  color: #8b93a1;
+}
+
+.pageRailFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid #edf0f4;
+  padding: 0 12px;
+  color: #8b93a1;
+  font-size: 10px;
+}
+
+.pageRailFooter span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stageArea {
+  display: grid;
+  grid-template-rows: 0 minmax(0, 1fr) 32px;
+  padding: 8px;
+  background: #f0f2f5;
+}
+
+.stageMetaBar {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: min(560px, calc(100% - 36px));
+  border: 1px solid rgba(223, 227, 234, 0.9);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+}
+
+.stageMetaBar > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stageMetaBar strong {
+  overflow: hidden;
+  color: #22262d;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stageMetaBar span {
+  color: #7d8592;
+  font-size: 10px;
+}
+
+.stageMetaStatus {
+  display: inline-flex !important;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.stageMetaStatus span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #eef4ff;
+  color: #1459ff;
+}
+
+.stageWrap {
+  grid-row: 2;
+  border: 1px solid #dfe3ea;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
+.stageFooter {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  overflow: hidden;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #7d8592;
+  font-size: 11px;
+}
+
+.stageFooter span {
+  min-width: 86px;
+  padding: 7px 12px;
+  text-align: center;
+}
+
+.stageFooter span + span {
+  border-left: 1px solid #edf0f4;
+}
+
+.canvasHint {
+  color: #8b93a1;
+}
+
+.assetInspector {
+  background: #fbfcfe;
+}
+
+.inspectorInner {
+  grid-template-rows: minmax(280px, 40%) minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.assetInspector.assetListCollapsed .inspectorInner {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.inspectorToggle {
+  top: 10px;
+  right: 8px;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 6px;
+}
+
+.assetReviewPanel,
+.detailsPanel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  border-bottom: 1px solid #edf0f4;
+  background: #fbfcfe;
+}
+
+.assetReviewPanel {
+  grid-template-rows: 40px auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.assetInspector.assetListCollapsed .assetReviewPanel {
+  grid-template-rows: 40px;
+}
+
+.detailsPanel {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  gap: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 12px 14px;
+}
+
+.inspectorHeader,
+.detailsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 42px 0 12px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.detailsHeader {
+  padding: 10px 0 8px;
+  border-bottom: 0;
+}
+
+.inspectorHeader h2,
+.detailsHeader h2 {
+  color: #22262d;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.inspectorHeader span,
+.detailsHeader span {
+  color: #8b93a1;
+  font-size: 10px;
+}
+
+.assetPanelCollapseButton {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  place-items: center;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.assetPanelCollapseButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.assetSearchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.assetSearchRow label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #ffffff;
+}
+
+.assetSearchRow svg {
+  width: 13px;
+  height: 13px;
+  color: #8b93a1;
+}
+
+.assetSearchRow input,
+.assetSearchRow select {
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #4b5563;
+  font-size: 11px;
+}
+
+.assetSearchRow select {
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  color: transparent;
+}
+
+.assetOverviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 12px 8px;
+  color: #8b93a1;
+  font-size: 11px;
+}
+
+.assetGalleryButton {
+  border-radius: 6px;
+  min-height: 28px;
+}
+
+.assetList {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 8px 12px;
+  scrollbar-width: thin;
+}
+
+.assetList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.assetItem {
+  grid-template-columns: 42px minmax(0, 1fr) 56px 28px;
+  gap: 8px;
+  min-height: 58px;
+  border-color: #e1e5ec;
+  border-radius: 6px;
+  padding: 6px;
+  background: #ffffff;
+}
+
+.assetItem.active {
+  border-color: #2f6bff;
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 1px #2f6bff;
+}
+
+.assetPreviewButton {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e1e5ec;
+  border-radius: 4px;
+  padding: 0;
+  background: #f4f6f8;
+}
+
+.assetPreviewButton img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.assetFields {
+  gap: 4px;
+}
+
+.assetFields small {
+  color: #a0a7b3;
+  font-size: 10px;
+}
+
+.assetItem input {
+  min-height: 20px;
+  color: #4b5563;
+  font-size: 11px;
+}
+
+.assetCutModeButton {
+  min-height: 24px;
+  border-radius: 5px;
+  padding: 0 6px;
+  color: #1459ff;
+  font-size: 10px;
+}
+
+.assetListEmpty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 120px;
+  color: #8b93a1;
+  font-size: 12px;
+  text-align: center;
+}
+
+.assetListEmpty svg {
+  width: 18px;
+  height: 18px;
+}
+
+.activeAssetPanel,
+.pageInfoPanel,
+.inspectorSummary,
+.cutModePanel,
+.boxColorPanel {
+  border-color: #e1e5ec;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.activeAssetPanel {
+  gap: 10px;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detailsGrid label,
+.detailsSelectRow {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detailsGrid span,
+.detailsSelectRow span,
+.detailsStaticGrid span {
+  color: #777f8b;
+  font-size: 10px;
+}
+
+.detailsGrid input,
+.detailsSelectRow select,
+.activeAssetEditRow input,
+.pageNameField input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #ffffff;
+  color: #3f4652;
+  font-size: 11px;
+}
+
+.detailsStaticGrid {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.detailsStaticGrid strong,
+.detailsStaticGrid button {
+  min-width: 0;
+  color: #3f4652;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.detailsStaticGrid button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: start;
+  gap: 6px;
+  min-height: 28px;
+  border-radius: 6px;
+  padding: 0 8px;
+}
+
+.detailsStaticGrid svg {
+  width: 12px;
+  height: 12px;
+}
+
+.deleteAssetWideButton {
+  min-height: 36px;
+  border-color: #f1b8bb;
+  border-radius: 6px;
+  background: #fff;
+  color: #df4b54;
+  font-size: 12px;
+}
+
+.deleteAssetWideButton:hover:not(:disabled) {
+  border-color: #df4b54;
+  color: #c9303a;
+}
+
+/* Adaptive density overrides for the production workbench. */
+.reviewShell {
+  --rail-width: clamp(15.5rem, 19vw, 20rem);
+  --inspector-width: clamp(17.875rem, 21vw, 22.5rem);
+  --inspector-compact-width: clamp(14.25rem, 16vw, 16.75rem);
+  --collapsed-inspector-width: clamp(2.375rem, 3vw, 2.75rem);
+  --stage-min-width: clamp(26rem, 44vw, 42rem);
+  --panel-pad: clamp(0.375rem, 0.7vw, 0.625rem);
+  --panel-gap: clamp(0.3125rem, 0.65vw, 0.625rem);
+  --control-height: clamp(1.75rem, 2.2vw, 2rem);
+  grid-template-rows: clamp(2.75rem, 4.4vw, 3.125rem) minmax(0, 1fr);
+  grid-template-columns: var(--rail-width) minmax(var(--stage-min-width), 1fr) var(--inspector-width);
+  transition: grid-template-columns 180ms ease;
+}
+
+.reviewShell.assetListCollapsed {
+  grid-template-columns: var(--rail-width) minmax(var(--stage-min-width), 1fr) var(--inspector-compact-width);
+}
+
+.reviewShell.inspectorCollapsed,
+.reviewShell.inspectorCollapsed.assetListCollapsed {
+  grid-template-columns: var(--rail-width) minmax(var(--stage-min-width), 1fr) var(--collapsed-inspector-width);
+}
+
+.reviewTopbar,
+.pageRail,
+.stageArea,
+.assetInspector {
+  container-type: inline-size;
+}
+
+.reviewTopbar {
+  container-name: review-topbar;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-height: 0;
+  overflow: hidden;
+  gap: var(--panel-gap);
+  padding: clamp(6px, 0.6vw, 8px) clamp(8px, 0.9vw, 12px);
+}
+
+.topbarProject {
+  flex: 0 1 clamp(120px, 12vw, 220px);
+  gap: clamp(10px, 1.2vw, 18px);
+}
+
+.topbarBrand {
+  font-size: clamp(12px, 1cqi, 14px);
+}
+
+.projectTitleBlock {
+  padding-left: clamp(10px, 1vw, 16px);
+}
+
+.projectTitleBlock span {
+  max-width: clamp(72px, 10vw, 160px);
+}
+
+.topbarActions {
+  gap: clamp(4px, 0.42cqi, 7px);
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.topbarActions::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbarButton,
+.zoomGroup,
+.toolSegment,
+.languageToggle {
+  min-height: var(--control-height);
+}
+
+.toolbarButton {
+  --command-button-width: clamp(4.25rem, 6.6cqi, 5.875rem);
+  gap: clamp(3px, 0.34cqi, 6px);
+  inline-size: var(--command-button-width);
+  max-inline-size: var(--command-button-width);
+  justify-content: center;
+  padding-inline: clamp(5px, 0.48cqi, 9px);
+  font-size: clamp(10px, 0.88cqi, 12px);
+}
+
+.uploadButton,
+.aiButton,
+.exportButton {
+  --command-button-width: clamp(4.875rem, 7.4cqi, 6.625rem);
+}
+
+.toolbarButton.ghostButton {
+  --command-button-width: clamp(3.625rem, 5.2cqi, 4.625rem);
+}
+
+.toolbarButton span,
+.zoomButton,
+.languageToggle button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoomButton,
+.zoomIconButton,
+.toolSegment button,
+.languageToggle button {
+  min-height: calc(var(--control-height) - 2px);
+}
+
+.zoomButton {
+  padding-inline: clamp(6px, 0.68cqi, 10px);
+}
+
+.zoomIconButton {
+  width: clamp(26px, 2.2cqi, 32px);
+  min-width: clamp(26px, 2.2cqi, 32px);
+}
+
+.zoomReadout {
+  min-width: clamp(42px, 3.6cqi, 52px);
+}
+
+.toolSegment button {
+  gap: clamp(4px, 0.4cqi, 6px);
+  padding-inline: clamp(6px, 0.62cqi, 10px);
+}
+
+.saveState {
+  min-width: clamp(38px, 3.2cqi, 52px);
+}
+
+.languageToggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  inline-size: clamp(4.25rem, 5.8cqi, 5rem);
+  overflow: hidden;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.languageToggle button {
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+  padding-inline: clamp(5px, 0.48cqi, 8px);
+  background: transparent;
+  color: #6b7280;
+  font-size: clamp(10px, 0.82cqi, 11px);
+  font-weight: 600;
+}
+
+.languageToggle button.active {
+  background: #eef4ff;
+  color: #1459ff;
+}
+
+.pageRail {
+  container-name: page-rail;
+}
+
+.pageRailList {
+  align-content: start;
+}
+
+.pageRailHeader {
+  padding-inline: clamp(8px, 4cqi, 12px);
+}
+
+.pageThumbButton {
+  grid-template-columns: clamp(16px, 6cqi, 20px) clamp(30px, 12cqi, 38px) minmax(0, 1fr) minmax(52px, 19cqi) minmax(60px, 23cqi);
+  gap: clamp(5px, 2.2cqi, 8px);
+  min-height: clamp(56px, 20cqi, 64px);
+  padding: clamp(6px, 2cqi, 8px) clamp(8px, 3cqi, 10px) clamp(6px, 2cqi, 8px) clamp(24px, 9cqi, 28px);
+}
+
+.pageThumbImage {
+  width: clamp(30px, 12cqi, 36px);
+  height: clamp(38px, 15cqi, 46px);
+}
+
+.pageThumbBody {
+  gap: clamp(3px, 1.4cqi, 6px);
+}
+
+.stageArea {
+  container-name: stage-area;
+  padding: var(--panel-pad);
+}
+
+.canvasToolRail {
+  position: absolute;
+  left: clamp(10px, 1.4cqi, 18px);
+  top: clamp(10px, 1.4cqi, 18px);
+  z-index: 6;
+  display: grid;
+  gap: 6px;
+  width: 46px;
+  padding: 6px;
+  border: 1px solid rgba(223, 227, 234, 0.92);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+.canvasToolRail button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: #2f3540;
+}
+
+.canvasToolRail button:hover:not(:disabled) {
+  border-color: #dfe3ea;
+  background: #f7f8fb;
+  color: #1459ff;
+}
+
+.canvasToolRail button.active {
+  border-color: #dfe3ea;
+  background: #ffffff;
+  color: #1459ff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+.canvasToolRail svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+}
+
+.stageMetaBar {
+  left: clamp(12px, 1.2cqi, 18px);
+  top: clamp(12px, 1.2cqi, 18px);
+  gap: clamp(10px, 1.6cqi, 20px);
+  min-width: min(clamp(360px, 52cqi, 560px), calc(100% - 36px));
+  padding: clamp(6px, 0.8cqi, 8px) clamp(8px, 1cqi, 10px);
+}
+
+.assetInspector {
+  container-name: asset-inspector;
+}
+
+.inspectorInner {
+  grid-template-rows: clamp(24rem, 62dvh, 32rem) minmax(0, 1fr);
+}
+
+.assetInspector:has(.assetListEmpty) .inspectorInner {
+  grid-template-rows: clamp(14rem, 30dvh, 20rem) minmax(0, 1fr);
+}
+
+.assetInspector.assetListCollapsed .inspectorInner {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.assetSearchRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(5px, 1.8cqi, 8px);
+  padding: clamp(6px, 2cqi, 8px) clamp(8px, 3.4cqi, 12px);
+}
+
+.assetSearchRow select {
+  color: #4b5563;
+  font-size: clamp(10px, 3.4cqi, 11px);
+}
+
+.assetSearchRow label {
+  min-width: 0;
+}
+
+.assetSearchRow select {
+  width: 100%;
+}
+
+.assetItem {
+  grid-template-columns: clamp(34px, 12cqi, 42px) minmax(0, 1fr) clamp(50px, 17cqi, 56px) clamp(24px, 9cqi, 28px);
+  gap: clamp(5px, 1.8cqi, 8px);
+  min-height: clamp(52px, 18cqi, 58px);
+}
+
+.assetPreviewButton {
+  width: clamp(34px, 12cqi, 40px);
+  height: clamp(34px, 12cqi, 40px);
+  min-height: clamp(34px, 12cqi, 40px);
+}
+
+.detailsGrid {
+  grid-template-columns: repeat(auto-fit, minmax(min(96px, 100%), 1fr));
+}
+
+.reviewShell:has(.aiProgressPanel:not(.minimized)) .stageArea {
+  padding-bottom: clamp(10px, 1.2vw, 16px);
+}
+
+@container review-topbar (max-width: 920px) {
+  .topbarProject {
+    flex-basis: clamp(132px, 18cqi, 190px);
+  }
+
+  .projectTitleBlock span,
+  .toolbarButton svg {
+    display: none;
+  }
+}
+
+@container review-topbar (max-width: 1280px) {
+  .projectTitleBlock {
+    display: none;
+  }
+
+  .topbarProject {
+    flex-basis: auto;
+  }
+
+  .toolbarButton svg {
+    display: none;
+  }
+}
+
+@container review-topbar (max-width: 720px) {
+  .topbarBrand {
+    font-size: 0;
+  }
+
+  .topbarBrand::before {
+    content: "SS";
+    font-size: 12px;
+  }
+
+  .projectTitleBlock {
+    display: none;
+  }
+
+  .topbarProject {
+    flex-basis: auto;
+  }
+}
+
+@container stage-area (max-width: 620px) {
+  .stageMetaBar {
+    align-items: flex-start;
+    flex-direction: column;
+    min-width: min(clamp(260px, 82cqi, 420px), calc(100% - 24px));
+  }
+
+  .stageMetaStatus {
+    flex-wrap: wrap;
+  }
+}
+
+@container page-rail (max-width: 270px) {
+  .pageThumbButton {
+    grid-template-columns: clamp(16px, 7cqi, 20px) clamp(30px, 13cqi, 36px) minmax(0, 1fr) minmax(56px, 25cqi);
+  }
+
+  .pageThumbAssets {
+    display: none;
+  }
+}
+
+@container asset-inspector (max-width: 300px) {
+  .assetSearchRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assetItem {
+    grid-template-columns: clamp(32px, 13cqi, 38px) minmax(0, 1fr) clamp(42px, 18cqi, 54px) 26px;
+  }
+
+  .detailsStaticGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .assetGalleryBackdrop {
   padding: 28px;
   background: rgba(0, 0, 0, 0.58);
@@ -1650,7 +2825,7 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
-  width: min(1220px, 96vw);
+  width: min(1480px, 96vw);
   height: min(780px, 88vh);
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1727,7 +2902,9 @@ h1 {
 
 .assetGalleryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: start;
+  justify-content: stretch;
   gap: 10px;
   min-height: 0;
   overflow: auto;
@@ -1752,7 +2929,7 @@ h1 {
 
 .assetGalleryCard {
   display: grid;
-  grid-template-rows: auto minmax(112px, 1fr) auto auto;
+  grid-template-rows: auto 112px auto auto;
   gap: 8px;
   min-width: 0;
   min-height: 212px;
@@ -1800,7 +2977,8 @@ h1 {
 .assetGalleryPreview {
   display: grid;
   min-width: 0;
-  min-height: 112px;
+  min-height: 0;
+  height: 112px;
   place-items: center;
   overflow: hidden;
   border: 0;
@@ -1888,18 +3066,44 @@ h1 {
   }
 
   .reviewShell {
-    grid-template-columns: 76px minmax(0, 1fr) 44px;
+    grid-template-areas:
+      "topbar topbar"
+      "rail stage"
+      "inspector inspector";
+    grid-template-rows: auto minmax(360px, 1fr) minmax(260px, 40dvh);
+    grid-template-columns: clamp(210px, 28vw, 280px) minmax(0, 1fr);
+  }
+
+  .reviewShell.inspectorCollapsed,
+  .reviewShell.assetListCollapsed,
+  .reviewShell.inspectorCollapsed.assetListCollapsed {
+    grid-template-columns: clamp(210px, 28vw, 280px) minmax(0, 1fr);
+  }
+
+  .reviewTopbar {
+    min-height: 54px;
+    align-items: start;
+  }
+
+  .topbarActions {
+    padding-bottom: 2px;
+  }
+
+  .assetInspector {
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
 
   .assetInspector .inspectorInner {
-    display: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(min(260px, 100%), 0.85fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .projectTitleBlock strong {
     max-width: 170px;
   }
 
-  .toolbarButton span,
   .saveState {
     display: none;
   }

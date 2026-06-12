@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bot, ChevronLeft, ChevronRight, Download, GripHorizontal, Grid2X2, Hand, Images, MousePointer2, PanelRightClose, PanelRightOpen, RotateCcw, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, GripHorizontal, Grid2X2, Hand, Images, Lock, Minus, MousePointer2, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Search, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { apiBaseUrl, apiGet, apiPost, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
@@ -48,12 +48,365 @@ type AiProgress = {
 
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
+const reviewLanguageStorageKey = "sliceStudio.reviewLanguage.v1";
 const defaultBoxColors = {
   slice: "#0066cc",
   active: "#ff2d55"
 };
 
+type LanguageCode = "zh" | "en";
+
+const reviewI18n = {
+  zh: {
+    reviewWorkbench: "审核工作台",
+    untitledProject: "未命名项目",
+    backToProjects: "返回项目列表",
+    upload: "上传",
+    undo: "撤销",
+    redo: "重做",
+    fit: "适配",
+    zoomControls: "缩放控制",
+    zoomOut: "缩小",
+    zoomIn: "放大",
+    nothingToUndo: "没有可撤销操作",
+    redoUnavailable: "当前没有可重做记录",
+    aiRunning: "AI 运行中",
+    batchRunning: "批量运行中",
+    aiCurrent: "AI 当前页",
+    aiAll: "AI 全部",
+    assetsZip: "资产包",
+    projectZip: "项目包",
+    language: "界面语言",
+    chinese: "中文",
+    english: "英文",
+    saving: "保存中",
+    saved: "已保存",
+    saveFailed: "保存失败",
+    ready: "就绪",
+    pages: "页面",
+    project: "项目",
+    untitled: "未命名",
+    assets: "资产",
+    visible: "可见",
+    noPages: "暂无页面",
+    dragToReorder: "拖拽调整顺序",
+    canvasTools: "画布工具",
+    select: "选择",
+    draw: "框选",
+    pan: "拖动",
+    selectTool: "选择工具",
+    drawTool: "框选工具",
+    panTool: "拖动画布工具",
+    uploadHint: "上传 UI 截图后开始切图。",
+    assetInspector: "资产检查器",
+    expandInspector: "展开右侧面板",
+    collapseInspector: "折叠右侧面板",
+    expandAssetsList: "展开资产列表",
+    collapseAssetsList: "折叠资产列表",
+    searchAssetsPlaceholder: "搜索当前页资产...",
+    searchAssets: "搜索当前页资产",
+    filterByCropMode: "按裁切模式筛选",
+    allModes: "全部模式",
+    sortAssets: "资产排序",
+    order: "顺序",
+    name: "名称",
+    size: "尺寸",
+    selectAsset: "选择 {name}",
+    assetName: "资产名称",
+    cycleCropMode: "切换裁切模式",
+    deleteAsset: "删除资产",
+    noAssetsMatch: "当前视图没有匹配资产。",
+    details: "详情",
+    noAssetSelected: "未选择资产",
+    overview: "总览",
+    pageCropMode: "页面裁切模式",
+    cropMode: "裁切模式",
+    rect: "矩形",
+    subject: "抠主体",
+    innerImage: "保内图",
+    mixed: "混合",
+    inReview: "审核中",
+    completed: "已完成",
+    skipped: "已跳过",
+    noPage: "暂无页面",
+    pageName: "页面名称",
+    replace: "替换",
+    delete: "删除",
+    boxColor: "框颜色",
+    reset: "重置",
+    normal: "普通",
+    active: "选中",
+    normalBoxColor: "普通框颜色",
+    activeBoxColor: "选中框颜色",
+    activeAsset: "当前资产",
+    page: "页面",
+    format: "格式",
+    locked: "锁定",
+    off: "关闭",
+    lockedMissingInterface: "缺少接口：SliceRecord 目前没有 locked 字段",
+    deleteCurrentAsset: "删除当前资产",
+    pageStartHint: "顶部按钮可上传 1..N 张图片。",
+    createAssetHint: "使用框选工具创建资产，再用选择工具调整。",
+    canvasReadyHint: "画布已准备好接收源图。",
+    aiDetectionProgress: "AI 检测进度",
+    aiBatchProcessingRunning: "AI 批量处理中",
+    aiCurrentPage: "AI 当前页",
+    total: "总计",
+    newAssets: "新增资产",
+    failed: "失败",
+    expandAiProgress: "展开 AI 进度",
+    minimizeAiProgress: "最小化 AI 进度",
+    expand: "展开",
+    minimize: "最小化",
+    hideAiProgress: "隐藏 AI 进度",
+    hide: "隐藏",
+    close: "关闭",
+    deleteCurrentPageQuestion: "删除当前页面？",
+    replaceCurrentPageQuestion: "替换当前页面？",
+    deleteCurrentPageDescription: "该页面的原图和所有切图都会被删除，剩余页面会重新编号。",
+    replaceCurrentPageDescription: "将使用“{file}”替换当前页面原图，并清空该页已有切图。",
+    cancel: "取消",
+    confirmDelete: "确认删除",
+    confirmReplace: "确认替换",
+    assetOverview: "资产总览",
+    clickCardToLocate: "点击卡片定位资产",
+    assetOverviewPagination: "资产总览翻页",
+    previousPage: "上一页",
+    nextPage: "下一页",
+    closeAssetOverview: "关闭资产总览",
+    noAssetsOnPage: "当前页暂无资产",
+    assetCropMode: "{name} 裁切模式：{mode}",
+    pageCropModeAria: "页面裁切模式",
+    loadingProject: "正在读取项目。",
+    projectRestored: "项目已恢复。继续切图会自动保存。",
+    projectCreated: "项目已创建。上传 UI 截图开始。",
+    loadFailed: "读取失败：{error}",
+    sourceUndoUnavailable: "该操作涉及页面原图文件，无法完整撤销；已按当前磁盘状态重新载入项目。",
+    undone: "已撤销：{label}",
+    undoSaveFailed: "撤销保存失败：{error}",
+    uploadingImages: "正在上传 {count} 张图片。",
+    uploadedImages: "已上传 {count} 张图片。",
+    uploadFailed: "上传失败：{error}",
+    savedStatus: "已保存。",
+    saveFailedStatus: "保存失败：{error}",
+    pageNameSaved: "页面名称已保存。",
+    pageNameSaveFailed: "页面名称保存失败：{error}",
+    exportedAssets: "已导出 {count} 个切图。",
+    exportedProject: "已导出 Pencil 项目：{pages} 页，{assets} 个图层资产。",
+    exportFailed: "导出失败：{error}",
+    newAssetsWillUseMode: "后续新建资产将使用{mode}模式。",
+    currentPageAlreadyMode: "当前页已是{mode}模式。",
+    pageOrderSaved: "页面顺序已保存。",
+    pageReorderFailed: "页面排序失败：{error}",
+    pageDeleted: "页面已删除。",
+    pageReplaced: "页面已替换，该页已有切图已清空。",
+    pageActionFailed: "{action}页面失败：{error}",
+    aiDetecting: "AI 正在检测 {label}",
+    noNewBoxes: "AI 未新增框，跳过 {skipped} 个。",
+    noNewAiBoxes: "AI 未新增框。已跳过 {skipped} 个重复或无效框。",
+    aiAddedSkipped: "AI 已新增 {added} 个，跳过 {skipped} 个。",
+    aiAddedStatus: "AI 已新增 {added} 个矩形框，跳过 {skipped} 个。",
+    aiDetectionFailed: "AI 检测失败：{error}",
+    aiBatchDetection: "AI 批量检测 {done}/{total}",
+    aiBatchDetectingPage: "AI 批量检测 {label} · {done}/{total}",
+    aiBatchAdded: "AI 批量检测 {done}/{total} · 新增 {added}",
+    aiBatchComplete: "AI 批量完成：成功 {completed} 页，失败 {failed} 页",
+    aiBatchCompleteStatus: "AI 批量完成：成功 {completed} 页，失败 {failed} 页，新增 {added} 个，跳过 {skipped} 个。",
+    aiBatchFailed: "AI 批量检测失败：{error}",
+    undoEdit: "编辑",
+    undoRenamePage: "页面重命名",
+    undoCreateAsset: "新建资产",
+    undoAiBoxes: "AI 画框",
+    undoAiBatchBoxes: "AI 批量画框",
+    undoEditAsset: "编辑资产",
+    undoChangePageCropMode: "批量切换裁切模式",
+    undoDeleteAsset: "删除资产",
+    undoResizeAsset: "调整资产尺寸",
+    undoMoveAsset: "移动资产",
+    undoReorderPages: "页面排序",
+    undoDeletePage: "删除页面",
+    undoReplacePage: "替换页面",
+    undoEditBbox: "编辑坐标",
+    undoChangeCropMode: "切换裁切模式"
+  },
+  en: {
+    reviewWorkbench: "Review Workbench",
+    untitledProject: "Untitled Project",
+    backToProjects: "Back to projects",
+    upload: "Upload",
+    undo: "Undo",
+    redo: "Redo",
+    fit: "Fit",
+    zoomControls: "Zoom controls",
+    zoomOut: "Zoom out",
+    zoomIn: "Zoom in",
+    nothingToUndo: "Nothing to undo",
+    redoUnavailable: "Redo is not available until a redo stack exists",
+    aiRunning: "AI Running",
+    batchRunning: "Batch Running",
+    aiCurrent: "AI Current",
+    aiAll: "AI All",
+    assetsZip: "Assets.zip",
+    projectZip: "Project.zip",
+    language: "Interface language",
+    chinese: "Chinese",
+    english: "English",
+    saving: "Saving",
+    saved: "Saved",
+    saveFailed: "Save failed",
+    ready: "Ready",
+    pages: "Pages",
+    project: "Project",
+    untitled: "Untitled",
+    assets: "assets",
+    visible: "visible",
+    noPages: "No pages",
+    dragToReorder: "Drag to reorder",
+    canvasTools: "Canvas tools",
+    select: "Select",
+    draw: "Draw",
+    pan: "Pan",
+    selectTool: "Select tool",
+    drawTool: "Draw tool",
+    panTool: "Pan tool",
+    uploadHint: "Upload UI screenshots to start slicing.",
+    assetInspector: "Asset inspector",
+    expandInspector: "Expand inspector",
+    collapseInspector: "Collapse inspector",
+    expandAssetsList: "Expand assets list",
+    collapseAssetsList: "Collapse assets list",
+    searchAssetsPlaceholder: "Search assets on this page...",
+    searchAssets: "Search assets on this page",
+    filterByCropMode: "Filter by crop mode",
+    allModes: "All modes",
+    sortAssets: "Sort assets",
+    order: "Order",
+    name: "Name",
+    size: "Size",
+    selectAsset: "Select {name}",
+    assetName: "Asset name",
+    cycleCropMode: "Cycle crop mode",
+    deleteAsset: "Delete asset",
+    noAssetsMatch: "No assets match this view.",
+    details: "Details",
+    noAssetSelected: "No asset selected",
+    overview: "Overview",
+    pageCropMode: "Page Crop Mode",
+    cropMode: "Crop Mode",
+    rect: "Rect",
+    subject: "Subject",
+    innerImage: "Inner Image",
+    mixed: "Mixed",
+    inReview: "In Review",
+    completed: "Completed",
+    skipped: "Skipped",
+    noPage: "No page",
+    pageName: "Page name",
+    replace: "Replace",
+    delete: "Delete",
+    boxColor: "Box Color",
+    reset: "Reset",
+    normal: "Normal",
+    active: "Active",
+    normalBoxColor: "Normal box color",
+    activeBoxColor: "Active box color",
+    activeAsset: "Active asset",
+    page: "Page",
+    format: "Format",
+    locked: "Locked",
+    off: "Off",
+    lockedMissingInterface: "Missing interface: SliceRecord has no locked field yet",
+    deleteCurrentAsset: "Delete current asset",
+    pageStartHint: "Upload 1..N images from the top bar.",
+    createAssetHint: "Use Draw to create assets, then Select to adjust them.",
+    canvasReadyHint: "The canvas is ready for a source image.",
+    aiDetectionProgress: "AI detection progress",
+    aiBatchProcessingRunning: "AI Batch Processing Running",
+    aiCurrentPage: "AI Current Page",
+    total: "Total",
+    newAssets: "New Assets",
+    failed: "Failed",
+    expandAiProgress: "Expand AI progress",
+    minimizeAiProgress: "Minimize AI progress",
+    expand: "Expand",
+    minimize: "Minimize",
+    hideAiProgress: "Hide AI progress",
+    hide: "Hide",
+    close: "Close",
+    deleteCurrentPageQuestion: "Delete current page?",
+    replaceCurrentPageQuestion: "Replace current page?",
+    deleteCurrentPageDescription: "The source image and all slices on this page will be deleted. Remaining pages will be renumbered.",
+    replaceCurrentPageDescription: "This will replace the current source image with \"{file}\" and clear existing slices on this page.",
+    cancel: "Cancel",
+    confirmDelete: "Delete",
+    confirmReplace: "Replace",
+    assetOverview: "Asset Overview",
+    clickCardToLocate: "Click a card to locate it",
+    assetOverviewPagination: "Asset overview pagination",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    closeAssetOverview: "Close asset overview",
+    noAssetsOnPage: "No assets on this page",
+    assetCropMode: "{name} crop mode: {mode}",
+    pageCropModeAria: "Page crop mode",
+    loadingProject: "Loading project.",
+    projectRestored: "Project restored. Changes will auto-save.",
+    projectCreated: "Project created. Upload UI screenshots to start.",
+    loadFailed: "Load failed: {error}",
+    sourceUndoUnavailable: "This action changed a source image file and cannot be fully undone. Reloaded the current project state from disk.",
+    undone: "Undone: {label}",
+    undoSaveFailed: "Undo save failed: {error}",
+    uploadingImages: "Uploading {count} image(s).",
+    uploadedImages: "Uploaded {count} image(s).",
+    uploadFailed: "Upload failed: {error}",
+    savedStatus: "Saved.",
+    saveFailedStatus: "Save failed: {error}",
+    pageNameSaved: "Page name saved.",
+    pageNameSaveFailed: "Page name save failed: {error}",
+    exportedAssets: "Exported {count} assets.",
+    exportedProject: "Exported Pencil project: {pages} pages, {assets} layer assets.",
+    exportFailed: "Export failed: {error}",
+    newAssetsWillUseMode: "New assets will use {mode} mode.",
+    currentPageAlreadyMode: "Current page already uses {mode} mode.",
+    pageOrderSaved: "Page order saved.",
+    pageReorderFailed: "Page reorder failed: {error}",
+    pageDeleted: "Page deleted.",
+    pageReplaced: "Page replaced. Existing slices on that page were cleared.",
+    pageActionFailed: "{action} page failed: {error}",
+    aiDetecting: "AI is detecting {label}",
+    noNewBoxes: "No new boxes. Skipped {skipped}.",
+    noNewAiBoxes: "No new AI boxes. Skipped {skipped} duplicate or invalid boxes.",
+    aiAddedSkipped: "Added {added}. Skipped {skipped}.",
+    aiAddedStatus: "AI added {added} boxes and skipped {skipped}.",
+    aiDetectionFailed: "AI detection failed: {error}",
+    aiBatchDetection: "AI batch detection {done}/{total}",
+    aiBatchDetectingPage: "AI batch detection {label} · {done}/{total}",
+    aiBatchAdded: "AI batch detection {done}/{total} · added {added}",
+    aiBatchComplete: "AI batch complete: {completed} completed, {failed} failed",
+    aiBatchCompleteStatus: "AI batch complete: {completed} completed, {failed} failed, {added} added, {skipped} skipped.",
+    aiBatchFailed: "AI batch detection failed: {error}",
+    undoEdit: "Edit",
+    undoRenamePage: "Rename page",
+    undoCreateAsset: "Create asset",
+    undoAiBoxes: "AI boxes",
+    undoAiBatchBoxes: "AI batch boxes",
+    undoEditAsset: "Edit asset",
+    undoChangePageCropMode: "Change page crop mode",
+    undoDeleteAsset: "Delete asset",
+    undoResizeAsset: "Resize asset",
+    undoMoveAsset: "Move asset",
+    undoReorderPages: "Reorder pages",
+    undoDeletePage: "Delete page",
+    undoReplacePage: "Replace page",
+    undoEditBbox: "Edit bbox",
+    undoChangeCropMode: "Change crop mode"
+  }
+} satisfies Record<LanguageCode, Record<string, string>>;
+
+type ReviewText = typeof reviewI18n.zh;
+
 export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
+  const [language, setLanguage] = useState<LanguageCode>("zh");
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [pages, setPages] = useState<WorkbenchPage[]>([]);
   const [activePageId, setActivePageId] = useState<string | null>(null);
@@ -63,9 +416,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [stagePosition, setStagePosition] = useState<Point>({ x: 80, y: 80 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [status, setStatus] = useState("正在读取项目。");
+  const [status, setStatus] = useState(reviewI18n.zh.loadingProject);
   const [stageSize, setStageSize] = useState({ width: 1000, height: 700 });
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [assetListCollapsed, setAssetListCollapsed] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetCutModeFilter, setAssetCutModeFilter] = useState<"all" | CutMode>("all");
+  const [assetSort, setAssetSort] = useState<"order" | "name" | "size">("order");
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [pageConfirmAction, setPageConfirmAction] = useState<PageConfirmAction | null>(null);
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
@@ -78,6 +435,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
+  const languageRef = useRef<LanguageCode>("zh");
   const sliceNodeRefs = useRef<Record<string, Konva.Rect | null>>({});
   const assetItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -88,29 +446,71 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const pageRenameUndoRef = useRef<string | null>(null);
   const sliceEditUndoRef = useRef<string | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const text = reviewI18n[language];
 
   const activePage = pages.find((page) => page.id === activePageId) || null;
   const activeSlice = activePage?.slices.find((slice) => slice.id === activeSliceId) || null;
   const hasSlices = pages.some((page) => page.slices.length > 0);
   const totalAssets = pages.reduce((total, page) => total + page.slices.length, 0);
   const activePageAssetCount = activePage?.slices.length || 0;
-  const saveLabel = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "error" ? "保存失败" : "就绪";
+  const saveLabel = saveState === "saving" ? text.saving : saveState === "saved" ? text.saved : saveState === "error" ? text.saveFailed : text.ready;
   const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
   const pageCutMode = getPageCutMode(activePage, defaultCutMode);
   const aiBusy = aiRunning !== null;
+  const visibleAssets = useMemo(() => {
+    const query = assetSearch.trim().toLowerCase();
+    const source = activePage?.slices || [];
+    return source
+      .filter((slice) => !query || slice.name.toLowerCase().includes(query))
+      .filter((slice) => assetCutModeFilter === "all" || slice.cutMode === assetCutModeFilter)
+      .slice()
+      .sort((left, right) => {
+        if (assetSort === "name") return left.name.localeCompare(right.name);
+        if (assetSort === "size") return sliceArea(right) - sliceArea(left);
+        return left.sliceIndex - right.sliceIndex;
+      });
+  }, [activePage, assetCutModeFilter, assetSearch, assetSort]);
+
+  function changeLanguage(nextLanguage: LanguageCode) {
+    languageRef.current = nextLanguage;
+    setLanguage(nextLanguage);
+    window.localStorage.setItem(reviewLanguageStorageKey, nextLanguage);
+  }
 
   const loadProject = useCallback(async () => {
+    const messages = reviewI18n[languageRef.current];
     const projectDetail = await apiGet<ProjectDetail>(`/api/projects/${projectId}`);
     const hydratedPages = await hydratePages(projectDetail.pages);
     setDetail(projectDetail);
     setPages(hydratedPages);
     setActivePageId(hydratedPages[0]?.id || null);
     selectSlice(null);
-    setStatus(hydratedPages.length ? "项目已恢复。继续切图会自动保存。" : "项目已创建。上传 UI 截图开始。");
+    setStatus(hydratedPages.length ? messages.projectRestored : messages.projectCreated);
   }, [projectId]);
 
   useEffect(() => {
-    void loadProject().catch((error) => setStatus(`读取失败：${error instanceof Error ? error.message : "unknown error"}`));
+    try {
+      const stored = window.localStorage.getItem(reviewLanguageStorageKey);
+      if (stored === "zh" || stored === "en") {
+        languageRef.current = stored;
+        setLanguage(stored);
+      }
+    } catch {
+      languageRef.current = "zh";
+      setLanguage("zh");
+    }
+  }, []);
+
+  useEffect(() => {
+    languageRef.current = language;
+    document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  }, [language]);
+
+  useEffect(() => {
+    void loadProject().catch((error) => {
+      const messages = reviewI18n[languageRef.current];
+      setStatus(formatMessage(messages.loadFailed, { error: getErrorMessage(error) }));
+    });
   }, [loadProject]);
 
   useEffect(() => {
@@ -241,7 +641,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     clearPendingSaves();
     setUndoStack((current) => current.slice(0, -1));
     if (snapshot.sourceFileAction) {
-      setStatus("该操作涉及页面原图文件，无法完整撤销；已按当前磁盘状态重新载入项目。");
+      setStatus(text.sourceUndoUnavailable);
       await loadProject();
       return;
     }
@@ -250,7 +650,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     setPages(restoredPages);
     setActivePageId(snapshot.activePageId);
     selectSlice(snapshot.activeSliceId);
-    setStatus(`已撤销：${snapshot.label}`);
+    setStatus(formatMessage(text.undone, { label: snapshot.label }));
     setSaveState("saving");
     try {
       await reorderPages(projectId, restoredPages.map((page) => page.id));
@@ -259,7 +659,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       setSaveState("saved");
     } catch (error) {
       setSaveState("error");
-      setStatus(`撤销保存失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.undoSaveFailed, { error: getErrorMessage(error) }));
     }
   }
 
@@ -281,17 +681,17 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     const images = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
     if (!images.length) return;
     try {
-      setStatus(`正在上传 ${images.length} 张图片。`);
+      setStatus(formatMessage(text.uploadingImages, { count: images.length }));
       await uploadPages(projectId, images);
       await loadProject();
-      setStatus(`已上传 ${images.length} 张图片。`);
+      setStatus(formatMessage(text.uploadedImages, { count: images.length }));
     } catch (error) {
-      setStatus(`上传失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.uploadFailed, { error: getErrorMessage(error) }));
     }
   }
 
   function scheduleSave(nextPages: WorkbenchPage[], options: { pushUndo?: boolean; undoLabel?: string } = {}) {
-    if (options.pushUndo) pushUndo(options.undoLabel || "编辑");
+    if (options.pushUndo) pushUndo(options.undoLabel || text.undoEdit);
     setPages(nextPages);
     setSaveState("saving");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -316,12 +716,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await queuedSave;
       if (saveSequence === saveSequenceRef.current) {
         setSaveState("saved");
-        setStatus("已保存。");
+        setStatus(text.savedStatus);
       }
     } catch (error) {
       if (saveSequence === saveSequenceRef.current) {
         setSaveState("error");
-        setStatus(`保存失败：${error instanceof Error ? error.message : "unknown error"}`);
+        setStatus(formatMessage(text.saveFailedStatus, { error: getErrorMessage(error) }));
       }
       throw error;
     }
@@ -342,7 +742,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     await queuedSave;
     if (saveSequence === saveSequenceRef.current) {
       setSaveState("saved");
-      setStatus("已保存。");
+      setStatus(text.savedStatus);
     }
   }
 
@@ -355,7 +755,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   function commitPageName(pageId: string, displayName: string) {
     const currentPage = pages.find((page) => page.id === pageId);
     if (currentPage && currentPage.displayName !== displayName && pageRenameUndoRef.current !== pageId) {
-      pushUndo("页面重命名");
+      pushUndo(text.undoRenamePage);
       pageRenameUndoRef.current = pageId;
     }
     const nextPages = pages.map((page) => page.id === pageId ? { ...page, displayName } : page);
@@ -381,11 +781,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       }
       setPages((current) => current.map((page) => page.id === pageId ? { ...page, displayName: result.page.displayName } : page));
       setSaveState("saved");
-      setStatus("页面名称已保存。");
+      setStatus(text.pageNameSaved);
       pageRenameUndoRef.current = null;
     } catch (error) {
       setSaveState("error");
-      setStatus(`页面名称保存失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.pageNameSaveFailed, { error: getErrorMessage(error) }));
       throw error;
     }
   }
@@ -396,9 +796,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await saveNow();
       const result = await apiPost<{ ok: true; assetCount: number; url: string }>(`/api/projects/${projectId}/export-assets`, {});
       window.location.href = `${apiBaseUrl}${result.url}`;
-      setStatus(`已导出 ${result.assetCount} 个切图。`);
+      setStatus(formatMessage(text.exportedAssets, { count: result.assetCount }));
     } catch (error) {
-      setStatus(`导出失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
     }
   }
 
@@ -408,9 +808,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await saveNow();
       const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, {});
       window.location.href = `${apiBaseUrl}${result.url}`;
-      setStatus(`已导出 Pencil 项目：${result.pageCount} 页，${result.assetCount} 个图层资产。`);
+      setStatus(formatMessage(text.exportedProject, { pages: result.pageCount, assets: result.assetCount }));
     } catch (error) {
-      setStatus(`导出失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
     }
   }
 
@@ -515,7 +915,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     };
     const nextPages = pages.map((page) => page.id === activePage.id ? { ...page, slices: [...page.slices, slice] } : page);
     selectSlice(slice.id);
-    scheduleSave(nextPages, { pushUndo: true, undoLabel: "新建资产" });
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoCreateAsset });
   }
 
   async function runAiForCurrentPage() {
@@ -530,11 +930,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       added: 0,
       skipped: 0,
       currentLabel: label,
-      message: `AI 正在画 ${label}`,
+      message: formatMessage(text.aiDetecting, { label }),
       minimized: false,
       hidden: false
     });
-    setStatus(`AI 正在画 ${label}。`);
+    setStatus(`${formatMessage(text.aiDetecting, { label })}。`);
     try {
       await flushPageRename();
       const response = await generateAiBoxes(projectId, activePage.id);
@@ -555,12 +955,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           completed: 1,
           added: 0,
           skipped,
-          message: `AI 未新增框，跳过 ${skipped} 个`
+          message: formatMessage(text.noNewBoxes, { skipped })
         } : current);
-        setStatus(`AI 未新增框。已跳过 ${skipped} 个重复或无效框。`);
+        setStatus(formatMessage(text.noNewAiBoxes, { skipped }));
         return;
       }
-      pushUndo("AI 画框");
+      pushUndo(text.undoAiBoxes);
       const nextPages = currentPages.map((page) => page.id === currentPage.id ? { ...page, slices: merged.slices } : page);
       setPages(nextPages);
       selectSlice(merged.lastAddedSliceId);
@@ -570,18 +970,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         completed: 1,
         added: merged.addedCount,
         skipped,
-        message: `AI 已新增 ${merged.addedCount} 个，跳过 ${skipped} 个`
+        message: formatMessage(text.aiAddedSkipped, { added: merged.addedCount, skipped })
       } : current);
-      setStatus(`AI 已新增 ${merged.addedCount} 个矩形框，跳过 ${skipped} 个。`);
+      setStatus(formatMessage(text.aiAddedStatus, { added: merged.addedCount, skipped }));
     } catch (error) {
       setSaveState("error");
       setAiProgress((current) => current ? {
         ...current,
         completed: 1,
         failed: 1,
-        message: `AI 画框失败：${error instanceof Error ? error.message : "unknown error"}`
+        message: formatMessage(text.aiDetectionFailed, { error: getErrorMessage(error) })
       } : current);
-      setStatus(`AI 画框失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.aiDetectionFailed, { error: getErrorMessage(error) }));
     } finally {
       setAiRunning(null);
     }
@@ -598,18 +998,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       added: 0,
       skipped: 0,
       currentLabel: "",
-      message: `AI 批量画框 0/${pages.length}`,
+      message: formatMessage(text.aiBatchDetection, { done: 0, total: pages.length }),
       minimized: false,
       hidden: false
     });
-    setStatus(`AI 批量画框 0/${pages.length}。`);
+    setStatus(`${formatMessage(text.aiBatchDetection, { done: 0, total: pages.length })}。`);
     let workingPages = pages;
     let completed = 0;
     let failed = 0;
     let addedTotal = 0;
     let skippedTotal = 0;
     let mergeQueue = Promise.resolve();
-    pushUndo("AI 批量画框");
+    pushUndo(text.undoAiBatchBoxes);
     try {
       await flushPageRename();
       const settings = await getAiSliceSettings().catch(() => ({ ok: true as const, batchConcurrency: 4 }));
@@ -625,9 +1025,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           setAiProgress((current) => current ? {
             ...current,
             currentLabel,
-            message: `AI 正在画 ${currentLabel}`
+            message: formatMessage(text.aiDetecting, { label: currentLabel })
           } : current);
-          setStatus(`AI 批量画框 P${index + 1} · ${completed + failed}/${pages.length}`);
+          setStatus(formatMessage(text.aiBatchDetectingPage, { label: currentLabel, done: completed + failed, total: pages.length }));
           try {
             const response = await generateAiBoxes(projectId, page.id);
             mergeQueue = mergeQueue.catch(() => undefined).then(async () => {
@@ -655,9 +1055,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 added: addedTotal,
                 skipped: skippedTotal,
                 currentLabel,
-                message: `AI 批量画框 ${completed + failed}/${pages.length}`
+                message: formatMessage(text.aiBatchDetection, { done: completed + failed, total: pages.length })
               } : current);
-              setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
+              setStatus(formatMessage(text.aiBatchAdded, { done: completed + failed, total: pages.length, added: addedTotal }));
             });
             await mergeQueue;
           } catch {
@@ -667,10 +1067,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               completed,
               failed,
               currentLabel,
-              message: `AI 批量画框 ${completed + failed}/${pages.length}`
+              message: formatMessage(text.aiBatchDetection, { done: completed + failed, total: pages.length })
             } : current);
           }
-          setStatus(`AI 批量画框 ${completed + failed}/${pages.length} · 新增 ${addedTotal}`);
+          setStatus(formatMessage(text.aiBatchAdded, { done: completed + failed, total: pages.length, added: addedTotal }));
         }
       };
       await Promise.all(Array.from({ length: Math.min(concurrency, pages.length) }, () => worker()));
@@ -681,16 +1081,16 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         added: addedTotal,
         skipped: skippedTotal,
         currentLabel: "",
-        message: `AI 批量完成：成功 ${completed} 页，失败 ${failed} 页`
+        message: formatMessage(text.aiBatchComplete, { completed, failed })
       } : current);
-      setStatus(`AI 批量完成：成功 ${completed} 页，失败 ${failed} 页，新增 ${addedTotal} 个，跳过 ${skippedTotal} 个。`);
+      setStatus(formatMessage(text.aiBatchCompleteStatus, { completed, failed, added: addedTotal, skipped: skippedTotal }));
     } catch (error) {
       setSaveState("error");
       setAiProgress((current) => current ? {
         ...current,
-        message: `AI 批量画框失败：${error instanceof Error ? error.message : "unknown error"}`
+        message: formatMessage(text.aiBatchFailed, { error: getErrorMessage(error) })
       } : current);
-      setStatus(`AI 批量画框失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.aiBatchFailed, { error: getErrorMessage(error) }));
     } finally {
       setAiRunning(null);
     }
@@ -727,7 +1127,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     setTool((currentTool) => currentTool === nextTool ? currentTool : nextTool);
   }
 
-  function beginSliceEdit(sliceId: string, label = "编辑资产") {
+  function beginSliceEdit(sliceId: string, label = text.undoEditAsset) {
     if (sliceEditUndoRef.current === sliceId) return;
     pushUndo(label);
     sliceEditUndoRef.current = sliceId;
@@ -736,7 +1136,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   function commitSlicePatch(
     sliceId: string,
     patch: Partial<Pick<SliceRecord, "name" | "bbox" | "cutMode">>,
-    undoLabel = "编辑资产",
+    undoLabel = text.undoEditAsset,
     options: { pushUndo?: boolean; saveImmediately?: boolean } = { pushUndo: true }
   ) {
     if (!activePage) return;
@@ -761,18 +1161,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     setDefaultCutMode(cutMode);
     if (!activePage) return;
     if (!activePage.slices.length) {
-      setStatus(`后续新建资产将使用${cutModeLabel(cutMode)}。`);
+      setStatus(formatMessage(text.newAssetsWillUseMode, { mode: cutModeLabel(cutMode, text) }));
       return;
     }
     if (activePage.slices.every((slice) => slice.cutMode === cutMode)) {
-      setStatus(`当前页已是${cutModeLabel(cutMode)}模式。`);
+      setStatus(formatMessage(text.currentPageAlreadyMode, { mode: cutModeLabel(cutMode, text) }));
       return;
     }
     const nextPages = pages.map((page) => page.id === activePage.id ? {
       ...page,
       slices: page.slices.map((slice) => ({ ...slice, cutMode }))
     } : page);
-    scheduleSave(nextPages, { pushUndo: true, undoLabel: "批量切换裁切模式" });
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoChangePageCropMode });
   }
 
   function updateBoxColor(key: keyof typeof defaultBoxColors, value: string) {
@@ -802,7 +1202,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       slices: page.slices.filter((slice) => slice.id !== sliceId)
     } : page);
     selectSlice(null);
-    scheduleSave(nextPages, { pushUndo: true, undoLabel: "删除资产" });
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoDeleteAsset });
   }
 
   function onTransformEnd(slice: SliceRecord, node: Konva.Rect) {
@@ -819,7 +1219,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         width: Math.max(1, node.width() * scaleX),
         height: Math.max(1, node.height() * scaleY)
       }, activePage)
-    }, "缩放资产");
+    }, text.undoResizeAsset);
   }
 
   async function commitPageOrder(nextPages: WorkbenchPage[], activePageIdAfterOrder = activePageId) {
@@ -828,15 +1228,15 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       await saveNow();
-      pushUndo("调整页面顺序");
+      pushUndo(text.undoReorderPages);
       setPages(nextPages);
       const projectDetail = await reorderPages(projectId, nextPages.map((page) => page.id));
       await applyProjectDetail(projectDetail, activePageIdAfterOrder, activeSliceId);
       setSaveState("saved");
-      setStatus("页面顺序已保存。");
+      setStatus(text.pageOrderSaved);
     } catch (error) {
       setSaveState("error");
-      setStatus(`页面排序失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.pageReorderFailed, { error: getErrorMessage(error) }));
     }
   }
 
@@ -870,18 +1270,28 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       await saveNow();
-      pushUndo(pageConfirmAction.type === "delete" ? "删除页面" : "替换页面", { sourceFileAction: true });
+      pushUndo(pageConfirmAction.type === "delete" ? text.undoDeletePage : text.undoReplacePage, { sourceFileAction: true });
       const projectDetail = pageConfirmAction.type === "delete"
         ? await deletePage(projectId, pageConfirmAction.pageId)
         : await replacePage(projectId, pageConfirmAction.pageId, pageConfirmAction.file);
       await applyProjectDetail(projectDetail, pageConfirmAction.type === "replace" ? pageConfirmAction.pageId : null, null);
       setSaveState("saved");
-      setStatus(pageConfirmAction.type === "delete" ? "页面已删除。" : "页面已替换，该页切图已清空。");
+      setStatus(pageConfirmAction.type === "delete" ? text.pageDeleted : text.pageReplaced);
       setPageConfirmAction(null);
     } catch (error) {
       setSaveState("error");
-      setStatus(`${pageConfirmAction.type === "delete" ? "删除" : "替换"}页面失败：${error instanceof Error ? error.message : "unknown error"}`);
+      setStatus(formatMessage(text.pageActionFailed, {
+        action: pageConfirmAction.type === "delete" ? text.delete : text.replace,
+        error: getErrorMessage(error)
+      }));
     }
+  }
+
+  function commitActiveSliceBbox(patch: Partial<BBox>) {
+    if (!activePage || !activeSlice) return;
+    commitSlicePatch(activeSlice.id, {
+      bbox: normalizeBox({ ...activeSlice.bbox, ...patch }, activePage)
+    }, text.undoEditBbox);
   }
 
   const draftBox = useMemo(() => {
@@ -890,54 +1300,69 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   }, [drag, activePage]);
 
   return (
-    <main className={`reviewShell ${inspectorCollapsed ? "inspectorCollapsed" : ""}`}>
+    <main className={`reviewShell ${inspectorCollapsed ? "inspectorCollapsed" : ""} ${assetListCollapsed ? "assetListCollapsed" : ""}`}>
       <header className="reviewTopbar">
         <div className="topbarProject">
-          <a className="topbarBack" href="/projects" aria-label="返回项目列表">
-            <ArrowLeft aria-hidden="true" />
+          <a className="topbarBrand" href="/projects" aria-label={text.backToProjects}>
+            Slice Studio
           </a>
           <div className="projectTitleBlock">
-            <strong>{detail?.project.name || "Slice Studio"}</strong>
-            <span>{pages.length} pages · {pages.reduce((total, page) => total + page.slices.length, 0)} assets</span>
+            <strong>{text.reviewWorkbench}</strong>
+            <span>{detail?.project.name || text.untitledProject}</span>
           </div>
         </div>
         <div className="topbarActions">
-          <button className="toolbarButton" type="button" disabled={!undoStack.length} title={undoStack.length ? `撤销：${undoStack[undoStack.length - 1].label}` : "没有可撤销操作"} onClick={() => void restoreUndo()}>
-            <RotateCcw aria-hidden="true" />
-            <span>撤销</span>
-          </button>
           <label className="toolbarButton uploadButton">
             <Upload aria-hidden="true" />
-            <span>上传 UI 截图</span>
+            <span>{text.upload}</span>
             <input id="pageUpload" name="pageUpload" type="file" multiple accept="image/*" onChange={(event) => void handleUpload(event.target.files)} />
           </label>
-          <div className="zoomGroup" aria-label="缩放控制">
-            <button className="zoomButton" type="button" onClick={fitPage}>Fit</button>
-            <span className="zoomReadout">{Math.round(scale * 100)}%</span>
-            <button className="zoomButton" type="button" onClick={() => setScale(1)}>100%</button>
-          </div>
-          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
-            <Download aria-hidden="true" />
-            <span>导出 assets.zip</span>
+          <button className="toolbarButton" type="button" disabled={!undoStack.length} title={undoStack.length ? `${text.undo}: ${undoStack[undoStack.length - 1].label}` : text.nothingToUndo} onClick={() => void restoreUndo()}>
+            <RotateCcw aria-hidden="true" />
+            <span>{text.undo}</span>
           </button>
+          <button className="toolbarButton ghostButton" type="button" disabled title={text.redoUnavailable}>
+            <span>{text.redo}</span>
+          </button>
+          <div className="zoomGroup" aria-label={text.zoomControls}>
+            <button className="zoomButton" type="button" onClick={fitPage}>{text.fit}</button>
+            <button className="zoomIconButton" type="button" aria-label={text.zoomOut} onClick={() => setScale((value) => Math.max(0.08, value - 0.1))}>
+              <Minus aria-hidden="true" />
+            </button>
+            <span className="zoomReadout">{Math.round(scale * 100)}%</span>
+            <button className="zoomIconButton" type="button" aria-label={text.zoomIn} onClick={() => setScale((value) => Math.min(4, value + 0.1))}>
+              <Plus aria-hidden="true" />
+            </button>
+          </div>
           <button className="toolbarButton aiButton" type="button" disabled={!activePage || aiBusy} onClick={() => void runAiForCurrentPage()}>
             <Sparkles aria-hidden="true" />
-            <span>{aiRunning === "page" ? "AI 中" : "AI 当前页"}</span>
+            <span>{aiRunning === "page" ? text.aiRunning : text.aiCurrent}</span>
           </button>
           <button className="toolbarButton aiButton" type="button" disabled={!pages.length || aiBusy} onClick={() => void runAiForAllPages()}>
             <Bot aria-hidden="true" />
-            <span>{aiRunning === "batch" ? "AI 批量中" : "AI 全部页"}</span>
+            <span>{aiRunning === "batch" ? text.batchRunning : text.aiAll}</span>
+          </button>
+          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
+            <Download aria-hidden="true" />
+            <span>{text.assetsZip}</span>
           </button>
           <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportProject()}>
             <Download aria-hidden="true" />
-            <span>导出 project.zip</span>
+            <span>{text.projectZip}</span>
           </button>
+          <div className="languageToggle" role="group" aria-label={text.language}>
+            <button type="button" className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} title={text.chinese} onClick={() => changeLanguage("zh")}>中</button>
+            <button type="button" className={language === "en" ? "active" : ""} aria-pressed={language === "en"} title={text.english} onClick={() => changeLanguage("en")}>EN</button>
+          </div>
           <span className={`saveState ${saveState}`} title={status}>{saveLabel}</span>
         </div>
       </header>
 
-      <aside className="pageRail" aria-label="页面">
-        <div className="pageRailHeader">Pages</div>
+      <aside className="pageRail" aria-label={text.pages}>
+        <div className="pageRailHeader">
+          <span>{text.pages} ({pages.length})</span>
+          <Search aria-hidden="true" />
+        </div>
         <div className="pageRailList">
           {pages.map((page, index) => (
             <div
@@ -965,8 +1390,8 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 draggable
                 role="button"
                 tabIndex={0}
-                aria-label={`拖拽调整 P${index + 1} 顺序`}
-                title="拖拽调整页面顺序"
+                aria-label={`${text.dragToReorder} P${index + 1}`}
+                title={text.dragToReorder}
                 onDragStart={(event) => {
                   setDraggingPageId(page.id);
                   event.dataTransfer.effectAllowed = "move";
@@ -980,47 +1405,46 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 setActivePageId(page.id);
                 selectSlice(null);
               }}>
+                <span className="pageThumbOrdinal">{index + 1}</span>
                 <span className="pageThumbImage">
                   <img src={`${apiBaseUrl}${page.sourceUrl}`} alt="" />
                 </span>
-                <span className="pageThumbMeta">P{index + 1}</span>
-                <span className="pageThumbName">{page.displayName || page.originalName}</span>
-                <span className="pageThumbCount">{page.slices.length}</span>
+                <span className="pageThumbBody">
+                  <span className="pageThumbName">{page.displayName || page.originalName}</span>
+                  <span className="pageThumbMeta">{page.width}x{page.height}</span>
+                </span>
+                <span className="pageThumbAssets">{page.slices.length} {text.assets}</span>
+                <span className={`pageThumbStatus ${pageStatusClass(page, page.id === activePageId)}`}>{pageStatusLabel(page, page.id === activePageId, text)}</span>
               </button>
             </div>
           ))}
           {!pages.length && (
             <div className="pageRailEmpty">
               <Images aria-hidden="true" />
-              <span>无页面</span>
+              <span>{text.noPages}</span>
             </div>
           )}
         </div>
+        <footer className="pageRailFooter">
+          <span>{text.project}: {detail?.project.name || text.untitled}</span>
+          <span>{pages.length} {text.pages}</span>
+        </footer>
       </aside>
 
       <section className="stageArea">
-        <nav className="floatingTools" aria-label="切图工具">
-          <button className={tool === "select" ? "active" : ""} type="button" title="选择（V）" aria-label="选择工具，快捷键 V" onPointerDown={(event) => {
-            event.preventDefault();
-            activateTool("select");
-          }} onClick={() => activateTool("select")}>
+        <div className="canvasToolRail" role="group" aria-label={text.canvasTools}>
+          <button className={tool === "select" ? "active" : ""} type="button" title={text.select} aria-label={text.selectTool} aria-pressed={tool === "select"} onClick={() => activateTool("select")}>
             <MousePointer2 aria-hidden="true" />
           </button>
-          <button className={tool === "draw" ? "active" : ""} type="button" title="画框（B）" aria-label="画框工具，快捷键 B" onPointerDown={(event) => {
-            event.preventDefault();
-            activateTool("draw");
-          }} onClick={() => activateTool("draw")}>
+          <button className={tool === "draw" ? "active" : ""} type="button" title={text.draw} aria-label={text.drawTool} aria-pressed={tool === "draw"} onClick={() => activateTool("draw")}>
             <Square aria-hidden="true" />
           </button>
-          <button className={tool === "pan" ? "active" : ""} type="button" title="移动画布（H）" aria-label="移动画布工具，快捷键 H" onPointerDown={(event) => {
-            event.preventDefault();
-            activateTool("pan");
-          }} onClick={() => activateTool("pan")}>
+          <button className={tool === "pan" ? "active" : ""} type="button" title={text.pan} aria-label={text.panTool} aria-pressed={tool === "pan"} onClick={() => activateTool("pan")}>
             <Hand aria-hidden="true" />
           </button>
-        </nav>
+        </div>
         <div ref={stageWrapRef} className="stageWrap">
-          {!activePage && <div className="canvasHint">上传 UI 截图开始切图</div>}
+          {!activePage && <div className="canvasHint">{text.uploadHint}</div>}
           {activePage && (
             <Stage
               ref={stageRef}
@@ -1062,7 +1486,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       }}
                       onDragEnd={(event) => {
                         selectSlice(slice.id);
-                        commitSlicePatch(slice.id, { bbox: normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage) }, "移动资产");
+                        commitSlicePatch(slice.id, { bbox: normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage) }, text.undoMoveAsset);
                       }}
                       onTransformEnd={(event) => onTransformEnd(slice, event.target as Konva.Rect)}
                     />
@@ -1096,31 +1520,135 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             </Stage>
           )}
         </div>
+        {activePage ? (
+          <footer className="stageFooter">
+            <span>{activePage.width}x{activePage.height}</span>
+            <span>{Math.round(scale * 100)}%</span>
+          </footer>
+        ) : null}
       </section>
 
-      <aside className="assetInspector" aria-label="资产检查器">
-        <button className="inspectorToggle" type="button" aria-label={inspectorCollapsed ? "展开资产检查器" : "折叠资产检查器"} title={inspectorCollapsed ? "展开资产检查器" : "折叠资产检查器"} onClick={() => setInspectorCollapsed((value) => !value)}>
+      <aside className={`assetInspector ${assetListCollapsed ? "assetListCollapsed" : ""}`} aria-label={text.assetInspector}>
+        <button className="inspectorToggle" type="button" aria-label={inspectorCollapsed ? text.expandInspector : text.collapseInspector} title={inspectorCollapsed ? text.expandInspector : text.collapseInspector} onClick={() => setInspectorCollapsed((value) => !value)}>
           {inspectorCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
         </button>
         {!inspectorCollapsed && (
           <div className="inspectorInner">
-            <div className="inspectorControls">
+            <section className="assetReviewPanel">
               <header className="inspectorHeader">
                 <div>
-                  <h2>Assets</h2>
-                  <span>{activePageAssetCount} assets</span>
+                  <h2>{text.assets} ({activePageAssetCount})</h2>
+                  <span>{visibleAssets.length} {text.visible}</span>
+                </div>
+                <button className="assetPanelCollapseButton" type="button" aria-label={assetListCollapsed ? text.expandAssetsList : text.collapseAssetsList} title={assetListCollapsed ? text.expandAssetsList : text.collapseAssetsList} onClick={() => setAssetListCollapsed((value) => !value)}>
+                  {assetListCollapsed ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
+                </button>
+              </header>
+              {!assetListCollapsed ? (
+                <>
+                  <div className="assetSearchRow">
+                    <label>
+                      <Search aria-hidden="true" />
+                      <input
+                        value={assetSearch}
+                        onChange={(event) => setAssetSearch(event.target.value)}
+                        placeholder={text.searchAssetsPlaceholder}
+                        aria-label={text.searchAssets}
+                      />
+                    </label>
+                    <select aria-label={text.filterByCropMode} value={assetCutModeFilter} onChange={(event) => setAssetCutModeFilter(event.target.value as "all" | CutMode)}>
+                      <option value="all">{text.allModes}</option>
+                      <option value="rect">{text.rect}</option>
+                      <option value="subject">{text.subject}</option>
+                      <option value="card">{text.innerImage}</option>
+                    </select>
+                    <select aria-label={text.sortAssets} value={assetSort} onChange={(event) => setAssetSort(event.target.value as "order" | "name" | "size")}>
+                      <option value="order">{text.order}</option>
+                      <option value="name">{text.name}</option>
+                      <option value="size">{text.size}</option>
+                    </select>
+                  </div>
+                  <div className="assetList">
+                    {visibleAssets.map((slice, index) => (
+                      <div
+                        key={slice.id}
+                        className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`}
+                        ref={(node) => {
+                          assetItemRefs.current[slice.id] = node;
+                        }}
+                        onClick={() => selectSlice(slice.id)}
+                      >
+                        <button type="button" className="assetPreviewButton" aria-label={formatMessage(text.selectAsset, { name: slice.name })} onClick={(event) => {
+                          event.stopPropagation();
+                          selectSlice(slice.id);
+                        }}>
+                          <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
+                        </button>
+                        <span className="assetFields">
+                          <input
+                            name={`sliceName-${slice.id}`}
+                            aria-label={text.assetName}
+                            value={slice.name}
+                            onFocus={() => {
+                              selectSlice(slice.id);
+                              beginSliceEdit(slice.id, text.undoEditAsset);
+                            }}
+                            onBlur={() => {
+                              sliceEditUndoRef.current = null;
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value }, text.undoEditAsset, { pushUndo: false })}
+                          />
+                          <small>{slice.bbox.width}x{slice.bbox.height}</small>
+                        </span>
+                        <button
+                          className={`assetCutModeButton ${slice.cutMode}`}
+                          type="button"
+                          aria-label={formatMessage(text.assetCropMode, { name: slice.name, mode: cutModeLabel(slice.cutMode, text) })}
+                          title={text.cycleCropMode}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectSlice(slice.id);
+                            commitSlicePatch(slice.id, { cutMode: cycleSliceCutMode(slice.cutMode) }, text.undoChangeCropMode);
+                          }}
+                        >
+                          {cutModeLabel(slice.cutMode, text)}
+                        </button>
+                        <button className="assetItemDelete" type="button" aria-label={`${text.deleteAsset}: ${slice.name}`} title={text.deleteAsset} onClick={(event) => {
+                          event.stopPropagation();
+                          deleteActiveSlice(slice.id);
+                        }}>
+                          <Trash2 aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                    {activePage && !visibleAssets.length ? (
+                      <div className="assetListEmpty">
+                        <Images aria-hidden="true" />
+                        <span>{text.noAssetsMatch}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </section>
+            <section className="detailsPanel">
+              <header className="detailsHeader">
+                <div>
+                  <h2>{text.details}</h2>
+                  <span>{activeSlice ? activeSlice.name : text.noAssetSelected}</span>
                 </div>
                 <button className="assetGalleryButton" type="button" disabled={!activePage} onClick={() => void openAssetGallery()}>
                   <Grid2X2 aria-hidden="true" />
-                  <span>总览</span>
+                  <span>{text.overview}</span>
                 </button>
               </header>
               <section className="cutModePanel">
                 <div className="cutModePanelHeader">
-                  <strong>裁切模式</strong>
-                  <span>{pageCutMode === "mixed" ? "混合" : cutModeLabel(pageCutMode)}</span>
+                  <strong>{text.pageCropMode}</strong>
+                  <span>{pageCutMode === "mixed" ? text.mixed : cutModeLabel(pageCutMode, text)}</span>
                 </div>
-                <div className="cutModeSegmented" role="group" aria-label="裁切模式">
+                <div className="cutModeSegmented" role="group" aria-label={text.pageCropModeAria}>
                   {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
                     <button
                       key={mode}
@@ -1129,55 +1657,55 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       aria-pressed={pageCutMode === mode}
                       onClick={() => applyPageCutMode(mode)}
                     >
-                      {cutModeLabel(mode)}
+                      {cutModeLabel(mode, text)}
                     </button>
                   ))}
                 </div>
               </section>
               <section className="pageInfoPanel">
                 <div className="pageInfoHeader">
-                  <strong>{activePage ? `P${pageIndex + 1}` : "No page"}</strong>
-                  <span>{activePage ? `${activePage.width}x${activePage.height}` : "无页面"}</span>
+                  <strong>{activePage ? `P${pageIndex + 1}` : text.noPage}</strong>
+                  <span>{activePage ? `${activePage.width}x${activePage.height}` : text.noPage}</span>
                 </div>
                 {activePage ? (
                   <label className="pageNameField">
-                    <span>页面名称</span>
+                    <span>{text.pageName}</span>
                     <input
                       name={`pageName-${activePage.id}`}
-                      aria-label="页面名称"
-                      placeholder={`Page ${pageIndex + 1}`}
+                      aria-label={text.pageName}
+                      placeholder={`${text.page} ${pageIndex + 1}`}
                       value={activePage.displayName}
                       onChange={(event) => commitPageName(activePage.id, event.target.value)}
                     />
                   </label>
                 ) : null}
-                <span>{activePage ? activePage.originalName : "上传 UI 截图后开始切图"}</span>
+                <span>{activePage ? activePage.originalName : text.uploadHint}</span>
                 {activePage ? (
                   <div className="pageActionGrid">
                     <button type="button" onClick={() => replaceInputRef.current?.click()}>
                       <Upload aria-hidden="true" />
-                      替换
+                      {text.replace}
                     </button>
                     <button type="button" className="dangerButton" onClick={() => setPageConfirmAction({ type: "delete", pageId: activePage.id })}>
                       <Trash2 aria-hidden="true" />
-                      删除
+                      {text.delete}
                     </button>
                   </div>
                 ) : null}
               </section>
               <section className="boxColorPanel">
                 <div className="boxColorHeader">
-                  <strong>框颜色</strong>
-                  <button type="button" onClick={resetBoxColors}>重置</button>
+                  <strong>{text.boxColor}</strong>
+                  <button type="button" onClick={resetBoxColors}>{text.reset}</button>
                 </div>
                 <div className="boxColorFields">
                   <label>
-                    <span>普通</span>
-                    <input type="color" value={boxColors.slice} onChange={(event) => updateBoxColor("slice", event.target.value)} aria-label="普通框颜色" />
+                    <span>{text.normal}</span>
+                    <input type="color" value={boxColors.slice} onChange={(event) => updateBoxColor("slice", event.target.value)} aria-label={text.normalBoxColor} />
                   </label>
                   <label>
-                    <span>选中</span>
-                    <input type="color" value={boxColors.active} onChange={(event) => updateBoxColor("active", event.target.value)} aria-label="选中框颜色" />
+                    <span>{text.active}</span>
+                    <input type="color" value={boxColors.active} onChange={(event) => updateBoxColor("active", event.target.value)} aria-label={text.activeBoxColor} />
                   </label>
                 </div>
               </section>
@@ -1185,101 +1713,94 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 <section className="activeAssetPanel">
                   <div className="activeAssetHeader">
                     <div>
-                      <span>Active asset</span>
-                      <strong>{activeSlice.name || "Untitled"}</strong>
+                      <span>{text.activeAsset}</span>
+                      <strong>{activeSlice.name || text.untitled}</strong>
                     </div>
-                    <button className="assetDangerButton" type="button" aria-label="删除当前资产" title="删除当前资产" onClick={() => deleteActiveSlice(activeSlice.id)}>
+                    <button className="assetDangerButton" type="button" aria-label={text.deleteCurrentAsset} title={text.deleteCurrentAsset} onClick={() => deleteActiveSlice(activeSlice.id)}>
                       <Trash2 aria-hidden="true" />
                     </button>
                   </div>
                   <div className="activeAssetEditRow">
                     <input
                       name={`activeSliceName-${activeSlice.id}`}
-                      aria-label="资产名称"
+                      aria-label={text.assetName}
                       value={activeSlice.name}
-                      onFocus={() => beginSliceEdit(activeSlice.id, "编辑资产")}
+                      onFocus={() => beginSliceEdit(activeSlice.id, text.undoEditAsset)}
                       onBlur={() => {
                         sliceEditUndoRef.current = null;
                       }}
-                      onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
+                      onChange={(event) => commitSlicePatch(activeSlice.id, { name: event.target.value }, text.undoEditAsset, { pushUndo: false })}
                     />
                     <span>{activeSlice.bbox.width}x{activeSlice.bbox.height}</span>
                   </div>
+                  <div className="detailsGrid">
+                    <label>
+                      <span>X</span>
+                      <input type="number" value={activeSlice.bbox.x} onChange={(event) => commitActiveSliceBbox({ x: Number(event.target.value) || 0 })} />
+                    </label>
+                    <label>
+                      <span>Y</span>
+                      <input type="number" value={activeSlice.bbox.y} onChange={(event) => commitActiveSliceBbox({ y: Number(event.target.value) || 0 })} />
+                    </label>
+                    <label>
+                      <span>W</span>
+                      <input type="number" value={activeSlice.bbox.width} onChange={(event) => commitActiveSliceBbox({ width: Number(event.target.value) || 1 })} />
+                    </label>
+                    <label>
+                      <span>H</span>
+                      <input type="number" value={activeSlice.bbox.height} onChange={(event) => commitActiveSliceBbox({ height: Number(event.target.value) || 1 })} />
+                    </label>
+                  </div>
+                  <label className="detailsSelectRow">
+                    <span>{text.cropMode}</span>
+                    <select value={activeSlice.cutMode} onChange={(event) => commitSlicePatch(activeSlice.id, { cutMode: event.target.value as CutMode }, text.undoChangeCropMode, { saveImmediately: true })}>
+                      <option value="rect">{text.rect}</option>
+                      <option value="subject">{text.subject}</option>
+                      <option value="card">{text.innerImage}</option>
+                    </select>
+                  </label>
+                  <div className="detailsStaticGrid">
+                    <span>{text.page}</span>
+                    <strong>{activePage ? `${pageIndex + 1}/${pages.length}` : "-"}</strong>
+                    <span>{text.format}</span>
+                    <strong>PNG</strong>
+                    <span>{text.boxColor}</span>
+                    <strong>{boxColors.slice}</strong>
+                    <span>{text.locked}</span>
+                    <button type="button" disabled title={text.lockedMissingInterface}>
+                      <Lock aria-hidden="true" />
+                      {text.off}
+                    </button>
+                  </div>
+                  <button className="deleteAssetWideButton" type="button" onClick={() => deleteActiveSlice(activeSlice.id)}>
+                    {text.deleteAsset}
+                  </button>
                 </section>
               ) : (
                 <section className="inspectorSummary">
-                  <span>{activePage ? `${activePageAssetCount} assets on this page · ${totalAssets} total` : "顶部按钮可上传 1..N 张图片"}</span>
+                  <span>{activePage ? `${activePageAssetCount} ${text.assets} · ${totalAssets} ${text.total}` : text.pageStartHint}</span>
                   {activePageAssetCount === 0 && (
-                    <span>{activePage ? "使用画框工具创建资产，选择工具调整资产。" : "画布保持纯黑，不显示白色空态卡片。"}</span>
+                    <span>{activePage ? text.createAssetHint : text.canvasReadyHint}</span>
                   )}
                 </section>
               )}
-            </div>
-            <div className="assetList">
-              {activePage?.slices.map((slice, index) => (
-                <div
-                  key={slice.id}
-                  className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`}
-                  ref={(node) => {
-                    assetItemRefs.current[slice.id] = node;
-                  }}
-                  onClick={() => selectSlice(slice.id)}
-                >
-                  <span className="assetIndex">#{index + 1}</span>
-                  <span className="assetFields">
-                    <input
-                      name={`sliceName-${slice.id}`}
-                      aria-label="资产名称"
-                      value={slice.name}
-                      onFocus={() => {
-                        selectSlice(slice.id);
-                        beginSliceEdit(slice.id, "编辑资产");
-                      }}
-                      onBlur={() => {
-                        sliceEditUndoRef.current = null;
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => commitSlicePatch(slice.id, { name: event.target.value }, "编辑资产", { pushUndo: false })}
-                    />
-                  </span>
-                  <button
-                    className={`assetCutModeButton ${slice.cutMode}`}
-                    type="button"
-                    aria-label={`${slice.name} 裁切模式：${cutModeLabel(slice.cutMode)}`}
-                    title="点击切换：矩形 / 抠主体 / 保内图"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selectSlice(slice.id);
-                      commitSlicePatch(slice.id, { cutMode: cycleSliceCutMode(slice.cutMode) }, "切换裁切模式");
-                    }}
-                  >
-                    {cutModeLabel(slice.cutMode)}
-                  </button>
-                  <button className="assetItemDelete" type="button" aria-label={`删除 ${slice.name}`} title="删除资产" onClick={(event) => {
-                    event.stopPropagation();
-                    deleteActiveSlice(slice.id);
-                  }}>
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            </section>
           </div>
         )}
       </aside>
       <input ref={replaceInputRef} className="hiddenFileInput" type="file" accept="image/*" onChange={(event) => requestReplaceActivePage(event.target.files)} />
       {aiProgress && !aiProgress.hidden ? (
-        <section className={`aiProgressPanel ${aiProgress.minimized ? "minimized" : ""}`} aria-label="AI 画框进度" aria-live="polite">
+        <section className={`aiProgressPanel ${aiProgress.minimized ? "minimized" : ""}`} aria-label={text.aiDetectionProgress} aria-live="polite">
           <header className="aiProgressHeader">
             <div>
-              <strong>{aiProgress.mode === "batch" ? "AI 批量画框" : "AI 当前页"}</strong>
+              <strong>{aiProgress.mode === "batch" ? text.aiBatchProcessingRunning : text.aiCurrentPage}</strong>
               <span>{aiProgress.message}</span>
             </div>
             <div className="aiProgressActions">
-              <button type="button" aria-label={aiProgress.minimized ? "展开 AI 进度" : "最小化 AI 进度"} title={aiProgress.minimized ? "展开" : "最小化"} onClick={() => updateAiProgress({ minimized: !aiProgress.minimized })}>
+              <button type="button" aria-label={aiProgress.minimized ? text.expandAiProgress : text.minimizeAiProgress} title={aiProgress.minimized ? text.expand : text.minimize} onClick={() => updateAiProgress({ minimized: !aiProgress.minimized })}>
                 <GripHorizontal aria-hidden="true" />
               </button>
-              <button type="button" aria-label="隐藏 AI 进度" title="隐藏" onClick={() => updateAiProgress({ hidden: true })}>
+              <button type="button" aria-label={text.hideAiProgress} title={text.hide} onClick={() => updateAiProgress({ hidden: true })}>
                 <X aria-hidden="true" />
               </button>
             </div>
@@ -1289,10 +1810,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           </div>
           {!aiProgress.minimized ? (
             <div className="aiProgressStats">
-              <span>{aiProgress.completed + aiProgress.failed}/{aiProgress.total} 页</span>
-              <span>新增 {aiProgress.added}</span>
-              <span>跳过 {aiProgress.skipped}</span>
-              <span>失败 {aiProgress.failed}</span>
+              <span><strong>{aiProgress.completed + aiProgress.failed}/{aiProgress.total}</strong> {text.total}</span>
+              <span><strong>{aiProgress.completed}</strong> {text.completed}</span>
+              <span><strong>{aiProgress.added}</strong> {text.newAssets}</span>
+              <span><strong>{aiProgress.skipped}</strong> {text.skipped}</span>
+              <span><strong>{aiProgress.failed}</strong> {text.failed}</span>
             </div>
           ) : null}
         </section>
@@ -1306,24 +1828,24 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             aria-labelledby="page-action-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <button type="button" className="dialogCloseButton" aria-label="关闭" onClick={() => setPageConfirmAction(null)}>
+            <button type="button" className="dialogCloseButton" aria-label={text.close} onClick={() => setPageConfirmAction(null)}>
               <X aria-hidden="true" />
             </button>
             <div className={`dialogIcon ${pageConfirmAction.type === "delete" ? "danger" : "primary"}`}>
               {pageConfirmAction.type === "delete" ? <Trash2 aria-hidden="true" /> : <Upload aria-hidden="true" />}
             </div>
             <div className="dialogText">
-              <h2 id="page-action-title">{pageConfirmAction.type === "delete" ? "删除当前页面？" : "替换当前页面？"}</h2>
+              <h2 id="page-action-title">{pageConfirmAction.type === "delete" ? text.deleteCurrentPageQuestion : text.replaceCurrentPageQuestion}</h2>
               <p>
                 {pageConfirmAction.type === "delete"
-                  ? "该页面的原图和切图记录都会删除，剩余页面会重新生成 P1/P2 顺序。"
-                  : `将使用“${pageConfirmAction.file.name}”替换当前页面原图，并清空该页已有切图。`}
+                  ? text.deleteCurrentPageDescription
+                  : formatMessage(text.replaceCurrentPageDescription, { file: pageConfirmAction.file.name })}
               </p>
             </div>
             <div className="dialogActions">
-              <button type="button" onClick={() => setPageConfirmAction(null)}>取消</button>
+              <button type="button" onClick={() => setPageConfirmAction(null)}>{text.cancel}</button>
               <button type="button" className={pageConfirmAction.type === "delete" ? "dangerConfirmButton" : "primaryConfirmButton"} onClick={() => void confirmPageAction()}>
-                {pageConfirmAction.type === "delete" ? "确认删除" : "确认替换"}
+                {pageConfirmAction.type === "delete" ? text.confirmDelete : text.confirmReplace}
               </button>
             </div>
           </section>
@@ -1340,19 +1862,19 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           >
             <header className="assetGalleryHeader">
               <div>
-                <h2 id="asset-gallery-title">资产总览</h2>
-                <span>P{pageIndex + 1} · {activePage.slices.length} assets · 点击卡片定位资产</span>
+                <h2 id="asset-gallery-title">{text.assetOverview}</h2>
+                <span>P{pageIndex + 1} · {activePage.slices.length} {text.assets} · {text.clickCardToLocate}</span>
               </div>
-              <div className="assetGalleryPageNav" aria-label="资产总览翻页">
-                <button type="button" title="上一页" aria-label="上一页" disabled={pageIndex <= 0} onClick={() => goToRelativePage(-1)}>
+              <div className="assetGalleryPageNav" aria-label={text.assetOverviewPagination}>
+                <button type="button" title={text.previousPage} aria-label={text.previousPage} disabled={pageIndex <= 0} onClick={() => goToRelativePage(-1)}>
                   <ChevronLeft aria-hidden="true" />
                 </button>
                 <span>{pageIndex + 1}/{pages.length}</span>
-                <button type="button" title="下一页" aria-label="下一页" disabled={pageIndex >= pages.length - 1} onClick={() => goToRelativePage(1)}>
+                <button type="button" title={text.nextPage} aria-label={text.nextPage} disabled={pageIndex >= pages.length - 1} onClick={() => goToRelativePage(1)}>
                   <ChevronRight aria-hidden="true" />
                 </button>
               </div>
-              <button type="button" className="dialogCloseButton" aria-label="关闭资产总览" onClick={() => setGalleryOpen(false)}>
+              <button type="button" className="dialogCloseButton" aria-label={text.closeAssetOverview} onClick={() => setGalleryOpen(false)}>
                 <X aria-hidden="true" />
               </button>
             </header>
@@ -1360,7 +1882,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               {!activePage.slices.length ? (
                 <div className="assetGalleryEmpty">
                   <Grid2X2 aria-hidden="true" />
-                  <span>当前页暂无资产</span>
+                  <span>{text.noAssetsOnPage}</span>
                 </div>
               ) : activePage.slices.map((slice, index) => {
                 const isActive = slice.id === activeSliceId;
@@ -1383,7 +1905,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                     >
                       <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
                     </button>
-                    <span className="assetGalleryCutModes" role="group" aria-label={`${slice.name} 裁切模式`}>
+                    <span className="assetGalleryCutModes" role="group" aria-label={formatMessage(text.assetCropMode, { name: slice.name, mode: cutModeLabel(slice.cutMode, text) })}>
                       {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
                         <button
                           key={mode}
@@ -1393,16 +1915,16 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                           onClick={(event) => {
                             event.stopPropagation();
                             selectSlice(slice.id);
-                            if (slice.cutMode !== mode) commitSlicePatch(slice.id, { cutMode: mode }, "切换裁切模式", { saveImmediately: true });
+                            if (slice.cutMode !== mode) commitSlicePatch(slice.id, { cutMode: mode }, text.undoChangeCropMode, { saveImmediately: true });
                           }}
                         >
-                          {cutModeLabel(mode)}
+                          {cutModeLabel(mode, text)}
                         </button>
                       ))}
                     </span>
                     <span className="assetGalleryMeta">
                       <strong>{slice.name}</strong>
-                      <span>{cutModeLabel(slice.cutMode)}</span>
+                      <span>{cutModeLabel(slice.cutMode, text)}</span>
                     </span>
                   </article>
                 );
@@ -1433,14 +1955,41 @@ function slicePreviewUrl(projectId: string, slice: SliceRecord, previewRevision:
   return `${apiBaseUrl}/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`;
 }
 
-function cutModeLabel(mode: CutMode): string {
-  if (mode === "subject") return "抠主体";
-  if (mode === "card") return "保内图";
-  return "矩形";
+function cutModeLabel(mode: CutMode, text: ReviewText): string {
+  if (mode === "subject") return text.subject;
+  if (mode === "card") return text.innerImage;
+  return text.rect;
+}
+
+function sliceArea(slice: SliceRecord): number {
+  return slice.bbox.width * slice.bbox.height;
+}
+
+function pageStatusLabel(page: WorkbenchPage, isActive: boolean, text: ReviewText): string {
+  if (isActive) return text.inReview;
+  if (page.slices.length) return text.completed;
+  return text.skipped;
+}
+
+function pageStatusClass(page: WorkbenchPage, isActive: boolean): string {
+  if (isActive) return "reviewing";
+  if (page.slices.length) return "completed";
+  return "skipped";
 }
 
 function aiProgressPercent(progress: AiProgress): number {
   return Math.round(Math.min(100, Math.max(0, (progress.completed + progress.failed) / Math.max(1, progress.total) * 100)));
+}
+
+function formatMessage(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    const value = values[key];
+    return value === undefined ? match : String(value);
+  });
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "unknown error";
 }
 
 function isTransformerTarget(node: Konva.Node): boolean {
