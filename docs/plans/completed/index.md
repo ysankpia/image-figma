@@ -168,3 +168,4 @@
 - [183 Slice Studio AI Tile Merge And Progress](183-slice-studio-ai-tile-merge-and-progress.md) — `completed`
 - [184 Slice Studio Documentation Harness Sync](184-slice-studio-doc-harness-sync.md) — `completed`
 - [185 Slice Studio Dense PC Text Ownership Arbiter](185-slice-studio-dense-pc-text-ownership-arbiter.md) — `completed`
+- [186 Slice Studio Dense Text Editable Policy](186-slice-studio-dense-text-editable-policy.md) — `completed`

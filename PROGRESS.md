@@ -3,18 +3,19 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Completed dense PC UI Pencil export text-layer coordination fix without reviving legacy services or disabling OCR globally.
+Completed dense PC UI text ownership simplification so recognized tiny text can become editable Pencil text.
 
 ## Active plan
-- Current plan: `docs/plans/completed/185-slice-studio-dense-pc-text-ownership-arbiter.md`
+- Current plan: `docs/plans/completed/186-slice-studio-dense-text-editable-policy.md`
 
 ## Current phase
-Slice Studio export hardening completed
+Slice Studio export text ownership simplification completed
 
 ## Now
-- Text ownership arbiter is implemented and validated on the dense PC sample.
-- Bug 024 is resolved.
-- No AI prompt, SQLite, storage contract, Pencil schema, OCR provider, frontend UI, Docker, or legacy service change was made.
+- Dense PC UI tiny text now becomes editable when OCR/M29 already recognizes it.
+- The `tiny_dense_ui_text` raster-preserve rule has been removed.
+- Marker, slice-overlap, low-confidence, and geometry protections remain in place.
+- UpscalerJS / crop super-resolution was not added to the mainline.
 
 ## Done
 - 2026-06-12: implemented Slice Studio text ownership policy `slice_studio_text_ownership.v1`.
@@ -32,14 +33,26 @@ Slice Studio export hardening completed
 - 2026-06-12: moved plan 184 to completed.
 
 ## Next
-- Use the current local Slice Studio server for the next real project.
-- If dense PC OCR recognition quality itself becomes the bottleneck, open a separate plan for per-M29 crop OCR padding/upscale/grayscale experiments.
+- Use the updated Slice Studio export path for the next dense PC UI sample.
+- If a future sample still fails, inspect the concrete cause first: OCR content, M29 bbox, font sizing, remainder knockout, or Pencil rendering.
 
 ## Blocked or deferred
-- Per-M29 crop OCR padding/upscale/grayscale is deferred; current mainline does not OCR per M29 crop, so that is a separate experimental path.
+- Crop super-resolution / UpscalerJS is deferred; current evidence does not justify adding it to the mainline dependency path.
 - Source images that already contain blue detection boxes/labels still preserve those pixels as raster; this fix prevents double-emitting them as visible OCR text layers.
 
 ## Validation log
+- 2026-06-12: implemented direct policy change by removing `tiny_dense_ui_text`; high-confidence tiny text is no longer forced to raster solely because the page is dense.
+- 2026-06-12: `pnpm --dir apps/slice-studio exec vitest run tests/pencil-exporter.test.ts` passed: 19 tests passed.
+- 2026-06-12: `pnpm --dir apps/slice-studio run check` passed: typecheck passed, Vitest 8 files / 55 tests passed.
+- 2026-06-12: `pnpm --dir apps/slice-studio run build` passed: Next.js production build completed successfully.
+- 2026-06-12: `git diff --check` passed.
+- 2026-06-12: `project_mqavhwm7_875518fe` re-export passed; dense 09 v2 page changed to `sourceLineCount=205`, `textLayerCount=194`, `rasterPreservedTextCount=11`.
+- 2026-06-12: Pencil MCP layout check for `project_mqavhwm7_875518fe` regenerated `design.pen` reported no layout problems.
+- 2026-06-12: `project_mqar9qpo_93b911d9` re-export passed; page 1 changed to `sourceLineCount=219`, `textLayerCount=183`, `rasterPreservedTextCount=36`; page 2 remained `textLayerCount=84`, `rasterPreservedTextCount=0`.
+- 2026-06-12: Pencil MCP layout check for `project_mqar9qpo_93b911d9` regenerated `design.pen` reported no layout problems.
+- 2026-06-12: inspected `apps/slice-studio/server/text-reconstruction.ts`; `denseTextPage && located.bbox.height <= 10` returns `raster_preserve` with reason `tiny_dense_ui_text`.
+- 2026-06-12: inspected `tmp/m29-debug/summary.json`; regenerated v2 dense PC image has 205 OCR lines, 189 M29 foreground matches, 72 editable text decisions, and 129 `tiny_dense_ui_text` decisions.
+- 2026-06-12: temporary `tmp/upscalerjs-probe` install confirmed UpscalerJS can initialize with `@tensorflow/tfjs-node` on this machine; no mainline dependency changed.
 - 2026-06-12: `pnpm --dir apps/slice-studio exec vitest run tests/pencil-exporter.test.ts` passed: 18 tests passed.
 - 2026-06-12: `pnpm --dir apps/slice-studio run check` passed: typecheck passed, Vitest 8 files / 54 tests passed.
 - 2026-06-12: `pnpm --dir apps/slice-studio run build` passed: Next.js production build completed successfully.
@@ -61,4 +74,4 @@ Slice Studio export hardening completed
 - None recorded.
 
 ## Last checkpoint
-- 2026-06-12 19:34 CST: plan 185 implemented, validated, and documented.
+- 2026-06-12 21:53 CST: plan 186 implemented, validated, documented, and local dev server restarted for user testing.

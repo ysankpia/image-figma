@@ -53,7 +53,6 @@ const minTextHeight = 5;
 const minLineConfidence = 70;
 const minRemainingRatio = 0.55;
 const minCoverageOverlapRatio = 0.25;
-const tinyRasterPreserveHeight = 10;
 
 export async function reconstructTextLayers(options: ReconstructOptions): Promise<TextReconstruction> {
   const layers: TextLayer[] = [];
@@ -72,9 +71,8 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
     const locatedLines = textLocation.lines.map((located) => canUseLocalForeground
       ? refineWithLocalForeground(raw.data, raw.info.width, raw.info.height, located)
       : located);
-    const denseTextPage = isDenseTextPage(options.width, options.height, options.ocr.lines.length);
     for (const located of locatedLines) {
-      const ownership = classifyTextOwnership(located, options.width, blockers, denseTextPage);
+      const ownership = classifyTextOwnership(located, options.width, blockers);
       decisions.push(ownership);
       if (ownership.decision !== "editable_text") continue;
       layers.push(makeTextLayer({
@@ -110,25 +108,17 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
 export function classifyTextOwnership(
   located: LocatedTextLine,
   pageWidth: number,
-  blockers: BBox[],
-  denseTextPage = false
+  blockers: BBox[]
 ): { decision: TextOwnershipDecision; reason: string } {
   const text = located.line.text.trim();
   if (!text) return { decision: "skipped", reason: "empty_text" };
   if (located.line.confidence < minLineConfidence) return { decision: "skipped", reason: "low_confidence" };
   if (located.bbox.width <= 0 || located.bbox.height < minTextHeight) return { decision: "skipped", reason: "invalid_or_too_small_bbox" };
   if (looksLikeGeneratedMarkerLabel(text)) return { decision: "raster_preserve", reason: "generated_asset_marker_label" };
-  if (denseTextPage && located.bbox.height <= tinyRasterPreserveHeight) return { decision: "raster_preserve", reason: "tiny_dense_ui_text" };
   if (!textGeometryLooksEditable({ ...located.line, bbox: located.bbox }, pageWidth)) return { decision: "raster_preserve", reason: "geometry_not_editable" };
   if (remainingRatio(located.line.bbox, blockers) < minRemainingRatio) return { decision: "raster_preserve", reason: "ocr_text_inside_confirmed_slice" };
   if (remainingRatio(located.bbox, blockers) < minRemainingRatio) return { decision: "raster_preserve", reason: "physical_text_inside_confirmed_slice" };
   return { decision: "editable_text", reason: "normal_ocr_text" };
-}
-
-function isDenseTextPage(width: number, height: number, lineCount: number): boolean {
-  if (lineCount >= 120) return true;
-  const megapixels = (width * height) / 1_000_000;
-  return lineCount / Math.max(0.2, megapixels) >= 120;
 }
 
 export function remainingRatio(bbox: BBox, blockers: BBox[]): number {

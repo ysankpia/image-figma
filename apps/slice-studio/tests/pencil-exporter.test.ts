@@ -669,6 +669,54 @@ describe("pencil exporter", () => {
     expect(reconstruction.layers.map((layer) => layer.text)).toEqual(["Checkout"]);
   });
 
+  it("keeps high-confidence dense UI tiny text editable when OCR and M29 agree", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 320,
+        height: 180,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+    const tinyLine = { text: "DRESSES", bbox: { x: 40, y: 20, width: 52, height: 17 }, confidence: 100, wordCount: 1 };
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 320,
+      height: 180,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: Array.from({ length: 130 }, (_, index) => ({
+          line: index === 0
+            ? tinyLine
+            : { text: `Label ${index}`, bbox: { x: 40, y: 24 + index, width: 56, height: 16 }, confidence: 96, wordCount: 1 },
+          bbox: index === 0
+            ? { x: 43, y: 24, width: 45, height: 9 }
+            : { x: 40, y: 24 + index, width: 56, height: 16 },
+          bboxSource: index === 0 ? "m29_foreground" : "ocr",
+          bboxMatchScore: index === 0 ? 0.66 : undefined
+        }))
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: Array.from({ length: 130 }, (_, index) => index === 0
+          ? tinyLine
+          : { text: `Label ${index}`, bbox: { x: 40, y: 24 + index, width: 56, height: 16 }, confidence: 96, wordCount: 1 })
+      }
+    });
+
+    expect(reconstruction.layers[0].text).toBe("DRESSES");
+    expect(reconstruction.layers[0].bbox).toEqual({ x: 43, y: 24, width: 45, height: 9 });
+    expect(reconstruction.layers[0].metadata.bboxSource).toBe("m29_foreground");
+    expect(reconstruction.ocr.rasterPreservedTextCount).toBe(0);
+  });
+
   it("rejects oversized OCR noise lines before creating Pencil text layers", async () => {
     const imageBuffer = await sharp({
       create: {
