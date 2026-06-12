@@ -6,7 +6,7 @@ This document maps the current `main` branch. It describes where new product wor
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> project workspace
 -> original source images
 -> saved SliceRecord boxes in SQLite
@@ -17,7 +17,7 @@ This document maps the current `main` branch. It describes where new product wor
 New product work defaults to:
 
 ```text
-apps/slice-studio/
+repository root
 ```
 
 Saved Slice Studio pages and slices are the current product truth source. AI boxes, OCR, TypeScript M29 physical evidence, Go M29 fallback, and old automatic candidates are evidence only.
@@ -27,13 +27,13 @@ Saved Slice Studio pages and slices are the current product truth source. AI box
 Primary files:
 
 ```text
-apps/slice-studio/app/
-apps/slice-studio/components/
-apps/slice-studio/server/
-apps/slice-studio/shared/
-apps/slice-studio/tests/
-apps/slice-studio/README.md
-apps/slice-studio/.env.example
+app/
+components/
+server/
+shared/
+tests/
+README.md
+.env.example
 ```
 
 Runtime:
@@ -41,9 +41,9 @@ Runtime:
 ```text
 Next web:  http://127.0.0.1:3010
 Elysia API: http://127.0.0.1:4110
-SQLite:    apps/slice-studio/storage/app.sqlite
-Originals: apps/slice-studio/storage/projects/{projectId}/originals/
-Exports:   apps/slice-studio/storage/projects/{projectId}/exports/
+SQLite:    storage/app.sqlite
+Originals: storage/projects/{projectId}/originals/
+Exports:   storage/projects/{projectId}/exports/
 ```
 
 Current API:
@@ -112,22 +112,22 @@ These directories are retained but are not the default product entrypoint:
 
 | Path | Current status | Rule |
 | --- | --- | --- |
-| `services/pencil-python-backend/` | superseded product/reference | Do not send new default product work here. Keep for historical Pencil assisted slice reference and deployment notes. |
-| `services/pencil-asset-backend/` | superseded slim handoff/reference | Keep as image/icon handoff reference. Do not merge its YOLO/M29/PSD-like candidate logic into Slice Studio by default. |
-| `services/pencil-handoff-studio/` | superseded handoff prototype/reference | Keep as prior batch handoff reference. |
-| `services/backend-go/cmd/m29extract/` and `services/backend-go/internal/m29/` | reference/fallback tooling | Slice Studio default uses TypeScript M29 physical evidence. Go is explicit fallback/reference only. |
-| `services/backend-go/internal/draft/`, `cmd/draft*`, `internal/vision/`, `internal/app/` | legacy research/deferred runtime | Do not revive without a new active plan and validation gate. |
-| `backend/` | legacy Python upload-preview research | Not a current runtime. |
-| `services/backend-python/` | legacy model/PSD-like experiment | Reference only. |
-| `services/psdlike-python/` | legacy/reference dependency for old Python routes | Not used by default Slice Studio runtime. |
-| `services/pencil-go/` | legacy experiment | Do not revive by default. |
-| `figma-plugin/`, `packages/dsl-schema/`, `packages/image-to-figma-renderer/` | deferred Draft/plugin assets | Maintain only when explicitly working on old Draft/plugin runtime. |
+| `archive/legacy-code/services/pencil-python-backend/` | superseded product/reference | Do not send new default product work here. Keep for historical Pencil assisted slice reference and deployment notes. |
+| `archive/legacy-code/services/pencil-asset-backend/` | superseded slim handoff/reference | Keep as image/icon handoff reference. Do not merge its YOLO/M29/PSD-like candidate logic into Slice Studio by default. |
+| `archive/legacy-code/services/pencil-handoff-studio/` | superseded handoff prototype/reference | Keep as prior batch handoff reference. |
+| `archive/legacy-code/services/backend-go/cmd/m29extract/` and `archive/legacy-code/services/backend-go/internal/m29/` | reference/fallback tooling | Slice Studio default uses TypeScript M29 physical evidence. Go is explicit fallback/reference only. |
+| `archive/legacy-code/services/backend-go/internal/draft/`, `cmd/draft*`, `internal/vision/`, `internal/app/` | legacy research/deferred runtime | Do not revive without a new active plan and validation gate. |
+| `archive/legacy-code/backend/` | legacy Python upload-preview research | Not a current runtime. |
+| `archive/legacy-code/services/backend-python/` | legacy model/PSD-like experiment | Reference only. |
+| `archive/legacy-code/services/psdlike-python/` | legacy/reference dependency for old Python routes | Not used by default Slice Studio runtime. |
+| `archive/legacy-code/services/pencil-go/` | legacy experiment | Do not revive by default. |
+| `archive/legacy-code/figma-plugin/`, `archive/legacy-code/packages/dsl-schema/`, `archive/legacy-code/packages/image-to-figma-renderer/` | deferred Draft/plugin assets | Maintain only when explicitly working on old Draft/plugin runtime. |
 
 For full classification, read [legacy-code-inventory.md](legacy-code-inventory.md).
 
 ## Package Responsibilities
 
-Current active implementation responsibility lives in `apps/slice-studio`.
+Current active implementation responsibility lives at the repository root.
 
 Historical Go package responsibilities remain useful only when explicitly working on Go Draft/M29:
 

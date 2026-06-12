@@ -1,9 +1,9 @@
 # 环境变量
 
-当前产品交付主线是 `apps/slice-studio`。默认本地凭证文件是：
+当前产品交付主线在仓库根目录。默认本地凭证文件是：
 
 ```text
-apps/slice-studio/.env.local
+.env.local
 ```
 
 不要把 API key、bearer token、本地 storage 路径或 raw provider debug 输出提交到仓库。
@@ -16,7 +16,7 @@ apps/slice-studio/.env.local
 | --- | --- | --- | --- |
 | `NEXT_PUBLIC_SLICE_STUDIO_API_URL` | Next.js browser client 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
 | `SLICE_STUDIO_API_URL` | smoke/scripts 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
-| `SLICE_STUDIO_LOAD_LOCAL_ENV` | API 是否读取 `apps/slice-studio/.env.local` | `true` | 否 |
+| `SLICE_STUDIO_LOAD_LOCAL_ENV` | API 是否读取根目录 `.env.local` | `true` | 否 |
 | `SLICE_STUDIO_API_HOST` | Elysia API host | `127.0.0.1` | 否 |
 | `SLICE_STUDIO_API_PORT` | Elysia API port | `4110` | 否 |
 | `SLICE_STUDIO_PUBLIC_API_URL` | API 生成公开 URL 时使用 | `http://{host}:{port}` | 否 |
@@ -33,7 +33,7 @@ apps/slice-studio/.env.local
 | `SLICE_STUDIO_OCR_MIN_CONFIDENCE` | OCR line 最低置信度 | `0.70` | 否 |
 | `SLICE_STUDIO_TEXT_BBOX_SOURCE` | editable text bbox 来源；`m29_ocr_hybrid` 或 `ocr` | `m29_ocr_hybrid` | 否 |
 | `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` | text physical evidence provider；`ts_m29_physical_evidence`、`go_m29extract`、`ocr` | `ts_m29_physical_evidence` | 否 |
-| `SLICE_STUDIO_M29EXTRACT_PATH` | 显式使用 Go fallback 时的 `m29extract` 路径 | `../../services/backend-go/bin/m29extract` | 仅 Go fallback 需要 |
+| `SLICE_STUDIO_M29EXTRACT_PATH` | 显式使用 Go fallback 时的 `m29extract` 路径 | `archive/legacy-code/services/backend-go/bin/m29extract` | 仅 Go fallback 需要 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `baidu_ppocrv5` 需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |

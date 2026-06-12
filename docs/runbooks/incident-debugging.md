@@ -6,8 +6,8 @@
 
 1. 确认用户上传的是受支持图片，且没有超过 `SLICE_STUDIO_MAX_UPLOAD_BYTES` 或 batch 上限。
 2. 打开 `/projects`，确认项目、页面、缩略图可读。
-3. 检查 `apps/slice-studio/storage/app.sqlite` 是否存在。
-4. 检查 `apps/slice-studio/storage/projects/{projectId}/originals/` 是否有源图。
+3. 检查 `storage/app.sqlite` 是否存在。
+4. 检查 `storage/projects/{projectId}/originals/` 是否有源图。
 5. 检查页面和 slices 是否能通过 API 读回。
 6. 如果是 AI 画框问题，检查 `/ai-boxes` response diagnostics、provider 配置、tile/overview 解析和前端 merge/save。
 7. 如果是保存问题，检查 `PUT /api/projects/:projectId/slices` 和 SQLite state。
@@ -53,7 +53,7 @@ OCR / M29 失败：
 按归属层修：
 
 ```text
-project/page/slice persistence -> apps/slice-studio/server/projects.ts or db.ts
+project/page/slice persistence -> server/projects.ts or server/db.ts
 source image access -> page source route or storage path
 AI bbox -> ai-slice-boxes provider/tiling/parsing/filtering/merge/prompt
 save/undo/merge -> Review Workbench state and shared/ai-slices.ts
@@ -62,7 +62,7 @@ assets.zip -> exporter.ts
 project.zip/design.pen -> pencil-exporter.ts or pencil-package.ts
 OCR text -> text-ocr.ts and text quality gate
 physical text bbox -> m29-physical-evidence or m29-text-locator.ts
-historical Draft -> services/backend-go only when explicitly targeted
+historical Draft -> archive/legacy-code/services/backend-go only when explicitly targeted
 ```
 
 不要用样例名、固定坐标、固定文案、固定页面数量去修。

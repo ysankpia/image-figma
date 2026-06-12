@@ -1,8 +1,0 @@
-node_modules/
-.next/
-out/
-storage/*
-!storage/.gitkeep
-*.tsbuildinfo
-*.log
-.DS_Store

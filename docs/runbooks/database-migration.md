@@ -1,11 +1,11 @@
 # 数据库迁移
 
-v0.1 默认 SQLite。M4 后端已实现本地 SQLite 初始化。
+当前 Slice Studio 默认 SQLite，本地数据库位于 `storage/app.sqlite`。
 
 ## Current State
 
-- 数据库路径默认：`backend/storage/app.db`。
-- schema 在 `backend/app/database.py` 中通过 `CREATE TABLE IF NOT EXISTS` 初始化。
+- 数据库路径默认：`storage/app.sqlite`。
+- schema 在 `server/db.ts` 中初始化。
 - 当前没有 ORM。
 - 当前没有独立迁移脚本。
 

@@ -6,7 +6,7 @@
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> project workspace
 -> saved SliceRecord boxes in SQLite
 -> assets.zip
@@ -23,7 +23,7 @@
 2. [../PROGRESS.md](../PROGRESS.md)：当前目标、active plan、验证日志和 checkpoint。
 3. [product/direction-contract.md](product/direction-contract.md)：最终产物、truth source、repair path、non-goals 和验证产物。
 4. [roadmap.md](roadmap.md)：当前阶段、下一步和开放问题。
-5. [../apps/slice-studio/README.md](../apps/slice-studio/README.md)：Slice Studio 运行、产品行为、配置和存储。
+5. [../README.md](../README.md) 和 [reference/slice-studio-runtime.md](reference/slice-studio-runtime.md)：Slice Studio 运行、产品行为、配置和存储。
 6. [engineering/current-code-map.md](engineering/current-code-map.md)：当前代码地图。
 7. [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md)：旧代码分类和恢复规则。
 8. [engineering/validation.md](engineering/validation.md)：验证策略。
@@ -73,7 +73,7 @@ Plan 190 should run before disruptive production implementation:
 
 ```text
 protect existing local storage
--> clarify apps/slice-studio as the mainline
+-> clarify the repository root as the mainline
 -> mark legacy/reference code in place
 -> harden OpenRouter/OpenAI-compatible AI provider support
 -> run repeatable smoke validation
@@ -97,13 +97,13 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 
 ## By Task Type
 
-- Slice Studio UI/API/export work: read [../apps/slice-studio/README.md](../apps/slice-studio/README.md), [architecture/overview.md](architecture/overview.md), [architecture/api-contracts.md](architecture/api-contracts.md), [engineering/validation.md](engineering/validation.md).
+- Slice Studio UI/API/export work: read [../README.md](../README.md), [reference/slice-studio-runtime.md](reference/slice-studio-runtime.md), [architecture/overview.md](architecture/overview.md), [architecture/api-contracts.md](architecture/api-contracts.md), [engineering/validation.md](engineering/validation.md).
 - Prelaunch codebase hardening: read [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md), [engineering/current-code-map.md](engineering/current-code-map.md), [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md), and [reference/env-vars.md](reference/env-vars.md).
 - Multi-user production launch work: read [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md), [product/direction-contract.md](product/direction-contract.md), [product/requirements.md](product/requirements.md), [product/user-flows.md](product/user-flows.md), [reference/env-vars.md](reference/env-vars.md), and [engineering/validation.md](engineering/validation.md).
 - AI slice boxes: read [reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md), [plans/completed/182-slice-studio-ai-rect-slice-assist.md](plans/completed/182-slice-studio-ai-rect-slice-assist.md), [plans/completed/183-slice-studio-ai-tile-merge-and-progress.md](plans/completed/183-slice-studio-ai-tile-merge-and-progress.md).
 - OCR / editable text / M29 physical evidence: read [plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md](plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md), [plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md](plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md), [plans/completed/181-slice-studio-m29-physical-evidence-ts.md](plans/completed/181-slice-studio-m29-physical-evidence-ts.md).
 - Old code classification or cleanup: read [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md) first; do not delete or revive old directories by default.
-- Historical Pencil Python work: read [../services/pencil-python-backend/README.md](../services/pencil-python-backend/README.md) only when explicitly targeting that service.
+- Historical Pencil Python work: read [../archive/legacy-code/services/pencil-python-backend/README.md](../archive/legacy-code/services/pencil-python-backend/README.md) only when explicitly targeting that service.
 - Historical Go Draft / Renderer / plugin work: read [architecture/draft-layer-graph.md](architecture/draft-layer-graph.md), [architecture/runtime.md](architecture/runtime.md), [architecture/plugin-rendering.md](architecture/plugin-rendering.md), and create a new active plan before implementation.
 - Bugs: read [bugs/index.md](bugs/index.md), the related bug record, and [engineering/validation.md](engineering/validation.md).
 

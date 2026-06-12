@@ -32,7 +32,7 @@ anonymous visitor
 
 ## Now
 
-- Keep `apps/slice-studio` as the default product surface.
+- Keep the repository root as the default product surface.
 - Keep saved Slice Studio slices as the export truth source.
 - Use AI only as a batch drawing helper.
 - Use OCR only for editable text content.
@@ -59,7 +59,7 @@ anonymous visitor
 - Team/workspace collaboration after the individual-user product is stable.
 - Optional cleaner/full-recall AI slice modes if real samples require them.
 - Better repeated-AI-run behavior if duplicate management becomes the main bottleneck.
-- Optional physical cleanup or repository split for old research code after a separate plan identifies safe moves.
+- Optional repository split for old research code after a separate plan identifies safe moves.
 
 ## Milestones
 

@@ -1,5 +1,2 @@
 packages:
-  - "apps/slice-studio"
-  - "figma-plugin"
-  - "packages/*"
-  - "services/pencil-handoff-studio/web"
+  - "."

@@ -3,23 +3,30 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Continue formal multi-user production planning for Slice Studio after completing the prelaunch codebase hardening pass.
+Resume Slice Studio multi-user production launch work after completing repository structure cleanup.
 
 ## Active plan
 - Current plan: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
-- Most recently completed: `docs/plans/completed/190-slice-studio-prelaunch-codebase-hardening.md`
+- Most recently completed:
+  - `docs/plans/completed/191-repository-legacy-code-physical-archive.md`
+  - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
 Slice Studio multi-user production launch planning
 
 ## Now
-- Current local product is usable, and the current repository checks pass.
-- Plan 190 is complete: local storage is backed up, root scripts/docs point to Slice Studio, legacy/reference directories are marked in place, OpenRouter/OpenAI-compatible `chat_completions` provider support is implemented, and repeatable smoke validation passed.
+- Repository root is now the Slice Studio product app: `app/`, `components/`, `server/`, `shared/`, `scripts/`, and `tests/`.
+- Legacy/reference source code lives under `archive/legacy-code/`; archived runtime artifacts remain ignored and archived packages are not part of the active workspace.
+- Local Slice Studio data now lives under root `storage/`; current observed project directory count is `17`.
+- Root `.env.local` carries Slice Studio local keys; the previous root env was backed up to an ignored `.env.local.legacy-backup-*` file.
 - Plan 189 remains the formal multi-user launch plan for auth/session, ownership, production database/storage, entitlement, payment, and deployment.
-- Payment provider remains intentionally undecided.
-- Existing local project data must not be deleted, stranded, or hidden by any path cleanup.
 
 ## Done
+- 2026-06-13: completed plan 192 and moved it to `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`.
+- 2026-06-13: completed plan 191 and moved it to `docs/plans/completed/191-repository-legacy-code-physical-archive.md`.
+- 2026-06-13: physically archived legacy/reference code under `archive/legacy-code/`, added archive recovery rules, and removed the empty root `tools/` directory.
+- 2026-06-13: promoted Slice Studio from `apps/slice-studio/` to the repository root; root scripts now run Slice Studio directly.
+- 2026-06-13: moved local Slice Studio runtime data to root `storage/`; browser/API validation confirmed `17` projects still list.
 - 2026-06-13: completed plan 190 and moved it to `docs/plans/completed/190-slice-studio-prelaunch-codebase-hardening.md`.
 - 2026-06-13: backed up Slice Studio local storage to `backups/slice-studio-storage-20260613-023319` with `projects=17`, `pages=47`, `slices=643`, size `223M`.
 - 2026-06-13: added root Slice Studio scripts, marker READMEs for legacy/reference directories, backup/release/local smoke runbooks, and OpenRouter/OpenAI-compatible chat-completions AI provider support.
@@ -62,6 +69,10 @@ Slice Studio multi-user production launch planning
 - Source images that already contain blue detection boxes/labels still preserve those pixels as raster; this fix prevents double-emitting them as visible OCR text layers.
 
 ## Validation log
+- 2026-06-13: plan 191/192 validation passed: `pnpm install` completed; `pnpm run check` passed with 8 test files / 60 tests; `pnpm run build` completed successfully; `pnpm run smoke` created and deleted temporary project `project_mqbju82i_bf09eab6` and exported both `assets.zip` and `project.zip`.
+- 2026-06-13: plan 191/192 browser smoke passed on `http://127.0.0.1:3010/projects`: API returned `17` projects, UI showed `共 17 个项目。`, source-image preview requests returned 200, and console had no errors.
+- 2026-06-13: plan 191/192 browser smoke passed on `http://127.0.0.1:3010/projects/project_mqavhwm7_875518fe/review`: source image loaded at `1672x941`, 7 asset previews loaded, Konva canvas rendered at `649x769`, network requests returned 200, and console had no errors.
+- 2026-06-13: plan 191/192 artifact discipline check passed: `git diff --check` produced no output; `git ls-files` runtime-artifact grep only matched `storage/.gitkeep` plus archived source paths whose names contain `storage`.
 - 2026-06-13: plan 190 completion validation passed: `pnpm --dir apps/slice-studio run check` passed with 8 test files / 60 tests; `pnpm --dir apps/slice-studio run build` passed; `pnpm -r run check` passed across Slice Studio, packages, services, and figma-plugin.
 - 2026-06-13: plan 190 API smoke passed with `pnpm --dir apps/slice-studio run smoke`: created temporary project `project_mqba2sqe_67812ca4`, uploaded pages, saved slices, exported `assets.zip`, exported `project.zip/design.pen`, and deleted the temporary project.
 - 2026-06-13: plan 190 browser smoke passed on `http://127.0.0.1:3010/projects`: existing local projects rendered in the UI, `17` projects were visible, and browser console reported no errors.
@@ -135,4 +146,4 @@ Slice Studio multi-user production launch planning
 - None recorded.
 
 ## Last checkpoint
-- 2026-06-12 23:58 CST: Review Workbench i18n is implemented and validated; local page remains usable at `http://127.0.0.1:3010/projects/project_mqavhwm7_875518fe/review`.
+- 2026-06-13 07:20 CST: plans 191/192 are implemented and validated; Slice Studio runs from the repository root, local `storage/` still contains 17 projects, and the dev app is available at `http://127.0.0.1:3010/projects`.

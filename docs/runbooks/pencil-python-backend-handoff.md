@@ -1,6 +1,6 @@
 # Pencil Python Backend Handoff
 
-> Historical/reference handoff. 当前默认产品主线是 `apps/slice-studio`。只有明确维护旧 `services/pencil-python-backend` 时才使用本文。
+> Historical/reference handoff. 当前默认产品主线是仓库根目录的 Slice Studio。只有明确维护旧 `archive/legacy-code/services/pencil-python-backend` 时才使用本文。
 
 Last full HTTP acceptance evidence baseline:
 

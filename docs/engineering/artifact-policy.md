@@ -3,7 +3,7 @@
 Current product artifacts belong to Slice Studio.
 
 ```text
-apps/slice-studio/storage/
+storage/
   app.sqlite
   projects/{projectId}/originals/
   projects/{projectId}/exports/assets.zip
@@ -41,11 +41,11 @@ Exported visible image refs must be package-local. They must not contain absolut
 Do not commit runtime artifacts:
 
 ```text
-apps/slice-studio/storage/
-apps/slice-studio/.next/
-backend/storage/
-services/backend-go/storage/
-services/backend-go/tmp/
+storage/
+.next/
+archive/legacy-code/backend/storage/
+archive/legacy-code/services/backend-go/storage/
+archive/legacy-code/services/backend-go/tmp/
 services/*/storage/
 logs/
 *.log

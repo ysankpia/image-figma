@@ -1,6 +1,6 @@
 # Pencil Python Backend 部署 Runbook
 
-> Historical/reference runbook. 当前默认产品主线是 `apps/slice-studio`。只有明确部署旧 `services/pencil-python-backend` 时才使用本文。
+> Historical/reference runbook. 当前默认产品主线是仓库根目录的 Slice Studio。只有明确部署旧 `archive/legacy-code/services/pencil-python-backend` 时才使用本文。
 
 这个服务曾是 Pencil `.pen` / `project.zip` / `selected-assets.zip` 交付入口。它不替代 Go Draft runtime，也不需要 Figma 插件改动。
 

@@ -18,7 +18,7 @@
 
 当前产品实现任务完成条件：
 
-- 代码落在正确层：默认 `apps/slice-studio`，不是旧 Python Pencil、Go Draft、Renderer 或 plugin。
+- 代码落在正确层：默认仓库根目录的 Slice Studio，不是旧 Python Pencil、Go Draft、Renderer 或 plugin。
 - 保存后的 SliceRecord 仍是编辑和导出的 truth source。
 - AI/OCR/M29 仍是候选或证据，不绕过保存路径。
 - API、数据模型、环境变量、用户流程或导出合同变化已更新文档。
@@ -39,7 +39,7 @@ OCR/M29 diagnostics inspection
 import/export round trip where applicable
 ```
 
-`pnpm --dir apps/slice-studio run check` 和 `build` 不能替代这些真实验收，只能说明代码 baseline 没坏。
+`pnpm run check` 和 `pnpm run build` 不能替代这些真实验收，只能说明代码 baseline 没坏。
 
 ## 阶段提交纪律
 
@@ -48,7 +48,7 @@ import/export round trip where applicable
 阶段完成顺序固定为：
 
 1. 完成本阶段计划内代码、测试、文档和计划更新。
-2. 确认 staged 内容只属于当前阶段，不包含下一阶段探索、临时调试、`apps/slice-studio/storage/`、旧服务 storage、插件 `dist/`、密钥或无关本地改动。
+2. 确认 staged 内容只属于当前阶段，不包含下一阶段探索、临时调试、`storage/`、旧服务 storage、插件 `dist/`、密钥或无关本地改动。
 3. 创建独立 git commit。提交信息应描述阶段能力，而不是笼统写 `update` 或 `misc`。
 4. 在该提交之上运行阶段要求的验证命令。
 5. 验证通过后才能开始下一阶段；验证失败时，用同阶段 fix commit 修正并重新验证。

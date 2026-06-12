@@ -1,6 +1,6 @@
 # 本地设置
 
-当前默认运行面是 Slice Studio：`apps/slice-studio`。
+当前默认运行面是仓库根目录的 Slice Studio。
 
 ```text
 1..N UI screenshots/design images
@@ -16,7 +16,7 @@
 
 需要：
 
-- Bun for `apps/slice-studio`.
+- Bun for Slice Studio scripts.
 - Node.js / pnpm for workspace checks.
 - Git.
 - Go / Python only when explicitly maintaining historical Go/Python routes.
@@ -29,20 +29,12 @@
 pnpm install
 ```
 
-Slice Studio 依赖：
-
-```bash
-cd apps/slice-studio
-bun install
-```
-
 ## Run Slice Studio
 
 本地启动：
 
 ```bash
-cd apps/slice-studio
-bun run dev
+pnpm run dev
 ```
 
 默认端口：
@@ -61,19 +53,18 @@ http://127.0.0.1:3010/projects
 本地数据：
 
 ```text
-apps/slice-studio/storage/app.sqlite
-apps/slice-studio/storage/projects/{projectId}/originals/
-apps/slice-studio/storage/projects/{projectId}/exports/
+storage/app.sqlite
+storage/projects/{projectId}/originals/
+storage/projects/{projectId}/exports/
 ```
 
 `storage/` 是运行数据，不提交。不要删除用户正在使用的项目 storage，除非用户明确要求。
 
 ## Environment
 
-Slice Studio 默认读取 `apps/slice-studio/.env.local`。复制示例：
+Slice Studio 默认读取根目录 `.env.local`。复制示例：
 
 ```bash
-cd apps/slice-studio
 cp .env.example .env.local
 ```
 
@@ -99,8 +90,8 @@ OCR token 和 AI key 只能放在 `.env.local` 或进程环境，不能提交。
 默认检查：
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 git diff --check
 git status --short --branch
 ```
@@ -108,8 +99,7 @@ git status --short --branch
 如果只需要跑 Slice Studio 单元测试：
 
 ```bash
-cd apps/slice-studio
-bun run test
+pnpm run test
 ```
 
 ## Manual Smoke
@@ -128,18 +118,17 @@ bun run test
 本地 API smoke：
 
 ```bash
-cd apps/slice-studio
-bun run smoke
+pnpm run smoke
 ```
 
 `bun run smoke` 会创建临时项目、上传页面、重命名/替换/删除页面、保存 slices、导出 `assets.zip` 和 `project.zip`，最后删除临时项目。它不覆盖真实 AI provider；AI 需要单独用真实 key 做手动 smoke。
 
 ## Historical Python Pencil Route
 
-只在显式维护 `services/pencil-python-backend` 时使用：
+只在显式维护 `archive/legacy-code/services/pencil-python-backend` 时使用：
 
 ```bash
-cd services/pencil-python-backend
+cd archive/legacy-code/services/pencil-python-backend
 PENCIL_BACKEND_DEFAULT_BOUNDARY_SOURCE=psdlike \
 OCR_PROVIDER=none \
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8100
@@ -154,7 +143,7 @@ http://127.0.0.1:8100/api/pencil/slice-projects/workspace
 旧验收：
 
 ```bash
-cd services/pencil-python-backend
+cd archive/legacy-code/services/pencil-python-backend
 make slice-acceptance \
   IMAGE=/absolute/path/to/image-or-dir \
   OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
@@ -165,21 +154,21 @@ make slice-acceptance \
 只在显式恢复或调试 Go Draft 时使用：
 
 ```bash
-cd services/backend-go
+cd archive/legacy-code/services/backend-go
 DRAFT_SERVER_ADDR=127.0.0.1:8000 go run ./cmd/draftserver
 ```
 
 Go 检查：
 
 ```bash
-cd services/backend-go
+cd archive/legacy-code/services/backend-go
 go test ./...
 ```
 
 Draft CLI 示例：
 
 ```bash
-cd services/backend-go
+cd archive/legacy-code/services/backend-go
 go run ./cmd/draftcompile -input /absolute/path/to/input.png -out /tmp/draft-out
 ```
 
@@ -188,7 +177,7 @@ go run ./cmd/draftcompile -input /absolute/path/to/input.png -out /tmp/draft-out
 只在明确调试历史 `/api/upload-preview` 时启动：
 
 ```bash
-cd backend
+cd archive/legacy-code/backend
 UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -197,7 +186,10 @@ UPLOAD_PREVIEW_PROFILE=production uv run uvicorn app.main:app --reload --host 12
 Figma 插件和 Renderer 属于历史/延后 Draft runtime 资产，不是当前 Slice Studio 默认交付路径。只有任务明确恢复插件渲染时才跑：
 
 ```bash
-pnpm --filter @image-figma/figma-plugin run build
-pnpm --filter @image-figma/image-to-figma-renderer run typecheck
-pnpm --filter @image-figma/image-to-figma-renderer run test
+cd archive/legacy-code/figma-plugin
+pnpm run build
+
+cd ../packages/image-to-figma-renderer
+pnpm run typecheck
+pnpm run test
 ```

@@ -10,7 +10,7 @@ Read these first:
 2. `docs/index.md` for the documentation map.
 3. `docs/product/direction-contract.md` for final artifact, truth source, repair path, non-goals, and validation artifact.
 4. `docs/roadmap.md` for current phase and next work.
-5. `apps/slice-studio/README.md` for the current runtime and product behavior.
+5. `README.md` and `docs/reference/slice-studio-runtime.md` for the current runtime and product behavior.
 6. `docs/engineering/current-code-map.md` and `docs/engineering/legacy-code-inventory.md` before touching old directories.
 
 ## Current Mainline
@@ -19,7 +19,7 @@ The active product mainline is **Slice Studio**:
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> project workspace
 -> original PNGs in local storage
 -> saved SliceRecord boxes in SQLite
@@ -30,20 +30,19 @@ The active product mainline is **Slice Studio**:
 Current default surface:
 
 ```text
-apps/slice-studio/
+repository root
 ```
 
 Primary commands:
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 ```
 
 Local dev:
 
 ```bash
-cd apps/slice-studio
 bun run dev
 ```
 
@@ -95,14 +94,14 @@ The older assisted-slice Python endpoints under `/api/pencil/slice-projects/*` a
 
 ## Project Structure
 
-- `apps/slice-studio/` is the current product.
-- `apps/slice-studio/server/` owns Elysia routes, SQLite storage, export, OCR, M29 physical evidence, AI slice boxes, and Pencil package generation.
-- `apps/slice-studio/components/` owns the Next/React/Konva project workspace and review workbench.
-- `apps/slice-studio/shared/` owns shared data contracts.
-- `apps/slice-studio/tests/` owns Slice Studio unit/contract tests.
-- `services/pencil-python-backend/`, `services/pencil-asset-backend/`, and `services/pencil-handoff-studio/` are superseded product/reference surfaces.
-- `services/backend-go/` retains Go M29/Draft research and explicit fallback tooling.
-- `services/psdlike-python/`, `backend/`, `services/backend-python/`, `figma-plugin/`, `packages/dsl-schema/`, and `packages/image-to-figma-renderer/` are historical/deferred/research assets unless explicitly targeted.
+- `app/` owns the Next routes and global UI shell.
+- `server/` owns Elysia routes, SQLite storage, export, OCR, M29 physical evidence, AI slice boxes, and Pencil package generation.
+- `components/` owns the React/Konva project workspace and review workbench.
+- `shared/` owns shared data contracts.
+- `tests/` owns Slice Studio unit/contract tests.
+- `archive/legacy-code/services/pencil-python-backend/`, `archive/legacy-code/services/pencil-asset-backend/`, and `archive/legacy-code/services/pencil-handoff-studio/` are superseded product/reference surfaces.
+- `archive/legacy-code/services/backend-go/` retains Go M29/Draft research and explicit fallback tooling.
+- `archive/legacy-code/services/psdlike-python/`, `archive/legacy-code/backend/`, `archive/legacy-code/services/backend-python/`, `archive/legacy-code/figma-plugin/`, `archive/legacy-code/packages/dsl-schema/`, and `archive/legacy-code/packages/image-to-figma-renderer/` are historical/deferred/research assets unless explicitly targeted.
 
 Before deleting, moving, or reviving non-mainline directories, read `docs/engineering/legacy-code-inventory.md`.
 
@@ -143,8 +142,8 @@ Testing policy lives in `docs/engineering/validation.md`. Static tests alone are
 At minimum for Slice Studio changes:
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 git diff --check
 git status --short --branch
 ```
@@ -158,9 +157,9 @@ You may be in a dirty working tree. Never revert or overwrite user changes unles
 Do not commit:
 
 ```text
-apps/slice-studio/.env.local
-apps/slice-studio/storage/
-apps/slice-studio/.next/
+.env.local
+storage/
+.next/
 *.sqlite
 *.db
 *.zip

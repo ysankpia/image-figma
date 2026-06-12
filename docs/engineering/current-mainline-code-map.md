@@ -6,7 +6,7 @@ Current product path:
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> project workspace
 -> saved SliceRecord boxes in SQLite
 -> assets.zip

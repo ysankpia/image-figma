@@ -15,7 +15,7 @@
 
 当前默认产品栈是 Slice Studio：
 
-- App：`apps/slice-studio`
+- App：repository root
 - Web：Next.js + React
 - Canvas：Konva / React Konva
 - API：Elysia on Bun
@@ -23,7 +23,7 @@
 - Image processing：Sharp
 - Icons：lucide-react
 - Tests：Vitest + TypeScript
-- Package checks：`pnpm --dir apps/slice-studio run check` / `build`
+- Package checks：`pnpm run check` / `build`
 
 Workspace 仍使用 pnpm。Slice Studio 本地开发使用 Bun。
 
@@ -43,7 +43,7 @@ Do not add a second frontend state manager, ORM, queue, object storage SDK, or b
 
 ## AI/OCR Dependencies
 
-AI slice boxes are provider-boundary code under `apps/slice-studio/server/ai-slice-boxes/`.
+AI slice boxes are provider-boundary code under `server/ai-slice-boxes/`.
 
 Rules:
 
@@ -61,7 +61,7 @@ OCR is provider-boundary code under Slice Studio text modules:
 
 M29 physical evidence:
 
-- default is TypeScript `apps/slice-studio/server/m29-physical-evidence/`;
+- default is TypeScript `server/m29-physical-evidence/`;
 - Go `m29extract` is explicit fallback/reference only;
 - M29 evidence only affects text bbox placement.
 
@@ -69,11 +69,11 @@ M29 physical evidence:
 
 Old dependency groups remain for historical routes only:
 
-- Go Draft backend under `services/backend-go`.
+- Go Draft backend under `archive/legacy-code/services/backend-go`.
 - Python Pencil backend under `services/pencil-python-backend`.
 - Python upload-preview under `backend`.
 - PSD-like and model experiments under `services/*`.
-- Renderer and Figma plugin under `packages/*` and `figma-plugin/`.
+- Renderer and Figma plugin under `archive/legacy-code/packages/*` and `archive/legacy-code/figma-plugin/`.
 
 Do not add dependencies to those routes for current Slice Studio work unless the task explicitly targets that route.
 

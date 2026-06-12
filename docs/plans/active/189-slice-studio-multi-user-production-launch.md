@@ -11,7 +11,7 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 ## Concrete analysis
 
 ### Concrete object
-The concrete object is `apps/slice-studio`: a Next.js + React workbench backed by an Elysia API, Bun SQLite, and local filesystem storage.
+The concrete object is the repository-root Slice Studio app: a Next.js + React workbench backed by an Elysia API, Bun SQLite, and local filesystem storage.
 
 ### Known facts
 - Current product flow is:
@@ -491,8 +491,8 @@ This ordering lets the app become safe before it becomes monetized.
 Baseline checks:
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 git diff --check
 git status --short --branch
 ```

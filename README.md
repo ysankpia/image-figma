@@ -1,11 +1,11 @@
-# Image-to-Figma Design
+# Slice Studio
 
-Image-to-Figma Design 当前可交付主线已经收敛为 **Slice Studio**：本地项目制 UI 切图工具。它把 1..N 张截图/设计稿变成用户确认后的 `assets.zip` 和 Pencil/Figma handoff `project.zip`，而不是继续追求全自动 Codia-like tree、Go Draft 可编辑图层或插件一键还原。
+Slice Studio 是当前仓库的主线产品：本地项目制 UI 切图工具。它把 1..N 张截图或设计稿变成用户确认后的 `assets.zip` 和 Pencil/Figma handoff `project.zip`。
 
 当前默认产品入口：
 
 ```text
-apps/slice-studio
+repository root
 ```
 
 ## 当前主链
@@ -13,7 +13,7 @@ apps/slice-studio
 ```text
 1..N UI screenshots/design images
 -> Slice Studio project workspace
--> source images stored under apps/slice-studio/storage
+-> source images stored under storage/
 -> user-drawn or AI-assisted rect slices
 -> optional rect/subject/card cut modes
 -> SQLite-backed project state
@@ -35,15 +35,8 @@ apps/slice-studio
 从仓库根目录启动当前产品：
 
 ```bash
+pnpm install
 pnpm run dev
-```
-
-等价于：
-
-```bash
-cd apps/slice-studio
-bun install
-bun run dev
 ```
 
 默认端口：
@@ -61,11 +54,11 @@ http://127.0.0.1:3010/projects
 
 ## 配置
 
-Slice Studio 默认读取 `apps/slice-studio/.env.local`，不要把密钥提交到仓库。
+Slice Studio 默认读取根目录 `.env.local`，不要把密钥提交到仓库。
 
 常用变量见：
 
-- [apps/slice-studio/.env.example](apps/slice-studio/.env.example)
+- [.env.example](.env.example)
 - [docs/reference/env-vars.md](docs/reference/env-vars.md)
 
 关键变量：
@@ -88,15 +81,8 @@ SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW=true
 Slice Studio 基线检查：
 
 ```bash
-pnpm run check:slice-studio
-pnpm run build:slice-studio
-```
-
-等价于：
-
-```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 ```
 
 仓库级检查：
@@ -110,7 +96,7 @@ git status --short --branch
 
 ## 旧代码状态
 
-旧代码不是默认删除对象。这个仓库保留了多条历史路线：Pencil Python Backend、Pencil Asset Backend、Pencil Handoff Studio、Go M29/Draft、Python upload-preview、Renderer、Figma plugin、PSD-like、Codia eval 等。它们有研究价值，但不能覆盖当前 Slice Studio 主线。
+旧代码不是默认删除对象。这个仓库保留了多条历史路线：Pencil Python Backend、Pencil Asset Backend、Pencil Handoff Studio、Go M29/Draft、Python upload-preview、Renderer、Figma plugin、PSD-like、Codia eval 等。它们已经物理归档到 [archive/legacy-code](archive/legacy-code)，有研究价值，但不能覆盖当前 Slice Studio 主线。
 
 判断旧目录能不能删、改、恢复为产品路径，先读：
 
@@ -120,8 +106,8 @@ git status --short --branch
 默认规则：
 
 ```text
-new product work -> apps/slice-studio
-old services -> reference/fallback/legacy research unless a new active plan says otherwise
+new product work -> root app/components/server/shared/scripts/tests
+old services -> archive/legacy-code reference/fallback/legacy research unless a new active plan says otherwise
 manual/saved Slice Studio slices -> final export truth
 ```
 
@@ -134,7 +120,6 @@ manual/saved Slice Studio slices -> final export truth
 - [docs/index.md](docs/index.md)
 - [docs/product/direction-contract.md](docs/product/direction-contract.md)
 - [docs/roadmap.md](docs/roadmap.md)
-- [apps/slice-studio/README.md](apps/slice-studio/README.md)
 - [docs/engineering/current-code-map.md](docs/engineering/current-code-map.md)
 - [docs/engineering/legacy-code-inventory.md](docs/engineering/legacy-code-inventory.md)
 - [docs/engineering/validation.md](docs/engineering/validation.md)

@@ -12,7 +12,7 @@ For the production launch phase, anonymous visitors first see a landing page, th
 
 ## Final artifact
 
-The current default deliverables are produced by `apps/slice-studio`:
+The current default deliverables are produced by the repository-root Slice Studio app:
 
 ```text
 assets.zip
@@ -98,7 +98,7 @@ The old local-phase exclusions for auth, billing, cloud deployment, and formal m
 
 Primary validation artifacts:
 
-- `apps/slice-studio` typecheck/test/build output;
+- root `pnpm run check` and `pnpm run build` output;
 - real project smoke using uploaded images;
 - generated `assets.zip` and `project.zip`;
 - package inspection of `manifest.json`, `project.json`, and visible asset paths;

@@ -77,7 +77,7 @@ training-label extraction happens outside runtime generation
 Before committing visible-output logic, run:
 
 ```bash
-rg -n "腾讯|动漫|荔枝|闲鱼|东方|茉莉|山野|乌龙|去结算|首页|点单|tencent|lizhi|xianyu|018|022|011|PixPin|ChatGPT_Image|task_|project_mq" apps/slice-studio services/backend-go packages figma-plugin
+rg -n "腾讯|动漫|荔枝|闲鱼|东方|茉莉|山野|乌龙|去结算|首页|点单|tencent|lizhi|xianyu|018|022|011|PixPin|ChatGPT_Image|task_|project_mq" app components server shared tests archive/legacy-code
 ```
 
 Any match in generation code needs a strong reason or removal.

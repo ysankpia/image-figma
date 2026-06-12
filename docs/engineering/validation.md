@@ -4,7 +4,7 @@ Current validation protects the Slice Studio delivery path:
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> saved SliceRecord boxes in SQLite
 -> assets.zip
 -> project.zip / design.pen
@@ -17,13 +17,13 @@ Static checks are baseline evidence. User-facing slice, OCR, AI, export, and han
 Run these before handoff for ordinary Slice Studio changes:
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 git diff --check
 git status --short --branch
 ```
 
-Use `bun run dev` inside `apps/slice-studio` for local manual validation:
+Use `pnpm run dev` from the repository root for local manual validation:
 
 ```text
 Next web:  http://127.0.0.1:3010
@@ -34,7 +34,7 @@ Elysia API: http://127.0.0.1:4110
 
 For visible workflow, export, OCR, M29, AI boxes, or persistence changes, validate a real project:
 
-1. Start Slice Studio from `apps/slice-studio`.
+1. Start Slice Studio from the repository root.
 2. Upload one or more real UI screenshots/design images.
 3. Draw or generate slices.
 4. Save and refresh the page.
@@ -57,10 +57,10 @@ Required signals:
 
 ## AI Slice Box Validation
 
-For `apps/slice-studio/server/ai-slice-boxes/` and Review Workbench AI controls:
+For `server/ai-slice-boxes/` and Review Workbench AI controls:
 
 ```bash
-pnpm --dir apps/slice-studio run check
+pnpm run check
 ```
 
 Then run a real smoke when a provider key is available:
@@ -100,7 +100,7 @@ Use these only when a task explicitly targets old paths.
 Python Pencil assisted slice reference:
 
 ```bash
-cd services/pencil-python-backend
+cd archive/legacy-code/services/pencil-python-backend
 make check
 make slice-acceptance IMAGE=/absolute/path/to/image-or-dir OUT=/Volumes/WorkDrive/pencil-exports/slice-acceptance
 ```
@@ -108,22 +108,24 @@ make slice-acceptance IMAGE=/absolute/path/to/image-or-dir OUT=/Volumes/WorkDriv
 Go Draft/M29 reference:
 
 ```bash
-cd services/backend-go
+cd archive/legacy-code/services/backend-go
 go test ./...
 ```
 
 Renderer:
 
 ```bash
-pnpm --filter @image-figma/image-to-figma-renderer run typecheck
-pnpm --filter @image-figma/image-to-figma-renderer run test
+cd archive/legacy-code/packages/image-to-figma-renderer
+pnpm run typecheck
+pnpm run test
 ```
 
 Figma plugin:
 
 ```bash
-pnpm --filter @image-figma/figma-plugin run typecheck
-pnpm --filter @image-figma/figma-plugin run build
+cd archive/legacy-code/figma-plugin
+pnpm run typecheck
+pnpm run build
 ```
 
 ## Codia Eval Boundary
@@ -132,7 +134,7 @@ Codia golden samples are eval/reference only:
 
 ```text
 docs/reference/codia-samples/
-services/backend-go/internal/eval/codia
+archive/legacy-code/services/backend-go/internal/eval/codia
 ```
 
 Generation code must not import Codia eval packages or read golden JSON. Tree-match metrics are diagnostic only and must not become the product acceptance gate.
@@ -142,13 +144,13 @@ Generation code must not import Codia eval packages or read golden JSON. Tree-ma
 Fix the owning layer:
 
 ```text
-Slice persistence issue -> apps/slice-studio/server/projects.ts or db.ts
+Slice persistence issue -> server/projects.ts or server/db.ts
 source image/crop issue -> shape-cutout/exporter/pencil-exporter
 AI bbox issue -> ai-slice-boxes provider, tiling, parsing, merge, or prompt contract
 OCR source issue -> text-ocr provider
 physical bbox issue -> m29-physical-evidence or m29-text-locator
 Pencil package issue -> pencil-exporter or pencil-package
-legacy Draft issue -> services/backend-go/internal/draft
+legacy Draft issue -> archive/legacy-code/services/backend-go/internal/draft
 renderer/plugin warning -> verify the contract first, then fix renderer/plugin only if the contract is valid
 ```
 

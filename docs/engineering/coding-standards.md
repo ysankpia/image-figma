@@ -7,28 +7,29 @@
 后续实现建议：
 
 ```text
-figma-plugin/
-backend/
-packages/dsl-schema/
-packages/image-to-figma-renderer/
+app/
+components/
+server/
+shared/
+tests/
 ```
 
-不要在根目录散放实现文件。共享合同进 `packages/`，插件和后端通过合同交互。
+不要新增无归属的散装实现文件。UI 放 `app/` 或 `components/`，API/导出/OCR/M29/AI provider 放 `server/`，跨前后端合同放 `shared/`，回归放 `tests/`。旧插件、旧后端和旧 renderer 在 `archive/legacy-code/`，不作为新产品代码落点。
 
 ## File And Module Shape
 
 - 文件职责要窄。
 - 大型 central 文件是设计压力，不是成就。
-- Renderer 按元素类型拆模块。
-- 后端按 API、service、pipeline、storage、dsl 拆模块。
-- 插件 UI、Plugin Main、Renderer 调用不要混在同一个文件里。
+- UI 组件按工作台区域或页面职责拆模块。
+- 后端按 API、storage、export、OCR、M29、AI provider 等边界拆模块。
+- 不把 provider 调用、文件系统写入、UI 状态管理混进同一个文件。
 
 ## Boundary Rules
 
-- Renderer 不导入后端代码。
-- 后端不导入 Figma 插件代码。
-- 插件 UI 不直接操作 Figma API。
-- DSL 类型和 schema 是共享合同。
+- 前端组件不直接读写本地文件系统。
+- 服务端 provider 不绕过保存后的 SliceRecord。
+- OCR/M29/AI 只能提供 evidence/candidates，不能成为最终可见 ownership。
+- `shared/` 类型和 schema 是跨层合同。
 - API 响应结构必须和文档一致。
 
 ## Data Rules

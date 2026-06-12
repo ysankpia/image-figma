@@ -6,7 +6,7 @@
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> saved SliceRecord boxes
 -> assets.zip
 -> project.zip / design.pen
@@ -18,22 +18,22 @@
 
 | Path | Status | Keep Reason | Current Rule |
 | --- | --- | --- | --- |
-| `apps/slice-studio/` | `current` | 当前本地项目制 UI 切图、AI 画框、三种 cut mode、SQLite 状态、`assets.zip`、`project.zip/design.pen`、OCR/M29 text handoff 都在这里。 | 新产品交付和 P0/P1 修复默认落这里。 |
-| `services/pencil-python-backend/` | `superseded-product-reference` | 曾是 Pencil assisted slice delivery surface，仍保留大量 API、导出、部署和验收经验。 | 不再作为默认产品主线。只在显式维护旧 Python Pencil route 时修改。 |
-| `services/pencil-asset-backend/` | `superseded-reference` | 瘦 image/icon handoff 服务，保留 YOLO/M29/PSD-like/OCR 资产候选经验。 | 参考其设计，不默认接回 Slice Studio。 |
-| `services/pencil-handoff-studio/` | `superseded-reference` | 批量 handoff prototype，保留 Konva review 和 export 经验。 | 参考，不作为当前运行面。 |
-| `services/backend-go/cmd/m29extract/` and `services/backend-go/internal/m29/` | `reference/fallback` | Slice Studio 曾用 Go M29 no-OCR physical kernel；当前 TS port 已成为默认。Go 保留为对照和显式 fallback。 | 不再是默认部署依赖。只在 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract` 或 M29 研究任务中使用。 |
-| `apps/slice-studio/server/m29-physical-evidence/` | `current` | TypeScript M29 physical evidence kernel，服务 OCR text bbox placement。 | 当前默认使用。它只提供 physical evidence，不创建 visible layers。 |
-| `apps/slice-studio/server/ai-slice-boxes/` | `current` | AI 画框模块，输出 transient bbox，再由前端转成普通 slices。 | 只能服务 batch drawing，不持久化 proposal，不改变 export truth source。 |
-| `services/backend-go/internal/draft/`, `services/backend-go/cmd/draft*`, `services/backend-go/internal/vision/`, `services/backend-go/internal/app/` | `legacy-research/deferred-runtime` | Draft runtime、vision review、DSL export 和旧 `/api/draft-preview` 仍有研究价值。 | 不作为 Slice Studio 新功能入口。恢复前必须新建 active plan 和验收标准。 |
-| `backend/` | `legacy-research` | 历史 Python/FastAPI `/api/upload-preview`、M29/M30+ 研究链、source ownership 和 materialization 代码仍有研究价值。 | 除非任务明确点名 `/api/upload-preview`，否则不要从这里修当前产品。 |
-| `services/backend-python/` | `legacy-research` | OmniParser/VLM/PSD-like 早期实验和测试仍可作为未来模型/候选策略参考。 | 冷冻为实验代码。不要接成当前默认服务。 |
-| `services/psdlike-python/` | `legacy-reference` | PSD-like 研究和旧 Python services 的候选依赖。 | 不进入 Slice Studio 默认 runtime。 |
-| `services/pencil-go/` | `legacy-research` | Go 版 Pencil export/server 的 superseded experiment。 | 不复活为产品路径。 |
-| `packages/dsl-schema/` | `deferred-runtime-asset` | Draft runtime DSL TypeScript contract 和 validator。 | 只在插件/Renderer/Draft 任务中维护。 |
-| `packages/image-to-figma-renderer/` | `deferred-runtime-asset` | Draft DSL 到 Figma adapter 的 renderer。 | 只渲染 DSL contract，不修 Slice Studio export 问题。 |
-| `figma-plugin/` | `deferred-runtime-asset` | Figma 插件仍是旧 Draft/plugin 资产。 | 不作为 Slice Studio delivery path。若恢复插件交付，必须先定义新 runtime contract。 |
-| `Figma-design/` | `prototype/reference` | 早期 UI/design reference。 | 只作参考。 |
+| `app/`, `components/`, `server/`, `shared/`, `tests/` | `current` | 当前本地项目制 UI 切图、AI 画框、三种 cut mode、SQLite 状态、`assets.zip`、`project.zip/design.pen`、OCR/M29 text handoff 都在这里。 | 新产品交付和 P0/P1 修复默认落这里。 |
+| `archive/legacy-code/services/pencil-python-backend/` | `superseded-product-reference` | 曾是 Pencil assisted slice delivery surface，仍保留大量 API、导出、部署和验收经验。 | 不再作为默认产品主线。只在显式维护旧 Python Pencil route 时修改。 |
+| `archive/legacy-code/services/pencil-asset-backend/` | `superseded-reference` | 瘦 image/icon handoff 服务，保留 YOLO/M29/PSD-like/OCR 资产候选经验。 | 参考其设计，不默认接回 Slice Studio。 |
+| `archive/legacy-code/services/pencil-handoff-studio/` | `superseded-reference` | 批量 handoff prototype，保留 Konva review 和 export 经验。 | 参考，不作为当前运行面。 |
+| `archive/legacy-code/services/backend-go/cmd/m29extract/` and `archive/legacy-code/services/backend-go/internal/m29/` | `reference/fallback` | Slice Studio 曾用 Go M29 no-OCR physical kernel；当前 TS port 已成为默认。Go 保留为对照和显式 fallback。 | 不再是默认部署依赖。只在 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract` 或 M29 研究任务中使用。 |
+| `server/m29-physical-evidence/` | `current` | TypeScript M29 physical evidence kernel，服务 OCR text bbox placement。 | 当前默认使用。它只提供 physical evidence，不创建 visible layers。 |
+| `server/ai-slice-boxes/` | `current` | AI 画框模块，输出 transient bbox，再由前端转成普通 slices。 | 只能服务 batch drawing，不持久化 proposal，不改变 export truth source。 |
+| `archive/legacy-code/services/backend-go/internal/draft/`, `archive/legacy-code/services/backend-go/cmd/draft*`, `archive/legacy-code/services/backend-go/internal/vision/`, `archive/legacy-code/services/backend-go/internal/app/` | `legacy-research/deferred-runtime` | Draft runtime、vision review、DSL export 和旧 `/api/draft-preview` 仍有研究价值。 | 不作为 Slice Studio 新功能入口。恢复前必须新建 active plan 和验收标准。 |
+| `archive/legacy-code/backend/` | `legacy-research` | 历史 Python/FastAPI `/api/upload-preview`、M29/M30+ 研究链、source ownership 和 materialization 代码仍有研究价值。 | 除非任务明确点名 `/api/upload-preview`，否则不要从这里修当前产品。 |
+| `archive/legacy-code/services/backend-python/` | `legacy-research` | OmniParser/VLM/PSD-like 早期实验和测试仍可作为未来模型/候选策略参考。 | 冷冻为实验代码。不要接成当前默认服务。 |
+| `archive/legacy-code/services/psdlike-python/` | `legacy-reference` | PSD-like 研究和旧 Python services 的候选依赖。 | 不进入 Slice Studio 默认 runtime。 |
+| `archive/legacy-code/services/pencil-go/` | `legacy-research` | Go 版 Pencil export/server 的 superseded experiment。 | 不复活为产品路径。 |
+| `archive/legacy-code/packages/dsl-schema/` | `deferred-runtime-asset` | Draft runtime DSL TypeScript contract 和 validator。 | 只在插件/Renderer/Draft 任务中维护。 |
+| `archive/legacy-code/packages/image-to-figma-renderer/` | `deferred-runtime-asset` | Draft DSL 到 Figma adapter 的 renderer。 | 只渲染 DSL contract，不修 Slice Studio export 问题。 |
+| `archive/legacy-code/figma-plugin/` | `deferred-runtime-asset` | Figma 插件仍是旧 Draft/plugin 资产。 | 不作为 Slice Studio delivery path。若恢复插件交付，必须先定义新 runtime contract。 |
+| `archive/legacy-code/Figma-design/` | `prototype/reference` | 早期 UI/design reference。 | 只作参考。 |
 | `docs/reference/legacy/`, `docs/plans/archive/`, historical ADRs | `historical-docs` | 保存旧路线、逆向、计划和决策来源。 | 只能作背景，不能覆盖当前 direction contract。 |
 | `docs/code-reviews*/`, `docs/reports/`, `docs/prototypes/` | `research-evidence` | 保留审计、样例、视觉证据和问题追溯。 | 不作为当前产品规范。 |
 
@@ -42,18 +42,18 @@
 这些目录现在看起来“不在主线”，但不是死代码：
 
 ```text
-backend/
-services/backend-python/
-services/pencil-python-backend/
-services/pencil-asset-backend/
-services/pencil-handoff-studio/
-services/pencil-go/
-services/backend-go/internal/draft/
-services/backend-go/internal/vision/
-services/psdlike-python/
-figma-plugin/
-packages/dsl-schema/
-packages/image-to-figma-renderer/
+archive/legacy-code/backend/
+archive/legacy-code/services/backend-python/
+archive/legacy-code/services/pencil-python-backend/
+archive/legacy-code/services/pencil-asset-backend/
+archive/legacy-code/services/pencil-handoff-studio/
+archive/legacy-code/services/pencil-go/
+archive/legacy-code/services/backend-go/internal/draft/
+archive/legacy-code/services/backend-go/internal/vision/
+archive/legacy-code/services/psdlike-python/
+archive/legacy-code/figma-plugin/
+archive/legacy-code/packages/dsl-schema/
+archive/legacy-code/packages/image-to-figma-renderer/
 docs/reference/legacy/
 docs/plans/archive/
 docs/code-reviews*/
@@ -66,15 +66,15 @@ docs/code-reviews*/
 可删除的是本地运行产物，不是 legacy source：
 
 ```text
-apps/slice-studio/.next/
-apps/slice-studio/storage/
-backend/tmp/
-backend/storage/
-services/backend-go/storage/
-services/backend-go/tmp/
-services/backend-go/bin/
-services/*/storage/
-figma-plugin/dist/
+.next/
+storage/
+archive/legacy-code/backend/tmp/
+archive/legacy-code/backend/storage/
+archive/legacy-code/services/backend-go/storage/
+archive/legacy-code/services/backend-go/tmp/
+archive/legacy-code/services/backend-go/bin/
+archive/legacy-code/services/*/storage/
+archive/legacy-code/figma-plugin/dist/
 runs/
 node_modules/
 .venv/
@@ -102,7 +102,7 @@ node_modules/
 When docs conflict, authority order is:
 
 ```text
-current code in apps/slice-studio
+current code at repository root
 -> docs/product/direction-contract.md
 -> AGENTS.md / PROGRESS.md / docs/index.md
 -> docs/engineering/current-code-map.md

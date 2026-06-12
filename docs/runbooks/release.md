@@ -1,6 +1,6 @@
 # 发布 Runbook
 
-当前默认产品是 Slice Studio：`apps/slice-studio`。
+当前默认产品是仓库根目录的 Slice Studio。
 
 正式多用户发布前遵循 active plan：
 
@@ -23,11 +23,10 @@ docs/plans/active/189-slice-studio-multi-user-production-launch.md
 
 Slice Studio 发布前必须确认：
 
-- `apps/slice-studio/storage/` 已备份，或生产环境有独立持久 storage。
+- `storage/` 已备份，或生产环境有独立持久 storage。
 - `.env.local`、SQLite、ZIP、`.pen`、`.next`、`output`、`tmp`、`runs` 没有进入发布包。
-- `pnpm --dir apps/slice-studio run check` 通过。
-- `pnpm --dir apps/slice-studio run build` 通过。
-- `pnpm -r run check` 在 broader repo changes 后通过。
+- `pnpm run check` 通过。
+- `pnpm run build` 通过。
 - `git diff --check` 通过。
 - `bun run smoke` 对 running Slice Studio API 通过。
 - 真实样例能上传、保存 slices、导出 `assets.zip` 和 `project.zip`。
@@ -41,4 +40,4 @@ git status --short --branch
 git ls-files | rg "\\.zip$|\\.pen$|\\.sqlite$|\\.db$|\\.env\\.local$|(^|/)\\.next/|(^|/)dist/|(^|/)storage/"
 ```
 
-Only intentional tracked placeholders such as `apps/slice-studio/storage/.gitkeep` may appear.
+Only intentional tracked placeholders such as `storage/.gitkeep` may appear.

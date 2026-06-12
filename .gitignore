@@ -13,11 +13,14 @@ env.local
 # Node / pnpm
 node_modules/
 .pnpm-store/
+.next/
+out/
 dist/
 build/
 coverage/
 .vitest/
 .turbo/
+*.tsbuildinfo
 
 # Python
 __pycache__/
@@ -30,7 +33,11 @@ venv/
 dist/
 *.egg-info/
 
-# local app storage
+# current Slice Studio local storage
+storage/*
+!storage/.gitkeep
+
+# legacy local app storage
 backups/
 output/
 tmp/
@@ -55,5 +62,15 @@ figma-plugin/dist/
 figma-plugin/build/
 repomix-output.xml
 services/backend-python/storage/
+
+# archived legacy runtime artifacts
+archive/legacy-code/**/storage/
+archive/legacy-code/**/tmp/
+archive/legacy-code/**/bin/
+archive/legacy-code/**/dist/
+archive/legacy-code/**/build/
+archive/legacy-code/**/*.sqlite
+archive/legacy-code/**/*.sqlite3
+archive/legacy-code/**/*.db
 
 runs
