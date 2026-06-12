@@ -1,6 +1,6 @@
 # Bug: Text replacement rejects OCR labels on low-complexity UI cards
 
-- 状态：open，M14 已加入自动化回归保护，仍需真实首页 smoke 后决定是否关闭
+- 状态：resolved
 - 创建日期：2026-05-17
 - 影响范围：M12 text replacement coverage
 

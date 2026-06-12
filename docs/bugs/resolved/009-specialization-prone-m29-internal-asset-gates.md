@@ -1,6 +1,6 @@
 # Bug: M29 internal asset chain 存在特化倾向的证据门控
 
-- 状态：open
+- 状态：resolved
 - 创建日期：2026-05-25
 - 影响范围：M29.6 media internal decomposition、transparent asset report、internal source promotion、M29 contract docs/tests
 
