@@ -1,6 +1,6 @@
 # M29 Physical Evidence
 
-M29 is the physical evidence layer. In current Slice Studio, the default implementation is the TypeScript extractor under `apps/slice-studio/server/m29-physical-evidence/`, used only to improve OCR text bbox placement. Go M29 remains reference/fallback tooling.
+M29 is the physical evidence layer. In current Slice Studio, the default implementation is the TypeScript extractor under `server/m29-physical-evidence/`, used only to improve OCR text bbox placement. Go M29 remains reference/fallback tooling.
 
 M29 sees pixels, primitive regions, local measurements, and optional OCR line context. It does not own final visible asset decisions.
 
@@ -99,6 +99,6 @@ Thresholds should be derived from image scale or evidence measurements when poss
 
 ## Relationship To Legacy M29
 
-Python `/api/upload-preview` remains historical/reference on this branch. Go `internal/m29` and `cmd/m29extract` are retained as research/reference and explicit fallback.
+Python `/api/upload-preview` remains historical/reference on this branch. Go `archive/legacy-code/services/backend-go/internal/m29` and `archive/legacy-code/services/backend-go/cmd/m29extract` are retained as research/reference and explicit fallback.
 
-Do not patch Slice Studio output in old Python materializers or Go Draft assembly. If current text placement is wrong, fix `apps/slice-studio/server/m29-physical-evidence/`, `m29-text-locator.ts`, OCR integration, or text reconstruction.
+Do not patch Slice Studio output in old Python materializers or Go Draft assembly. If current text placement is wrong, fix `server/m29-physical-evidence/`, `server/m29-text-locator.ts`, OCR integration, or text reconstruction.

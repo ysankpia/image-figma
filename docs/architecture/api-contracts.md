@@ -1,6 +1,6 @@
 # API Contracts
 
-Current product runtime is Slice Studio in `apps/slice-studio`.
+Current product runtime is Slice Studio at the repository root.
 
 Development defaults:
 
@@ -98,7 +98,7 @@ Visible refs inside `design.pen` must be package-local and must not reference ab
 
 ## Historical APIs
 
-The old Pencil Python caller contract remains in [../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md). Use it only when explicitly maintaining `services/pencil-python-backend`.
+The old Pencil Python caller contract remains in [../reference/pencil-python-backend-api.md](../reference/pencil-python-backend-api.md). Use it only when explicitly maintaining `archive/legacy-code/services/pencil-python-backend`.
 
 The old Go Draft Preview contract remains historical/deferred:
 

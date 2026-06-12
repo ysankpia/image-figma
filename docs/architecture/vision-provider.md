@@ -1,6 +1,6 @@
 # Vision Provider
 
-Vision/AI providers are candidate and review subsystems. In current Slice Studio, the only default provider-backed product feature is AI rectangular slice boxes under `apps/slice-studio/server/ai-slice-boxes/`.
+Vision/AI providers are candidate and review subsystems. In current Slice Studio, the only default provider-backed product feature is AI rectangular slice boxes under `server/ai-slice-boxes/`.
 
 Providers are not final UI tree builders and do not bypass saved SliceRecord truth.
 

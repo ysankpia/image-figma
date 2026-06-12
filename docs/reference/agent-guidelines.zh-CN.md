@@ -12,7 +12,7 @@ PROGRESS.md
 docs/index.md
 docs/product/direction-contract.md
 docs/roadmap.md
-apps/slice-studio/README.md
+README.md
 docs/engineering/current-code-map.md
 docs/engineering/legacy-code-inventory.md
 docs/engineering/validation.md
@@ -26,7 +26,7 @@ docs/engineering/validation.md
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> project workspace
 -> original source images in local storage
 -> saved SliceRecord boxes in SQLite
@@ -45,7 +45,6 @@ screenshots/design images -> user-confirmed Pencil/Figma handoff package + front
 默认开发命令：
 
 ```bash
-cd apps/slice-studio
 bun run dev
 ```
 
@@ -59,8 +58,8 @@ Elysia API: http://127.0.0.1:4110
 基线检查：
 
 ```bash
-pnpm --dir apps/slice-studio run check
-pnpm --dir apps/slice-studio run build
+pnpm run check
+pnpm run build
 git diff --check
 git status --short --branch
 ```
@@ -79,9 +78,9 @@ git status --short --branch
 以下都是历史/参考/延后路线，不能作为当前默认产品路径：
 
 ```text
-services/pencil-python-backend
-services/pencil-asset-backend
-services/pencil-handoff-studio
+archive/legacy-code/services/pencil-python-backend
+archive/legacy-code/services/pencil-asset-backend
+archive/legacy-code/services/pencil-handoff-studio
 Go /api/draft-preview
 Python /api/upload-preview
 /api/codia-preview
@@ -91,8 +90,8 @@ M29 Direct compare
 legacy M30
 M31-M39/M39.1
 ONNX proposer
-figma-plugin runtime
-packages/image-to-figma-renderer default route
+archive/legacy-code/figma-plugin runtime
+archive/legacy-code/packages/image-to-figma-renderer default route
 ```
 
 要删除、移动、恢复旧目录，先读 `docs/engineering/legacy-code-inventory.md`，再写 active plan。

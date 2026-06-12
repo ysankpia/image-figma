@@ -3,9 +3,9 @@
 当前产品数据模型属于 Slice Studio：
 
 ```text
-apps/slice-studio/storage/app.sqlite
-apps/slice-studio/storage/projects/{projectId}/originals/
-apps/slice-studio/storage/projects/{projectId}/exports/
+storage/app.sqlite
+storage/projects/{projectId}/originals/
+storage/projects/{projectId}/exports/
 ```
 
 Saved projects, pages, and SliceRecord rows are the live edit/export truth. `assets.zip` and `project.zip/design.pen` are derived artifacts.
@@ -113,7 +113,7 @@ draft_validation_report.md
 
 ## Historical Python Preview Data
 
-`backend/` 里的 SQLite schema、`tasks/assets/dsl_results/ocr_results/error_logs`、`storage/upload_previews/{taskId}` 等属于历史 Python `/api/upload-preview` preview path。
+`archive/legacy-code/backend/` 里的 SQLite schema、`tasks/assets/dsl_results/ocr_results/error_logs`、`storage/upload_previews/{taskId}` 等属于历史 Python `/api/upload-preview` preview path。
 
 它们不是当前 Slice Studio 数据模型。除非任务明确针对 Python preview，否则不要以这些表、路径或 stage 名称作为新功能依据。
 

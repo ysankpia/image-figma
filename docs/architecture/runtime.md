@@ -4,7 +4,7 @@ Draft runtime 是历史/延后自动化路线。当前分支的可交付产品�
 
 ```text
 1..N UI screenshots/design images
--> apps/slice-studio
+-> repository root
 -> saved SliceRecord boxes
 -> assets.zip
 -> project.zip / design.pen
@@ -74,7 +74,7 @@ Vision artifacts are optional. Draft artifacts are required for completed tasks.
 
 `internal/draft` owns layer graph assembly, asset cropping, grouping, validation, reporting, and DSL export.
 
-`packages/image-to-figma-renderer` owns Figma node creation from DSL.
+`archive/legacy-code/packages/image-to-figma-renderer` owns Figma node creation from DSL.
 
 ## Failure Policy
 

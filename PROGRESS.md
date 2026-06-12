@@ -59,7 +59,7 @@ Slice Studio multi-user production launch planning
 ## Next
 - Continue plan 189 with auth/session and project ownership.
 - Confirm the first production auth contract: Better Auth as the session/user identity boundary, Chinese default language with browser-language auto selection, and Google login only when provider credentials are configured.
-- Keep physical relocation of legacy code as a later, separately planned action unless there is a strong operational need.
+- Keep archived legacy code under `archive/legacy-code/` unless a new active plan revives a specific component.
 - Run a real OpenRouter provider smoke after the user provides a key and model.
 
 ## Blocked or deferred
@@ -70,6 +70,7 @@ Slice Studio multi-user production launch planning
 
 ## Validation log
 - 2026-06-13: plan 191/192 validation passed: `pnpm install` completed; `pnpm run check` passed with 8 test files / 60 tests; `pnpm run build` completed successfully; `pnpm run smoke` created and deleted temporary project `project_mqbju82i_bf09eab6` and exported both `assets.zip` and `project.zip`.
+- 2026-06-13: plan 191/192 completion audit passed after repository-root promotion: `pnpm run check` passed with 8 test files / 60 tests; `pnpm run build` completed successfully; `pnpm run smoke` created temporary project `project_mqbku312_d343ee48` and exported `project.zip`; targeted current-doc grep found no stale `apps/slice-studio` mainline commands or active-path references.
 - 2026-06-13: plan 191/192 browser smoke passed on `http://127.0.0.1:3010/projects`: API returned `17` projects, UI showed `共 17 个项目。`, source-image preview requests returned 200, and console had no errors.
 - 2026-06-13: plan 191/192 browser smoke passed on `http://127.0.0.1:3010/projects/project_mqavhwm7_875518fe/review`: source image loaded at `1672x941`, 7 asset previews loaded, Konva canvas rendered at `649x769`, network requests returned 200, and console had no errors.
 - 2026-06-13: plan 191/192 artifact discipline check passed: `git diff --check` produced no output; `git ls-files` runtime-artifact grep only matched `storage/.gitkeep` plus archived source paths whose names contain `storage`.

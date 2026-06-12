@@ -18,7 +18,7 @@ These integrations produce or refine normal Slice Studio slices and export artif
 
 ## Figma
 
-The historical plugin writes Draft Runtime DSL into Figma through `packages/image-to-figma-renderer`.
+The historical plugin writes Draft Runtime DSL into Figma through `archive/legacy-code/packages/image-to-figma-renderer`.
 
 Figma integration boundaries:
 
@@ -64,7 +64,7 @@ Vision models provide candidates and review decisions. They do not generate fina
 
 ## Local Assets
 
-Current Slice Studio writes local originals and export packages under `apps/slice-studio/storage`.
+Current Slice Studio writes local originals and export packages under root `storage/`.
 
 The historical Go backend writes local crop assets for `RasterLayer` nodes.
 
@@ -82,7 +82,7 @@ Official Codia JSON samples are reference/eval inputs only:
 
 ```text
 docs/reference/codia-samples/
-internal/eval/codia
+archive/legacy-code/services/backend-go/internal/eval/codia
 ```
 
 Generation packages must not read Codia samples or import eval packages.
