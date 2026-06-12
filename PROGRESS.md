@@ -3,21 +3,21 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Completed Chinese/English internationalization for the Slice Studio Review Workbench while preserving upload, canvas editing, AI slicing, asset editing, and export behavior.
+Plan the formal multi-user production launch for Slice Studio, including landing page, login/register, user ownership, production database/storage, AI provider replaceability, entitlement gates, provider-neutral payment/subscription, deployment, backup, and validation.
 
 ## Active plan
-- Current plan: none.
+- Current plan: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Most recently completed: `docs/plans/completed/188-review-workbench-i18n.md`
 
 ## Current phase
-Slice Studio Review Workbench i18n completed
+Slice Studio multi-user production launch planning
 
 ## Now
-- Review Workbench now has a local Chinese/English UI dictionary.
-- Chinese is the default language; English is selectable from the top command bar.
-- Command button widths are stabilized across Chinese and English copy.
-- The page uses the existing Slice Studio handlers and APIs; no backend/API/export contract changed.
-- The local dev service is reachable at `http://127.0.0.1:3010`.
+- Current local product is usable as a private Slice Studio workflow, but formal public launch requires a new production product contract.
+- Active plan 189 defines the multi-user production path: landing page, auth/session, project ownership, production database, object storage, entitlement/usage gates, provider-neutral payment, replaceable AI provider, deployment, backup/restore, and full user-view validation.
+- Payment provider is intentionally not fixed yet because account/legal constraints are unresolved; the plan defines the internal entitlement and webhook safety contract first.
+- AI provider selection is treated as a replaceable OpenAI-compatible provider concern; OpenRouter can be evaluated without binding core product logic to it.
+- No business code has been changed for production launch yet.
 
 ## Done
 - 2026-06-12: completed Review Workbench i18n plan 188 and moved it to `docs/plans/completed/188-review-workbench-i18n.md`.
@@ -47,8 +47,10 @@ Slice Studio Review Workbench i18n completed
 - 2026-06-12: moved plan 184 to completed.
 
 ## Next
-- Select the next concrete Slice Studio issue before changing code.
-- If the Figma-only controls are required later, add real contracts first for redo history, asset lock state, persistent page processing status, and semantic asset categories.
+- Begin plan 189 implementation by choosing the first production slice: auth/session boundary and route protection, or AI provider replacement if that is prioritized tomorrow.
+- Before implementation, update the direction contract and product docs to stop treating auth/billing/cloud sync as local-phase non-goals for the new production phase.
+- Keep payment provider selection separate from the internal subscription/entitlement model.
+- Keep Review Workbench behavior stable unless auth/app-shell integration requires route changes.
 
 ## Blocked or deferred
 - Figma shows persistent page processing states, asset lock state, and redo behavior. These are not currently backed by persisted Slice Studio contracts and must be treated as missing interfaces unless implemented later.
@@ -57,6 +59,7 @@ Slice Studio Review Workbench i18n completed
 - Source images that already contain blue detection boxes/labels still preserve those pixels as raster; this fix prevents double-emitting them as visible OCR text layers.
 
 ## Validation log
+- 2026-06-13: concrete-analysis production launch planning completed from current docs and code facts: current API is open, project state is SQLite/filesystem-backed, no user ownership/session/payment entitlement exists, and current AI provider config is already OpenAI-compatible enough to support provider replacement planning.
 - 2026-06-12: `pnpm --dir apps/slice-studio run check` passed after Review Workbench i18n: TypeScript passed, Vitest 8 files / 55 tests passed.
 - 2026-06-12: `pnpm --dir apps/slice-studio run build` passed after Review Workbench i18n: Next.js production build completed successfully.
 - 2026-06-12: `git diff --check` passed after Review Workbench i18n.

@@ -2,9 +2,13 @@
 
 This document is the current project direction contract. It overrides historical Draft, Codia, and older Pencil-assisted plans when they conflict with the current code and documentation.
 
+The local Slice Studio delivery contract remains valid. Plan 189 adds the next formal production contract for turning the same product into a multi-user web service with auth, ownership, entitlement, provider-neutral payment, production storage, and deployment.
+
 ## Real user outcome
 
 Users can upload one or more UI screenshots/design images, quickly create or AI-assist rectangular asset boxes, manually adjust the result, and export a package that can be opened in Pencil and continued in Figma, plus a frontend asset ZIP.
+
+For the production launch phase, anonymous visitors first see a landing page, then register or log in, then work only inside authenticated projects they own. Expensive AI, storage, and export actions are gated by entitlement and usage limits.
 
 ## Final artifact
 
@@ -18,6 +22,19 @@ manifest.json
 project.json
 slice PNG assets
 editable OCR text nodes when OCR is configured
+```
+
+The production product additionally requires:
+
+```text
+landing page
+login/register
+authenticated project workspace
+account/billing page
+user-owned project data
+usage and entitlement records
+provider-neutral payment/subscription records
+production deployment, backup, and restore runbooks
 ```
 
 ## Success signal
@@ -38,6 +55,8 @@ For a real multi-page sample project:
 The SQLite-backed Slice Studio project state is the live editing truth. Saved `SliceRecord` rows and page order are the export truth.
 
 For exported packages, `manifest.json` with schema `manual_ui_slices.v1` is the artifact truth. AI slice boxes, M29 physical evidence, OCR output, and old automatic candidates are evidence only.
+
+For production SaaS work, authenticated user identity and project ownership become part of the truth source. Every project, page, slice, source image, preview, export, AI call, and usage event must be reachable only through the owning user or an explicit operator/admin path.
 
 ## Evidence and candidate sources
 
@@ -71,7 +90,9 @@ Current default delivery does not aim to:
 - revive Go Draft or Python upload-preview as the default product route;
 - depend on the Go `m29extract` binary for default Slice Studio text placement;
 - turn OCR text into button/card/background reconstruction;
-- perform cloud sync, auth, billing, or collaboration.
+- perform team collaboration in the first production phase.
+
+The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). They are not implemented yet, but they are now planned production work.
 
 ## Validation artifact
 
@@ -92,3 +113,6 @@ Revisit this contract if any of these appear:
 - export starts cropping from thumbnails, debug artifacts, or generated intermediates instead of source originals;
 - old Draft/Renderer/plugin work is revived without a new active plan and validation gate;
 - manual repair becomes impossible or secondary to automatic ownership.
+- public deployment exposes project APIs without authentication and ownership checks;
+- payment is implemented as a UI-only checkout without server-verified entitlement gates;
+- AI provider replacement leaks keys, skips usage metering, or bypasses per-user entitlement checks.

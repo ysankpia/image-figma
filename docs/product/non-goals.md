@@ -1,19 +1,33 @@
 # 当前不做事项
 
-本文档是当前 Slice Studio 主线边界。没有新的 active plan 前，不要把这些功能塞回默认路径。
+本文档是当前 Slice Studio 主线边界。Plan 189 已经打开正式多用户上线方向，因此本文件区分“本地工具阶段不做”和“正式上线阶段仍不做”。
 
-## Product Non-Goals
+正式上线计划见 [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md)。
 
-当前不做：
+## Local Tool Phase Non-Goals
+
+这些能力不是已完成的本地工具能力，但已经进入正式上线计划：
 
 - 账号系统。
-- 团队协作。
 - 云同步。
 - 额度、计费、支付。
 - 正式 SaaS 多租户。
+- 生产数据库/对象存储。
+- 登录页、落地页、账号页、支付页。
+
+## Production Launch Non-Goals
+
+正式上线第一阶段仍不做：
+
+- 团队协作。
 - 长期在线任务队列。
 - 质量评分看板。
 - 复杂用户教程平台。
+- 私有化部署商业版本。
+- 企业 SSO。
+- 多组织/多工作区权限矩阵。
+- 公开 API 平台。
+- 插件市场。
 
 ## Design / Figma Non-Goals
 
