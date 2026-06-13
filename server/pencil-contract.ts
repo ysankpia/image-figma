@@ -105,11 +105,8 @@ function validateControlSurfaceSiblings(parent: PencilNode): void {
       ? child.metadata.textLayoutOwnerSurface
       : child.metadata.textOwnerSurface;
     if (!hasVisibleFilledControlSurface(ownerSurface)) continue;
-
     const surface = controlSurfaceByTextId.get(child.id) || controlSurfaceByKey.get(controlSurfaceKeyFromOwnerSurface(ownerSurface));
-    if (!surface) {
-      throw new Error(`Pencil contract violation: missing control surface rectangle for ${child.id}`);
-    }
+    if (!surface) continue;
     if (surface.index >= index) {
       throw new Error(`Pencil contract violation: control surface must render below editable text on ${child.id}`);
     }

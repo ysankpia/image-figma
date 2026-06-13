@@ -89,18 +89,28 @@ outlined/background surfaces -> do not squeeze or shift text
 
 The old media-owned-text behavior is useful evidence for why the previous output looked clean, but it must not become the mainline answer for ordinary uncut regions because the user needs editable text.
 
-Use a local dominant-color estimate inside the text region before falling back to surrounding-ring sampling. This preserves colored control surfaces while still removing original glyph pixels from the remainder.
+Use a local dominant-color estimate inside the text region before falling back to surrounding-ring sampling for ordinary text replacement.
+
+Current policy update after P15/P16 gradient-button validation:
+
+```text
+filled non-background owner surface -> raster-owned control background
+editable label on that surface -> fixed-bound text overlay
+text knockout for that label -> skipped
+Pencil vector control rectangle -> not emitted by default
+```
+
+This is intentionally conservative. It avoids turning gradients, shadows, rounded caps, and mixed button fills into inaccurate single-color vector rectangles. Owner-surface evidence is still useful for text alignment, sizing, and metadata, but it no longer means the source button background is removed from the remainder.
 
 Set Pencil child order to:
 
 ```text
 remainder
-OCR-anchored control surface rectangles
 editable OCR text
 confirmed slice images
 ```
 
-This preserves colored rounded controls as editable-friendly shape surfaces, keeps editable text above the control surface, and still makes saved slice images the visible owner when text and slices overlap.
+This keeps saved slice images as the final visible owner when text and slices overlap. Raster button/control backgrounds remain in the remainder unless a future mask-grade surface owner is introduced.
 
 The implementation now uses an explicit page render/ownership plan before
 Pencil materialization:
@@ -108,14 +118,13 @@ Pencil materialization:
 ```text
 TextReconstruction + saved slices
 -> PageRenderPlan
--> remainder text knockouts + surface knockouts
+-> remainder text knockouts
 -> Pencil nodes in declared z-order
 ```
 
 The plan builder does not rerun OCR, M29, or project loading. It only converts
-already-computed evidence into ownership instructions. `pencil-package` is now
-an executor for `SurfaceKnockout` instructions; it must not rediscover whether
-a region is a button/control.
+already-computed evidence into ownership instructions. `pencil-package` remains
+an executor; it must not rediscover whether a region is a button/control.
 
 Set Slice Studio page frames to:
 
@@ -352,6 +361,43 @@ Pixel audit:
 Pencil layout:
   page_0010__frame: No layout problems
   page_0011__frame: No layout problems
+```
+
+No-vector control-surface validation:
+
+```text
+Policy:
+  filled owner surfaces remain raster-owned by default
+  no Pencil `slice_studio_control_surface` rectangles are emitted
+  no surfaceKnockouts are emitted from PageRenderPlan
+  non-background filled owner labels skip textKnockout to avoid raster repaint artifacts
+  ordinary/background text still uses textKnockout
+
+Targeted page exports:
+  project: project_mqc1wpkd_123c88b0
+  pages: page_0010, page_0011, page_0015, page_0016
+  result: all page exports passed
+  Pencil snapshot_layout(problemsOnly=true): No layout problems
+
+Full export:
+  package: /private/tmp/slice-novector-full/design.pen
+  frames: 28
+  assets: 532
+  editable text nodes: 1330
+  control surface nodes: 0
+  Pencil snapshot_layout(problemsOnly=true): No layout problems
+
+Visual checks:
+  P10/P11: no visible square button-edge protrusion in full-package screenshots
+  P15: bottom `联系客服` remains a continuous raster gradient, not a split solid vector fill
+  P16: no layout overflow in targeted/full-package screenshots
+
+Validation:
+  pnpm exec vitest run tests/pencil-exporter.test.ts
+  pnpm run typecheck
+  pnpm run check
+  pnpm run build
+  git diff --check
 ```
 
 Root-cause correction after zoomed P10/P11 review:

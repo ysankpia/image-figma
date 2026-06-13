@@ -303,7 +303,7 @@ describe("pencil exporter", () => {
     expect(raw.data[farBackground + 3]).toBe(255);
   });
 
-  it("builds explicit control surface knockout instructions from text owner metadata", () => {
+  it("keeps filled control surfaces raster-owned by default", () => {
     const plan = buildPageRenderPlan({
       pageId: "page_0001",
       pageDirectory: "P1",
@@ -330,35 +330,13 @@ describe("pencil exporter", () => {
       ]
     });
 
-    expect(plan.layers.controlSurfaces).toHaveLength(1);
-    expect(plan.layers.controlSurfaces[0]).toMatchObject({
-      id: "page_0001__control_surface_0001",
-      sourceTextId: "page_0001__text_0001",
-      visibleBBox: { x: 52, y: 30, width: 92, height: 38 },
-      fill: "#10b32f",
-      cornerRadius: 19,
-      provenance: "ocr_owner_surface"
-    });
-    expect(plan.remainder.surfaceKnockouts).toEqual([{
-      visibleShape: {
-        kind: "rounded_rect",
-        bbox: { x: 52, y: 30, width: 92, height: 38 },
-        cornerRadius: 19
-      },
-      sourceOwnerRegion: {
-        kind: "owner_band",
-        pad: 3,
-        fill: "#10b32f",
-        backgroundSample: "outside_ring",
-        connectivity: "from_visible_shape",
-        provenance: "ocr_owner_surface"
-      },
-      provenance: "ocr_owner_surface"
-    }]);
+    expect(plan.layers.controlSurfaces).toEqual([]);
+    expect(plan.remainder.surfaceKnockouts).toEqual([]);
     expect(plan.remainder.textKnockouts).toEqual([
       { x: 20, y: 84, width: 46, height: 18 }
     ]);
-    expect(plan.layers.text[0].zIndex).toBeGreaterThan(plan.layers.controlSurfaces[0].zIndex);
+    expect(plan.layers.text[0].zIndex).toBe(1);
+    expect(plan.layers.text[1].zIndex).toBe(2);
   });
 
   it("uses tight knockout bounds instead of Pencil safe bounds on rounded buttons", async () => {
@@ -694,7 +672,7 @@ describe("pencil exporter", () => {
     expect(() => validatePencilPackage({ version: "2.11", children: [frame] }, files)).toThrow(/must not set lineHeight/);
   });
 
-  it("requires visible filled control surfaces to be exported below editable text", () => {
+  it("allows raster-owned filled controls and validates optional vector control surfaces", () => {
     const ownerSurface = {
       bbox: { x: 20, y: 30, width: 120, height: 44 },
       fill: "#10b32f",
@@ -758,7 +736,7 @@ describe("pencil exporter", () => {
     };
 
     expect(() => validatePencilPackage({ version: "2.11", children: [frame] }, [])).not.toThrow();
-    expect(() => validatePencilPackage({ version: "2.11", children: [{ ...frame, children: [text] }] }, [])).toThrow(/missing control surface rectangle/);
+    expect(() => validatePencilPackage({ version: "2.11", children: [{ ...frame, children: [text] }] }, [])).not.toThrow();
     expect(() => validatePencilPackage({ version: "2.11", children: [{ ...frame, children: [text, surface] }] }, [])).toThrow(/must render below/);
     expect(() => validatePencilPackage({
       version: "2.11",
