@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { buildPencilManifest, createRemainderPng, frameLayoutXPositions, preparePencilSliceImage } from "../server/pencil-package";
 import { validatePencilPackage, type PencilNode } from "../server/pencil-contract";
+import { buildPageRenderPlan } from "../server/render-plan-builder";
+import type { SurfaceKnockout } from "../server/render-plan";
 import { parseBaiduPpocrv5Rows, parseTesseractTsv } from "../server/text-ocr";
-import { reconstructTextLayers, remainingRatio, textGeometryLooksEditable } from "../server/text-reconstruction";
+import { reconstructTextLayers, remainingRatio, textGeometryLooksEditable, type TextLayer } from "../server/text-reconstruction";
 import { locateTextLinesFromM29 } from "../server/m29-text-locator";
 import type { ProjectDetail } from "../shared/types";
 
@@ -19,6 +21,44 @@ function fillRawRect(rgba: Buffer, imageWidth: number, box: TestBox, rgb: [numbe
       rgba[offset + 3] = 255;
     }
   }
+}
+
+function surfaceKnockout(bbox: TestBox, fill: string, cornerRadius: number, driftPad = 3): SurfaceKnockout {
+  return {
+    visibleShape: {
+      kind: "rounded_rect",
+      bbox,
+      cornerRadius
+    },
+    sourceOwnerRegion: {
+      kind: "owner_band",
+      pad: driftPad,
+      fill,
+      backgroundSample: "outside_ring",
+      connectivity: "from_visible_shape",
+      provenance: "ocr_owner_surface"
+    },
+    provenance: "ocr_owner_surface"
+  };
+}
+
+function testTextLayer(id: string, text: string, bbox: TestBox, metadata: Record<string, unknown> = {}): TextLayer {
+  return {
+    id,
+    text,
+    bbox,
+    textRenderBBox: bbox,
+    safeBBox: bbox,
+    knockoutBBox: bbox,
+    originalBBox: bbox,
+    fontSize: 16,
+    fontFamily: "PingFang SC",
+    fontWeight: "400",
+    lineHeight: 1,
+    color: "#ffffff",
+    confidence: 99,
+    metadata
+  };
 }
 
 function overlapArea(a: TestBox, b: TestBox): number {
@@ -176,6 +216,149 @@ describe("pencil exporter", () => {
     expect(raw.data[offset + 1]).toBeGreaterThan(110);
     expect(raw.data[offset + 2]).toBeLessThan(120);
     expect(raw.data[offset + 3]).toBe(255);
+  });
+
+  it("removes exported control surfaces from the remainder owner layer", async () => {
+    const width = 120;
+    const height = 80;
+    const source = await sharp(Buffer.from(`
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>
+        <rect x="24" y="24" width="72" height="32" rx="16" fill="#10b32f"/>
+        <rect x="48" y="36" width="24" height="8" fill="#ffffff"/>
+      </svg>
+    `)).png().toBuffer();
+
+    const remainder = await createRemainderPng(
+      source,
+      [],
+      [{ x: 44, y: 32, width: 32, height: 16 }],
+      [surfaceKnockout({ x: 24, y: 24, width: 72, height: 32 }, "#10b32f", 16)]
+    );
+    const raw = await sharp(remainder).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const buttonCenter = (40 * width + 60) * 4;
+    const outsideButton = (12 * width + 12) * 4;
+
+    expect(raw.data[buttonCenter + 3]).toBe(0);
+    expect(raw.data[outsideButton + 3]).toBe(255);
+  });
+
+  it("clears small source-surface edge drift around exported control surfaces", async () => {
+    const width = 160;
+    const height = 90;
+    const source = await sharp(Buffer.from(`
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="#f2eadf"/>
+        <rect x="24" y="22" width="96" height="36" rx="18" fill="#10b32f"/>
+        <rect x="62" y="36" width="20" height="8" fill="#ffffff"/>
+      </svg>
+    `)).png().toBuffer();
+
+    const remainder = await createRemainderPng(
+      source,
+      [],
+      [{ x: 58, y: 34, width: 24, height: 12 }],
+      [surfaceKnockout({ x: 27, y: 25, width: 90, height: 30 }, "#10b32f", 15)]
+    );
+    const raw = await sharp(remainder).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const sourceOnlyEdge = (22 * width + 72) * 4;
+    const backgroundNearSurfaceEdge = (23 * width + 27) * 4;
+    const outsideButton = (12 * width + 12) * 4;
+
+    expect(raw.data[sourceOnlyEdge + 3]).toBe(0);
+    expect(raw.data[backgroundNearSurfaceEdge + 3]).toBe(255);
+    expect(raw.data[outsideButton + 3]).toBe(255);
+  });
+
+  it("clears connected owner/background blend pixels without erasing isolated lookalikes", async () => {
+    const width = 90;
+    const height = 70;
+    const rgba = Buffer.alloc(width * height * 4);
+    const background: [number, number, number] = [242, 234, 223];
+    const fill: [number, number, number] = [16, 179, 47];
+    const blend: [number, number, number] = [230, 249, 233];
+    fillRawRect(rgba, width, { x: 0, y: 0, width, height }, background);
+    fillRawRect(rgba, width, { x: 20, y: 20, width: 40, height: 20 }, fill);
+    fillRawRect(rgba, width, { x: 25, y: 19, width: 30, height: 1 }, blend);
+    fillRawRect(rgba, width, { x: 25, y: 17, width: 30, height: 1 }, blend);
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const remainder = await createRemainderPng(
+      source,
+      [],
+      [],
+      [surfaceKnockout({ x: 20, y: 20, width: 40, height: 20 }, "#10b32f", 0, 3)]
+    );
+    const raw = await sharp(remainder).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const connectedBlend = (19 * width + 30) * 4;
+    const isolatedBlend = (17 * width + 30) * 4;
+    const exactBackgroundBand = (18 * width + 30) * 4;
+    const visibleSurface = (25 * width + 30) * 4;
+    const farBackground = (10 * width + 10) * 4;
+
+    expect(raw.data[visibleSurface + 3]).toBe(0);
+    expect(raw.data[connectedBlend + 3]).toBe(0);
+    expect(raw.data[isolatedBlend + 3]).toBe(255);
+    expect(raw.data[exactBackgroundBand + 3]).toBe(255);
+    expect(raw.data[farBackground + 3]).toBe(255);
+  });
+
+  it("builds explicit control surface knockout instructions from text owner metadata", () => {
+    const plan = buildPageRenderPlan({
+      pageId: "page_0001",
+      pageDirectory: "P1",
+      width: 200,
+      height: 120,
+      slices: [],
+      textLayers: [
+        testTextLayer("page_0001__text_0001", "预约", { x: 70, y: 40, width: 48, height: 20 }, {
+          textOwnerSurface: {
+            bbox: { x: 52, y: 30, width: 92, height: 38 },
+            fill: "#10b32f",
+            cornerRadius: 19,
+            reason: "filled_control_surface"
+          }
+        }),
+        testTextLayer("page_0001__text_0002", "价格", { x: 20, y: 84, width: 46, height: 18 }, {
+          textOwnerSurface: {
+            bbox: { x: 16, y: 80, width: 72, height: 26 },
+            fill: "#fefefe",
+            cornerRadius: 4,
+            reason: "filled_control_surface"
+          }
+        })
+      ]
+    });
+
+    expect(plan.layers.controlSurfaces).toHaveLength(1);
+    expect(plan.layers.controlSurfaces[0]).toMatchObject({
+      id: "page_0001__control_surface_0001",
+      sourceTextId: "page_0001__text_0001",
+      visibleBBox: { x: 52, y: 30, width: 92, height: 38 },
+      fill: "#10b32f",
+      cornerRadius: 19,
+      provenance: "ocr_owner_surface"
+    });
+    expect(plan.remainder.surfaceKnockouts).toEqual([{
+      visibleShape: {
+        kind: "rounded_rect",
+        bbox: { x: 52, y: 30, width: 92, height: 38 },
+        cornerRadius: 19
+      },
+      sourceOwnerRegion: {
+        kind: "owner_band",
+        pad: 3,
+        fill: "#10b32f",
+        backgroundSample: "outside_ring",
+        connectivity: "from_visible_shape",
+        provenance: "ocr_owner_surface"
+      },
+      provenance: "ocr_owner_surface"
+    }]);
+    expect(plan.remainder.textKnockouts).toEqual([
+      { x: 20, y: 84, width: 46, height: 18 }
+    ]);
+    expect(plan.layers.text[0].zIndex).toBeGreaterThan(plan.layers.controlSurfaces[0].zIndex);
   });
 
   it("uses tight knockout bounds instead of Pencil safe bounds on rounded buttons", async () => {
@@ -1334,6 +1517,202 @@ describe("pencil exporter", () => {
     expect(layer.textRenderBBox.height).toBeLessThan(surface.bbox.height);
     expect(layer.textRenderBBox.height).toBeLessThan(layer.safeBBox.height);
     expect(overlapArea(layer.knockoutBBox, surface.bbox)).toBe(layer.knockoutBBox.width * layer.knockoutBBox.height);
+  });
+
+  it("uses OCR text bounds when local foreground captures the whole filled button", async () => {
+    const width = 220;
+    const height = 100;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 255;
+      rgba[offset + 1] = 255;
+      rgba[offset + 2] = 255;
+      rgba[offset + 3] = 255;
+    }
+    const green: [number, number, number] = [16, 179, 47];
+    fillRawRect(rgba, width, { x: 46, y: 26, width: 128, height: 48 }, green);
+    fillRawRect(rgba, width, { x: 76, y: 40, width: 10, height: 22 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 98, y: 40, width: 10, height: 22 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 120, y: 40, width: 10, height: 22 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 142, y: 40, width: 10, height: 22 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 72, y: 49, width: 84, height: 5 }, [255, 255, 255]);
+    const imageBuffer = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const ocrBBox = { x: 72, y: 36, width: 86, height: 32 };
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "查看详情", bbox: ocrBBox, confidence: 99, wordCount: 1 },
+          bbox: { x: 46, y: 26, width: 128, height: 48 },
+          bboxSource: "local_foreground",
+          physicalBBox: { x: 46, y: 26, width: 128, height: 48 },
+          bboxMatchScore: 1
+        }]
+      }),
+      textStyleResolver: async ({ items }) => {
+        expect(items).toHaveLength(1);
+        expect(items[0].bbox).toEqual(ocrBBox);
+        expect(items[0].ownerSurface).toMatchObject({
+          fill: "#10b32f",
+          reason: "filled_control_surface"
+        });
+        return [{
+          fontSize: 25,
+          fontWeight: "500",
+          fontFamily: "PingFang SC",
+          color: "#ffffff",
+          lineHeight: 25,
+          textAlign: "center",
+          measured: { width: 100, height: 27 },
+          source: "psdlike"
+        }];
+      },
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "查看详情", bbox: ocrBBox, confidence: 99, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    const surface = layer.metadata.textOwnerSurface as { bbox: TestBox };
+    expect(layer.originalBBox).toEqual(ocrBBox);
+    expect(layer.metadata.textLayoutOwnerSurface).toMatchObject({
+      reason: "filled_control_surface"
+    });
+    expect(String(layer.metadata.bboxFallbackReason)).toContain("local_foreground_matched_owner_surface");
+    expect(layer.textRenderBBox.y).toBeGreaterThanOrEqual(surface.bbox.y);
+    expect(layer.textRenderBBox.y + layer.textRenderBBox.height).toBeLessThanOrEqual(surface.bbox.y + surface.bbox.height);
+  });
+
+  it("uses measured psdlike text style when the resolver returns one", async () => {
+    const width = 260;
+    const height = 110;
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      rgba[offset] = 255;
+      rgba[offset + 1] = 255;
+      rgba[offset + 2] = 255;
+      rgba[offset + 3] = 255;
+    }
+    const green: [number, number, number] = [14, 176, 48];
+    fillRawRect(rgba, width, { x: 8, y: 30, width: 234, height: 3 }, green);
+    fillRawRect(rgba, width, { x: 8, y: 74, width: 234, height: 3 }, green);
+    fillRawRect(rgba, width, { x: 238, y: 34, width: 3, height: 40 }, green);
+    fillRawRect(rgba, width, { x: 158, y: 24, width: 86, height: 58 }, green);
+    fillRawRect(rgba, width, { x: 184, y: 39, width: 9, height: 28 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 202, y: 39, width: 9, height: 28 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 178, y: 49, width: 42, height: 7 }, [255, 255, 255]);
+    const imageBuffer = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "搜索", bbox: { x: 174, y: 34, width: 58, height: 38 }, confidence: 99, wordCount: 1 },
+          bbox: { x: 150, y: 20, width: 104, height: 66 },
+          bboxSource: "m29_foreground",
+          physicalBBox: { x: 150, y: 20, width: 104, height: 66 },
+          bboxMatchScore: 0.9,
+          m29PrimitiveId: "prim_search_button_mixed"
+        }]
+      }),
+      textStyleResolver: async ({ items }) => {
+        expect(items).toHaveLength(1);
+        expect(items[0].bbox).toEqual({ x: 174, y: 34, width: 58, height: 38 });
+        expect(items[0].ownerSurface).toMatchObject({
+          fill: "#0eb030",
+          reason: "filled_control_surface"
+        });
+        return [{
+          fontSize: 31,
+          fontWeight: "500",
+          fontFamily: "PingFang SC",
+          color: "#fcfdfc",
+          lineHeight: 31,
+          textAlign: "center",
+          measured: { width: 62, height: 34 },
+          source: "psdlike"
+        }];
+      },
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "搜索", bbox: { x: 174, y: 34, width: 58, height: 38 }, confidence: 99, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    expect(layer.fontSize).toBe(31);
+    expect(layer.fontWeight).toBe("500");
+    expect(layer.color).toBe("#fcfdfc");
+    expect(layer.metadata.textStyleSource).toBe("psdlike");
+    expect(layer.metadata.textStyleMeasured).toEqual({ width: 62, height: 34 });
+  });
+
+  it("falls back to local font estimates when measured text style is unavailable", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 180,
+        height: 90,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 180,
+      height: 90,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "首页", bbox: { x: 40, y: 30, width: 30, height: 16 }, confidence: 92, wordCount: 1 },
+          bbox: { x: 40, y: 30, width: 30, height: 16 },
+          bboxSource: "ocr"
+        }]
+      }),
+      textStyleResolver: async () => null,
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "首页", bbox: { x: 40, y: 30, width: 30, height: 16 }, confidence: 92, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers).toHaveLength(1);
+    expect(reconstruction.layers[0].fontSize).toBeGreaterThan(8);
+    expect(reconstruction.layers[0].metadata.textStyleSource).toBe("fallback");
   });
 
   it.each([

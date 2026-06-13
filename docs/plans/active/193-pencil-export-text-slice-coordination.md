@@ -102,6 +102,21 @@ confirmed slice images
 
 This preserves colored rounded controls as editable-friendly shape surfaces, keeps editable text above the control surface, and still makes saved slice images the visible owner when text and slices overlap.
 
+The implementation now uses an explicit page render/ownership plan before
+Pencil materialization:
+
+```text
+TextReconstruction + saved slices
+-> PageRenderPlan
+-> remainder text knockouts + surface knockouts
+-> Pencil nodes in declared z-order
+```
+
+The plan builder does not rerun OCR, M29, or project loading. It only converts
+already-computed evidence into ownership instructions. `pencil-package` is now
+an executor for `SurfaceKnockout` instructions; it must not rediscover whether
+a region is a button/control.
+
 Set Slice Studio page frames to:
 
 ```text
@@ -309,6 +324,76 @@ Full export:
   assets: 532
   Pencil snapshot_layout(problemsOnly=true): No layout problems
   Visual screenshots checked: page_0006__frame, page_0010__frame, page_0011__frame
+```
+
+Plan-driven surface-knockout validation:
+
+```text
+Files:
+  server/render-plan.ts
+  server/render-plan-builder.ts
+
+Contract:
+  visible control surface bbox remains the Pencil rectangle bbox
+  surface knockout keeps a separate source-owner cleanup instruction
+  visible rounded shape is cleared from remainder
+  owner band clears only source-owned pixels for the control surface
+  text layers that generated a filled control surface do not also repaint text knockout pixels
+  confirmed slices remain final visible owners above editable text
+
+Real samples:
+  /private/tmp/slice-plan-p10/design.pen
+  /private/tmp/slice-plan-p11/design.pen
+
+Pixel audit:
+  P10 coloredSurfaceCount=5,totalSurviving=0
+  P11 coloredSurfaceCount=5,totalSurviving=0
+
+Pencil layout:
+  page_0010__frame: No layout problems
+  page_0011__frame: No layout problems
+```
+
+Root-cause correction after zoomed P10/P11 review:
+
+```text
+Observed symptom:
+  Green button caps showed small rectangular green protrusions above the vector
+  control surface in Pencil.
+
+Rejected diagnosis:
+  This was not caused by rembg/background-removal absence, OCR content failure,
+  or an original source button bbox larger than the exported control surface.
+
+Pixel evidence:
+  original P10 x=748,y=597: [254,254,254,255]
+  broken remainder x=748,y=597: [18,184,51,255]
+  fixed remainder x=748,y=597: [254,254,254,255]
+  fixed remainder true button interior x=760,y=600: [10,173,38,0]
+
+Actual root cause:
+  Text knockout ran before surface ownership cleanup and expanded the control
+  label knockout by a small pad. Because the label background estimate was the
+  green button fill, white pixels just outside the original button were treated
+  as foreground text and repainted green. Surface cleanup could not remove those
+  pixels because they were not source-owned green pixels; Slice Studio had
+  created them during materialization.
+
+Fix:
+  buildPageRenderPlan() omits textKnockouts for text layers that already emit a
+  non-background filled control surface. The vector control surface plus editable
+  text own that region; there is no second text-background repaint pass for the
+  same label.
+
+Validation:
+  pnpm exec vitest run tests/pencil-exporter.test.ts
+  pnpm run typecheck
+  pnpm run check
+  pnpm run build
+  git diff --check
+  current-code page exports: page_0010 and page_0011
+  full export: project_mqc1wpkd_123c88b0, 28 frames, 532 assets
+  Pencil screenshots: page_0010__frame and page_0011__frame
 ```
 
 Nested-control final validation after backend restart:

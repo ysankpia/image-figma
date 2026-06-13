@@ -1,0 +1,22 @@
+[project]
+name = "psdlike-text-style"
+version = "0.1.0"
+description = "Focused Slice Studio text style measurement service"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "numpy>=2.0.0",
+    "pillow>=11.0.0",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.32.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

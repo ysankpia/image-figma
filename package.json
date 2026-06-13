@@ -5,9 +5,10 @@
   "type": "module",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "concurrently \"bun run dev:api\" \"bun run dev:web\"",
+    "dev": "concurrently \"bun run dev:text-style\" \"bun run dev:api\" \"bun run dev:web\"",
     "dev:web": "next dev --hostname 127.0.0.1 --port 3010",
     "dev:api": "bun --watch server/index.ts",
+    "dev:text-style": "cd services/psdlike-text-style && uv run uvicorn app.main:app --host 127.0.0.1 --port 4120",
     "server": "bun server/index.ts",
     "build": "next build",
     "typecheck": "tsc -p tsconfig.json --noEmit",

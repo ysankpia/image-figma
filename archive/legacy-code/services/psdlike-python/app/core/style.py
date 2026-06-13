@@ -12,6 +12,14 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from .colors import (
+    color_distance,
+    color_hex,
+    dominant_cluster_color,
+    dominant_cluster_stats,
+)
+from .schema import BBox, Candidate, clamp_box
+
 # Mechanical migration from PSD-like V1 oracle. Keep behavior changes out of this stage.
 
 
@@ -346,6 +354,7 @@ def measure_text_pixels(text: str, font_size: int) -> dict[str, int]:
 
 @lru_cache(maxsize=128)
 def cached_preview_font(size: int) -> ImageFont.ImageFont:
+    from .previews import load_preview_font
     return load_preview_font(size)
 
 

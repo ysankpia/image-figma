@@ -12,6 +12,8 @@ import {
   type PencilSlicePlacementManifest
 } from "./pencil-package";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
+import { buildPageRenderPlan } from "./render-plan-builder";
+import type { ControlSurfaceLayer } from "./render-plan";
 import { cropSliceToPng } from "./shape-cutout";
 import { runOcr } from "./text-ocr";
 import { reconstructTextLayers, type TextLayer, type TextReconstruction } from "./text-reconstruction";
@@ -20,14 +22,6 @@ import type { BBox, ProjectDetail } from "../shared/types";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
 const penVersion = "2.11";
-
-type ExportControlSurface = {
-  key: string;
-  bbox: BBox;
-  fill: string;
-  cornerRadius: number;
-  sourceTextId: string;
-};
 
 export async function exportPencilProject(projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
   const detail = getProjectDetail(projectId);
@@ -142,6 +136,14 @@ async function buildPencilDocument(
       slices: page.slices,
       ocr: await runOcr(originalBuffer)
     });
+    const renderPlan = buildPageRenderPlan({
+      pageId: page.id,
+      pageDirectory,
+      width: page.width,
+      height: page.height,
+      textLayers: textReconstruction.layers,
+      slices: page.slices
+    });
     textByPageId.set(page.id, textManifest(textReconstruction));
     files.push({ name: originalPath, data: originalBuffer });
     files.push({
@@ -149,7 +151,8 @@ async function buildPencilDocument(
       data: await createRemainderPng(
         originalBuffer,
         page.slices.map((slice, sliceIndex) => ({ ...slice, png: slicePngs[sliceIndex] })),
-        textReconstruction.layers.map((layer) => layer.knockoutBBox)
+        renderPlan.remainder.textKnockouts,
+        renderPlan.remainder.surfaceKnockouts
       )
     });
 
@@ -158,7 +161,7 @@ async function buildPencilDocument(
         id: `${page.id}__remainder`,
         name: `${pageDirectory} remainder`,
         url: `./${remainderPath}`,
-        bbox: { x: 0, y: 0, width: page.width, height: page.height },
+        bbox: renderPlan.layers.remainder.visibleBBox,
         metadata: {
           type: "slice_studio_remainder",
           pageId: page.id,
@@ -168,21 +171,19 @@ async function buildPencilDocument(
       })
     ];
 
-    const controlSurfaces = controlSurfacesFromTextLayers(textReconstruction.layers);
-    for (const [surfaceIndex, surface] of controlSurfaces.entries()) {
+    for (const [surfaceIndex, surface] of renderPlan.layers.controlSurfaces.entries()) {
       children.push(controlSurfaceNode({
-        pageId: page.id,
         index: surfaceIndex,
         surface,
-        z: surfaceIndex + 1
+        z: surface.zIndex
       }));
     }
 
-    for (const [textIndex, layer] of textReconstruction.layers.entries()) {
+    for (const [textIndex, textLayer] of renderPlan.layers.text.entries()) {
       children.push(textNode({
-        layer,
-        name: `text_${String(textIndex + 1).padStart(4, "0")} ${layer.text}`,
-        z: controlSurfaces.length + textIndex + 1
+        layer: textLayer.layer,
+        name: `text_${String(textIndex + 1).padStart(4, "0")} ${textLayer.layer.text}`,
+        z: textLayer.zIndex
       }));
     }
     for (const [sliceIndex, slice] of page.slices.entries()) {
@@ -209,7 +210,7 @@ async function buildPencilDocument(
           originalBBox: { ...slice.bbox },
           visibleBBox: { ...pencilSlice.placement },
           alphaTrim: pencilSlice.alphaTrim,
-          z: textReconstruction.layers.length + sliceIndex + 1
+          z: renderPlan.layers.slices[sliceIndex]?.zIndex ?? textReconstruction.layers.length + sliceIndex + 1
         }
       }));
     }
@@ -248,68 +249,24 @@ async function buildPencilDocument(
   };
 }
 
-function controlSurfacesFromTextLayers(layers: TextLayer[]): ExportControlSurface[] {
-  const surfaces = new Map<string, ExportControlSurface>();
-  for (const layer of layers) {
-    const surface = parseControlSurface(layer);
-    if (!surface) continue;
-    if (surfaceIsBackgroundLike(surface.fill)) continue;
-    if (!surfaces.has(surface.key)) surfaces.set(surface.key, surface);
-  }
-  return [...surfaces.values()];
-}
-
-function parseControlSurface(layer: TextLayer): ExportControlSurface | null {
-  const raw = layer.metadata.textLayoutOwnerSurface || layer.metadata.textOwnerSurface;
-  if (!raw || typeof raw !== "object") return null;
-  const candidate = raw as { bbox?: unknown; fill?: unknown; cornerRadius?: unknown; reason?: unknown };
-  if (candidate.reason !== "filled_control_surface") return null;
-  if (!candidate.bbox || typeof candidate.bbox !== "object" || typeof candidate.fill !== "string") return null;
-  const bbox = candidate.bbox as Partial<BBox>;
-  if (
-    typeof bbox.x !== "number"
-    || typeof bbox.y !== "number"
-    || typeof bbox.width !== "number"
-    || typeof bbox.height !== "number"
-    || bbox.width <= 0
-    || bbox.height <= 0
-  ) return null;
-  const rounded = roundBBox(bbox as BBox);
-  const maxRadius = Math.floor(Math.min(rounded.width, rounded.height) / 2);
-  const cornerRadius = typeof candidate.cornerRadius === "number"
-    ? Math.max(0, Math.round(candidate.cornerRadius))
-    : maxRadius;
-  const fill = candidate.fill;
+function controlSurfaceNode(input: { index: number; surface: ControlSurfaceLayer; z: number }): PencilNode {
   return {
-    key: `${rounded.x}:${rounded.y}:${rounded.width}:${rounded.height}:${fill}`,
-    bbox: rounded,
-    fill,
-    cornerRadius: Math.min(cornerRadius, maxRadius),
-    sourceTextId: layer.id
-  };
-}
-
-function surfaceIsBackgroundLike(fill: string): boolean {
-  const rgb = rgbFromHex(fill);
-  if (!rgb) return true;
-  return rgb.r >= 245 && rgb.g >= 245 && rgb.b >= 245;
-}
-
-function controlSurfaceNode(input: { pageId: string; index: number; surface: ExportControlSurface; z: number }): PencilNode {
-  return {
-    id: `${input.pageId}__control_surface_${String(input.index + 1).padStart(4, "0")}`,
+    id: input.surface.id,
     type: "rectangle",
     name: `control_surface_${String(input.index + 1).padStart(4, "0")}`,
-    x: Math.round(input.surface.bbox.x),
-    y: Math.round(input.surface.bbox.y),
-    width: Math.round(input.surface.bbox.width),
-    height: Math.round(input.surface.bbox.height),
+    x: Math.round(input.surface.visibleBBox.x),
+    y: Math.round(input.surface.visibleBBox.y),
+    width: Math.round(input.surface.visibleBBox.width),
+    height: Math.round(input.surface.visibleBBox.height),
     fill: input.surface.fill,
     cornerRadius: input.surface.cornerRadius,
     metadata: {
       type: "slice_studio_control_surface",
-      pageId: input.pageId,
+      pageId: input.surface.pageId,
       sourceTextId: input.surface.sourceTextId,
+      visibleBBox: input.surface.visibleBBox,
+      knockout: input.surface.knockout,
+      provenance: input.surface.provenance,
       z: input.z
     }
   };
@@ -368,17 +325,6 @@ function textNode(input: { layer: TextLayer; name: string; z: number }): PencilN
   };
 }
 
-function rgbFromHex(value: string): { r: number; g: number; b: number } | null {
-  if (!value.startsWith("#")) return null;
-  const hex = value.slice(1);
-  if (!/^[0-9a-f]{6}$/iu.test(hex)) return null;
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16)
-  };
-}
-
 function textManifest(reconstruction: TextReconstruction): PencilPageTextManifest {
   return {
     ocr: reconstruction.ocr,
@@ -395,6 +341,8 @@ function textManifest(reconstruction: TextReconstruction): PencilPageTextManifes
       fontWeight: layer.fontWeight,
       color: layer.color,
       confidence: layer.confidence,
+      textStyleSource: layer.metadata.textStyleSource,
+      textStyleMeasured: layer.metadata.textStyleMeasured,
       textOwnerSurface: layer.metadata.textOwnerSurface,
       textLayoutOwnerSurface: layer.metadata.textLayoutOwnerSurface
     }))

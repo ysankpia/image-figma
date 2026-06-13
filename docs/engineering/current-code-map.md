@@ -85,6 +85,8 @@ server/pencil-package.ts    Pencil package assembly helpers
 server/shape-cutout.ts      rect/subject/card crop output
 server/text-ocr.ts          OCR provider integration
 server/text-reconstruction.ts editable Pencil text nodes
+server/render-plan.ts       Pencil export layer ownership contract
+server/render-plan-builder.ts derives page render/ownership plan from saved slices and reconstructed text
 server/m29-text-locator.ts  OCR line to physical bbox matching
 server/m29-physical-evidence/ TypeScript M29 physical evidence kernel
 server/ai-slice-boxes/      AI tile/overview bbox proposal

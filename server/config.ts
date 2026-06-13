@@ -23,6 +23,10 @@ export const textBBoxSource = process.env.SLICE_STUDIO_TEXT_BBOX_SOURCE || "m29_
 export type PhysicalEvidenceProvider = "ts_m29_physical_evidence" | "go_m29extract" | "ocr";
 export const physicalEvidenceProvider = normalizePhysicalEvidenceProvider(process.env.SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER);
 export const m29extractPath = path.resolve(process.env.SLICE_STUDIO_M29EXTRACT_PATH || path.join(process.cwd(), "archive/legacy-code/services/backend-go/bin/m29extract"));
+export type TextStyleProvider = "psdlike" | "fallback";
+export const textStyleProvider = normalizeTextStyleProvider(process.env.SLICE_STUDIO_TEXT_STYLE_PROVIDER);
+export const textStyleBaseUrl = trimTrailingSlash(process.env.SLICE_STUDIO_TEXT_STYLE_BASE_URL || "http://127.0.0.1:4120");
+export const textStyleTimeoutSeconds = normalizeNumber(process.env.SLICE_STUDIO_TEXT_STYLE_TIMEOUT_SECONDS, 8);
 export type AiSliceProvider = "openai_responses" | "disabled";
 export const aiSliceProvider = normalizeAiSliceProvider(process.env.SLICE_STUDIO_AI_SLICE_PROVIDER);
 export const aiSliceBaseUrl = trimTrailingSlash(process.env.SLICE_STUDIO_AI_SLICE_BASE_URL || "https://api.openai.com");
@@ -67,6 +71,13 @@ function stripEnvQuotes(value: string): string {
 function normalizePhysicalEvidenceProvider(value: string | undefined): PhysicalEvidenceProvider {
   if (value === "go_m29extract" || value === "ocr" || value === "ts_m29_physical_evidence") return value;
   return "ts_m29_physical_evidence";
+}
+
+function normalizeTextStyleProvider(value: string | undefined): TextStyleProvider {
+  if (value === "fallback" || value === "disabled" || value === "off") return "fallback";
+  if (value === "psdlike") return "psdlike";
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) return "fallback";
+  return "psdlike";
 }
 
 function normalizeAiSliceProvider(value: string | undefined): AiSliceProvider {

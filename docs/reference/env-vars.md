@@ -34,13 +34,16 @@
 | `SLICE_STUDIO_TEXT_BBOX_SOURCE` | editable text bbox 来源；`m29_ocr_hybrid` 或 `ocr` | `m29_ocr_hybrid` | 否 |
 | `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` | text physical evidence provider；`ts_m29_physical_evidence`、`go_m29extract`、`ocr` | `ts_m29_physical_evidence` | 否 |
 | `SLICE_STUDIO_M29EXTRACT_PATH` | 显式使用 Go fallback 时的 `m29extract` 路径 | `archive/legacy-code/services/backend-go/bin/m29extract` | 仅 Go fallback 需要 |
+| `SLICE_STUDIO_TEXT_STYLE_PROVIDER` | editable text style provider；`psdlike` 或 `fallback` | 正常运行 `psdlike`，测试环境 `fallback` | 否 |
+| `SLICE_STUDIO_TEXT_STYLE_BASE_URL` | PSD-like text-style service base URL | `http://127.0.0.1:4120` | 使用 `psdlike` 时需要 |
+| `SLICE_STUDIO_TEXT_STYLE_TIMEOUT_SECONDS` | text-style service 单页 batch 超时秒数 | `8` | 否 |
 | `BAIDU_PADDLE_OCR_TOKEN` | 百度 AI Studio OCR bearer token | 无 | 仅 `baidu_ppocrv5` 需要 |
 | `BAIDU_PADDLE_OCR_JOB_URL` | 百度 AI Studio OCR jobs endpoint | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` | 否 |
 | `BAIDU_PADDLE_OCR_MODEL` | 百度 OCR 模型 | `PP-OCRv5` | 否 |
 | `BAIDU_PADDLE_OCR_POLL_INTERVAL_SECONDS` | OCR 轮询间隔秒数 | `5` | 否 |
 | `BAIDU_PADDLE_OCR_TIMEOUT_SECONDS` | OCR 单任务超时秒数 | `120` | 否 |
 
-OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bbox，不创建 visible layer。默认 TS provider 不依赖 Go binary；`go_m29extract` 只作为显式 reference/fallback。
+OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bbox，不创建 visible layer。默认 TS provider 不依赖 Go binary；`go_m29extract` 只作为显式 reference/fallback。PSD-like text-style service 只测量 editable text 的字体大小、字重、颜色和对齐；它不决定文字是否可编辑、不决定 slice ownership、不生成 Pencil 图层。服务不可用时导出回落到 TS 本地估算并继续完成。
 
 ## Slice Studio AI Slice Boxes
 
@@ -88,6 +91,9 @@ SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
 SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence
+SLICE_STUDIO_TEXT_STYLE_PROVIDER=psdlike
+SLICE_STUDIO_TEXT_STYLE_BASE_URL=http://127.0.0.1:4120
+SLICE_STUDIO_TEXT_STYLE_TIMEOUT_SECONDS=8
 SLICE_STUDIO_AI_SLICE_PROVIDER=openai_responses
 SLICE_STUDIO_AI_SLICE_BASE_URL=https://api.openai.com
 SLICE_STUDIO_AI_SLICE_API_KEY=

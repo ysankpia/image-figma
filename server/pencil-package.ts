@@ -4,6 +4,7 @@ import type { BBox, CutMode, ProjectDetail } from "../shared/types";
 import { normalizeDefaultSliceNames } from "../shared/slice-names";
 import { cropSliceToPng } from "./shape-cutout";
 import type { TextReconstruction } from "./text-reconstruction";
+import type { SurfaceKnockout } from "./render-plan";
 
 const pageFrameGap = 160;
 
@@ -22,6 +23,8 @@ export type PencilPageTextManifest = {
     fontWeight: string;
     color: string;
     confidence: number;
+    textStyleSource?: unknown;
+    textStyleMeasured?: unknown;
     textOwnerSurface?: unknown;
     textLayoutOwnerSurface?: unknown;
   }>;
@@ -42,7 +45,12 @@ type RemainderSlice = {
   png?: Buffer;
 };
 
-export async function createRemainderPng(originalBuffer: Buffer, slices: RemainderSlice[], textKnockouts: BBox[] = []): Promise<Buffer> {
+export async function createRemainderPng(
+  originalBuffer: Buffer,
+  slices: RemainderSlice[],
+  textKnockouts: BBox[] = [],
+  surfaceKnockouts: SurfaceKnockout[] = []
+): Promise<Buffer> {
   const original = await sharp(originalBuffer)
     .ensureAlpha()
     .raw()
@@ -50,6 +58,7 @@ export async function createRemainderPng(originalBuffer: Buffer, slices: Remaind
   const data = Buffer.from(original.data);
   const sourceData = Buffer.from(original.data);
   for (const bbox of textKnockouts) paintTextForeground(data, sourceData, original.info.width, original.info.height, bbox);
+  for (const knockout of surfaceKnockouts) clearSurfaceOwnership(data, sourceData, original.info.width, original.info.height, knockout);
   for (const slice of slices) {
     if (slice.cutMode === "subject" || slice.cutMode === "card") {
       await clearAlphaBySliceMask(data, original.info.width, original.info.height, originalBuffer, slice);
@@ -253,6 +262,163 @@ function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: numb
   }
 }
 
+function clearSurfaceOwnership(
+  targetData: Buffer,
+  sourceData: Buffer,
+  width: number,
+  height: number,
+  knockout: SurfaceKnockout
+): void {
+  const shape = knockout.visibleShape;
+  const region = knockout.sourceOwnerRegion;
+  const pad = region.pad;
+  const cleanupBox = roundedBox({
+    x: shape.bbox.x - pad,
+    y: shape.bbox.y - pad,
+    width: shape.bbox.width + pad * 2,
+    height: shape.bbox.height + pad * 2
+  }, width, height);
+  const visibleBox = roundedBox(shape.bbox, width, height);
+  if (cleanupBox.width <= 0 || cleanupBox.height <= 0 || visibleBox.width <= 0 || visibleBox.height <= 0) return;
+  const radius = clamp(
+    Math.round(shape.cornerRadius),
+    0,
+    Math.floor(Math.min(visibleBox.width, visibleBox.height) / 2)
+  );
+  const paddedRadius = clamp(radius + pad, 0, Math.floor(Math.min(cleanupBox.width, cleanupBox.height) / 2));
+  const fill = rgbFromHex(region.fill);
+  const background = fill
+    ? estimateOwnerBandBackground(sourceData, width, height, shape.bbox, pad)
+    : null;
+  const candidate = new Uint8Array(cleanupBox.width * cleanupBox.height);
+  const owned = new Uint8Array(cleanupBox.width * cleanupBox.height);
+  const queue: number[] = [];
+  for (let y = cleanupBox.top; y < cleanupBox.top + cleanupBox.height; y += 1) {
+    const row = y * width;
+    for (let x = cleanupBox.left; x < cleanupBox.left + cleanupBox.width; x += 1) {
+      const offset = (row + x) * 4;
+      if (sourceData[offset + 3] < 10) continue;
+      const localIndex = (y - cleanupBox.top) * cleanupBox.width + (x - cleanupBox.left);
+      const insideVisibleBox = x >= visibleBox.left
+        && x < visibleBox.left + visibleBox.width
+        && y >= visibleBox.top
+        && y < visibleBox.top + visibleBox.height;
+      const insideVisibleSurface = insideVisibleBox && pointInsideRoundedRect(
+        x - visibleBox.left + 0.5,
+        y - visibleBox.top + 0.5,
+        visibleBox.width,
+        visibleBox.height,
+        radius
+      );
+      if (insideVisibleSurface) {
+        owned[localIndex] = 1;
+        queue.push(localIndex);
+        targetData[offset + 3] = 0;
+        continue;
+      }
+      if (!fill || !background) continue;
+      const insidePaddedSurface = pointInsideRoundedRect(
+        x - cleanupBox.left + 0.5,
+        y - cleanupBox.top + 0.5,
+        cleanupBox.width,
+        cleanupBox.height,
+        paddedRadius
+      );
+      if (!insidePaddedSurface) continue;
+      const sourcePixel = { r: sourceData[offset], g: sourceData[offset + 1], b: sourceData[offset + 2] };
+      if (isOwnerBandPixel(sourcePixel, fill, background)) candidate[localIndex] = 1;
+    }
+  }
+
+  while (queue.length) {
+    const current = queue.shift() as number;
+    const localX = current % cleanupBox.width;
+    const localY = Math.floor(current / cleanupBox.width);
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const nextX = localX + dx;
+        const nextY = localY + dy;
+        if (nextX < 0 || nextY < 0 || nextX >= cleanupBox.width || nextY >= cleanupBox.height) continue;
+        const nextIndex = nextY * cleanupBox.width + nextX;
+        if (owned[nextIndex] || !candidate[nextIndex]) continue;
+        owned[nextIndex] = 1;
+        const targetOffset = ((cleanupBox.top + nextY) * width + cleanupBox.left + nextX) * 4;
+        targetData[targetOffset + 3] = 0;
+        queue.push(nextIndex);
+      }
+    }
+  }
+}
+
+function estimateOwnerBandBackground(data: Buffer, width: number, height: number, bbox: BBox, pad: number): Rgb {
+  const ring = 8;
+  const innerLeft = clamp(Math.floor(bbox.x - pad), 0, width);
+  const innerTop = clamp(Math.floor(bbox.y - pad), 0, height);
+  const innerRight = clamp(Math.ceil(bbox.x + bbox.width + pad), innerLeft, width);
+  const innerBottom = clamp(Math.ceil(bbox.y + bbox.height + pad), innerTop, height);
+  const outerLeft = clamp(innerLeft - ring, 0, width);
+  const outerTop = clamp(innerTop - ring, 0, height);
+  const outerRight = clamp(innerRight + ring, outerLeft, width);
+  const outerBottom = clamp(innerBottom + ring, outerTop, height);
+  const samples: Rgb[] = [];
+  for (let y = outerTop; y < outerBottom; y += 1) {
+    const row = y * width;
+    for (let x = outerLeft; x < outerRight; x += 1) {
+      const insideOwnerSearch = x >= innerLeft && x < innerRight && y >= innerTop && y < innerBottom;
+      if (insideOwnerSearch) continue;
+      const offset = (row + x) * 4;
+      if (data[offset + 3] < 200) continue;
+      samples.push({ r: data[offset], g: data[offset + 1], b: data[offset + 2] });
+    }
+  }
+  if (!samples.length) return { r: 255, g: 255, b: 255 };
+  return backgroundEstimate(samples).fill;
+}
+
+function isOwnerBandPixel(pixel: Rgb, fill: Rgb, background: Rgb): boolean {
+  const backgroundDistance = colorDistance(pixel, background);
+  if (backgroundDistance <= 6) return false;
+  const fillBackgroundDistance = colorDistance(fill, background);
+  if (fillBackgroundDistance <= 1) return colorDistance(pixel, fill) <= 18;
+
+  const fillToBackground = {
+    r: background.r - fill.r,
+    g: background.g - fill.g,
+    b: background.b - fill.b
+  };
+  const fillToPixel = {
+    r: pixel.r - fill.r,
+    g: pixel.g - fill.g,
+    b: pixel.b - fill.b
+  };
+  const lengthSquared = fillBackgroundDistance * fillBackgroundDistance;
+  const t = (
+    fillToPixel.r * fillToBackground.r
+    + fillToPixel.g * fillToBackground.g
+    + fillToPixel.b * fillToBackground.b
+  ) / lengthSquared;
+  if (t < -0.1 || t > 1.08) return false;
+  const projected = {
+    r: fill.r + fillToBackground.r * t,
+    g: fill.g + fillToBackground.g * t,
+    b: fill.b + fillToBackground.b * t
+  };
+  const blendLineTolerance = clamp(fillBackgroundDistance * 0.08, 10, 34);
+  return colorDistance(pixel, projected) <= blendLineTolerance;
+}
+
+function pointInsideRoundedRect(localX: number, localY: number, width: number, height: number, radius: number): boolean {
+  if (radius <= 0) return true;
+  if (localX >= radius && localX <= width - radius) return true;
+  if (localY >= radius && localY <= height - radius) return true;
+  const centerX = localX < radius ? radius : width - radius;
+  const centerY = localY < radius ? radius : height - radius;
+  const dx = localX - centerX;
+  const dy = localY - centerY;
+  return dx * dx + dy * dy <= radius * radius + 0.75;
+}
+
 function estimateBackgroundColor(data: Buffer, width: number, height: number, bbox: BBox): BackgroundEstimate {
   const local = sampleDominantInteriorColor(data, width, height, bbox);
   if (local) return local;
@@ -327,6 +493,12 @@ function isForegroundTextPixel(pixel: Rgb, background: BackgroundEstimate): bool
   const distance = colorDistance(pixel, background.fill);
   if (distance > background.tolerance) return true;
   const lumaDelta = Math.abs(luma(pixel) - luma(background.fill));
+  const channels = [background.fill.r, background.fill.g, background.fill.b];
+  const chroma = Math.max(...channels) - Math.min(...channels);
+  if (chroma <= 28) {
+    const antialiasTolerance = Math.max(8, Math.min(18, background.tolerance * 0.45));
+    return distance >= antialiasTolerance && lumaDelta >= antialiasTolerance;
+  }
   return lumaDelta > background.tolerance * 0.75;
 }
 
@@ -336,6 +508,17 @@ function colorDistance(a: Rgb, b: Rgb): number {
     + ((a.g - b.g) ** 2)
     + ((a.b - b.b) ** 2)
   );
+}
+
+function rgbFromHex(value: string): Rgb | null {
+  if (!value.startsWith("#")) return null;
+  const hex = value.slice(1);
+  if (!/^[0-9a-f]{6}$/iu.test(hex)) return null;
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16)
+  };
 }
 
 function luma(color: Rgb): number {

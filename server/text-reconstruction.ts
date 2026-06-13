@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import type { BBox, SliceRecord } from "../shared/types";
 import { locateTextLinesWithM29, type LocatedTextLine, type TextLocationResult } from "./m29-text-locator";
+import { fetchTextStyleBatch, type TextStyleBatchItem, type TextStyleBatchResult } from "./psdlike-text-style";
 import type { OcrLine, OcrResult } from "./text-ocr";
 
 export type TextLayer = {
@@ -58,6 +59,7 @@ type ReconstructOptions = {
   slices: SliceRecord[];
   ocr: OcrResult;
   locator?: (input: { imageBuffer: Buffer; width: number; height: number; ocr: OcrResult }) => TextLocationResult | Promise<TextLocationResult>;
+  textStyleResolver?: TextStyleResolver;
 };
 
 const fontFamily = "PingFang SC";
@@ -65,6 +67,19 @@ const minTextHeight = 5;
 const minLineConfidence = 70;
 const minRemainingRatio = 0.55;
 const minCoverageOverlapRatio = 0.25;
+
+type TextStyleResolver = (input: {
+  imageBuffer: Buffer;
+  items: TextStyleBatchItem[];
+}) => Promise<Array<TextStyleBatchResult | null> | null>;
+
+type EditableTextCandidate = {
+  located: LocatedTextLine;
+  ownershipReason: string;
+  ownerSurface?: TextOwnerSurface;
+  layoutOwnerSurface?: TextOwnerSurface;
+  fallbackColor: string;
+};
 
 export async function reconstructTextLayers(options: ReconstructOptions): Promise<TextReconstruction> {
   const layers: TextLayer[] = [];
@@ -88,24 +103,51 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
       blockers,
       { refineOcrFallback: canUseLocalForeground }
     ));
+    const editableCandidates: EditableTextCandidate[] = [];
     for (const located of locatedLines) {
       const ownership = classifyTextOwnership(located, options.width, blockers);
       decisions.push(ownership);
       if (ownership.decision !== "editable_text") continue;
       const ownerSurface = detectTextOwnerSurface(raw.data, raw.info.width, raw.info.height, located);
-      const layoutOwnerSurface = ownerSurface && located.bboxSource !== "local_foreground" && canUseOwnerSurfaceForLayout(ownerSurface, located.line.bbox)
+      const localForegroundIsOwnerSurface = ownerSurface
+        && located.bboxSource === "local_foreground"
+        && localForegroundLooksLikeOwnerSurface(located.bbox, ownerSurface.bbox);
+      const textLocated = localForegroundIsOwnerSurface
+        ? {
+            ...located,
+            bbox: { ...located.line.bbox },
+            bboxSource: "ocr" as const,
+            physicalBBox: located.physicalBBox || located.bbox,
+            bboxFallbackReason: appendReason(located.bboxFallbackReason, "local_foreground_matched_owner_surface")
+          }
+        : located;
+      const layoutOwnerSurface = ownerSurface
+        && (located.bboxSource !== "local_foreground" || localForegroundIsOwnerSurface)
+        && canUseOwnerSurfaceForLayout(ownerSurface, textLocated.line.bbox)
         ? ownerSurface
         : undefined;
+      editableCandidates.push({
+        located: textLocated,
+        ownershipReason: ownership.reason,
+        ownerSurface,
+        layoutOwnerSurface,
+        fallbackColor: sampleTextColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface)
+      });
+    }
+
+    const measuredStyles = await resolveTextStyles(options, editableCandidates);
+    for (const [candidateIndex, candidate] of editableCandidates.entries()) {
       layers.push(makeTextLayer({
         index: layers.length,
-        located,
+        located: candidate.located,
         pageId: options.pageId,
         pageWidth: options.width,
         pageHeight: options.height,
-        color: sampleTextColor(raw.data, raw.info.width, raw.info.height, located.line.bbox, ownerSurface),
-        ownershipReason: ownership.reason,
-        ownerSurface,
-        layoutOwnerSurface
+        color: candidate.fallbackColor,
+        ownershipReason: candidate.ownershipReason,
+        ownerSurface: candidate.ownerSurface,
+        layoutOwnerSurface: candidate.layoutOwnerSurface,
+        textStyle: measuredStyles?.[candidateIndex] || undefined
       }));
     }
     harmonizeTextRows(layers, options.width, options.height);
@@ -127,6 +169,30 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
     },
     layers
   };
+}
+
+async function resolveTextStyles(
+  options: ReconstructOptions,
+  candidates: EditableTextCandidate[]
+): Promise<Array<TextStyleBatchResult | null> | null> {
+  if (!candidates.length) return [];
+  const items = candidates.map((candidate) => ({
+    text: candidate.located.line.text.trim(),
+    bbox: styleMeasurementBBox(candidate.located, candidate.layoutOwnerSurface),
+    ownerSurface: candidate.layoutOwnerSurface ? {
+      bbox: candidate.layoutOwnerSurface.bbox,
+      fill: candidate.layoutOwnerSurface.fill,
+      reason: candidate.layoutOwnerSurface.reason
+    } : null
+  }));
+  const resolver = options.textStyleResolver || ((input: { imageBuffer: Buffer; items: TextStyleBatchItem[] }) => fetchTextStyleBatch(input.imageBuffer, input.items));
+  return resolver({ imageBuffer: options.imageBuffer, items });
+}
+
+function styleMeasurementBBox(located: LocatedTextLine, layoutOwnerSurface?: TextOwnerSurface): BBox {
+  if (layoutOwnerSurface) return { ...located.line.bbox };
+  if (located.bboxSource === "m29_foreground" || located.bboxSource === "local_foreground") return { ...located.bbox };
+  return { ...located.line.bbox };
 }
 
 export function classifyTextOwnership(
@@ -166,12 +232,13 @@ function makeTextLayer(input: {
   ownershipReason: string;
   ownerSurface?: TextOwnerSurface;
   layoutOwnerSurface?: TextOwnerSurface;
+  textStyle?: TextStyleBatchResult;
 }): TextLayer {
   const line = input.located.line;
   const script = scriptForText(line.text);
   const isPhysicalBBox = input.located.bboxSource === "m29_foreground" || input.located.bboxSource === "local_foreground";
   const renderSourceBBox = isPhysicalBBox ? { ...input.located.bbox } : { ...line.bbox };
-  const fontSize = fitFontSize(line.text, renderSourceBBox, input.layoutOwnerSurface, isPhysicalBBox);
+  const fontSize = input.textStyle?.fontSize ?? fitFontSize(line.text, renderSourceBBox, input.layoutOwnerSurface, isPhysicalBBox);
   const placementBBox = input.layoutOwnerSurface
     ? ownerAwareTextBBox(line.text, renderSourceBBox, input.layoutOwnerSurface.bbox, fontSize, script, input.pageWidth, input.pageHeight)
     : renderSourceBBox;
@@ -187,6 +254,9 @@ function makeTextLayer(input: {
       ? { ...input.located.bbox }
       : undefined
   );
+  const layerFontFamily = input.textStyle?.fontFamily || fontFamily;
+  const layerFontWeight = input.textStyle?.fontWeight ?? fontWeight;
+  const layerColor = input.textStyle?.color || input.color;
   return {
     id: `${input.pageId}__text_${String(input.index + 1).padStart(4, "0")}`,
     text: line.text.trim(),
@@ -196,10 +266,10 @@ function makeTextLayer(input: {
     knockoutBBox,
     originalBBox: renderSourceBBox,
     fontSize,
-    fontFamily,
-    fontWeight,
+    fontFamily: layerFontFamily,
+    fontWeight: layerFontWeight,
     lineHeight: 1,
-    color: input.color,
+    color: layerColor,
     confidence: line.confidence,
     metadata: {
       type: "slice_studio_editable_text",
@@ -225,6 +295,10 @@ function makeTextLayer(input: {
       textOwnershipPolicy: "slice_studio_text_ownership.v1",
       textOwnershipDecision: "editable_text",
       textOwnershipReason: input.ownershipReason,
+      textStyleSource: input.textStyle?.source || "fallback",
+      textStyleMeasured: input.textStyle ? { ...input.textStyle.measured } : undefined,
+      textStyleLineHeight: input.textStyle?.lineHeight,
+      textStyleTextAlign: input.textStyle?.textAlign,
       textOwnerSurface: input.ownerSurface ? {
         bbox: input.ownerSurface.bbox,
         fill: input.ownerSurface.fill,
@@ -267,6 +341,25 @@ function canUseOwnerSurfaceForLayout(ownerSurface: TextOwnerSurface, sourceBBox:
   if (ownerSurface.bbox.height < sourceBBox.height * 0.92) return false;
   if (ownerSurface.bbox.width > sourceBBox.width * 8 && ownerSurface.bbox.height > sourceBBox.height * 3.4) return false;
   return true;
+}
+
+function localForegroundLooksLikeOwnerSurface(localBBox: BBox, ownerBBox: BBox): boolean {
+  const localArea = localBBox.width * localBBox.height;
+  const ownerArea = ownerBBox.width * ownerBBox.height;
+  if (localArea <= 0 || ownerArea <= 0) return false;
+  const overlap = intersectionArea(localBBox, ownerBBox);
+  const localCoverage = overlap / localArea;
+  const ownerCoverage = overlap / ownerArea;
+  const widthRatio = localBBox.width / Math.max(1, ownerBBox.width);
+  const heightRatio = localBBox.height / Math.max(1, ownerBBox.height);
+  return localCoverage >= 0.84
+    && ownerCoverage >= 0.54
+    && widthRatio >= 0.82
+    && heightRatio >= 0.54;
+}
+
+function appendReason(current: string | undefined, reason: string): string {
+  return current ? `${current};${reason}` : reason;
 }
 
 function harmonizeTextRows(layers: TextLayer[], pageWidth: number, pageHeight: number): void {
@@ -721,9 +814,11 @@ function detectTextOwnerSurface(data: Buffer, width: number, height: number, loc
 
   const fillRatio = component.area / Math.max(1, candidate.width * candidate.height);
   const fill = sampleControlSurfaceFill(data, width, height, candidate, located.line.bbox, pageBackground);
+  const fillBackgroundDistance = colorDistance(fill, pageBackground);
   const edgeCoverage = markedEdgeCoverage(data, width, height, candidate, pageBackground, threshold);
-  const filledSurface = fillRatio >= 0.42;
-  if (filledSurface && !hasControlSurfacePadding(candidate, bbox)) return undefined;
+  const paddedSurface = hasControlSurfacePadding(candidate, bbox);
+  if (!paddedSurface) return undefined;
+  const filledSurface = fillRatio >= 0.42 && fillBackgroundDistance >= 42;
   const strongOutline = edgeCoverage >= 0.55;
   const largerSurface = candidate.width >= bbox.width * 1.10 || candidate.height >= bbox.height * 1.10;
   const materialSurfaceEvidence = strongOutline || largerSurface;
@@ -737,7 +832,7 @@ function detectTextOwnerSurface(data: Buffer, width: number, height: number, loc
     fill: toHex(fill.r, fill.g, fill.b),
     cornerRadius: inferControlCornerRadius(data, width, height, candidate, fill),
     confidence: Math.round(Math.max(fillRatio, edgeCoverage) * 100) / 100,
-    reason: fillRatio >= 0.42 ? "filled_control_surface" : "outlined_control_surface",
+    reason: filledSurface ? "filled_control_surface" : "outlined_control_surface",
     fillRatio: Math.round(fillRatio * 1000) / 1000,
     edgeCoverage: Math.round(edgeCoverage * 1000) / 1000
   };
