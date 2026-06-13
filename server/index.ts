@@ -5,7 +5,7 @@ import { allowedOrigin, apiHost, apiPort } from "./config";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
-import { exportPencilProject, getProjectZipPath } from "./pencil-exporter";
+import { exportPencilProject, exportPencilProjectPage, getProjectPageZipPath, getProjectZipPath } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
 import { generateAiSliceBoxes } from "./ai-slice-boxes";
 import { aiSliceBatchConcurrency } from "./config";
@@ -26,9 +26,15 @@ import {
 } from "./projects";
 import type { SaveSlicesRequest } from "../shared/types";
 
+const longExportIdleTimeoutSeconds = 255;
+
 initDatabase();
 
-const app = new Elysia()
+const app = new Elysia({
+  serve: {
+    idleTimeout: longExportIdleTimeoutSeconds
+  }
+})
   .use(cors({ origin: allowedOrigin }))
   .onError(({ error, set }) => {
     if (error instanceof HttpError) {
@@ -115,6 +121,17 @@ const app = new Elysia()
     });
   })
   .post("/api/projects/:projectId/export-project", async ({ params }) => exportPencilProject(params.projectId))
+  .post("/api/projects/:projectId/pages/:pageId/export-project", async ({ params }) => exportPencilProjectPage(params.projectId, params.pageId))
+  .get("/api/projects/:projectId/pages/:pageId/project.zip", ({ params }) => {
+    const zipPath = getProjectPageZipPath(params.projectId, params.pageId);
+    if (!fs.existsSync(zipPath)) throw httpError(404, "page project.zip has not been generated");
+    return new Response(Bun.file(zipPath), {
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${params.projectId}-${params.pageId}-project.zip"`
+      }
+    });
+  })
   .get("/api/projects/:projectId/project.zip", ({ params }) => {
     const zipPath = getProjectZipPath(params.projectId);
     if (!fs.existsSync(zipPath)) throw httpError(404, "project.zip has not been generated");

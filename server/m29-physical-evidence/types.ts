@@ -15,6 +15,14 @@ export type DecodedRgbaImage = {
 export type M29PhysicalEvidenceInput = {
   imageBuffer: Buffer;
   sourcePath?: string;
+  ocrBlocks?: M29OcrBlock[];
+};
+
+export type M29OcrBlock = {
+  id: string;
+  text: string;
+  bbox: BBox;
+  confidence?: number;
 };
 
 export type M29PhysicalEvidenceDocument = {
@@ -31,8 +39,8 @@ export type M29PhysicalEvidenceDocument = {
     sha256: string;
   };
   ocr: {
-    provided: false;
-    blockCount: 0;
+    provided: boolean;
+    blockCount: number;
   };
   primitives: M29Primitive[];
   physicalRelations: M29PhysicalRelation[];
@@ -43,7 +51,7 @@ export type M29PhysicalEvidenceDocument = {
     foregroundPixelCount: number;
     componentCount: number;
     primitiveCount: number;
-    textMaskPixelCount: 0;
+    textMaskPixelCount: number;
   };
 };
 

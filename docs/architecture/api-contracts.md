@@ -32,6 +32,8 @@ POST   /api/projects/:projectId/export-assets
 GET    /api/projects/:projectId/assets.zip
 POST   /api/projects/:projectId/export-project
 GET    /api/projects/:projectId/project.zip
+POST   /api/projects/:projectId/pages/:pageId/export-project
+GET    /api/projects/:projectId/pages/:pageId/project.zip
 ```
 
 ## Contract Rules

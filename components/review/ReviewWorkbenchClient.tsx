@@ -75,6 +75,7 @@ const reviewI18n = {
     aiCurrent: "AI 当前页",
     aiAll: "AI 全部",
     assetsZip: "资产包",
+    pageZip: "当前页包",
     projectZip: "项目包",
     language: "界面语言",
     chinese: "中文",
@@ -192,6 +193,7 @@ const reviewI18n = {
     pageNameSaved: "页面名称已保存。",
     pageNameSaveFailed: "页面名称保存失败：{error}",
     exportedAssets: "已导出 {count} 个切图。",
+    exportedPage: "已导出当前页 Pencil 项目：{assets} 个图层资产。",
     exportedProject: "已导出 Pencil 项目：{pages} 页，{assets} 个图层资产。",
     exportFailed: "导出失败：{error}",
     newAssetsWillUseMode: "后续新建资产将使用{mode}模式。",
@@ -247,6 +249,7 @@ const reviewI18n = {
     aiCurrent: "AI Current",
     aiAll: "AI All",
     assetsZip: "Assets.zip",
+    pageZip: "Current page",
     projectZip: "Project.zip",
     language: "Interface language",
     chinese: "Chinese",
@@ -364,6 +367,7 @@ const reviewI18n = {
     pageNameSaved: "Page name saved.",
     pageNameSaveFailed: "Page name save failed: {error}",
     exportedAssets: "Exported {count} assets.",
+    exportedPage: "Exported current page Pencil project: {assets} layer assets.",
     exportedProject: "Exported Pencil project: {pages} pages, {assets} layer assets.",
     exportFailed: "Export failed: {error}",
     newAssetsWillUseMode: "New assets will use {mode} mode.",
@@ -809,6 +813,19 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, {});
       window.location.href = `${apiBaseUrl}${result.url}`;
       setStatus(formatMessage(text.exportedProject, { pages: result.pageCount, assets: result.assetCount }));
+    } catch (error) {
+      setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
+    }
+  }
+
+  async function exportCurrentPage() {
+    if (!activePage) return;
+    try {
+      await flushPageRename();
+      await saveNow();
+      const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/pages/${activePage.id}/export-project`, {});
+      window.location.href = `${apiBaseUrl}${result.url}`;
+      setStatus(formatMessage(text.exportedPage, { assets: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
     }
@@ -1345,6 +1362,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
             <Download aria-hidden="true" />
             <span>{text.assetsZip}</span>
+          </button>
+          <button className="toolbarButton exportButton" type="button" disabled={!activePage} onClick={() => void exportCurrentPage()}>
+            <Download aria-hidden="true" />
+            <span>{text.pageZip}</span>
           </button>
           <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportProject()}>
             <Download aria-hidden="true" />

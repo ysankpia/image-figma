@@ -14,12 +14,16 @@ export type PencilPageTextManifest = {
     id: string;
     text: string;
     placement: BBox;
+    textRenderBBox: BBox;
     originalBBox: BBox;
+    knockoutBBox: BBox;
     fontSize: number;
     fontFamily: string;
     fontWeight: string;
     color: string;
     confidence: number;
+    textOwnerSurface?: unknown;
+    textLayoutOwnerSurface?: unknown;
   }>;
 };
 
@@ -30,6 +34,7 @@ export type PencilSlicePlacementManifest = {
 };
 
 type Rgb = { r: number; g: number; b: number };
+type BackgroundEstimate = { fill: Rgb; tolerance: number };
 
 type RemainderSlice = {
   bbox: BBox;
@@ -43,7 +48,8 @@ export async function createRemainderPng(originalBuffer: Buffer, slices: Remaind
     .raw()
     .toBuffer({ resolveWithObject: true });
   const data = Buffer.from(original.data);
-  for (const bbox of textKnockouts) paintBackgroundRect(data, original.info.width, original.info.height, bbox);
+  const sourceData = Buffer.from(original.data);
+  for (const bbox of textKnockouts) paintTextForeground(data, sourceData, original.info.width, original.info.height, bbox);
   for (const slice of slices) {
     if (slice.cutMode === "subject" || slice.cutMode === "card") {
       await clearAlphaBySliceMask(data, original.info.width, original.info.height, originalBuffer, slice);
@@ -225,8 +231,8 @@ function roundBBox(bbox: BBox): BBox {
   };
 }
 
-function paintBackgroundRect(data: Buffer, width: number, height: number, bbox: BBox): void {
-  const fill = sampleBackgroundColor(data, width, height, bbox);
+function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: number, height: number, bbox: BBox): void {
+  const background = estimateBackgroundColor(sourceData, width, height, bbox);
   const pad = clamp(Math.round(bbox.height * 0.08), 1, 4);
   const left = clamp(Math.floor(bbox.x - pad), 0, width);
   const top = clamp(Math.floor(bbox.y - pad), 0, height);
@@ -236,15 +242,21 @@ function paintBackgroundRect(data: Buffer, width: number, height: number, bbox: 
     const row = y * width;
     for (let x = left; x < right; x += 1) {
       const offset = (row + x) * 4;
-      data[offset] = fill.r;
-      data[offset + 1] = fill.g;
-      data[offset + 2] = fill.b;
-      data[offset + 3] = 255;
+      if (sourceData[offset + 3] < 200) continue;
+      const pixel = { r: sourceData[offset], g: sourceData[offset + 1], b: sourceData[offset + 2] };
+      if (!isForegroundTextPixel(pixel, background)) continue;
+      targetData[offset] = background.fill.r;
+      targetData[offset + 1] = background.fill.g;
+      targetData[offset + 2] = background.fill.b;
+      targetData[offset + 3] = 255;
     }
   }
 }
 
-function sampleBackgroundColor(data: Buffer, width: number, height: number, bbox: BBox): Rgb {
+function estimateBackgroundColor(data: Buffer, width: number, height: number, bbox: BBox): BackgroundEstimate {
+  const local = sampleDominantInteriorColor(data, width, height, bbox);
+  if (local) return local;
+
   const ring = clamp(Math.round(bbox.height * 0.5), 4, 18);
   const innerLeft = clamp(Math.floor(bbox.x), 0, width);
   const innerTop = clamp(Math.floor(bbox.y), 0, height);
@@ -265,8 +277,69 @@ function sampleBackgroundColor(data: Buffer, width: number, height: number, bbox
       samples.push({ r: data[offset], g: data[offset + 1], b: data[offset + 2] });
     }
   }
-  if (!samples.length) return { r: 255, g: 255, b: 255 };
-  return medianRgb(samples);
+  if (!samples.length) return { fill: { r: 255, g: 255, b: 255 }, tolerance: 18 };
+  return backgroundEstimate(samples);
+}
+
+function sampleDominantInteriorColor(data: Buffer, width: number, height: number, bbox: BBox): BackgroundEstimate | null {
+  const left = clamp(Math.floor(bbox.x), 0, width);
+  const top = clamp(Math.floor(bbox.y), 0, height);
+  const right = clamp(Math.ceil(bbox.x + bbox.width), left, width);
+  const bottom = clamp(Math.ceil(bbox.y + bbox.height), top, height);
+  const buckets = new Map<string, { count: number; samples: Rgb[] }>();
+  for (let y = top; y < bottom; y += 1) {
+    const row = y * width;
+    for (let x = left; x < right; x += 1) {
+      const offset = (row + x) * 4;
+      if (data[offset + 3] < 200) continue;
+      const sample = { r: data[offset], g: data[offset + 1], b: data[offset + 2] };
+      const key = `${Math.round(sample.r / 32)}:${Math.round(sample.g / 32)}:${Math.round(sample.b / 32)}`;
+      const bucket = buckets.get(key) || { count: 0, samples: [] };
+      bucket.count += 1;
+      bucket.samples.push(sample);
+      buckets.set(key, bucket);
+    }
+  }
+  if (buckets.size < 2) return null;
+  const candidates = [...buckets.values()].filter((bucket) => bucket.count >= 8);
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.count - a.count);
+  return backgroundEstimate(candidates[0].samples);
+}
+
+function backgroundEstimate(samples: Rgb[]): BackgroundEstimate {
+  const fill = medianRgb(samples);
+  const distances = samples
+    .map((sample) => colorDistance(sample, fill))
+    .sort((a, b) => a - b);
+  const p90 = distances[Math.min(distances.length - 1, Math.floor(distances.length * 0.9))] || 0;
+  const channels = [fill.r, fill.g, fill.b];
+  const chroma = Math.max(...channels) - Math.min(...channels);
+  const baseTolerance = chroma >= 48 ? 24 : 18;
+  const maxTolerance = chroma >= 48 ? 72 : 54;
+  return {
+    fill,
+    tolerance: clamp(Math.round(p90 + baseTolerance), baseTolerance, maxTolerance)
+  };
+}
+
+function isForegroundTextPixel(pixel: Rgb, background: BackgroundEstimate): boolean {
+  const distance = colorDistance(pixel, background.fill);
+  if (distance > background.tolerance) return true;
+  const lumaDelta = Math.abs(luma(pixel) - luma(background.fill));
+  return lumaDelta > background.tolerance * 0.75;
+}
+
+function colorDistance(a: Rgb, b: Rgb): number {
+  return Math.sqrt(
+    ((a.r - b.r) ** 2)
+    + ((a.g - b.g) ** 2)
+    + ((a.b - b.b) ** 2)
+  );
+}
+
+function luma(color: Rgb): number {
+  return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
 }
 
 function medianRgb(samples: Rgb[]): Rgb {

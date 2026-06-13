@@ -104,6 +104,7 @@ storage/
   projects/{projectId}/originals/page_0001.png
   projects/{projectId}/exports/assets.zip
   projects/{projectId}/exports/project.zip
+  projects/{projectId}/exports/pages/{pageId}/project.zip
 ```
 
 `storage/` is local runtime data and must not be committed.
@@ -130,11 +131,13 @@ assets/visible/remainders/P1-首页/remainder.png
 assets/visible/slices/P1-首页/slice_0001.png
 ```
 
-`design.pen` contains one frame per page. Each frame has a visible `remainder.png` layer plus the confirmed slice PNG layers placed at their original source-image coordinates. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline.
+`POST /api/projects/:projectId/pages/:pageId/export-project` writes the same package shape for only one page under `exports/pages/{pageId}/project.zip`. It exists for fast page-level debugging and delivery; it does not introduce a second Pencil schema.
 
-Pencil export also runs a conservative OCR pass. By default it uses the existing Baidu AI Studio PP-OCRv5 async API when `BAIDU_PADDLE_OCR_TOKEN` is available from `.env.local` or the process environment. OCR remains the text-content authority. When `SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid`, Slice Studio uses M29 physical foreground evidence to place editable text boxes more tightly. The default physical evidence provider is the internal TypeScript `m29-physical-evidence` extractor. It ports the Go `m29extract --ocr-provider none` physical kernel used by Slice Studio, so text pixels remain ordinary physical foreground fragments and OCR is matched to them later. The Go `m29extract` binary is retained only as an explicit reference/fallback with `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract`. M29 evidence never creates visible layers and never overrides confirmed manual slice assets.
+`design.pen` contains one clipped frame per exported page. Each frame has a visible `remainder.png` layer, editable OCR text nodes when available, and confirmed slice PNG layers placed at their original source-image coordinates. Editable text nodes use compact fixed render bounds (`textGrowth: fixed-width-height`) through `textRenderBBox`; expanded `safeBBox` remains metadata/audit evidence instead of the visible Pencil text node box, and the original OCR/physical bbox remains the fit/knockout source. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline.
 
-OCR output only adds editable text nodes above the remainder and slice layers; it does not rebuild button backgrounds, card shapes, images, icons, or Auto Layout. OCR text lines that are mostly covered by confirmed manual slice boxes, low confidence, or oversized/noisy are skipped so product images, icons, and manually extracted raster assets do not get accidental text overlays. If OCR or M29 fails, `project.zip` still exports and `manifest.json` records the skip/failure status. Tesseract is available only as an explicit diagnostic fallback with `SLICE_STUDIO_OCR_PROVIDER=tesseract`.
+Pencil export also runs a conservative OCR pass. By default it uses the existing Baidu AI Studio PP-OCRv5 async API when `BAIDU_PADDLE_OCR_TOKEN` is available from `.env.local` or the process environment. OCR remains the text-content authority. When `SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid`, Slice Studio uses M29 physical foreground evidence as physical/color evidence for OCR text, not as the default final render box. The default physical evidence provider is the internal TypeScript `m29-physical-evidence` extractor. It accepts OCR blocks as text-mask/text-region lineage, while still treating OCR-backed text regions as mask evidence instead of physical bbox truth. Editable text placement defaults to the OCR/original text region so the generated Pencil text replaces source glyph pixels instead of shrinking to a tight foreground mask. The Go `m29extract` binary is retained only as an explicit reference/fallback with `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=go_m29extract`. M29 evidence never creates visible layers and never overrides confirmed manual slice assets.
+
+OCR output only adds editable text nodes above the remainder and below confirmed slice layers; it does not rebuild button backgrounds, card shapes, images, icons, or Auto Layout. OCR text lines that are mostly covered by confirmed manual slice boxes, low confidence, or oversized/noisy are skipped so product images, icons, and manually extracted raster assets do not get accidental text overlays. Solid owner surfaces may help center and fit short labels; outlined/background surfaces are recorded as evidence but must not squeeze or shift the editable replacement text. If OCR or M29 fails, `project.zip` still exports and `manifest.json` records the skip/failure status. Tesseract is available only as an explicit diagnostic fallback with `SLICE_STUDIO_OCR_PROVIDER=tesseract`.
 
 ## Configuration
 
@@ -159,7 +162,7 @@ BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
 
 `NEXT_PUBLIC_SLICE_STUDIO_API_URL` is used by the Next.js browser client. `SLICE_STUDIO_API_URL` is used by scripts such as `bun run smoke`.
 
-`SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency and follows the Go no-OCR physical evidence behavior. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
+`SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency. It carries OCR text-mask lineage in the same spirit as the older Go M29 pipeline, but it does not let OCR boxes directly become physical text placement. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 
 AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. The model sees compressed tiles and an optional compressed overview, returns rectangular boxes, and the Review Workbench saves accepted boxes as ordinary `SliceRecord` entries. AI does not create a separate proposal database or export path.
 

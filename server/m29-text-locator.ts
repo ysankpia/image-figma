@@ -69,7 +69,15 @@ async function locateWithTsPhysicalEvidence(input: {
   ocr: OcrResult;
 }): Promise<TextLocationResult> {
   try {
-    const doc = await extractPhysicalEvidence({ imageBuffer: input.imageBuffer });
+    const doc = await extractPhysicalEvidence({
+      imageBuffer: input.imageBuffer,
+      ocrBlocks: input.ocr.lines.map((line, index) => ({
+        id: ocrBlockId(index),
+        text: line.text,
+        bbox: line.bbox,
+        confidence: line.confidence / 100
+      }))
+    });
     return locateTextLinesFromM29(input.ocr.lines, doc);
   } catch (error) {
     return fallbackToOcr(input.ocr.lines, `ts_m29_physical_evidence_failed:${normalizeReason(error instanceof Error ? error.message : String(error))}`);
@@ -115,8 +123,9 @@ export function locateTextLinesFromM29(lines: OcrLine[], doc: M29Document): Text
   const located = lines.map((line, index) => {
     const blockId = ocrBlockId(index);
     const direct = primitives.find((primitive) => primitive.primitiveType === "text_region" && primitive.source?.ocrBlockId === blockId);
-    const match = direct
-      ? { primitive: direct, score: 1 }
+    const directPhysical = direct?.source?.kind === "ocr" ? undefined : direct;
+    const match = directPhysical
+      ? { primitive: directPhysical, score: 1 }
       : bestPhysicalMatch(line, primitives);
     if (match && match.score >= minMatchScore) {
       if (physicalTextBoxIsTooBroad(line.bbox, match.primitive.bbox)) {
@@ -131,9 +140,9 @@ export function locateTextLinesFromM29(lines: OcrLine[], doc: M29Document): Text
         m29PrimitiveId: match.primitive.id
       };
     }
-    return {
-      ...fallbackLine(line, "no_matching_m29_text_bbox")
-    };
+    return direct?.source?.kind === "ocr"
+      ? { ...fallbackLine(line, "m29_text_region_ocr_mask_only"), m29PrimitiveId: direct.id }
+      : { ...fallbackLine(line, "no_matching_m29_text_bbox") };
   });
   return {
     status: "ok",
@@ -156,6 +165,7 @@ function bestPhysicalMatch(line: OcrLine, primitives: M29Primitive[]): Match | n
 }
 
 function isTextLikePrimitive(primitive: M29Primitive): boolean {
+  if (primitive.primitiveType === "text_region" && primitive.source?.kind === "ocr") return false;
   if (primitive.primitiveType === "surface_region" || primitive.primitiveType === "image_region") return false;
   if (primitive.bbox.width > 260 || primitive.bbox.height > 96) return false;
   return true;

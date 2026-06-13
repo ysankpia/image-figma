@@ -68,6 +68,37 @@ describe("m29 physical evidence", () => {
     expect(doc.primitives.every((primitive) => primitive.source.kind === "pixel")).toBe(true);
   });
 
+  it("records OCR blocks as text regions and text mask evidence when OCR is provided", async () => {
+    const imageBuffer = await testImage({
+      width: 120,
+      height: 80,
+      background: [250, 248, 242],
+      rects: [
+        { x: 20, y: 24, width: 28, height: 12, color: [20, 20, 20] }
+      ]
+    });
+
+    const doc = await extractPhysicalEvidence({
+      imageBuffer,
+      sourcePath: "input.png",
+      ocrBlocks: [{
+        id: "ocr_0001",
+        text: "首页",
+        bbox: { x: 18, y: 20, width: 36, height: 20 },
+        confidence: 0.96
+      }]
+    });
+
+    const textRegion = doc.primitives.find((primitive) => primitive.primitiveType === "text_region");
+    expect(doc.ocr).toEqual({ provided: true, blockCount: 1 });
+    expect(doc.diagnostics.textMaskPixelCount).toBeGreaterThan(0);
+    expect(textRegion).toMatchObject({
+      bbox: { x: 18, y: 20, width: 36, height: 20 },
+      source: { kind: "ocr", ocrBlockId: "ocr_0001", text: "首页" }
+    });
+    expect(textRegion?.compileHints.reasons).toContain("text_mask_source");
+  });
+
   it("keeps text pixels as physical symbol evidence in no-OCR mode", async () => {
     const imageBuffer = await testImage({
       width: 500,
