@@ -96,11 +96,13 @@ Current policy update after P15/P16 gradient-button validation:
 ```text
 filled non-background owner surface -> raster-owned control background
 editable label on that surface -> fixed-bound text overlay
-text knockout for that label -> skipped
+text knockout for that label -> clipped glyph-only knockout
 Pencil vector control rectangle -> not emitted by default
 ```
 
 This is intentionally conservative. It avoids turning gradients, shadows, rounded caps, and mixed button fills into inaccurate single-color vector rectangles. Owner-surface evidence is still useful for text alignment, sizing, and metadata, but it no longer means the source button background is removed from the remainder.
+
+To avoid text ghosting, raster-owned control labels still remove the original glyph pixels from the remainder. The removal is not a rectangular repaint: `PageRenderPlan` emits a `TextKnockout` with the label bbox, optional rounded owner clip, foreground text color, and `paintPadding=0`. `pencil-package` then repaints only pixels close to that foreground color after estimating local background from non-glyph pixels.
 
 Set Pencil child order to:
 
@@ -370,7 +372,7 @@ Policy:
   filled owner surfaces remain raster-owned by default
   no Pencil `slice_studio_control_surface` rectangles are emitted
   no surfaceKnockouts are emitted from PageRenderPlan
-  non-background filled owner labels skip textKnockout to avoid raster repaint artifacts
+  non-background filled owner labels use clipped glyph-only textKnockout
   ordinary/background text still uses textKnockout
 
 Targeted page exports:
@@ -391,6 +393,44 @@ Visual checks:
   P10/P11: no visible square button-edge protrusion in full-package screenshots
   P15: bottom `联系客服` remains a continuous raster gradient, not a split solid vector fill
   P16: no layout overflow in targeted/full-package screenshots
+
+Validation:
+  pnpm exec vitest run tests/pencil-exporter.test.ts
+  pnpm run typecheck
+  pnpm run check
+  pnpm run build
+  git diff --check
+```
+
+Text ghosting follow-up validation:
+
+```text
+Root cause:
+  The initial no-vector strategy preserved filled/gradient controls in the raster
+  remainder, but skipped textKnockout for those labels. Editable text was then
+  drawn on top of the original raster text, causing visible double text.
+
+Fix:
+  Keep the no-vector control background policy.
+  Restore label glyph erasure through TextKnockout instructions with:
+    bbox = text knockout bbox clipped to the owner surface
+    clipShape = rounded owner surface
+    foregroundColor = sampled text color
+    paintPadding = 0
+  The executor estimates background from non-foreground pixels and only repaints
+  pixels that are closer to the label foreground color than to the background.
+
+P16 pixel audit:
+  source `查看订单` knockout region: white=381, bright=589
+  exported remainder same region: white=0, bright=0
+
+Full export:
+  package: /private/tmp/slice-textghost-full/design.pen
+  frames: 28
+  assets: 532
+  editable text nodes: 1330
+  control surface nodes: 0
+  Pencil snapshot_layout(problemsOnly=true): No layout problems
 
 Validation:
   pnpm exec vitest run tests/pencil-exporter.test.ts

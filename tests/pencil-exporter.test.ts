@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { buildPencilManifest, createRemainderPng, frameLayoutXPositions, preparePencilSliceImage } from "../server/pencil-package";
 import { validatePencilPackage, type PencilNode } from "../server/pencil-contract";
 import { buildPageRenderPlan } from "../server/render-plan-builder";
-import type { SurfaceKnockout } from "../server/render-plan";
+import type { SurfaceKnockout, TextKnockout } from "../server/render-plan";
 import { parseBaiduPpocrv5Rows, parseTesseractTsv } from "../server/text-ocr";
 import { reconstructTextLayers, remainingRatio, textGeometryLooksEditable, type TextLayer } from "../server/text-reconstruction";
 import { locateTextLinesFromM29 } from "../server/m29-text-locator";
@@ -333,10 +333,59 @@ describe("pencil exporter", () => {
     expect(plan.layers.controlSurfaces).toEqual([]);
     expect(plan.remainder.surfaceKnockouts).toEqual([]);
     expect(plan.remainder.textKnockouts).toEqual([
-      { x: 20, y: 84, width: 46, height: 18 }
+      {
+        bbox: { x: 70, y: 40, width: 48, height: 20 },
+        clipShape: {
+          kind: "rounded_rect",
+          bbox: { x: 52, y: 30, width: 92, height: 38 },
+          cornerRadius: 19
+        },
+        foregroundColor: "#ffffff",
+        paintPadding: 0,
+        provenance: "raster_owned_control_text"
+      },
+      {
+        bbox: { x: 20, y: 84, width: 46, height: 18 },
+        provenance: "ocr_text"
+      }
     ]);
     expect(plan.layers.text[0].zIndex).toBe(1);
     expect(plan.layers.text[1].zIndex).toBe(2);
+  });
+
+  it("erases raster-owned control label glyphs without repainting outside the control", async () => {
+    const width = 90;
+    const height = 60;
+    const rgba = Buffer.alloc(width * height * 4);
+    fillRawRect(rgba, width, { x: 0, y: 0, width, height }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 20, y: 20, width: 42, height: 22 }, [16, 179, 47]);
+    fillRawRect(rgba, width, { x: 34, y: 28, width: 16, height: 5 }, [255, 255, 255]);
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+    const knockout: TextKnockout = {
+      bbox: { x: 30, y: 20, width: 24, height: 18 },
+      clipShape: {
+        kind: "rounded_rect",
+        bbox: { x: 20, y: 20, width: 42, height: 22 },
+        cornerRadius: 0
+      },
+      foregroundColor: "#ffffff",
+      paintPadding: 0,
+      provenance: "raster_owned_control_text"
+    };
+
+    const remainder = await createRemainderPng(source, [], [knockout]);
+    const raw = await sharp(remainder).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const outsideWhite = (19 * width + 40) * 4;
+    const erasedGlyph = (30 * width + 40) * 4;
+
+    expect(raw.data[outsideWhite]).toBe(255);
+    expect(raw.data[outsideWhite + 1]).toBe(255);
+    expect(raw.data[outsideWhite + 2]).toBe(255);
+    expect(raw.data[outsideWhite + 3]).toBe(255);
+    expect(raw.data[erasedGlyph]).toBeLessThan(60);
+    expect(raw.data[erasedGlyph + 1]).toBeGreaterThan(120);
+    expect(raw.data[erasedGlyph + 2]).toBeLessThan(90);
+    expect(raw.data[erasedGlyph + 3]).toBe(255);
   });
 
   it("uses tight knockout bounds instead of Pencil safe bounds on rounded buttons", async () => {

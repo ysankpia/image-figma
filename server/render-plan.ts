@@ -13,7 +13,7 @@ export type PageRenderPlan = {
     slices: SliceRenderLayer[];
   };
   remainder: {
-    textKnockouts: BBox[];
+    textKnockouts: TextKnockout[];
     surfaceKnockouts: SurfaceKnockout[];
   };
 };
@@ -41,6 +41,14 @@ export type SurfaceKnockout = {
   visibleShape: RoundedRectShape;
   sourceOwnerRegion: SourceOwnerRegion;
   provenance: "ocr_owner_surface";
+};
+
+export type TextKnockout = {
+  bbox: BBox;
+  clipShape?: RoundedRectShape;
+  foregroundColor?: string;
+  paintPadding?: number;
+  provenance: "ocr_text" | "raster_owned_control_text";
 };
 
 export type RoundedRectShape = {

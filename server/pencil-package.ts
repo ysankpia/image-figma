@@ -4,7 +4,7 @@ import type { BBox, CutMode, ProjectDetail } from "../shared/types";
 import { normalizeDefaultSliceNames } from "../shared/slice-names";
 import { cropSliceToPng } from "./shape-cutout";
 import type { TextReconstruction } from "./text-reconstruction";
-import type { SurfaceKnockout } from "./render-plan";
+import type { SurfaceKnockout, TextKnockout } from "./render-plan";
 
 const pageFrameGap = 160;
 
@@ -48,7 +48,7 @@ type RemainderSlice = {
 export async function createRemainderPng(
   originalBuffer: Buffer,
   slices: RemainderSlice[],
-  textKnockouts: BBox[] = [],
+  textKnockouts: Array<BBox | TextKnockout> = [],
   surfaceKnockouts: SurfaceKnockout[] = []
 ): Promise<Buffer> {
   const original = await sharp(originalBuffer)
@@ -57,7 +57,7 @@ export async function createRemainderPng(
     .toBuffer({ resolveWithObject: true });
   const data = Buffer.from(original.data);
   const sourceData = Buffer.from(original.data);
-  for (const bbox of textKnockouts) paintTextForeground(data, sourceData, original.info.width, original.info.height, bbox);
+  for (const knockout of textKnockouts) paintTextForeground(data, sourceData, original.info.width, original.info.height, normalizeTextKnockout(knockout));
   for (const knockout of surfaceKnockouts) clearSurfaceOwnership(data, sourceData, original.info.width, original.info.height, knockout);
   for (const slice of slices) {
     if (slice.cutMode === "subject" || slice.cutMode === "card") {
@@ -240,26 +240,55 @@ function roundBBox(bbox: BBox): BBox {
   };
 }
 
-function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: number, height: number, bbox: BBox): void {
-  const background = estimateBackgroundColor(sourceData, width, height, bbox);
-  const pad = clamp(Math.round(bbox.height * 0.08), 1, 4);
+function normalizeTextKnockout(value: BBox | TextKnockout): TextKnockout {
+  if ("bbox" in value && "provenance" in value) return value;
+  return {
+    bbox: value,
+    provenance: "ocr_text"
+  };
+}
+
+function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: number, height: number, knockout: TextKnockout): void {
+  const bbox = knockout.bbox;
+  const foreground = knockout.foregroundColor ? rgbFromHex(knockout.foregroundColor) : null;
+  const background = estimateBackgroundColor(sourceData, width, height, bbox, foreground);
+  const pad = knockout.paintPadding ?? clamp(Math.round(bbox.height * 0.08), 1, 4);
   const left = clamp(Math.floor(bbox.x - pad), 0, width);
   const top = clamp(Math.floor(bbox.y - pad), 0, height);
   const right = clamp(Math.ceil(bbox.x + bbox.width + pad), left, width);
   const bottom = clamp(Math.ceil(bbox.y + bbox.height + pad), top, height);
+  const clip = knockout.clipShape;
+  const clipBox = clip ? roundedBox(clip.bbox, width, height) : null;
+  const clipRadius = clip && clipBox
+    ? clamp(Math.round(clip.cornerRadius), 0, Math.floor(Math.min(clipBox.width, clipBox.height) / 2))
+    : 0;
   for (let y = top; y < bottom; y += 1) {
     const row = y * width;
     for (let x = left; x < right; x += 1) {
+      if (clip && clipBox && !insideRoundedClip(x, y, clipBox, clipRadius)) continue;
       const offset = (row + x) * 4;
       if (sourceData[offset + 3] < 200) continue;
       const pixel = { r: sourceData[offset], g: sourceData[offset + 1], b: sourceData[offset + 2] };
-      if (!isForegroundTextPixel(pixel, background)) continue;
+      if (foreground
+        ? !isForegroundTextPixelNearColor(pixel, foreground, background)
+        : !isForegroundTextPixel(pixel, background)
+      ) continue;
       targetData[offset] = background.fill.r;
       targetData[offset + 1] = background.fill.g;
       targetData[offset + 2] = background.fill.b;
       targetData[offset + 3] = 255;
     }
   }
+}
+
+function insideRoundedClip(
+  x: number,
+  y: number,
+  box: { left: number; top: number; width: number; height: number },
+  radius: number
+): boolean {
+  if (x < box.left || x >= box.left + box.width || y < box.top || y >= box.top + box.height) return false;
+  return pointInsideRoundedRect(x - box.left + 0.5, y - box.top + 0.5, box.width, box.height, radius);
 }
 
 function clearSurfaceOwnership(
@@ -419,7 +448,17 @@ function pointInsideRoundedRect(localX: number, localY: number, width: number, h
   return dx * dx + dy * dy <= radius * radius + 0.75;
 }
 
-function estimateBackgroundColor(data: Buffer, width: number, height: number, bbox: BBox): BackgroundEstimate {
+function estimateBackgroundColor(
+  data: Buffer,
+  width: number,
+  height: number,
+  bbox: BBox,
+  foreground?: Rgb | null
+): BackgroundEstimate {
+  if (foreground) {
+    const local = sampleInteriorColorWithoutForeground(data, width, height, bbox, foreground);
+    if (local) return local;
+  }
   const local = sampleDominantInteriorColor(data, width, height, bbox);
   if (local) return local;
 
@@ -444,6 +483,32 @@ function estimateBackgroundColor(data: Buffer, width: number, height: number, bb
     }
   }
   if (!samples.length) return { fill: { r: 255, g: 255, b: 255 }, tolerance: 18 };
+  return backgroundEstimate(samples);
+}
+
+function sampleInteriorColorWithoutForeground(
+  data: Buffer,
+  width: number,
+  height: number,
+  bbox: BBox,
+  foreground: Rgb
+): BackgroundEstimate | null {
+  const left = clamp(Math.floor(bbox.x), 0, width);
+  const top = clamp(Math.floor(bbox.y), 0, height);
+  const right = clamp(Math.ceil(bbox.x + bbox.width), left, width);
+  const bottom = clamp(Math.ceil(bbox.y + bbox.height), top, height);
+  const samples: Rgb[] = [];
+  for (let y = top; y < bottom; y += 1) {
+    const row = y * width;
+    for (let x = left; x < right; x += 1) {
+      const offset = (row + x) * 4;
+      if (data[offset + 3] < 200) continue;
+      const sample = { r: data[offset], g: data[offset + 1], b: data[offset + 2] };
+      if (colorDistance(sample, foreground) <= 58) continue;
+      samples.push(sample);
+    }
+  }
+  if (samples.length < 8) return null;
   return backgroundEstimate(samples);
 }
 
@@ -500,6 +565,14 @@ function isForegroundTextPixel(pixel: Rgb, background: BackgroundEstimate): bool
     return distance >= antialiasTolerance && lumaDelta >= antialiasTolerance;
   }
   return lumaDelta > background.tolerance * 0.75;
+}
+
+function isForegroundTextPixelNearColor(pixel: Rgb, foreground: Rgb, background: BackgroundEstimate): boolean {
+  const foregroundDistance = colorDistance(pixel, foreground);
+  const backgroundDistance = colorDistance(pixel, background.fill);
+  if (foregroundDistance > 118) return false;
+  if (foregroundDistance + 8 < backgroundDistance) return true;
+  return foregroundDistance <= 48 && (backgroundDistance > 10 || Math.abs(luma(pixel) - luma(background.fill)) > 10);
 }
 
 function colorDistance(a: Rgb, b: Rgb): number {

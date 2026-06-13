@@ -21,6 +21,7 @@ coverage/
 .vitest/
 .turbo/
 *.tsbuildinfo
+.codegraph/
 
 # Python
 __pycache__/

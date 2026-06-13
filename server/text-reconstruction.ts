@@ -495,7 +495,7 @@ function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, 
   const value = text.trim();
   if (!value || bbox.width <= 0 || bbox.height <= 0) return 8;
 
-  const maxSize = clamp(Math.round(bbox.height * (isPhysicalBBox ? 0.92 : 0.8)), 8, 55);
+  let maxSize = clamp(Math.round(bbox.height * (isPhysicalBBox ? 0.92 : 0.8)), 8, 55);
   let targetWidth = Math.max(1, Math.round(bbox.width * (isPhysicalBBox ? 0.96 : 0.98)));
   let targetHeight = Math.max(1, Math.round(bbox.height * (isPhysicalBBox ? 0.86 : 0.98)));
 
@@ -504,13 +504,15 @@ function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, 
     const verticalPadding = Math.max(3, Math.round(ownerSurface.bbox.height * 0.18));
     const availableWidth = Math.max(1, ownerSurface.bbox.width - horizontalPadding * 2);
     const availableHeight = Math.max(1, ownerSurface.bbox.height - verticalPadding * 2);
+    const ownerHeightTarget = Math.max(1, Math.round(availableHeight * 0.72));
+    maxSize = Math.max(maxSize, clamp(Math.round(availableHeight * 0.72), 8, 55));
     if (bbox.width >= ownerSurface.bbox.width * 0.30) {
       targetWidth = Math.min(
         Math.max(targetWidth, Math.round(availableWidth * 0.96)),
         Math.max(1, Math.round(ownerSurface.bbox.width * 0.88))
       );
     }
-    targetHeight = Math.min(targetHeight, Math.round(availableHeight * 0.92));
+    targetHeight = Math.max(targetHeight, ownerHeightTarget);
   }
 
   for (let size = maxSize; size >= 8; size -= 1) {

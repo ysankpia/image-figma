@@ -1,6 +1,6 @@
 import type { BBox, SliceRecord } from "../shared/types";
 import type { TextLayer } from "./text-reconstruction";
-import type { ControlSurfaceLayer, PageRenderPlan } from "./render-plan";
+import type { ControlSurfaceLayer, PageRenderPlan, RoundedRectShape, TextKnockout } from "./render-plan";
 
 export function buildPageRenderPlan(input: {
   pageId: string;
@@ -11,11 +11,6 @@ export function buildPageRenderPlan(input: {
   slices: SliceRecord[];
 }): PageRenderPlan {
   const controlSurfaces: ControlSurfaceLayer[] = [];
-  const rasterOwnedControlTextIds = new Set(
-    input.textLayers
-      .filter((layer) => hasRasterOwnedFilledControlSurface(layer))
-      .map((layer) => layer.id)
-  );
   return {
     pageId: input.pageId,
     pageDirectory: input.pageDirectory,
@@ -45,20 +40,36 @@ export function buildPageRenderPlan(input: {
       }))
     },
     remainder: {
-      textKnockouts: input.textLayers
-        .filter((layer) => !rasterOwnedControlTextIds.has(layer.id))
-        .map((layer) => layer.knockoutBBox),
+      textKnockouts: input.textLayers.map((layer) => textKnockoutFromLayer(layer)),
       surfaceKnockouts: []
     }
   };
 }
 
-function hasRasterOwnedFilledControlSurface(layer: TextLayer): boolean {
+function textKnockoutFromLayer(layer: TextLayer): TextKnockout {
+  const clipShape = rasterOwnedControlClip(layer);
+  if (!clipShape) {
+    return {
+      bbox: layer.knockoutBBox,
+      provenance: "ocr_text"
+    };
+  }
+
+  return {
+    bbox: intersectionBox(layer.knockoutBBox, clipShape.bbox) || layer.knockoutBBox,
+    clipShape,
+    foregroundColor: layer.color,
+    paintPadding: 0,
+    provenance: "raster_owned_control_text"
+  };
+}
+
+function rasterOwnedControlClip(layer: TextLayer): RoundedRectShape | null {
   const raw = layer.metadata.textLayoutOwnerSurface || layer.metadata.textOwnerSurface;
-  if (!raw || typeof raw !== "object") return false;
-  const candidate = raw as { bbox?: unknown; fill?: unknown; reason?: unknown };
-  if (candidate.reason !== "filled_control_surface") return false;
-  if (!candidate.bbox || typeof candidate.bbox !== "object" || typeof candidate.fill !== "string") return false;
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw as { bbox?: unknown; fill?: unknown; cornerRadius?: unknown; reason?: unknown };
+  if (candidate.reason !== "filled_control_surface") return null;
+  if (!candidate.bbox || typeof candidate.bbox !== "object" || typeof candidate.fill !== "string") return null;
   const bbox = candidate.bbox as Partial<BBox>;
   if (
     typeof bbox.x !== "number"
@@ -67,8 +78,18 @@ function hasRasterOwnedFilledControlSurface(layer: TextLayer): boolean {
     || typeof bbox.height !== "number"
     || bbox.width <= 0
     || bbox.height <= 0
-  ) return false;
-  return !surfaceIsBackgroundLike(candidate.fill);
+  ) return null;
+  if (surfaceIsBackgroundLike(candidate.fill)) return null;
+  const rounded = roundBBox(bbox as BBox);
+  const maxRadius = Math.floor(Math.min(rounded.width, rounded.height) / 2);
+  const cornerRadius = typeof candidate.cornerRadius === "number"
+    ? Math.max(0, Math.round(candidate.cornerRadius))
+    : maxRadius;
+  return {
+    kind: "rounded_rect",
+    bbox: rounded,
+    cornerRadius: Math.min(cornerRadius, maxRadius)
+  };
 }
 
 function surfaceIsBackgroundLike(fill: string): boolean {
@@ -86,4 +107,22 @@ function rgbFromHex(value: string): { r: number; g: number; b: number } | null {
     g: Number.parseInt(hex.slice(2, 4), 16),
     b: Number.parseInt(hex.slice(4, 6), 16)
   };
+}
+
+function roundBBox(bbox: BBox): BBox {
+  return {
+    x: Math.round(bbox.x),
+    y: Math.round(bbox.y),
+    width: Math.round(bbox.width),
+    height: Math.round(bbox.height)
+  };
+}
+
+function intersectionBox(a: BBox, b: BBox): BBox | null {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  if (right <= left || bottom <= top) return null;
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
