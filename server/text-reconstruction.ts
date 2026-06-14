@@ -79,6 +79,7 @@ type EditableTextCandidate = {
   ownerSurface?: TextOwnerSurface;
   layoutOwnerSurface?: TextOwnerSurface;
   fallbackColor: string;
+  backgroundColor: string;
 };
 
 export async function reconstructTextLayers(options: ReconstructOptions): Promise<TextReconstruction> {
@@ -131,7 +132,8 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
         ownershipReason: ownership.reason,
         ownerSurface,
         layoutOwnerSurface,
-        fallbackColor: sampleTextColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface)
+        fallbackColor: sampleTextColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface),
+        backgroundColor: sampleTextBackgroundColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface)
       });
     }
 
@@ -144,6 +146,7 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
         pageWidth: options.width,
         pageHeight: options.height,
         color: candidate.fallbackColor,
+        backgroundColor: candidate.backgroundColor,
         ownershipReason: candidate.ownershipReason,
         ownerSurface: candidate.ownerSurface,
         layoutOwnerSurface: candidate.layoutOwnerSurface,
@@ -229,6 +232,7 @@ function makeTextLayer(input: {
   pageWidth: number;
   pageHeight: number;
   color: string;
+  backgroundColor: string;
   ownershipReason: string;
   ownerSurface?: TextOwnerSurface;
   layoutOwnerSurface?: TextOwnerSurface;
@@ -238,7 +242,10 @@ function makeTextLayer(input: {
   const script = scriptForText(line.text);
   const isPhysicalBBox = input.located.bboxSource === "m29_foreground" || input.located.bboxSource === "local_foreground";
   const renderSourceBBox = isPhysicalBBox ? { ...input.located.bbox } : { ...line.bbox };
-  const fontSize = input.textStyle?.fontSize ?? fitFontSize(line.text, renderSourceBBox, input.layoutOwnerSurface, isPhysicalBBox);
+  const fitBBox = input.layoutOwnerSurface
+    ? renderSourceBBox
+    : singleLinePlacementBBox(renderSourceBBox, line.bbox, input.pageWidth, input.pageHeight);
+  const fontSize = input.textStyle?.fontSize ?? fitFontSize(line.text, fitBBox, input.layoutOwnerSurface, isPhysicalBBox);
   const placementBBox = input.layoutOwnerSurface
     ? ownerAwareTextBBox(line.text, renderSourceBBox, input.layoutOwnerSurface.bbox, fontSize, script, input.pageWidth, input.pageHeight)
     : renderSourceBBox;
@@ -256,7 +263,10 @@ function makeTextLayer(input: {
   );
   const layerFontFamily = input.textStyle?.fontFamily || fontFamily;
   const layerFontWeight = input.textStyle?.fontWeight ?? fontWeight;
-  const layerColor = input.textStyle?.color || input.color;
+  const layerColor = chooseReadableTextColor(input.textStyle?.color, input.color, input.backgroundColor);
+  const rejectedMeasuredColor = input.textStyle?.color && layerColor !== input.textStyle.color
+    ? input.textStyle.color
+    : undefined;
   return {
     id: `${input.pageId}__text_${String(input.index + 1).padStart(4, "0")}`,
     text: line.text.trim(),
@@ -297,6 +307,12 @@ function makeTextLayer(input: {
       textOwnershipReason: input.ownershipReason,
       textStyleSource: input.textStyle?.source || "fallback",
       textStyleMeasured: input.textStyle ? { ...input.textStyle.measured } : undefined,
+      textStyleColorRejected: rejectedMeasuredColor ? {
+        measuredColor: rejectedMeasuredColor,
+        fallbackColor: input.color,
+        backgroundColor: input.backgroundColor,
+        reason: "low_contrast_against_local_background"
+      } : undefined,
       textStyleLineHeight: input.textStyle?.lineHeight,
       textStyleTextAlign: input.textStyle?.textAlign,
       textOwnerSurface: input.ownerSurface ? {
@@ -325,7 +341,11 @@ function makeTextLayer(input: {
 function textKnockoutBounds(ocrBBox: BBox, renderSourceBBox: BBox, pageWidth: number, pageHeight: number, fontSize: number): BBox {
   const ocrArea = ocrBBox.width * ocrBBox.height;
   const renderArea = renderSourceBBox.width * renderSourceBBox.height;
-  const source = renderArea > 0 && renderArea <= ocrArea ? renderSourceBBox : ocrBBox;
+  const source = ocrArea > 0 && renderArea > 0
+    ? unionBox(ocrBBox, renderSourceBBox)
+    : renderArea > 0
+      ? renderSourceBBox
+      : ocrBBox;
   const pad = Math.max(1, Math.min(3, Math.round(fontSize * 0.1)));
   return clampBox({
     x: source.x - pad,
@@ -333,6 +353,14 @@ function textKnockoutBounds(ocrBBox: BBox, renderSourceBBox: BBox, pageWidth: nu
     width: source.width + pad * 2,
     height: source.height + pad * 2
   }, pageWidth, pageHeight);
+}
+
+function unionBox(a: BBox, b: BBox): BBox {
+  const left = Math.min(a.x, b.x);
+  const top = Math.min(a.y, b.y);
+  const right = Math.max(a.x + a.width, b.x + b.width);
+  const bottom = Math.max(a.y + a.height, b.y + b.height);
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 function canUseOwnerSurfaceForLayout(ownerSurface: TextOwnerSurface, sourceBBox: BBox): boolean {
@@ -522,6 +550,18 @@ function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, 
   return 8;
 }
 
+function singleLinePlacementBBox(sourceBBox: BBox, ocrBBox: BBox, pageWidth: number, pageHeight: number): BBox {
+  const left = Math.round(sourceBBox.x);
+  const sourceRight = sourceBBox.x + sourceBBox.width;
+  const ocrRight = ocrBBox.x + ocrBBox.width;
+  return clampBox({
+    x: left,
+    y: sourceBBox.y,
+    width: Math.max(sourceBBox.width, Math.round(Math.max(sourceRight, ocrRight) - left)),
+    height: sourceBBox.height
+  }, pageWidth, pageHeight);
+}
+
 function ownerAwareTextBBox(
   text: string,
   sourceBBox: BBox,
@@ -578,7 +618,7 @@ function textRenderBounds(
   if (ownerBBox) {
     const ownerPad = Math.max(3, Math.round(ownerBBox.height * 0.12));
     const maxWidth = Math.max(1, ownerBBox.width - ownerPad * 2);
-    const width = Math.max(1, Math.min(maxWidth, compactWidth));
+    const width = Math.max(1, Math.min(maxWidth, Math.max(placementBBox.width, compactWidth, noWrapTextWidth(text, fontSize, script))));
     const height = Math.max(1, Math.min(ownerBBox.height, compactHeight));
     const centerX = placementBBox.x + placementBBox.width / 2;
     const centerY = ownerBBox.y + ownerBBox.height / 2;
@@ -598,10 +638,12 @@ function textRenderBounds(
     }, pageWidth, pageHeight);
   }
 
-  const width = Math.max(placementBBox.width, compactWidth);
+  const width = Math.max(placementBBox.width, compactWidth, noWrapTextWidth(text, fontSize, script));
   const height = Math.max(placementBBox.height, compactHeight);
+  const right = Math.min(pageWidth, Math.round(placementBBox.x) + width);
+  const x = Math.max(0, right - width);
   return clampBox({
-    x: Math.round(placementBBox.x),
+    x,
     y: Math.round(placementBBox.y + placementBBox.height / 2 - height / 2),
     width,
     height
@@ -610,6 +652,18 @@ function textRenderBounds(
 
 function estimatedRenderedTextWidth(text: string, fontSize: number, script: string): number {
   return Math.max(fontSize, textVisualUnits(text) * fontSize);
+}
+
+function noWrapTextWidth(text: string, fontSize: number, script: string): number {
+  const measured = estimatedRenderedTextWidth(text, fontSize, script);
+  const pad = Math.max(6, Math.round(fontSize * 0.48));
+  return Math.ceil(measured * noWrapWidthSafety(script) + pad);
+}
+
+function noWrapWidthSafety(script: string): number {
+  if (script === "latin") return 1.18;
+  if (script === "mixed") return 1.26;
+  return 1.22;
 }
 
 function measureTextPixels(text: string, fontSize: number): { width: number; height: number } {
@@ -670,6 +724,25 @@ function sampleTextColor(data: Buffer, width: number, height: number, bbox: BBox
     Math.round(average.g / chosen.length),
     Math.round(average.b / chosen.length)
   );
+}
+
+function sampleTextBackgroundColor(data: Buffer, width: number, height: number, bbox: BBox, ownerSurface?: TextOwnerSurface): string {
+  const ownerFill = ownerSurface?.reason === "filled_control_surface" ? rgbFromHex(ownerSurface.fill) : null;
+  const background = ownerFill || sampleBackgroundColor(data, width, height, bbox);
+  return toHex(background.r, background.g, background.b);
+}
+
+function chooseReadableTextColor(measuredColor: string | undefined, fallbackColor: string, backgroundColor: string): string {
+  if (!measuredColor) return fallbackColor;
+  const measured = rgbFromHex(measuredColor);
+  const fallback = rgbFromHex(fallbackColor);
+  const background = rgbFromHex(backgroundColor);
+  if (!measured || !fallback || !background) return measuredColor;
+
+  const measuredContrast = colorDistance(measured, background);
+  const fallbackContrast = colorDistance(fallback, background);
+  if (measuredContrast < 70 && fallbackContrast >= measuredContrast + 55) return fallbackColor;
+  return measuredColor;
 }
 
 function localTextForegroundBBox(data: Buffer, width: number, height: number, bbox: BBox, blockers: BBox[]): BBox | null {

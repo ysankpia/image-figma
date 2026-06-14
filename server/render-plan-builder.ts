@@ -51,6 +51,7 @@ function textKnockoutFromLayer(layer: TextLayer): TextKnockout {
   if (!clipShape) {
     return {
       bbox: layer.knockoutBBox,
+      foregroundColor: layer.color,
       provenance: "ocr_text"
     };
   }

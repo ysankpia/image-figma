@@ -131,6 +131,9 @@ export function locateTextLinesFromM29(lines: OcrLine[], doc: M29Document): Text
       if (physicalTextBoxIsTooBroad(line.bbox, match.primitive.bbox)) {
         return fallbackLine(line, "m29_bbox_too_broad_for_ocr_line");
       }
+      if (physicalTextBoxIsTooSmall(line.bbox, match.primitive.bbox)) {
+        return fallbackLine(line, "m29_bbox_too_small_for_ocr_line");
+      }
       return {
         line,
         bbox: { ...match.primitive.bbox },
@@ -254,6 +257,21 @@ function physicalTextBoxIsTooBroad(ocrBBox: BBox, physicalBBox: BBox): boolean {
   if (heightRatio >= 1.32 && areaRatio >= 1.85) return true;
   if (widthRatio >= 1.85 && heightRatio >= 1.12) return true;
   if (widthRatio >= 2.4) return true;
+  return false;
+}
+
+function physicalTextBoxIsTooSmall(ocrBBox: BBox, physicalBBox: BBox): boolean {
+  const ocrArea = area(ocrBBox);
+  const physicalArea = area(physicalBBox);
+  if (ocrArea <= 0 || physicalArea <= 0) return true;
+
+  const widthRatio = physicalBBox.width / Math.max(1, ocrBBox.width);
+  const heightRatio = physicalBBox.height / Math.max(1, ocrBBox.height);
+  const areaRatio = physicalArea / ocrArea;
+
+  if (areaRatio < 0.18) return true;
+  if (widthRatio < 0.50 && areaRatio < 0.32) return true;
+  if (heightRatio < 0.36 && areaRatio < 0.32) return true;
   return false;
 }
 

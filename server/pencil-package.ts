@@ -38,6 +38,7 @@ export type PencilSlicePlacementManifest = {
 
 type Rgb = { r: number; g: number; b: number };
 type BackgroundEstimate = { fill: Rgb; tolerance: number };
+type PaintRect = { left: number; top: number; width: number; height: number };
 
 type RemainderSlice = {
   bbox: BBox;
@@ -262,6 +263,10 @@ function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: numb
   const clipRadius = clip && clipBox
     ? clamp(Math.round(clip.cornerRadius), 0, Math.floor(Math.min(clipBox.width, clipBox.height) / 2))
     : 0;
+  const rect: PaintRect = { left, top, width: right - left, height: bottom - top };
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const mask = new Uint8Array(rect.width * rect.height);
+  let marked = 0;
   for (let y = top; y < bottom; y += 1) {
     const row = y * width;
     for (let x = left; x < right; x += 1) {
@@ -273,9 +278,136 @@ function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: numb
         ? !isForegroundTextPixelNearColor(pixel, foreground, background)
         : !isForegroundTextPixel(pixel, background)
       ) continue;
-      targetData[offset] = background.fill.r;
-      targetData[offset + 1] = background.fill.g;
-      targetData[offset + 2] = background.fill.b;
+      const localIndex = (y - rect.top) * rect.width + (x - rect.left);
+      mask[localIndex] = 1;
+      marked += 1;
+    }
+  }
+  if (!marked) return;
+  const dilation = clamp(Math.ceil(bbox.height * 0.08), 1, 3);
+  const paintMask = dilateTextMask(mask, rect.width, rect.height, dilation);
+  if (clip && clipBox) constrainMaskToClip(paintMask, rect, clipBox, clipRadius, width, height);
+  inpaintTextMask(targetData, width, height, rect, paintMask, background.fill);
+}
+
+function dilateTextMask(mask: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+  if (radius <= 0) return mask;
+  const result = new Uint8Array(mask);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!mask[index]) continue;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const nextX = x + dx;
+          const nextY = y + dy;
+          if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+          result[nextY * width + nextX] = 1;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function constrainMaskToClip(
+  mask: Uint8Array,
+  rect: PaintRect,
+  clipBox: { left: number; top: number; width: number; height: number },
+  clipRadius: number,
+  pageWidth: number,
+  pageHeight: number
+): void {
+  for (let localY = 0; localY < rect.height; localY += 1) {
+    const y = rect.top + localY;
+    if (y < 0 || y >= pageHeight) continue;
+    for (let localX = 0; localX < rect.width; localX += 1) {
+      const index = localY * rect.width + localX;
+      if (!mask[index]) continue;
+      const x = rect.left + localX;
+      if (x < 0 || x >= pageWidth || !insideRoundedClip(x, y, clipBox, clipRadius)) mask[index] = 0;
+    }
+  }
+}
+
+function inpaintTextMask(targetData: Buffer, width: number, height: number, rect: PaintRect, mask: Uint8Array, fallback: Rgb): void {
+  const resolved = new Uint8Array(mask.length);
+  let unresolved = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    if (mask[index]) {
+      unresolved += 1;
+    } else {
+      resolved[index] = 1;
+    }
+  }
+  if (!unresolved) return;
+
+  const maxIterations = clamp(Math.ceil(Math.max(rect.width, rect.height) * 0.35), 8, 36);
+  for (let iteration = 0; iteration < maxIterations && unresolved > 0; iteration += 1) {
+    const updates: Array<{ index: number; r: number; g: number; b: number }> = [];
+    for (let localY = 0; localY < rect.height; localY += 1) {
+      for (let localX = 0; localX < rect.width; localX += 1) {
+        const index = localY * rect.width + localX;
+        if (!mask[index] || resolved[index]) continue;
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) continue;
+            const nextX = localX + dx;
+            const nextY = localY + dy;
+            if (nextX < 0 || nextY < 0 || nextX >= rect.width || nextY >= rect.height) continue;
+            const nextIndex = nextY * rect.width + nextX;
+            if (!resolved[nextIndex]) continue;
+            const pageX = rect.left + nextX;
+            const pageY = rect.top + nextY;
+            if (pageX < 0 || pageY < 0 || pageX >= width || pageY >= height) continue;
+            const offset = (pageY * width + pageX) * 4;
+            if (targetData[offset + 3] < 200) continue;
+            sumR += targetData[offset];
+            sumG += targetData[offset + 1];
+            sumB += targetData[offset + 2];
+            count += 1;
+          }
+        }
+        if (count > 0) updates.push({
+          index,
+          r: Math.round(sumR / count),
+          g: Math.round(sumG / count),
+          b: Math.round(sumB / count)
+        });
+      }
+    }
+    if (!updates.length) break;
+    for (const update of updates) {
+      const localX = update.index % rect.width;
+      const localY = Math.floor(update.index / rect.width);
+      const pageX = rect.left + localX;
+      const pageY = rect.top + localY;
+      if (pageX < 0 || pageY < 0 || pageX >= width || pageY >= height) continue;
+      const offset = (pageY * width + pageX) * 4;
+      targetData[offset] = update.r;
+      targetData[offset + 1] = update.g;
+      targetData[offset + 2] = update.b;
+      targetData[offset + 3] = 255;
+      resolved[update.index] = 1;
+      unresolved -= 1;
+    }
+  }
+
+  for (let localY = 0; localY < rect.height; localY += 1) {
+    for (let localX = 0; localX < rect.width; localX += 1) {
+      const index = localY * rect.width + localX;
+      if (!mask[index] || resolved[index]) continue;
+      const pageX = rect.left + localX;
+      const pageY = rect.top + localY;
+      if (pageX < 0 || pageY < 0 || pageX >= width || pageY >= height) continue;
+      const offset = (pageY * width + pageX) * 4;
+      targetData[offset] = fallback.r;
+      targetData[offset + 1] = fallback.g;
+      targetData[offset + 2] = fallback.b;
       targetData[offset + 3] = 255;
     }
   }

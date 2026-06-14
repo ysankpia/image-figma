@@ -170,6 +170,36 @@ describe("pencil exporter", () => {
     expect(raw.data[sliceOffset + 3]).toBe(0);
   });
 
+  it("inpaints dilated text masks so bright glyph shadows do not remain in raster-owned backgrounds", async () => {
+    const width = 80;
+    const height = 44;
+    const rgba = Buffer.alloc(width * height * 4);
+    fillRawRect(rgba, width, { x: 0, y: 0, width, height }, [0, 148, 65]);
+    fillRawRect(rgba, width, { x: 24, y: 17, width: 28, height: 8 }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 24, y: 25, width: 28, height: 2 }, [0, 104, 45]);
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const png = await createRemainderPng(source, [], [{
+      bbox: { x: 22, y: 14, width: 32, height: 16 },
+      foregroundColor: "#ffffff",
+      provenance: "ocr_text"
+    }]);
+    const raw = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const whiteGlyph = (20 * width + 34) * 4;
+    const darkShadow = (25 * width + 34) * 4;
+
+    expect(raw.data[whiteGlyph]).toBeLessThan(24);
+    expect(raw.data[whiteGlyph + 1]).toBeGreaterThan(120);
+    expect(raw.data[whiteGlyph + 1]).toBeLessThan(180);
+    expect(raw.data[whiteGlyph + 2]).toBeGreaterThan(44);
+    expect(raw.data[darkShadow]).toBeLessThan(24);
+    expect(raw.data[darkShadow + 1]).toBeGreaterThan(120);
+    expect(raw.data[darkShadow + 1]).toBeLessThan(180);
+    expect(raw.data[darkShadow + 2]).toBeGreaterThan(44);
+    expect(raw.data[whiteGlyph + 3]).toBe(255);
+    expect(raw.data[darkShadow + 3]).toBe(255);
+  });
+
   it("preserves colored button surfaces when knocking out editable button text", async () => {
     const source = await sharp({
       create: {
@@ -346,6 +376,7 @@ describe("pencil exporter", () => {
       },
       {
         bbox: { x: 20, y: 84, width: 46, height: 18 },
+        foregroundColor: "#ffffff",
         provenance: "ocr_text"
       }
     ]);
@@ -441,6 +472,105 @@ describe("pencil exporter", () => {
     expect(raw.data[offset + 3]).toBe(255);
   });
 
+  it("rejects low-contrast PSD-like text colors when local foreground has clear contrast", async () => {
+    const width = 160;
+    const height = 80;
+    const source = await sharp(Buffer.from(`
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>
+        <rect x="20" y="20" width="120" height="36" rx="12" fill="#019441"/>
+        <rect x="46" y="32" width="64" height="12" fill="#ffffff"/>
+      </svg>
+    `)).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer: source,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "ocr",
+        lines: [{
+          line: { text: "待支付", bbox: { x: 44, y: 27, width: 70, height: 24 }, confidence: 98, wordCount: 1 },
+          bbox: { x: 44, y: 27, width: 70, height: 24 },
+          bboxSource: "ocr"
+        }]
+      }),
+      textStyleResolver: async () => [{
+        fontSize: 24,
+        fontWeight: "500",
+        fontFamily: "PingFang SC",
+        color: "#019441",
+        lineHeight: 1,
+        textAlign: "left",
+        measured: { width: 64, height: 20 },
+        source: "psdlike"
+      }],
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "待支付", bbox: { x: 44, y: 27, width: 70, height: 24 }, confidence: 98, wordCount: 1 }
+        ]
+      }
+    });
+
+    expect(reconstruction.layers[0].color).toBe("#ffffff");
+    expect(reconstruction.layers[0].metadata.textStyleColorRejected).toEqual({
+      measuredColor: "#019441",
+      fallbackColor: "#ffffff",
+      backgroundColor: "#019441",
+      reason: "low_contrast_against_local_background"
+    });
+  });
+
+  it("uses the union of OCR and physical text boxes for source knockout bounds", async () => {
+    const width = 140;
+    const height = 80;
+    const source = await sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer: source,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "ocr",
+        lines: [{
+          line: { text: "立即支付", bbox: { x: 48, y: 28, width: 58, height: 22 }, confidence: 98, wordCount: 1 },
+          bbox: { x: 34, y: 26, width: 42, height: 24 },
+          bboxSource: "m29_foreground"
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "立即支付", bbox: { x: 48, y: 28, width: 58, height: 22 }, confidence: 98, wordCount: 1 }
+        ]
+      }
+    });
+
+    const knockout = reconstruction.layers[0].knockoutBBox;
+    expect(knockout.x).toBeLessThanOrEqual(34);
+    expect(knockout.x + knockout.width).toBeGreaterThanOrEqual(106);
+  });
+
   it("knocks out glyph foreground without flattening rounded gradient button surfaces", async () => {
     const width = 220;
     const height = 90;
@@ -460,7 +590,11 @@ describe("pencil exporter", () => {
     `)).png().toBuffer();
 
     const originalRaw = await sharp(source).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const remainder = await createRemainderPng(source, [], [{ x: 62, y: 20, width: 112, height: 44 }]);
+    const remainder = await createRemainderPng(source, [], [{
+      bbox: { x: 62, y: 20, width: 112, height: 44 },
+      foregroundColor: "#ffffff",
+      provenance: "ocr_text"
+    }]);
     const raw = await sharp(remainder).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const gradientProbe = { x: 112, y: 25 };
     const textProbe = { x: 108, y: 43 };
@@ -1021,6 +1155,148 @@ describe("pencil exporter", () => {
     expect(reconstruction.layers[0].metadata.bboxSource).toBe("m29_foreground");
     expect(reconstruction.layers[0].metadata.m29PrimitiveId).toBe("prim_text");
     expect(reconstruction.layers[0].metadata.textOwnershipDecision).toBe("editable_text");
+  });
+
+  it("falls back when M29 physical evidence only covers a small fragment of an OCR line", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 750,
+        height: 1334,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+    const ocrBBox = { x: 151, y: 143, width: 157, height: 38 };
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0015",
+      width: 750,
+      height: 1334,
+      imageBuffer,
+      slices: [],
+      locator: () => locateTextLinesFromM29([
+        { text: "退款处理中", bbox: ocrBBox, confidence: 100, wordCount: 1 }
+      ], {
+        schemaName: "M29PhysicalEvidence",
+        primitives: [{
+          id: "prim_tiny_refund_status",
+          primitiveType: "text_region",
+          bbox: { x: 229, y: 160, width: 69, height: 11 },
+          source: { kind: "m29", ocrBlockId: "ocr_0001" }
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "退款处理中", bbox: ocrBBox, confidence: 100, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    expect(layer.metadata.bboxSource).toBe("ocr");
+    expect(layer.metadata.bboxFallbackReason).toBe("m29_bbox_too_small_for_ocr_line");
+    expect(layer.originalBBox).toEqual(ocrBBox);
+    expect(layer.textRenderBBox.width).toBeGreaterThan(ocrBBox.width);
+  });
+
+  it("keeps mixed CJK detail titles in a no-wrap render box", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 900,
+        height: 1600,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+    const ocrBBox = { x: 57, y: 578, width: 327, height: 37 };
+    const physicalBBox = { x: 61, y: 581, width: 323, height: 34 };
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0012",
+      width: 900,
+      height: 1600,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "日常保洁（3小时深度）", bbox: ocrBBox, confidence: 94, wordCount: 1 },
+          bbox: physicalBBox,
+          bboxSource: "m29_foreground",
+          physicalBBox,
+          bboxMatchScore: 0.94,
+          m29PrimitiveId: "prim_detail_title"
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "日常保洁（3小时深度）", bbox: ocrBBox, confidence: 94, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    expect(layer.bbox.x).toBe(physicalBBox.x);
+    expect(layer.bbox.width).toBe(physicalBBox.width);
+    expect(layer.textRenderBBox.width).toBeGreaterThan(layer.bbox.width);
+    expect(layer.textRenderBBox.height).toBeLessThan(layer.textRenderBBox.width / 6);
+  });
+
+  it("keeps price labels in a no-wrap render box while preserving the physical left edge", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 900,
+        height: 1600,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+    const ocrBBox = { x: 496, y: 511, width: 91, height: 45 };
+    const physicalBBox = { x: 506, y: 523, width: 73, height: 25 };
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0011",
+      width: 900,
+      height: 1600,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "m29_ocr_hybrid",
+        lines: [{
+          line: { text: "￥99起", bbox: ocrBBox, confidence: 99, wordCount: 1 },
+          bbox: physicalBBox,
+          bboxSource: "m29_foreground",
+          physicalBBox,
+          bboxMatchScore: 0.66,
+          m29PrimitiveId: "prim_price"
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "￥99起", bbox: ocrBBox, confidence: 99, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    expect(layer.bbox.x).toBe(physicalBBox.x);
+    expect(layer.bbox.width).toBe(physicalBBox.width);
+    expect(layer.textRenderBBox.width).toBeGreaterThanOrEqual(layer.bbox.width);
+    expect(layer.textRenderBBox.height).toBeLessThan(layer.textRenderBBox.width / 3);
   });
 
   it("falls back from over-broad shared M29 text boxes before Pencil font sizing", async () => {
