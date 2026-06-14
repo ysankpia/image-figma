@@ -104,6 +104,17 @@ This is intentionally conservative. It avoids turning gradients, shadows, rounde
 
 To avoid text ghosting, raster-owned control labels still remove the original glyph pixels from the remainder. The removal is not a rectangular repaint: `PageRenderPlan` emits a `TextKnockout` with the label bbox, optional rounded owner clip, foreground text color, and `paintPadding=0`. `pencil-package` then repaints only pixels close to that foreground color after estimating local background from non-glyph pixels.
 
+Current policy update after P9 payment-detail validation:
+
+```text
+all editable text -> render plan carries foregroundColor
+text knockout bounds -> union of OCR bbox and physical bbox
+glyph removal -> dilated foreground mask + local inpaint
+PSD-like color -> accepted only if it remains readable against local background
+```
+
+This keeps the no-vector product direction: the original raster owns gradients, shadows, rounded controls, and complex backgrounds, while editable text owns the glyphs. The package executor must not flatten a full text rectangle to one sampled color. It builds a glyph mask from the known foreground text color, expands that mask just enough to cover antialias/shadow residue, and fills only those glyph-owned pixels from neighboring raster pixels. This is why P9 can remove old white payment text without turning the green/yellow payment button into a single-color vector rectangle.
+
 Set Pencil child order to:
 
 ```text
@@ -238,6 +249,44 @@ Remaining intersections:
 - `page_0021`: certification icon plus label.
 - `page_0023`: rating star glyph/slice overlap.
 - `page_0024`: illustration text crossing illustration slice.
+
+P9 no-vector text cleanup validation:
+
+```text
+New package: /private/tmp/slice-studio-p9-after/project/design.pen
+Backend/web/text-style restarted before export: yes
+Project: project_mqc1wpkd_123c88b0
+Pages: 28
+Assets: 532
+Pencil layout: No layout problems
+Pencil screenshot: page_0009__frame inspected
+```
+
+Implementation adjustment:
+
+- `buildPageRenderPlan()` now passes `foregroundColor` for ordinary OCR text knockouts, not only raster-owned control text.
+- `textKnockoutBounds()` now covers the union of OCR and physical text boxes so source glyphs are not left behind when the two evidence boxes disagree.
+- PSD-like text colors are contrast-guarded against local background and fall back to the local foreground sample when the measured color is effectively a background sample.
+- `paintTextForeground()` now removes a dilated glyph mask through local inpainting instead of repainting glyph pixels with one estimated background color.
+
+Measured result:
+
+```text
+P9 待支付 stillFgRatio=0
+P9 请在23：45：12内完成支付，超时订单将自动取消 stillFgRatio=0
+P9 服务已完成 stillFgRatio=0
+P9 立即支付 stillFgRatio=0
+P9 ￥149.00 stillFgRatio=0
+```
+
+Validation commands:
+
+```bash
+pnpm exec vitest run tests/pencil-exporter.test.ts
+pnpm run check
+pnpm run build
+git diff --check
+```
 
 These remaining cases are not the same main fault as page 6 icon+label layout drift. They are co-owned symbol/text regions or illustration-owned regions and should be handled with a separate rule only after visual acceptance is reviewed.
 
