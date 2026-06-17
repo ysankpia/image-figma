@@ -1,7 +1,7 @@
 import cors from "@elysiajs/cors";
 import { Elysia, t } from "elysia";
 import fs from "node:fs";
-import { allowedOrigin, apiHost, apiPort } from "./config";
+import { allowedOrigins, apiHost, apiPort } from "./config";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
@@ -35,7 +35,7 @@ const app = new Elysia({
     idleTimeout: longExportIdleTimeoutSeconds
   }
 })
-  .use(cors({ origin: allowedOrigin }))
+  .use(cors({ origin: allowedOrigins }))
   .onError(({ error, set }) => {
     if (error instanceof HttpError) {
       set.status = error.statusCode;

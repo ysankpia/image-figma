@@ -9,7 +9,7 @@ export const storageRoot = path.resolve(process.env.SLICE_STUDIO_STORAGE_ROOT ||
 export const projectsRoot = path.join(storageRoot, "projects");
 export const databasePath = path.join(storageRoot, "app.sqlite");
 export const publicApiBaseUrl = process.env.SLICE_STUDIO_PUBLIC_API_URL || `http://${apiHost}:${apiPort}`;
-export const allowedOrigin = process.env.SLICE_STUDIO_ALLOWED_ORIGIN || "http://127.0.0.1:3010";
+export const allowedOrigins = normalizeAllowedOrigins(process.env.SLICE_STUDIO_ALLOWED_ORIGIN);
 export const maxUploadBytes = Number(process.env.SLICE_STUDIO_MAX_UPLOAD_BYTES || 20 * 1024 * 1024);
 export const maxBatchUploadBytes = Number(process.env.SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES || 300 * 1024 * 1024);
 export const ocrProvider = process.env.SLICE_STUDIO_OCR_PROVIDER || "baidu_ppocrv5";
@@ -88,6 +88,31 @@ function normalizeAiSliceProvider(value: string | undefined): AiSliceProvider {
 function normalizeAiSliceWireApi(value: string | undefined): AiSliceWireApi {
   if (value === "chat_completions" || value === "chat.completions" || value === "chat-completions") return "chat_completions";
   return "responses";
+}
+
+function normalizeAllowedOrigins(value: string | undefined): string[] {
+  const origins = (value || "http://127.0.0.1:3010,http://localhost:3010")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return [...new Set(origins.flatMap((origin) => [origin, ...loopbackOriginAliases(origin)]))];
+}
+
+function loopbackOriginAliases(origin: string): string[] {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "127.0.0.1") {
+      url.hostname = "localhost";
+      return [url.origin];
+    }
+    if (url.hostname === "localhost") {
+      url.hostname = "127.0.0.1";
+      return [url.origin];
+    }
+  } catch {
+    return [];
+  }
+  return [];
 }
 
 function normalizeBool(value: string | undefined, fallback: boolean): boolean {
