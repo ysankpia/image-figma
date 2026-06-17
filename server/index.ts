@@ -41,6 +41,7 @@ import {
   createProject,
   deletePage,
   deleteProject,
+  getPageOriginalKey,
   getPageOriginalPath,
   getProjectDetail,
   getSliceForPreview,
@@ -216,8 +217,9 @@ const app = new Elysia({
   .delete("/api/projects/:projectId/pages/:pageId", ({ request, params }) => deletePage(requireUser(request).id, params.projectId, params.pageId))
   .post("/api/projects/:projectId/pages/:pageId/ai-boxes", async ({ request, params }) => generateAiSliceBoxes(requireUser(request).id, params.projectId, params.pageId))
   .get("/api/projects/:projectId/pages/:pageId/source", ({ request, params }) => {
-    const filePath = getPageOriginalPath(requireUser(request).id, params.projectId, params.pageId);
-    return storage.response(storage.projectOriginalImageKey(params.projectId, params.pageId), {
+    const user = requireUser(request);
+    getPageOriginalPath(user.id, params.projectId, params.pageId);
+    return storage.response(getPageOriginalKey(user.id, params.projectId, params.pageId), {
       contentType: "image/png",
       cacheControl: "no-store",
       notFoundMessage: "Original image not found"
@@ -239,7 +241,7 @@ const app = new Elysia({
   .get("/api/projects/:projectId/assets.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    return storage.response(storage.assetsZipKey(params.projectId), {
+    return storage.response(storage.firstExistingKey(storage.assetsZipKeyVariants(user.id, params.projectId), "assets.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-assets.zip"`,
       notFoundMessage: "assets.zip has not been generated"
@@ -250,7 +252,7 @@ const app = new Elysia({
   .get("/api/projects/:projectId/pages/:pageId/project.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    return storage.response(storage.projectPageZipKey(params.projectId, params.pageId), {
+    return storage.response(storage.firstExistingKey(storage.projectPageZipKeyVariants(user.id, params.projectId, params.pageId), "page project.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-${params.pageId}-project.zip"`,
       notFoundMessage: "page project.zip has not been generated"
@@ -259,7 +261,7 @@ const app = new Elysia({
   .get("/api/projects/:projectId/project.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    return storage.response(storage.projectZipKey(params.projectId), {
+    return storage.response(storage.firstExistingKey(storage.projectZipKeyVariants(user.id, params.projectId), "project.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-project.zip"`,
       notFoundMessage: "project.zip has not been generated"

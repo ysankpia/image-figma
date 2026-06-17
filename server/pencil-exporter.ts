@@ -9,7 +9,7 @@ import {
   type PencilPageTextManifest,
   type PencilSlicePlacementManifest
 } from "./pencil-package";
-import { getProjectDetail } from "./projects";
+import { getPageOriginalKey, getProjectDetail } from "./projects";
 import { buildPageRenderPlan } from "./render-plan-builder";
 import type { ControlSurfaceLayer } from "./render-plan";
 import { cropSliceToPng } from "./shape-cutout";
@@ -27,12 +27,12 @@ export async function exportPencilProject(userId: string, projectId: string): Pr
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   consumeExport(userId, projectId, "export.project", { assetCount, pageCount: detail.pages.length });
-  storage.ensureProjectDirectories(projectId);
+  storage.ensureProjectDirectories(userId, projectId);
 
   return exportPencilDetail({
     userId,
     detail,
-    zipKey: storage.projectZipKey(projectId),
+    zipKey: storage.projectZipKey(userId, projectId),
     zipFilename: "project.zip",
     url: `/api/projects/${projectId}/project.zip`
   });
@@ -53,12 +53,12 @@ export async function exportPencilProjectPage(userId: string, projectId: string,
     },
     pages: [page]
   };
-  storage.ensureProjectDirectories(projectId);
+  storage.ensureProjectDirectories(userId, projectId);
 
   return exportPencilDetail({
     userId,
     detail: pageDetail,
-    zipKey: storage.projectPageZipKey(projectId, pageId),
+    zipKey: storage.projectPageZipKey(userId, projectId, pageId),
     zipFilename: "project.zip",
     url: `/api/projects/${projectId}/pages/${pageId}/project.zip`
   });
@@ -102,12 +102,12 @@ async function exportPencilDetail(input: {
   };
 }
 
-export function getProjectZipPath(projectId: string): string {
-  return storage.absolutePath(storage.projectZipKey(projectId));
+export function getProjectZipPath(userId: string, projectId: string): string {
+  return storage.absolutePath(storage.projectZipKey(userId, projectId));
 }
 
-export function getProjectPageZipPath(projectId: string, pageId: string): string {
-  return storage.absolutePath(storage.projectPageZipKey(projectId, pageId));
+export function getProjectPageZipPath(userId: string, projectId: string, pageId: string): string {
+  return storage.absolutePath(storage.projectPageZipKey(userId, projectId, pageId));
 }
 
 async function buildPencilDocument(
@@ -126,7 +126,7 @@ async function buildPencilDocument(
   const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(storage.projectOriginalImageKey(detail.project.id, page.id), "Original image not found");
+    const originalBuffer = storage.read(getPageOriginalKey(userId, detail.project.id, page.id), "Original image not found");
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));

@@ -22,40 +22,107 @@ export function createLocalStorageAdapter(root: string) {
     return filePath;
   }
 
-  function projectRootKey(projectId: string): string {
+  function userRootKey(userId: string): string {
+    return `users/${userId}`;
+  }
+
+  function projectRootKey(userId: string, projectId: string): string {
+    return `${userRootKey(userId)}/projects/${projectId}`;
+  }
+
+  function legacyProjectRootKey(projectId: string): string {
     return `projects/${projectId}`;
   }
 
-  function projectOriginalImageKey(projectId: string, pageId: string): string {
-    return `${projectRootKey(projectId)}/originals/${pageId}.png`;
+  function projectOriginalImageKey(userId: string, projectId: string, pageId: string): string {
+    return `${projectRootKey(userId, projectId)}/originals/${pageId}.png`;
   }
 
-  function assetsZipKey(projectId: string): string {
-    return `${projectRootKey(projectId)}/exports/assets.zip`;
+  function legacyProjectOriginalImageKey(projectId: string, pageId: string): string {
+    return `${legacyProjectRootKey(projectId)}/originals/${pageId}.png`;
   }
 
-  function projectZipKey(projectId: string): string {
-    return `${projectRootKey(projectId)}/exports/project.zip`;
+  function projectOriginalImageKeyVariants(userId: string, projectId: string, pageId: string): string[] {
+    return [
+      projectOriginalImageKey(userId, projectId, pageId),
+      legacyProjectOriginalImageKey(projectId, pageId)
+    ];
   }
 
-  function projectPageZipKey(projectId: string, pageId: string): string {
-    return `${projectRootKey(projectId)}/exports/pages/${pageId}/project.zip`;
+  function assetsZipKey(userId: string, projectId: string): string {
+    return `${projectRootKey(userId, projectId)}/exports/assets.zip`;
+  }
+
+  function legacyAssetsZipKey(projectId: string): string {
+    return `${legacyProjectRootKey(projectId)}/exports/assets.zip`;
+  }
+
+  function assetsZipKeyVariants(userId: string, projectId: string): string[] {
+    return [
+      assetsZipKey(userId, projectId),
+      legacyAssetsZipKey(projectId)
+    ];
+  }
+
+  function projectZipKey(userId: string, projectId: string): string {
+    return `${projectRootKey(userId, projectId)}/exports/project.zip`;
+  }
+
+  function legacyProjectZipKey(projectId: string): string {
+    return `${legacyProjectRootKey(projectId)}/exports/project.zip`;
+  }
+
+  function projectZipKeyVariants(userId: string, projectId: string): string[] {
+    return [
+      projectZipKey(userId, projectId),
+      legacyProjectZipKey(projectId)
+    ];
+  }
+
+  function projectPageZipKey(userId: string, projectId: string, pageId: string): string {
+    return `${projectRootKey(userId, projectId)}/exports/pages/${pageId}/project.zip`;
+  }
+
+  function legacyProjectPageZipKey(projectId: string, pageId: string): string {
+    return `${legacyProjectRootKey(projectId)}/exports/pages/${pageId}/project.zip`;
+  }
+
+  function projectPageZipKeyVariants(userId: string, projectId: string, pageId: string): string[] {
+    return [
+      projectPageZipKey(userId, projectId, pageId),
+      legacyProjectPageZipKey(projectId, pageId)
+    ];
+  }
+
+  function firstExistingKey(keys: string[], notFoundMessage = "Storage object not found"): string {
+    for (const key of keys) {
+      if (fs.existsSync(absolutePath(key))) return key;
+    }
+    throw httpError(404, notFoundMessage);
   }
 
   return {
     root,
     absolutePath,
+    userRootKey,
     projectRootKey,
+    legacyProjectRootKey,
     projectOriginalImageKey,
+    projectOriginalImageKeyVariants,
     assetsZipKey,
+    assetsZipKeyVariants,
     projectZipKey,
+    projectZipKeyVariants,
     projectPageZipKey,
-    ensureProjectDirectories(projectId: string): void {
-      fs.mkdirSync(absolutePath(`${projectRootKey(projectId)}/originals`), { recursive: true });
-      fs.mkdirSync(absolutePath(`${projectRootKey(projectId)}/exports`), { recursive: true });
+    projectPageZipKeyVariants,
+    firstExistingKey,
+    ensureProjectDirectories(userId: string, projectId: string): void {
+      fs.mkdirSync(absolutePath(`${projectRootKey(userId, projectId)}/originals`), { recursive: true });
+      fs.mkdirSync(absolutePath(`${projectRootKey(userId, projectId)}/exports`), { recursive: true });
     },
-    deleteProject(projectId: string): void {
-      fs.rmSync(absolutePath(projectRootKey(projectId)), { recursive: true, force: true });
+    deleteProject(userId: string, projectId: string): void {
+      fs.rmSync(absolutePath(projectRootKey(userId, projectId)), { recursive: true, force: true });
+      fs.rmSync(absolutePath(legacyProjectRootKey(projectId)), { recursive: true, force: true });
     },
     exists(key: string): boolean {
       return fs.existsSync(absolutePath(key));

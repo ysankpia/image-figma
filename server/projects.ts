@@ -48,7 +48,7 @@ export function createProject(userId: string, payload: { name?: string }): Proje
     INSERT INTO projects (id, user_id, name, created_at, updated_at, page_count, slice_count)
     VALUES (?, ?, ?, ?, ?, 0, 0)
   `).run(id, userId, name, now, now);
-  storage.ensureProjectDirectories(id);
+  storage.ensureProjectDirectories(userId, id);
   const project = getProjectSummary(userId, id);
   if (!project) throw httpError(500, "Project was not created");
   recordUsageEvent({ userId, projectId: id, eventType: "project.create" });
@@ -82,7 +82,7 @@ export function deleteProject(userId: string, projectId: string): void {
   transaction(() => {
     db.query("DELETE FROM projects WHERE id = ? AND user_id = ?").run(projectId, userId);
   });
-  storage.deleteProject(projectId);
+  storage.deleteProject(userId, projectId);
 }
 
 export async function addPages(userId: string, projectId: string, files: File | File[] | undefined): Promise<PageRecord[]> {
@@ -95,7 +95,7 @@ export async function addPages(userId: string, projectId: string, files: File | 
   const existingCount = Number(db.query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM pages WHERE project_id = ?").get(projectId)?.count || 0);
   const nextPageIdNumber = getNextPageIdNumber(projectId);
   const now = new Date().toISOString();
-  storage.ensureProjectDirectories(projectId);
+  storage.ensureProjectDirectories(userId, projectId);
 
   const normalizedFiles: Array<{
     pageIndex: number;
@@ -129,7 +129,7 @@ export async function addPages(userId: string, projectId: string, files: File | 
   const pages: PageRecord[] = [];
   transaction(() => {
     for (const file of normalizedFiles) {
-      const relativePath = storage.projectOriginalImageKey(projectId, file.pageId);
+      const relativePath = storage.projectOriginalImageKey(userId, projectId, file.pageId);
       storage.write(relativePath, file.buffer);
       db.query(`
         INSERT INTO pages (id, project_id, page_index, original_name, display_name, original_path, width, height, created_at)
@@ -344,14 +344,25 @@ export function getPageOriginalPath(userId: string, projectId: string, pageId: s
   return absolutePath;
 }
 
+export function getPageOriginalKey(userId: string, projectId: string, pageId: string): string {
+  assertSafeId(projectId, "projectId");
+  assertSafeId(pageId, "pageId");
+  assertProjectExists(userId, projectId);
+  const row = db.query<Pick<PageRow, "original_path">, [string, string]>("SELECT original_path FROM pages WHERE project_id = ? AND id = ?").get(projectId, pageId);
+  if (!row) throw httpError(404, "Page not found");
+  if (!storage.exists(row.original_path)) throw httpError(404, "Original image not found");
+  return row.original_path;
+}
+
 export function getSliceForPreview(userId: string, projectId: string, sliceId: string): { originalKey: string; slice: SliceRecord } {
   assertSafeId(projectId, "projectId");
   assertSafeSliceId(sliceId);
   assertProjectExists(userId, projectId);
   const slice = db.query<SliceRow, [string, string]>("SELECT * FROM slices WHERE project_id = ? AND id = ?").get(projectId, sliceId);
   if (!slice) throw httpError(404, "Slice not found");
+  const page = getPageRow(projectId, slice.page_id);
   return {
-    originalKey: storage.projectOriginalImageKey(projectId, slice.page_id),
+    originalKey: storage.firstExistingKey([page.original_path], "Original image not found"),
     slice: formatSlice(slice)
   };
 }

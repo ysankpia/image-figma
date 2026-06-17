@@ -3,7 +3,7 @@ import { createSignedStorageDownloadUrl, resolveSignedStorageDownload } from "..
 
 describe("signed storage download urls", () => {
   it("round-trips a signed local download descriptor", () => {
-    const url = createSignedStorageDownloadUrl("projects/project_1/exports/project.zip", {
+    const url = createSignedStorageDownloadUrl("users/user_1/projects/project_1/exports/project.zip", {
       contentType: "application/zip",
       contentDisposition: 'attachment; filename="project.zip"',
       notFoundMessage: "project.zip has not been generated"
@@ -13,7 +13,7 @@ describe("signed storage download urls", () => {
 
     const resolved = resolveSignedStorageDownload(token!, 1_700_000_300_000);
     expect(resolved).toEqual({
-      key: "projects/project_1/exports/project.zip",
+      key: "users/user_1/projects/project_1/exports/project.zip",
       response: {
         contentType: "application/zip",
         contentDisposition: 'attachment; filename="project.zip"',
@@ -24,7 +24,7 @@ describe("signed storage download urls", () => {
   });
 
   it("rejects tampered or expired tokens", () => {
-    const url = createSignedStorageDownloadUrl("projects/project_1/exports/assets.zip", {
+    const url = createSignedStorageDownloadUrl("users/user_1/projects/project_1/exports/assets.zip", {
       contentType: "application/zip"
     }, 1_700_000_000_000);
     const token = new URL(`http://slice.test${url}`).searchParams.get("token");

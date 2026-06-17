@@ -10,7 +10,7 @@ import {
 } from "../config";
 import { consumeAiCall } from "../billing";
 import { httpError } from "../errors";
-import { getPageOriginalPath, getProjectDetail } from "../projects";
+import { getPageOriginalKey, getPageOriginalPath, getProjectDetail } from "../projects";
 import { storage } from "../storage";
 import type { AiSliceBoxesResponse } from "../../shared/types";
 import { filterAiBoxes, parseAiBoxResponse } from "./boxes";
@@ -27,7 +27,7 @@ export async function generateAiSliceBoxes(userId: string, projectId: string, pa
   consumeAiCall(userId, projectId, { pageId, provider: aiSliceProvider });
 
   getPageOriginalPath(userId, projectId, pageId);
-  const imageBuffer = storage.read(storage.projectOriginalImageKey(projectId, pageId), "Original image not found");
+  const imageBuffer = storage.read(getPageOriginalKey(userId, projectId, pageId), "Original image not found");
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
   const width = metadata.width || page.width;
   const height = metadata.height || page.height;

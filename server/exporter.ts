@@ -1,6 +1,6 @@
 import { consumeExport } from "./billing";
 import { httpError } from "./errors";
-import { getProjectDetail } from "./projects";
+import { getPageOriginalKey, getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
 import { storage } from "./storage";
 import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
@@ -11,7 +11,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   consumeExport(userId, projectId, "export.assets", { assetCount });
-  storage.ensureProjectDirectories(projectId);
+  storage.ensureProjectDirectories(userId, projectId);
 
   const exportedAt = new Date().toISOString();
   const manifest = buildExportManifest(detail, exportedAt);
@@ -28,7 +28,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
 
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(storage.projectOriginalImageKey(projectId, page.id), "Original image not found");
+    const originalBuffer = storage.read(getPageOriginalKey(userId, projectId, page.id), "Original image not found");
     files.push({
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer
@@ -42,11 +42,12 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
     }
   }
 
-  storage.write(storage.assetsZipKey(projectId), createZipBuffer(files));
+  const zipKey = storage.assetsZipKey(userId, projectId);
+  storage.write(zipKey, createZipBuffer(files));
   return {
     ok: true,
     assetCount,
-    url: storage.downloadUrl(storage.assetsZipKey(projectId), {
+    url: storage.downloadUrl(zipKey, {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${projectId}-assets.zip"`,
       notFoundMessage: "assets.zip has not been generated"
@@ -54,6 +55,6 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
   };
 }
 
-export function getAssetsZipPath(projectId: string): string {
-  return storage.absolutePath(storage.assetsZipKey(projectId));
+export function getAssetsZipPath(userId: string, projectId: string): string {
+  return storage.absolutePath(storage.assetsZipKey(userId, projectId));
 }
