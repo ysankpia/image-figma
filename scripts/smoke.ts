@@ -68,8 +68,11 @@ async function main() {
     }
 
     const exported = await request<{ assetCount: number; url: string }>(`/api/projects/${projectId}/export-assets`, { method: "POST" });
+    if (!exported.url.startsWith("/api/storage-download?token=")) {
+      throw new Error(`expected signed assets download url, got ${exported.url}`);
+    }
     if (exported.assetCount !== 1) throw new Error(`expected 1 asset, got ${exported.assetCount}`);
-    const zip = await fetchWithSession(`${apiBaseUrl}${exported.url}`);
+    const zip = await fetch(`${apiBaseUrl}${exported.url}`);
     if (!zip.ok) throw new Error(`zip download failed ${zip.status}`);
     const zipBuffer = Buffer.from(await zip.arrayBuffer());
     const entries = readZipEntryNames(zipBuffer);
@@ -90,9 +93,12 @@ async function main() {
     }
 
     const projectExport = await request<{ assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, { method: "POST" });
+    if (!projectExport.url.startsWith("/api/storage-download?token=")) {
+      throw new Error(`expected signed project download url, got ${projectExport.url}`);
+    }
     if (projectExport.assetCount !== 1) throw new Error(`expected 1 project asset, got ${projectExport.assetCount}`);
     if (projectExport.pageCount !== 2) throw new Error(`expected 2 project pages, got ${projectExport.pageCount}`);
-    const projectZip = await fetchWithSession(`${apiBaseUrl}${projectExport.url}`);
+    const projectZip = await fetch(`${apiBaseUrl}${projectExport.url}`);
     if (!projectZip.ok) throw new Error(`project.zip download failed ${projectZip.status}`);
     const projectZipBuffer = Buffer.from(await projectZip.arrayBuffer());
     const projectEntries = readZipEntryNames(projectZipBuffer);

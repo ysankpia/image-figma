@@ -94,7 +94,11 @@ async function exportPencilDetail(input: {
     ok: true,
     assetCount,
     pageCount: input.detail.pages.length,
-    url: input.url
+    url: storage.downloadUrl(input.zipKey, {
+      contentType: "application/zip",
+      contentDisposition: `attachment; filename="${input.zipFilename}"`,
+      notFoundMessage: `${input.zipFilename} has not been generated`
+    })
   };
 }
 

@@ -52,4 +52,13 @@ describe("storage adapter", () => {
       notFoundMessage: "project.zip has not been generated"
     })).toThrow("project.zip has not been generated");
   });
+
+  it("creates signed download urls for stored files", () => {
+    const { storage } = makeStorage();
+    const url = storage.downloadUrl("projects/project_1/exports/project.zip", {
+      contentType: "application/zip",
+      contentDisposition: 'attachment; filename="project.zip"'
+    });
+    expect(url.startsWith("/api/storage-download?token=")).toBe(true);
+  });
 });

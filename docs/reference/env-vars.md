@@ -23,6 +23,8 @@
 | `SLICE_STUDIO_AUTH_COOKIE_NAME` | 会话 cookie 名 | `slice_studio_session` | 否 |
 | `SLICE_STUDIO_AUTH_SESSION_TTL_DAYS` | 会话有效天数 | `30` | 否 |
 | `SLICE_STUDIO_AUTH_SECURE_COOKIES` | 是否给会话 cookie 加 Secure | 生产默认 `true`，本地默认 `false` | 否 |
+| `SLICE_STUDIO_DOWNLOAD_SIGNING_SECRET` | 本地/生产下载签名密钥；用于签发 `/api/storage-download` token | 回退到 `SLICE_STUDIO_LOCAL_OWNER_PASSWORD`，再回退到内置开发默认值 | 否 |
+| `SLICE_STUDIO_DOWNLOAD_URL_TTL_SECONDS` | 下载 token 有效秒数 | `600` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_EMAIL` | 本地/bootstrap 管理员邮箱 | `local@slicestudio.dev` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_NAME` | 本地/bootstrap 管理员昵称 | `Local Owner` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_PASSWORD` | 本地/bootstrap 管理员密码；生产必须覆盖 | `slice-studio-local-owner` | 否 |
@@ -103,6 +105,8 @@ SLICE_STUDIO_API_PORT=4110
 SLICE_STUDIO_AUTH_COOKIE_NAME=slice_studio_session
 SLICE_STUDIO_AUTH_SESSION_TTL_DAYS=30
 SLICE_STUDIO_AUTH_SECURE_COOKIES=false
+SLICE_STUDIO_DOWNLOAD_SIGNING_SECRET=replace-me-before-production
+SLICE_STUDIO_DOWNLOAD_URL_TTL_SECONDS=600
 SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner

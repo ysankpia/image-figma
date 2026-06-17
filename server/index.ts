@@ -35,6 +35,7 @@ import { cropSliceToPng } from "./shape-cutout";
 import { generateAiSliceBoxes } from "./ai-slice-boxes";
 import { aiSliceBatchConcurrency } from "./config";
 import { storage } from "./storage";
+import { resolveSignedStorageDownload } from "./storage-download";
 import {
   addPages,
   createProject,
@@ -75,6 +76,14 @@ const app = new Elysia({
     return { error: error instanceof Error ? error.message : "Internal server error" };
   })
   .get("/api/health", () => ({ ok: true }))
+  .get("/api/storage-download", ({ query }) => {
+    const download = resolveSignedStorageDownload(query.token);
+    return storage.response(download.key, download.response);
+  }, {
+    query: t.Object({
+      token: t.String({ minLength: 1 })
+    })
+  })
   .get("/api/auth/session", ({ request }) => ({ user: getCurrentUser(request) }))
   .get("/api/me", ({ request }) => {
     const user = requireUser(request);

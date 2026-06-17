@@ -200,6 +200,8 @@ Current mainline storage now goes through a single `server/storage.ts` local ada
 
 Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the local SQLite schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc `ALTER TABLE`/rebuild side effects. The current migration contract still targets local SQLite, but auth, billing, quota, and export schema repair now has stable named stages and a repeatable `bun run smoke:db-migrations` legacy-upgrade proof.
 
+Current mainline download delivery is also separated from raw file paths. Export APIs now return short-lived signed URLs under `/api/storage-download?token=...`; the token resolves to a local storage key plus response metadata and expires after a configured TTL. The current byte source is still local filesystem storage, but this download contract is the seam intended for a later object-storage backend with real provider-signed downloads.
+
 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency. It carries OCR text-mask lineage in the same spirit as the older Go M29 pipeline, but it does not let OCR boxes directly become physical text placement. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 
 `SLICE_STUDIO_TEXT_STYLE_PROVIDER` accepts `psdlike` or `fallback`. Normal runtime defaults to `psdlike`; test runtime defaults to `fallback` unless explicitly overridden so unit tests do not depend on a local HTTP service.

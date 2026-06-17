@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { storageRoot } from "./config";
 import { httpError } from "./errors";
+import { createSignedStorageDownloadUrl, type StorageDownloadOptions } from "./storage-download";
 import { assertInside } from "./utils";
 
 export function createLocalStorageAdapter(root: string) {
@@ -93,6 +94,9 @@ export function createLocalStorageAdapter(root: string) {
       if (input.contentDisposition) headers["content-disposition"] = input.contentDisposition;
       if (input.cacheControl) headers["cache-control"] = input.cacheControl;
       return new Response(Bun.file(filePath), { headers });
+    },
+    downloadUrl(key: string, input: StorageDownloadOptions): string {
+      return createSignedStorageDownloadUrl(key, input);
     }
   };
 }

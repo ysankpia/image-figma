@@ -46,7 +46,11 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
   return {
     ok: true,
     assetCount,
-    url: `/api/projects/${projectId}/assets.zip`
+    url: storage.downloadUrl(storage.assetsZipKey(projectId), {
+      contentType: "application/zip",
+      contentDisposition: `attachment; filename="${projectId}-assets.zip"`,
+      notFoundMessage: "assets.zip has not been generated"
+    })
   };
 }
 
