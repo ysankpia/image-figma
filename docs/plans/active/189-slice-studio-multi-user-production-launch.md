@@ -10,6 +10,14 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 
 ## Implementation progress
 
+2026-06-18 the product shell is now in a usable SaaS shape:
+
+- Landing page now acts as a real product home instead of a redirect stub.
+- `/login` and `/register` now share a proper auth surface.
+- `/projects`, `/settings`, `/billing`, and `/admin` now sit under one console shell with consistent navigation and account identity.
+- Billing keeps plan/usage/order structure visible, but the payment flow is intentionally paused and not presented as the current user action.
+- The current focus is on keeping the product shell coherent for real usage while leaving payment reintegration for a later provider decision.
+
 2026-06-17 Stage 1 foundation is in progress:
 
 - Landing, login/register, protected `/projects`, protected `/projects/:projectId/review`, `/settings`, `/billing`, and `/admin` surfaces now exist.
