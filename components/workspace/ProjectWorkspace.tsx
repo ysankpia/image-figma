@@ -58,7 +58,7 @@ export function ProjectWorkspace() {
         firstPageSize: project.firstPage ? `${project.firstPage.width}x${project.firstPage.height}` : null
       }));
       setProjects(enriched);
-      setStatus(data.projects.length ? `共 ${data.projects.length} 个项目。` : "还没有项目。新建一个项目开始切图。");
+      setStatus(data.projects.length ? `共 ${data.projects.length} 个项目。` : "还没有项目。创建一个项目后就可以开始上传页面。");
     } catch (error) {
       setStatus(`读取失败：${error instanceof Error ? error.message : "unknown error"}`);
     }
@@ -128,7 +128,7 @@ export function ProjectWorkspace() {
         <header className="workspaceTopbar">
           <div className="workspaceCrumbs">
             <span>Slice Studio</span>
-            <strong>{filter === "withSlices" ? "With assets" : filter === "all" ? "All projects" : "Recents"}</strong>
+            <strong>{filter === "withSlices" ? "已有切图项目" : filter === "all" ? "全部项目" : "最近项目"}</strong>
           </div>
           <div className="workspaceAccount">
             {account ? <span>{account.name || account.email}</span> : null}
@@ -193,11 +193,11 @@ export function ProjectWorkspace() {
               ))}
             </div>
           ) : (
-            <div className="emptyState">
+          <div className="emptyState">
               <FileImage aria-hidden="true" />
               <strong>{projects.length ? "没有匹配项目" : "没有项目"}</strong>
-              <span>{projects.length ? "换一个搜索词或过滤条件。" : "输入名称后点击“新建”。"}</span>
-            </div>
+              <span>{projects.length ? "换一个搜索词或过滤条件。" : "先创建一个项目，再上传原图开始切图。"}</span>
+          </div>
           )}
         </div>
       </section>
@@ -342,8 +342,8 @@ function ProjectCard({
           ) : (
             <Link href={`/projects/${project.id}/review`}>{project.name}</Link>
           )}
-          <span>{project.pageCount ? `Edited ${updated}` : "Empty project"}</span>
-          {isList ? <span>{project.firstPageName || "尚未上传页面"}{project.firstPageSize ? ` · ${project.firstPageSize}` : ""}</span> : null}
+          <span>{project.pageCount ? `更新于 ${updated}` : "尚未上传页面"}</span>
+          {isList ? <span>{project.firstPageName || "等待上传首张页面"}{project.firstPageSize ? ` · ${project.firstPageSize}` : ""}</span> : null}
         </div>
         <div className="projectBadges">
           <span>{project.pageCount} 页</span>

@@ -1,31 +1,13 @@
-"use client";
-
-import { useState } from "react";
-import { apiPost } from "@/components/api";
-
 export function BillingActions({ planId }: { planId: string }) {
-  const [status, setStatus] = useState("");
-
-  async function createOrder() {
-    setStatus("正在创建订单...");
-    try {
-      const result = await apiPost<{ order: { id: string; checkoutUrl: string | null; message: string } }>("/api/billing/orders", {
-        planId,
-        provider: "xpay"
-      });
-      setStatus(`已创建订单 ${result.order.id}。${result.order.message}`);
-      if (result.order.checkoutUrl) {
-        window.location.href = result.order.checkoutUrl;
-      }
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "创建订单失败");
-    }
-  }
-
   return (
-    <div className="billingAction">
-      <button type="button" className="primaryButton" onClick={() => void createOrder()}>创建 XPay 预留订单</button>
-      {status ? <span>{status}</span> : null}
+    <div className="billingPlaceholder">
+      <div className="billingPlaceholderHeader">
+        <strong>支付入口暂未开放</strong>
+        <span>目标套餐：{planId.toUpperCase()}</span>
+      </div>
+      <p>
+        账单页先保留额度、套餐和订单结构。正式支付暂不接 XPay，后续会改成链动小铺或新的支付 provider，再把购买链路重新挂上来。
+      </p>
     </div>
   );
 }

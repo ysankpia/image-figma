@@ -68,7 +68,7 @@ button:disabled {
 
 .workspaceShell {
   min-height: 100dvh;
-  background: var(--surface);
+  background: #f4f6fa;
 }
 
 h1,
@@ -141,9 +141,10 @@ h1 {
   align-items: center;
   gap: 18px;
   min-width: 0;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(210, 210, 215, 0.86);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
 }
 
 .workspaceCrumbs {
@@ -170,7 +171,9 @@ h1 {
 
 .workspaceContent {
   min-width: 0;
-  padding: 24px 32px 40px;
+  width: min(1680px, 100%);
+  margin: 0 auto;
+  padding: 24px 24px 40px;
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -248,8 +251,8 @@ h1 {
 
 .projectGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(292px, 1fr));
-  gap: 30px 32px;
+  grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+  gap: 24px;
 }
 
 .projectList {
@@ -261,7 +264,7 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(82px, auto);
   min-width: 0;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(210, 210, 215, 0.9);
   border-radius: 14px;
   background: var(--surface);
   overflow: hidden;
@@ -272,7 +275,7 @@ h1 {
 
 .projectCard:hover {
   border-color: #c0c0c6;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 
@@ -3118,6 +3121,335 @@ h1 {
   background: var(--bg);
 }
 
+.marketingPage {
+  min-height: 100dvh;
+  background: #f4f6fa;
+}
+
+.marketingSection {
+  width: min(1240px, calc(100% - 56px));
+  margin: 0 auto;
+}
+
+.siteHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(1240px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 18px 0;
+}
+
+.siteHeaderNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.siteHeaderNav a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.consoleBrand {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.consoleBrand.inline {
+  display: inline-grid;
+}
+
+.consoleBrandMark {
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.consoleBrandText {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.marketingHero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: min(920px, calc(100dvh - 78px));
+  overflow: hidden;
+  border-top: 1px solid rgba(210, 210, 215, 0.6);
+}
+
+.marketingHeroImage {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.marketingHeroShade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(9, 11, 18, 0.84) 0%, rgba(9, 11, 18, 0.68) 34%, rgba(9, 11, 18, 0.22) 62%, rgba(9, 11, 18, 0.12) 100%);
+}
+
+.marketingHeroInner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 26px;
+  width: min(1240px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 72px 0 56px;
+  color: #fff;
+}
+
+.marketingHeroCopy {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+}
+
+.marketingHeroInner h1 {
+  max-width: 12ch;
+  font-size: clamp(40px, 6vw, 68px);
+  line-height: 1.02;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.marketingLead {
+  max-width: 56ch;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.heroStatRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 920px;
+}
+
+.heroStat {
+  display: grid;
+  gap: 6px;
+  min-height: 108px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(12, 17, 29, 0.34);
+  backdrop-filter: blur(10px);
+}
+
+.heroStat span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+}
+
+.heroStat strong {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.marketingBand {
+  display: grid;
+  gap: 20px;
+  padding: 40px 0 56px;
+}
+
+.marketingBand.compact {
+  padding-top: 0;
+}
+
+.bandHeader {
+  display: grid;
+  gap: 10px;
+}
+
+.bandHeader h2,
+.deliverableRow h2 {
+  max-width: 18ch;
+  font-size: 32px;
+  line-height: 1.14;
+  text-wrap: balance;
+}
+
+.deliverableRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 24px;
+  align-items: end;
+}
+
+.workflowGrid,
+.surfaceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.workflowCard,
+.surfaceCard {
+  display: grid;
+  gap: 10px;
+  min-height: 196px;
+  padding: 18px;
+  border: 1px solid rgba(210, 210, 215, 0.86);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.workflowStep {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflowCard strong,
+.surfaceCard strong {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.workflowCard p,
+.surfaceCard p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.marketingBand.subtle {
+  padding-top: 0;
+}
+
+.marketingNote {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.authPage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 520px);
+  min-height: 100dvh;
+  background: #f4f6fa;
+}
+
+.authShowcase {
+  position: relative;
+  display: grid;
+  align-items: end;
+  min-height: 100%;
+  padding: 32px;
+  background:
+    linear-gradient(135deg, rgba(8, 11, 19, 0.92) 0%, rgba(8, 11, 19, 0.76) 32%, rgba(8, 11, 19, 0.28) 100%),
+    url("/marketing/workspace-hero.png") top center / cover no-repeat;
+}
+
+.authShowcaseOverlay {
+  position: absolute;
+  inset: 0;
+}
+
+.authShowcaseBody {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 22px;
+  max-width: 560px;
+  color: #fff;
+}
+
+.authShowcaseCopy {
+  display: grid;
+  gap: 18px;
+}
+
+.authShowcaseBody h1 {
+  max-width: 12ch;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.04;
+  font-weight: 700;
+}
+
+.authShowcaseBody p {
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.7;
+}
+
+.authShowcasePanel {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(8, 11, 19, 0.36);
+  backdrop-filter: blur(10px);
+}
+
+.authShowcasePanel strong {
+  font-size: 14px;
+}
+
+.authFeatureList {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.authFeatureList li {
+  position: relative;
+  padding-left: 16px;
+  color: rgba(255, 255, 255, 0.76);
+  line-height: 1.6;
+}
+
+.authFeatureList li::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #6be675;
+}
+
+.authPanel {
+  display: grid;
+  align-content: center;
+  gap: 24px;
+  padding: 48px 48px 48px 40px;
+  background:
+    radial-gradient(circle at top left, rgba(0, 102, 204, 0.06), transparent 34%),
+    #f7f8fb;
+}
+
+.authPanelHeader {
+  display: grid;
+  gap: 18px;
+}
+
+.authPanelHeader h2 {
+  margin: 0 0 8px;
+  font-size: 34px;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.authPanelHeader p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .landingShell {
   align-content: center;
 }
@@ -3173,6 +3505,18 @@ h1 {
 .authForm {
   display: grid;
   gap: 14px;
+  max-width: 420px;
+}
+
+.formField {
+  display: grid;
+  gap: 8px;
+}
+
+.formField > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .authForm label {
@@ -3188,6 +3532,73 @@ h1 {
   border-radius: 9px;
   padding: 0 12px;
   color: var(--ink);
+  background: #fff;
+}
+
+.authForm input:focus {
+  border-color: var(--blue);
+  outline: 3px solid rgba(0, 102, 204, 0.12);
+}
+
+.passwordField {
+  position: relative;
+}
+
+.passwordField input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.passwordToggle:hover:not(:disabled) {
+  background: #f1f5fb;
+  color: var(--blue);
+}
+
+.authSubmitButton {
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.authHelperRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.authHelperRow a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.authStatus {
+  min-height: 20px;
+  margin: 0;
+}
+
+.authDevHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .inlineLink,
@@ -3254,6 +3665,409 @@ h1 {
   gap: 18px;
   padding: 28px;
   background: var(--bg);
+}
+
+.consoleShell {
+  min-height: 100dvh;
+  background: #f4f6fa;
+}
+
+.consoleHeaderBand {
+  border-bottom: 1px solid rgba(210, 210, 215, 0.8);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+}
+
+.consoleHeaderInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+  width: min(1560px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 22px 0;
+}
+
+.consoleTitleBlock {
+  display: grid;
+  gap: 16px;
+}
+
+.consoleHeading {
+  display: grid;
+  gap: 8px;
+}
+
+.consoleHeading h1 {
+  font-size: 34px;
+  line-height: 1.08;
+}
+
+.consoleHeading p {
+  max-width: 72ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.consoleUserPanel {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.consoleUserMeta {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.consoleUserMeta strong {
+  font-size: 14px;
+}
+
+.consoleUserMeta span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.consoleUserBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consoleBody {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 28px;
+  width: min(1560px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 28px 0 36px;
+}
+
+.consoleSidebar {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  position: sticky;
+  top: 28px;
+  align-self: start;
+}
+
+.consoleSidebarSurface {
+  padding: 10px;
+  border: 1px solid rgba(210, 210, 215, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.consoleNav {
+  display: grid;
+  gap: 6px;
+}
+
+.consoleNavLink {
+  display: inline-grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.consoleNavLink:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+}
+
+.consoleNavLink.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.consoleNavLink svg,
+.consoleSidebarNote svg,
+.signOutButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.consoleSidebarNote {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(210, 210, 215, 0.82);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+}
+
+.consoleSidebarNote strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.consoleSidebarNote span,
+.consoleFooterNote {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.consoleContent {
+  display: grid;
+  gap: 30px;
+  min-width: 0;
+  align-content: start;
+}
+
+.consoleSection {
+  display: grid;
+  gap: 16px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sectionHeader h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.sectionHeader p,
+.sectionMeta,
+.emptyInline {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sectionSplit {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dashboardTopSplit {
+  align-items: stretch;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.metricGridCompact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.metricCard,
+.planCard,
+.toolSurface,
+.tableSurface,
+.calloutSurface,
+.billingPlaceholder {
+  border: 1px solid rgba(210, 210, 215, 0.9);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.metricCard,
+.planCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.metricCard dt,
+.planCard small,
+.billingPlaceholder p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.metricCard dd {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.metricGridCompact .metricCard dd {
+  font-size: 24px;
+}
+
+.toolSurface,
+.tableSurface,
+.calloutSurface,
+.billingPlaceholder {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+}
+
+.calloutSurface strong,
+.billingPlaceholderHeader strong {
+  font-size: 15px;
+}
+
+.calloutSurface p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.calloutSurface.emphasis {
+  border-color: rgba(0, 102, 204, 0.16);
+  background:
+    linear-gradient(180deg, rgba(0, 102, 204, 0.04), rgba(0, 102, 204, 0.01)),
+    #fff;
+}
+
+.billingPlaceholderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.billingPlaceholderHeader span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.planDeck {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.planCardHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.planCard.active {
+  border-color: rgba(0, 102, 204, 0.26);
+  box-shadow: 0 12px 26px rgba(0, 102, 204, 0.08);
+}
+
+.planCard strong {
+  font-size: 18px;
+}
+
+.activityList {
+  display: grid;
+  gap: 10px;
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(210, 210, 215, 0.72);
+}
+
+.activityRow:last-child {
+  border-bottom: 0;
+}
+
+.activityRow strong {
+  font-size: 14px;
+}
+
+.activityRow span,
+.activityRow time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.activityRow.stacked {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.activityRow.stacked > div {
+  display: grid;
+  gap: 4px;
+}
+
+.orderRow {
+  gap: 18px;
+}
+
+.cellStack {
+  display: grid;
+  gap: 4px;
+}
+
+.cellStack strong {
+  font-size: 14px;
+}
+
+.cellStack span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cellStack code {
+  display: inline-block;
+  max-width: 260px;
+}
+
+.inlineActionRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detailList {
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.signOutButton {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.signOutButton.compact {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.statusPill.neutral {
+  background: #f1f3f6;
+  color: var(--ink);
 }
 
 .accountNav {
@@ -3332,11 +4146,19 @@ h1 {
   overflow-x: auto;
 }
 
+.denseTableSurface {
+  padding: 14px 16px;
+}
+
 .adminTable {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
   font-size: 13px;
+}
+
+.adminTable.modern {
+  min-width: 100%;
 }
 
 .adminTable.wide {
@@ -3444,8 +4266,106 @@ h1 {
   line-height: 1.4;
 }
 
+.summarySurface {
+  align-content: center;
+}
+
+.summaryRows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summaryRows div {
+  display: grid;
+  gap: 6px;
+}
+
+.summaryRows span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.summaryRows strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
 @media (max-width: 760px) {
+  .marketingHero {
+    min-height: auto;
+  }
+
+  .marketingHeroInner,
+  .authShowcase {
+    padding-inline: 20px;
+  }
+
+  .marketingSection,
+  .siteHeader,
+  .consoleHeaderInner,
+  .consoleBody {
+    width: min(100%, calc(100% - 40px));
+  }
+
+  .heroStatRow,
+  .workflowGrid,
+  .surfaceGrid,
+  .deliverableRow,
+  .sectionSplit,
+  .authPage,
+  .consoleBody,
+  .consoleHeaderInner {
+    grid-template-columns: 1fr;
+  }
+
+  .siteHeader,
+  .consoleHeaderInner {
+    padding-inline: 0;
+  }
+
+  .siteHeader,
+  .consoleUserPanel,
+  .billingPlaceholderHeader,
+  .sectionHeader {
+    align-items: start;
+  }
+
+  .siteHeader,
+  .siteHeaderNav,
+  .consoleUserBadges,
+  .landingActions {
+    flex-wrap: wrap;
+  }
+
+  .consoleBody,
+  .marketingBand,
+  .authPanel {
+    padding: 20px 0;
+  }
+
+  .consoleUserMeta {
+    text-align: left;
+  }
+
+  .consoleSidebar {
+    position: static;
+    order: 2;
+  }
+
+  .authPage {
+    min-height: auto;
+  }
+
+  .authShowcase {
+    min-height: 420px;
+  }
+
   .featureGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryRows {
     grid-template-columns: 1fr;
   }
 
