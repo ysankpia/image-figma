@@ -71,10 +71,16 @@ cp .env.example .env.local
 常用本地配置：
 
 ```text
-NEXT_PUBLIC_SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=
 SLICE_STUDIO_API_URL=http://127.0.0.1:4110
 SLICE_STUDIO_LOAD_LOCAL_ENV=true
 SLICE_STUDIO_API_PORT=4110
+SLICE_STUDIO_AUTH_COOKIE_NAME=slice_studio_session
+SLICE_STUDIO_AUTH_SESSION_TTL_DAYS=30
+SLICE_STUDIO_AUTH_SECURE_COOKIES=false
+SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
+SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
+SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_STORAGE_ROOT=./storage
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
@@ -114,6 +120,20 @@ pnpm run test
 8. 如果配置了 AI provider，点击 `AI 当前页`，确认返回 boxes 并保存成普通 slices。
 9. 如果项目有多页，点击 `AI 全部页`，确认 batch progress、completed/failed/skipped/new assets 统计正常。
 10. 对重要项目，打开 `project.zip/design.pen` 做一次视觉检查。
+
+## 189 生产化入口
+
+在 189 的当前阶段，浏览器侧默认走 Next.js 同源 `/api`，所以本地同时启动 Web 和 API 后，登录态会通过浏览器 cookie 正常回传给服务端页面保护。
+
+新增入口：
+
+- `/` landing page
+- `/login`
+- `/projects`
+- `/projects/:projectId/review`
+- `/settings`
+- `/billing`
+- `/admin`
 
 本地 API smoke：
 

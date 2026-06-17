@@ -4,22 +4,15 @@
 
 正式上线计划见 [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md)。
 
-## Local Tool Phase Non-Goals
-
-这些能力不是已完成的本地工具能力，但已经进入正式上线计划：
-
-- 账号系统。
-- 云同步。
-- 额度、计费、支付。
-- 正式 SaaS 多租户。
-- 生产数据库/对象存储。
-- 登录页、落地页、账号页、支付页。
-
 ## Production Launch Non-Goals
 
 正式上线第一阶段仍不做：
 
-- 团队协作。
+- 团队协作；
+- 云同步；
+- 生产数据库 / 对象存储的最终供应商锁定；
+- XPay/webhook 的最终收款闭环；
+- 计划编辑器、订单修复工具、用户后台 CRUD；
 - 长期在线任务队列。
 - 质量评分看板。
 - 复杂用户教程平台。

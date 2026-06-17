@@ -42,6 +42,15 @@ Elysia API: http://127.0.0.1:4110
 Primary API surface:
 
 ```text
+GET    /api/health
+GET    /api/auth/session
+POST   /api/auth/sign-up
+POST   /api/auth/sign-in
+POST   /api/auth/sign-out
+GET    /api/me
+GET    /api/billing/plans
+POST   /api/billing/orders
+GET    /api/admin/overview
 GET    /api/projects
 POST   /api/projects
 GET    /api/projects/:projectId
@@ -58,11 +67,14 @@ GET    /api/projects/:projectId/pages/:pageId/project.zip
 
 Primary contracts:
 
+- authenticated user/session: project access truth for production phase;
 - saved Slice Studio slices: live edit/export truth;
 - `manual_ui_slices.v1`: export manifest schema;
 - `assets.zip`: frontend asset output;
 - `project.zip/design.pen`: Pencil/Figma handoff output;
 - AI boxes: transient suggestions converted into normal slices;
+- entitlement/usage rows: cost-control truth for AI and export gates;
+- payment orders: provider-neutral payment intent truth;
 - OCR/M29: editable text evidence only.
 
 ## Active Production Plans
@@ -80,6 +92,8 @@ protect existing local storage
 -> harden OpenRouter/OpenAI-compatible AI provider support
 -> run repeatable smoke validation
 ```
+
+Current Stage 1 implementation has landed same-origin `/api` browser access, custom session auth, repeatable local bootstrap admin, project ownership, `/settings`, `/billing`, `/admin`, entitlement/usage skeleton, and pending XPay payment-order skeleton. Verified webhook fulfillment, production storage/database, and operations runbooks remain later 189 stages.
 
 This plan changes the next phase from local/private tool hardening to formal multi-user product launch planning:
 

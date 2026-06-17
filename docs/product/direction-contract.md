@@ -92,7 +92,7 @@ Current default delivery does not aim to:
 - turn OCR text into button/card/background reconstruction;
 - perform team collaboration in the first production phase.
 
-The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). They are not implemented yet, but they are now planned production work.
+The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). Auth/session, project ownership, basic entitlement/usage, provider-neutral payment-order skeleton, and the first landing/account/admin surfaces have started landing; production database/storage, verified payment fulfillment, backup/restore, and deployment are still future 189 stages.
 
 ## Validation artifact
 

@@ -8,6 +8,17 @@ Turn Slice Studio from a local/private UI slicing tool into a formal multi-user 
 
 This plan is not a warning to avoid the work. The work is in scope. The point is to make the production contract explicit so Codex can implement quickly without mixing local-tool assumptions into a public product.
 
+## Implementation progress
+
+2026-06-17 Stage 1 foundation is in progress:
+
+- Landing, login/register, protected `/projects`, protected `/projects/:projectId/review`, `/settings`, `/billing`, and `/admin` surfaces now exist.
+- Elysia has custom email/password session auth, bootstrap local admin, user ownership on projects, and auth guards for project APIs, source images, previews, AI boxes, assets/project downloads, and page-scoped project downloads.
+- SQLite now has `users`, `sessions`, `usage_events`, `plans`, `entitlements`, `payment_orders`, and `payment_events`; existing unowned local projects are claimed by the bootstrap owner at API startup.
+- Browser API calls now normally use same-origin `/api` through the Next rewrite so the session cookie remains first-party; direct `SLICE_STUDIO_API_URL` remains for scripts and server-side checks.
+- AI and export routes now consume entitlement counters and write `usage_events`; `POST /api/billing/orders` creates a provider-neutral pending XPay order skeleton without granting entitlement.
+- Remaining 189 work: verified XPay/webhook fulfillment, richer admin operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
+
 ## Concrete analysis
 
 ### Concrete object

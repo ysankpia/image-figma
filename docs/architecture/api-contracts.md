@@ -13,6 +13,14 @@ Elysia API: http://127.0.0.1:4110
 
 ```text
 GET    /api/health
+GET    /api/auth/session
+POST   /api/auth/sign-up
+POST   /api/auth/sign-in
+POST   /api/auth/sign-out
+GET    /api/me
+GET    /api/billing/plans
+POST   /api/billing/orders
+GET    /api/admin/overview
 GET    /api/ai-slice-settings
 GET    /api/projects
 POST   /api/projects
@@ -38,9 +46,23 @@ GET    /api/projects/:projectId/pages/:pageId/project.zip
 
 ## Contract Rules
 
+Authentication rules:
+
+- `/api/health`, `/api/auth/session`, `/api/auth/sign-up`, `/api/auth/sign-in`, `/api/auth/sign-out`, and `/api/billing/plans` are public or session-discovery routes.
+- `/api/me`, project APIs, source image download, slice preview, assets zip download, project zip download, AI boxes, and exports require an authenticated session.
+- `/api/admin/overview` requires an authenticated admin user.
+- Every project-scoped route must authorize through `projects.user_id`; unguessable project ids are not an authorization boundary.
+- Browser requests should normally go through Next.js same-origin `/api` rewrite so the `slice_studio_session` cookie is first-party.
+
 Saved projects, pages, and slices are the live truth source. Export reads persisted slices and original source images; it must not crop from browser thumbnails, canvas state, AI raw output, or OCR/M29 evidence.
 
 AI boxes are a calculation result from `/ai-boxes`. The route does not write database state. The Review Workbench converts accepted boxes into ordinary `SliceRecord` entries and saves them through `PUT /api/projects/:projectId/slices`.
+
+AI boxes consume AI entitlement and write a `usage_events` row before provider execution starts.
+
+Export routes consume export entitlement and write a `usage_events` row before ZIP materialization starts.
+
+`POST /api/billing/orders` creates a provider-neutral local `payment_orders` row. In the current 189 stage it reserves the XPay adapter contract and returns a pending order without granting entitlement. Entitlement must only be activated by later server-verified payment/webhook fulfillment or explicit admin/manual grant.
 
 OCR and M29 evidence only affect Pencil text overlays in `project.zip`. They must not modify saved slice boxes or visible raster asset ownership.
 

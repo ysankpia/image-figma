@@ -4,6 +4,11 @@
 
 ## P0 Must Pass
 
+- ` / ` landing page 可打开。
+- `/login` 能登录/注册并设置会话 cookie。
+- `/projects` 和 `/projects/:projectId/review` 对匿名用户不可访问。
+- `/settings`、`/billing`、`/admin` 路由存在。
+- 项目列表按登录用户归属隔离。
 - 可以新建项目。
 - 可以上传多张页面图片。
 - 项目刷新后页面和 slices 仍存在。
@@ -18,6 +23,10 @@
 
 ## P1 Should Pass
 
+- `/api/me` 能返回 entitlement、usage、paymentOrders。
+- AI 当前页前检查 entitlement，并记录 usage。
+- assets/project 导出前检查 entitlement，并记录 usage。
+- `/billing` 能创建 provider-neutral 的 pending payment order。
 - AI 当前页能生成普通 rect slices，并保存进现有 slice state。
 - AI 全部页能逐页处理，失败页不影响已完成页面。
 - AI 结果与已有 slices 高重叠时不会大量重复追加。
@@ -62,3 +71,11 @@
 - 旧 Figma plugin render 通过。
 - YOLO/M29/OCR/AI 自动 ownership 完全正确。
 - 商业化账号、权限、额度、支付。
+
+189 当前阶段已经开始覆盖的内容除外：
+
+- 账号/会话；
+- 项目归属；
+- landing / login / settings / billing / admin 最小入口；
+- entitlement/usage skeleton；
+- provider-neutral payment order 骨架。

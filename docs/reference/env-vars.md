@@ -14,12 +14,18 @@
 
 | 名称 | 用途 | 默认值 | 是否必需 |
 | --- | --- | --- | --- |
-| `NEXT_PUBLIC_SLICE_STUDIO_API_URL` | Next.js browser client 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
-| `SLICE_STUDIO_API_URL` | smoke/scripts 调用 API 的 URL | `http://127.0.0.1:4110` | 否 |
+| `NEXT_PUBLIC_SLICE_STUDIO_API_URL` | 浏览器 API URL 覆盖；为空时使用 Next 同源 `/api` rewrite | 空 | 否 |
+| `SLICE_STUDIO_API_URL` | Next rewrite、server pages、smoke/scripts 调用 Elysia API 的 URL | `http://127.0.0.1:4110` | 否 |
 | `SLICE_STUDIO_LOAD_LOCAL_ENV` | API 是否读取根目录 `.env.local` | `true` | 否 |
 | `SLICE_STUDIO_API_HOST` | Elysia API host | `127.0.0.1` | 否 |
 | `SLICE_STUDIO_API_PORT` | Elysia API port | `4110` | 否 |
 | `SLICE_STUDIO_PUBLIC_API_URL` | API 生成公开 URL 时使用 | `http://{host}:{port}` | 否 |
+| `SLICE_STUDIO_AUTH_COOKIE_NAME` | 会话 cookie 名 | `slice_studio_session` | 否 |
+| `SLICE_STUDIO_AUTH_SESSION_TTL_DAYS` | 会话有效天数 | `30` | 否 |
+| `SLICE_STUDIO_AUTH_SECURE_COOKIES` | 是否给会话 cookie 加 Secure | 生产默认 `true`，本地默认 `false` | 否 |
+| `SLICE_STUDIO_LOCAL_OWNER_EMAIL` | 本地/bootstrap 管理员邮箱 | `local@slicestudio.dev` | 否 |
+| `SLICE_STUDIO_LOCAL_OWNER_NAME` | 本地/bootstrap 管理员昵称 | `Local Owner` | 否 |
+| `SLICE_STUDIO_LOCAL_OWNER_PASSWORD` | 本地/bootstrap 管理员密码；生产必须覆盖 | `slice-studio-local-owner` | 否 |
 | `SLICE_STUDIO_STORAGE_ROOT` | Slice Studio storage 根目录 | `./storage` | 否 |
 | `SLICE_STUDIO_ALLOWED_ORIGIN` | 允许的 Web origin | `http://127.0.0.1:3010` | 否 |
 | `SLICE_STUDIO_MAX_UPLOAD_BYTES` | 单文件上传上限 | `20971520` | 否 |
@@ -82,10 +88,16 @@ SLICE_STUDIO_AI_SLICE_WIRE_API=chat_completions
 ## Example `.env.local`
 
 ```text
-NEXT_PUBLIC_SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=
 SLICE_STUDIO_API_URL=http://127.0.0.1:4110
 SLICE_STUDIO_LOAD_LOCAL_ENV=true
 SLICE_STUDIO_API_PORT=4110
+SLICE_STUDIO_AUTH_COOKIE_NAME=slice_studio_session
+SLICE_STUDIO_AUTH_SESSION_TTL_DAYS=30
+SLICE_STUDIO_AUTH_SECURE_COOKIES=false
+SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
+SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
+SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_STORAGE_ROOT=./storage
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5

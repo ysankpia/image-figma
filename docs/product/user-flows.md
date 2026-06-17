@@ -1,11 +1,30 @@
 # 用户流程
 
-当前主流程是 Slice Studio 本地项目制切图，不是 Figma 插件上传单张 PNG。
+当前主流程是 Slice Studio 多用户化中的项目制切图，不是 Figma 插件上传单张 PNG。
+
+## 访问与登录流程
+
+```text
+打开 /
+-> 查看 landing page
+-> 进入 /login
+-> 登录或注册
+-> 浏览器获得 slice_studio_session cookie
+-> 进入 /projects
+```
+
+本地开发默认 bootstrap 管理员：
+
+```text
+local@slicestudio.dev / slice-studio-local-owner
+```
+
+已有未归属本地项目会在 API 启动时迁到 bootstrap owner，避免旧数据在项目归属引入后变成孤儿。
 
 ## 项目流程
 
 ```text
-打开 /projects
+登录后打开 /projects
 -> 新建项目
 -> 进入 Review Workbench
 -> 上传一张或多张页面图片
@@ -21,6 +40,8 @@
 
 ```text
 点击 AI 当前页或 AI 全部页
+-> API 检查项目 owner 和 AI entitlement
+-> 写入 AI usage event 并扣减 AI 剩余额度
 -> API 将原图切成重叠 tile 并压缩
 -> provider 返回 bbox JSON
 -> 服务端裁边、过滤、去重、合并
@@ -36,6 +57,8 @@ AI 不创建独立 proposal 状态。进入工作台后的 AI box 就是普通 s
 `assets.zip`：
 
 ```text
+API 检查项目 owner 和 export entitlement
+-> 写入 export usage event 并扣减导出剩余额度
 读取 SQLite 项目和 saved slices
 -> 按页面顺序读取 original PNG
 -> 按 slice bbox 和 cut mode 裁切
@@ -45,6 +68,8 @@ AI 不创建独立 proposal 状态。进入工作台后的 AI box 就是普通 s
 `project.zip`：
 
 ```text
+API 检查项目 owner 和 export entitlement
+-> 写入 export usage event 并扣减导出剩余额度
 读取同一批 saved slices
 -> 生成 remainder.png
 -> 放置 slice PNG 到 source-image 坐标
@@ -58,6 +83,22 @@ AI 不创建独立 proposal 状态。进入工作台后的 AI box 就是普通 s
 - Review Workbench：左侧页面 rail、中间 Konva canvas、右侧 asset inspector 和 asset gallery。
 - AI progress：批量运行时显示完成页数、失败页数、新增/跳过框数量，可最小化或关闭。
 - Save state：自动保存中、已保存、保存失败。
+- Settings：当前账号、角色、状态。
+- Billing：当前计划、剩余额度、最近用量、订单。
+- Admin：管理员查看 users/projects/pages/slices/usage/payment order 计数。
+
+## 账单与支付订单流程
+
+当前阶段只实现 provider-neutral 订单骨架：
+
+```text
+打开 /billing
+-> 读取 entitlement、usage_events、payment_orders
+-> 创建 XPay provider 预留订单
+-> payment_orders 写入 pending 订单
+```
+
+这一步不会发放权益。后续只有服务端验签 webhook 或明确的 admin/manual grant 才能改变 entitlement。
 
 ## 修复路径
 
