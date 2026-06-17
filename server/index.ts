@@ -16,11 +16,14 @@ import {
 } from "./auth";
 import { initDatabase } from "./db";
 import {
+  adminSetUserEntitlement,
+  adminSetUserStatus,
   createPaymentOrder,
   getAccountUsage,
   getAdminOverview,
   getEntitlementSummary,
   handlePaymentWebhook,
+  listAdminUsers,
   listAdminPaymentEvents,
   listAdminPaymentOrders,
   listPaymentOrders,
@@ -161,6 +164,47 @@ const app = new Elysia({
       orders: listAdminPaymentOrders(50),
       events: listAdminPaymentEvents(50)
     };
+  })
+  .get("/api/admin/users", ({ request }) => {
+    requireAdmin(request);
+    return {
+      users: listAdminUsers(100),
+      plans: listPlans()
+    };
+  })
+  .patch("/api/admin/users/:userId/status", ({ request, params, body }) => {
+    const admin = requireAdmin(request);
+    adminSetUserStatus(params.userId, body.status, admin);
+    return { ok: true };
+  }, {
+    body: t.Object({
+      status: t.Union([t.Literal("active"), t.Literal("suspended")])
+    })
+  })
+  .patch("/api/admin/users/:userId/entitlement", ({ request, params, body }) => {
+    const admin = requireAdmin(request);
+    adminSetUserEntitlement({
+      userId: params.userId,
+      planId: body.planId,
+      status: body.status,
+      admin
+    });
+    return { ok: true };
+  }, {
+    body: t.Object({
+      planId: t.String(),
+      status: t.Union([
+        t.Literal("free"),
+        t.Literal("trial"),
+        t.Literal("active"),
+        t.Literal("past_due"),
+        t.Literal("paused"),
+        t.Literal("canceled"),
+        t.Literal("expired"),
+        t.Literal("refunded"),
+        t.Literal("manual_grant")
+      ])
+    })
   })
   .post("/api/admin/payment-orders/:orderId/mark-paid", ({ request, params }) => {
     const admin = requireAdmin(request);

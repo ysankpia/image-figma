@@ -110,6 +110,25 @@ try {
   assert(billing.getEntitlementSummary(manualUser.id).plan.id === "pro", "manual payment repair should grant paid plan");
   assert(billing.listAdminPaymentOrders().some((item) => item.id === manualOrder.id && item.status === "paid"), "admin payment list should include repaired paid order");
   assert(billing.listAdminPaymentEvents().some((item) => item.order_id === manualOrder.id && item.event_type === "manual_mark_paid"), "manual payment repair should write payment event");
+  billing.adminSetUserStatus(bob.id, "suspended", refreshedOwner);
+  assertThrows(() => auth.signInWithEmail("bob@example.test", "password-123"), "Account is suspended");
+  billing.adminSetUserStatus(bob.id, "active", refreshedOwner);
+  const usersBeforeGrant = billing.listAdminUsers();
+  const bobBeforeGrant = usersBeforeGrant.find((item) => item.id === bob.id);
+  assert(bobBeforeGrant?.status === "active", "admin user list should reflect restored active status");
+  billing.adminSetUserEntitlement({
+    userId: bob.id,
+    planId: "pro",
+    status: "manual_grant",
+    admin: refreshedOwner
+  });
+  const bobEntitlement = billing.getEntitlementSummary(bob.id);
+  assert(bobEntitlement.plan.id === "pro", "manual entitlement update should switch plan");
+  assert(bobEntitlement.entitlement.status === "manual_grant", "manual entitlement update should persist status");
+  const usersAfterGrant = billing.listAdminUsers();
+  const bobAfterGrant = usersAfterGrant.find((item) => item.id === bob.id);
+  assert(bobAfterGrant?.plan_id === "pro", "admin user list should show updated plan");
+  assert(bobAfterGrant?.entitlement_status === "manual_grant", "admin user list should show updated entitlement status");
   assert(billing.getAdminOverview().users >= 3, "admin overview should count users");
 
   console.log("auth-billing smoke passed");

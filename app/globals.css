@@ -3339,6 +3339,10 @@ h1 {
   font-size: 13px;
 }
 
+.adminTable.wide {
+  min-width: 1180px;
+}
+
 .adminTable th,
 .adminTable td {
   border-bottom: 1px solid var(--border);
@@ -3413,6 +3417,28 @@ h1 {
 }
 
 .adminPaymentAction span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.adminUserAction {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+}
+
+.adminInlineForm {
+  display: grid;
+  gap: 6px;
+}
+
+.adminInlineForm select,
+.adminInlineForm button {
+  width: 100%;
+}
+
+.adminUserAction span {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;

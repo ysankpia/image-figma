@@ -19,6 +19,25 @@ export type EntitlementSummary = {
   entitlement: EntitlementRow;
 };
 
+export type AdminUserRecord = {
+  id: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  status: "active" | "suspended";
+  created_at: string;
+  updated_at: string;
+  plan_id: string | null;
+  entitlement_status: EntitlementRow["status"] | null;
+  ai_calls_remaining: number | null;
+  exports_remaining: number | null;
+  storage_mb: number | null;
+  renews_at: string | null;
+  project_count: number;
+  page_count: number;
+  storage_bytes: number;
+};
+
 export function getEntitlementSummary(userId: string): EntitlementSummary {
   const entitlement = db.query<EntitlementRow, [string]>("SELECT * FROM entitlements WHERE user_id = ?").get(userId);
   if (!entitlement) throw httpError(500, "Entitlement missing");
@@ -361,6 +380,107 @@ export function listAdminPaymentEvents(limit = 50) {
     ORDER BY created_at DESC
     LIMIT ?
   `).all(Math.max(1, Math.min(100, Math.floor(limit))));
+}
+
+export function listAdminUsers(limit = 100): AdminUserRecord[] {
+  const rows = db.query<{
+    id: string;
+    email: string;
+    name: string;
+    role: "user" | "admin";
+    status: "active" | "suspended";
+    created_at: string;
+    updated_at: string;
+    plan_id: string | null;
+    entitlement_status: EntitlementRow["status"] | null;
+    ai_calls_remaining: number | null;
+    exports_remaining: number | null;
+    storage_mb: number | null;
+    renews_at: string | null;
+    project_count: number;
+    page_count: number;
+  }, [number]>(`
+    SELECT
+      u.id,
+      u.email,
+      u.name,
+      u.role,
+      u.status,
+      u.created_at,
+      u.updated_at,
+      e.plan_id,
+      e.status AS entitlement_status,
+      e.ai_calls_remaining,
+      e.exports_remaining,
+      e.storage_mb,
+      e.renews_at,
+      COUNT(DISTINCT pr.id) AS project_count,
+      COUNT(DISTINCT p.id) AS page_count
+    FROM users u
+    LEFT JOIN entitlements e ON e.user_id = u.id
+    LEFT JOIN projects pr ON pr.user_id = u.id
+    LEFT JOIN pages p ON p.project_id = pr.id
+    GROUP BY
+      u.id, u.email, u.name, u.role, u.status, u.created_at, u.updated_at,
+      e.plan_id, e.status, e.ai_calls_remaining, e.exports_remaining, e.storage_mb, e.renews_at
+    ORDER BY u.created_at DESC
+    LIMIT ?
+  `).all(Math.max(1, Math.min(200, Math.floor(limit))));
+
+  return rows.map((row) => ({
+    ...row,
+    storage_bytes: getUserStorageBytes(row.id)
+  }));
+}
+
+export function adminSetUserStatus(userId: string, status: "active" | "suspended", admin: CurrentUser): void {
+  if (admin.role !== "admin") throw httpError(403, "Admin only");
+  const user = db.query<{ id: string; role: "user" | "admin"; status: "active" | "suspended" }, [string]>(`
+    SELECT id, role, status
+    FROM users
+    WHERE id = ?
+  `).get(userId);
+  if (!user) throw httpError(404, "User not found");
+  if (user.status === status) return;
+  if (admin.id === user.id && status === "suspended") {
+    throw httpError(409, "Cannot suspend current admin");
+  }
+  if (user.role === "admin" && status === "suspended") {
+    const activeAdminCount = Number(db.query<{ count: number }, []>(`
+      SELECT COUNT(*) AS count
+      FROM users
+      WHERE role = 'admin' AND status = 'active'
+    `).get()?.count || 0);
+    if (activeAdminCount <= 1) throw httpError(409, "Cannot suspend the last active admin");
+  }
+  db.query("UPDATE users SET status = ?, updated_at = ? WHERE id = ?").run(status, new Date().toISOString(), userId);
+}
+
+export function adminSetUserEntitlement(input: {
+  userId: string;
+  planId: string;
+  status: EntitlementRow["status"];
+  admin: CurrentUser;
+}): void {
+  if (input.admin.role !== "admin") throw httpError(403, "Admin only");
+  const user = db.query<{ id: string }, [string]>("SELECT id FROM users WHERE id = ?").get(input.userId);
+  if (!user) throw httpError(404, "User not found");
+  const plan = db.query<PlanRow, [string]>("SELECT * FROM plans WHERE id = ?").get(input.planId);
+  if (!plan) throw httpError(404, "Plan not found");
+  const now = new Date().toISOString();
+  const existing = db.query<{ user_id: string }, [string]>("SELECT user_id FROM entitlements WHERE user_id = ?").get(input.userId);
+  if (existing) {
+    db.query(`
+      UPDATE entitlements
+      SET plan_id = ?, status = ?, ai_calls_remaining = ?, exports_remaining = ?, storage_mb = ?, updated_at = ?
+      WHERE user_id = ?
+    `).run(input.planId, input.status, plan.monthly_ai_calls, plan.monthly_exports, plan.storage_mb, now, input.userId);
+  } else {
+    db.query(`
+      INSERT INTO entitlements (user_id, plan_id, status, ai_calls_remaining, exports_remaining, storage_mb, renews_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+    `).run(input.userId, input.planId, input.status, plan.monthly_ai_calls, plan.monthly_exports, plan.storage_mb, now);
+  }
 }
 
 export function getAdminOverview() {

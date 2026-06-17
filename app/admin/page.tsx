@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPaymentActions } from "@/app/admin/AdminPaymentActions";
+import { AdminUserActions } from "@/app/admin/AdminUserActions";
 import { fetchCurrentUser } from "@/app/server-auth";
 import { serverApiGet } from "@/app/server-api";
 
@@ -44,6 +45,33 @@ type AdminPayments = {
   }>;
 };
 
+type AdminUsers = {
+  users: Array<{
+    id: string;
+    email: string;
+    name: string;
+    role: "user" | "admin";
+    status: "active" | "suspended";
+    created_at: string;
+    updated_at: string;
+    plan_id: string | null;
+    entitlement_status: "free" | "trial" | "active" | "past_due" | "paused" | "canceled" | "expired" | "refunded" | "manual_grant" | null;
+    ai_calls_remaining: number | null;
+    exports_remaining: number | null;
+    storage_mb: number | null;
+    renews_at: string | null;
+    project_count: number;
+    page_count: number;
+    storage_bytes: number;
+  }>;
+  plans: Array<{
+    id: string;
+    name: string;
+    price_cents: number;
+    currency: string;
+  }>;
+};
+
 export default async function AdminPage() {
   const user = await fetchCurrentUser().catch(() => null);
   if (!user) redirect("/login");
@@ -51,9 +79,10 @@ export default async function AdminPage() {
 
   const { headers } = await import("next/headers");
   const cookie = (await headers()).get("cookie") || "";
-  const [data, payments] = await Promise.all([
+  const [data, payments, adminUsers] = await Promise.all([
     serverApiGet<AdminOverview>("/api/admin/overview", cookie),
-    serverApiGet<AdminPayments>("/api/admin/payments", cookie)
+    serverApiGet<AdminPayments>("/api/admin/payments", cookie),
+    serverApiGet<AdminUsers>("/api/admin/users", cookie)
   ]);
 
   return (
@@ -77,6 +106,60 @@ export default async function AdminPage() {
           <div><dt>已支付订单</dt><dd>{data.totals.paidPaymentOrders}</dd></div>
           <div><dt>支付事件</dt><dd>{data.totals.paymentEvents}</dd></div>
         </dl>
+      </section>
+      <section className="accountPanel">
+        <p className="eyebrow">User Ops</p>
+        <h2>用户与权益</h2>
+        <div className="adminTableWrap">
+          <table className="adminTable wide">
+            <thead>
+              <tr>
+                <th>用户</th>
+                <th>角色 / 状态</th>
+                <th>套餐 / 权益</th>
+                <th>资源使用</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adminUsers.users.map((record) => (
+                <tr key={record.id}>
+                  <td>
+                    <strong>{record.name}</strong>
+                    <code>{record.email}</code>
+                  </td>
+                  <td>
+                    <span>{record.role}</span>
+                    <span className={`statusPill ${record.status}`}>{record.status}</span>
+                  </td>
+                  <td>
+                    <span>{record.plan_id || "无套餐"}</span>
+                    <span>{record.entitlement_status || "无权益"}</span>
+                    <span>AI {record.ai_calls_remaining ?? 0} / 导出 {record.exports_remaining ?? 0} / {record.storage_mb ?? 0} MB</span>
+                  </td>
+                  <td>
+                    <span>{record.project_count} 项目 / {record.page_count} 页面</span>
+                    <span>{formatBytes(record.storage_bytes)}</span>
+                  </td>
+                  <td>{formatDate(record.created_at)}</td>
+                  <td>
+                    <AdminUserActions
+                      userId={record.id}
+                      currentStatus={record.status}
+                      currentPlanId={record.plan_id}
+                      currentEntitlementStatus={record.entitlement_status}
+                      plans={adminUsers.plans}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {!adminUsers.users.length ? (
+                <tr><td colSpan={6}>暂无用户</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </section>
       <section className="accountPanel">
         <p className="eyebrow">Payment Ops</p>
@@ -151,6 +234,11 @@ export default async function AdminPage() {
 
 function formatAmount(amountCents: number, currency: string): string {
   return `${currency} ${(amountCents / 100).toFixed(2)}`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatDate(value: string): string {
