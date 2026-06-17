@@ -10,7 +10,7 @@ export default async function AdminPage() {
 
   const { headers } = await import("next/headers");
   const cookie = (await headers()).get("cookie") || "";
-  const data = await serverApiGet<{ totals: { users: number; projects: number; pages: number; slices: number; usageEvents: number; paymentOrders: number; pendingPaymentOrders: number } }>("/api/admin/overview", cookie);
+  const data = await serverApiGet<{ totals: { users: number; projects: number; pages: number; slices: number; usageEvents: number; paymentOrders: number; pendingPaymentOrders: number; paidPaymentOrders: number; paymentEvents: number } }>("/api/admin/overview", cookie);
 
   return (
     <main className="accountShell">
@@ -30,6 +30,8 @@ export default async function AdminPage() {
           <div><dt>用量事件</dt><dd>{data.totals.usageEvents}</dd></div>
           <div><dt>支付订单</dt><dd>{data.totals.paymentOrders}</dd></div>
           <div><dt>待处理订单</dt><dd>{data.totals.pendingPaymentOrders}</dd></div>
+          <div><dt>已支付订单</dt><dd>{data.totals.paidPaymentOrders}</dd></div>
+          <div><dt>支付事件</dt><dd>{data.totals.paymentEvents}</dd></div>
         </dl>
       </section>
     </main>

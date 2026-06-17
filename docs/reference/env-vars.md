@@ -26,6 +26,11 @@
 | `SLICE_STUDIO_LOCAL_OWNER_EMAIL` | 本地/bootstrap 管理员邮箱 | `local@slicestudio.dev` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_NAME` | 本地/bootstrap 管理员昵称 | `Local Owner` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_PASSWORD` | 本地/bootstrap 管理员密码；生产必须覆盖 | `slice-studio-local-owner` | 否 |
+| `SLICE_STUDIO_XPAY_BASE_URL` | XPay / 易支付 提交地址根 URL；用于生成 checkout URL | 空 | XPay 联调时需要 |
+| `SLICE_STUDIO_XPAY_PID` | XPay 商户 pid | 空 | XPay 联调时需要 |
+| `SLICE_STUDIO_XPAY_KEY` | XPay 商户密钥；用于签名和验签 | 空 | XPay 联调时需要 |
+| `SLICE_STUDIO_XPAY_NOTIFY_URL` | XPay 后台通知回调 URL | 空 | XPay 联调时需要 |
+| `SLICE_STUDIO_XPAY_RETURN_URL` | XPay 支付完成返回 URL | 空 | XPay 联调时需要 |
 | `SLICE_STUDIO_STORAGE_ROOT` | Slice Studio storage 根目录 | `./storage` | 否 |
 | `SLICE_STUDIO_ALLOWED_ORIGIN` | 允许的 Web origin | `http://127.0.0.1:3010` | 否 |
 | `SLICE_STUDIO_MAX_UPLOAD_BYTES` | 单文件上传上限 | `20971520` | 否 |

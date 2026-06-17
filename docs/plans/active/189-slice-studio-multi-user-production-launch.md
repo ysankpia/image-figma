@@ -17,7 +17,8 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 - SQLite now has `users`, `sessions`, `usage_events`, `plans`, `entitlements`, `payment_orders`, and `payment_events`; existing unowned local projects are claimed by the bootstrap owner at API startup.
 - Browser API calls now normally use same-origin `/api` through the Next rewrite so the session cookie remains first-party; direct `SLICE_STUDIO_API_URL` remains for scripts and server-side checks.
 - AI and export routes now consume entitlement counters and write `usage_events`; `POST /api/billing/orders` creates a provider-neutral pending XPay order skeleton without granting entitlement.
-- Remaining 189 work: verified XPay/webhook fulfillment, richer admin operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
+- Minimal XPay / 易支付 checkout and webhook fulfillment now exists: configured XPay env vars produce a checkout URL, verified success callbacks write `payment_events`, mark the local order paid, and grant entitlement from the local plan table. Forged callbacks are recorded but do not grant entitlement.
+- Remaining 189 work: payment reconciliation/refund/cancel/admin repair, richer admin operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
 
 ## Concrete analysis
 

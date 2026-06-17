@@ -20,6 +20,7 @@ POST   /api/auth/sign-out
 GET    /api/me
 GET    /api/billing/plans
 POST   /api/billing/orders
+POST   /api/billing/webhooks/xpay
 GET    /api/admin/overview
 GET    /api/ai-slice-settings
 GET    /api/projects
@@ -48,7 +49,7 @@ GET    /api/projects/:projectId/pages/:pageId/project.zip
 
 Authentication rules:
 
-- `/api/health`, `/api/auth/session`, `/api/auth/sign-up`, `/api/auth/sign-in`, `/api/auth/sign-out`, and `/api/billing/plans` are public or session-discovery routes.
+- `/api/health`, `/api/auth/session`, `/api/auth/sign-up`, `/api/auth/sign-in`, `/api/auth/sign-out`, `/api/billing/plans`, and `/api/billing/webhooks/xpay` are public or session-discovery routes. The webhook route is public only because the provider cannot send a session cookie; it must verify the provider signature before fulfillment.
 - `/api/me`, project APIs, source image download, slice preview, assets zip download, project zip download, AI boxes, and exports require an authenticated session.
 - `/api/admin/overview` requires an authenticated admin user.
 - Every project-scoped route must authorize through `projects.user_id`; unguessable project ids are not an authorization boundary.
@@ -62,7 +63,9 @@ AI boxes consume AI entitlement and write a `usage_events` row before provider e
 
 Export routes consume export entitlement and write a `usage_events` row before ZIP materialization starts.
 
-`POST /api/billing/orders` creates a provider-neutral local `payment_orders` row. In the current 189 stage it reserves the XPay adapter contract and returns a pending order without granting entitlement. Entitlement must only be activated by later server-verified payment/webhook fulfillment or explicit admin/manual grant.
+`POST /api/billing/orders` creates a provider-neutral local `payment_orders` row. When XPay env vars are configured, it also returns a checkout URL built from the local order id. Creating the order never grants entitlement.
+
+`POST /api/billing/webhooks/xpay` accepts XPay / 易支付 style payment notifications, verifies the MD5 signature server-side, writes a raw `payment_events` row, and marks the order paid only for verified success events. Paid orders update the user's entitlement from the local plan table. Forged callbacks must return `fail` and must not grant entitlement.
 
 OCR and M29 evidence only affect Pencil text overlays in `project.zip`. They must not modify saved slice boxes or visible raster asset ownership.
 

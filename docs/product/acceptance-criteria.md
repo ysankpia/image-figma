@@ -26,7 +26,8 @@
 - `/api/me` 能返回 entitlement、usage、paymentOrders。
 - AI 当前页前检查 entitlement，并记录 usage。
 - assets/project 导出前检查 entitlement，并记录 usage。
-- `/billing` 能创建 provider-neutral 的 pending payment order。
+- `/billing` 能创建 provider-neutral 的 payment order；XPay 配置齐全时返回 checkout URL。
+- XPay webhook 验签通过后才能把订单标记为 paid 并发放本地 entitlement；伪造签名不能发放权益。
 - AI 当前页能生成普通 rect slices，并保存进现有 slice state。
 - AI 全部页能逐页处理，失败页不影响已完成页面。
 - AI 结果与已有 slices 高重叠时不会大量重复追加。
@@ -78,4 +79,4 @@
 - 项目归属；
 - landing / login / settings / billing / admin 最小入口；
 - entitlement/usage skeleton；
-- provider-neutral payment order 骨架。
+- provider-neutral payment order 与最小 XPay webhook fulfillment。

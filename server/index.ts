@@ -16,7 +16,7 @@ import {
   signUpWithEmail
 } from "./auth";
 import { initDatabase } from "./db";
-import { createPaymentOrder, getAdminOverview, getEntitlementSummary, listPaymentOrders, listPlans, listUsageEvents } from "./billing";
+import { createPaymentOrder, getAdminOverview, getEntitlementSummary, handlePaymentWebhook, listPaymentOrders, listPlans, listUsageEvents } from "./billing";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage, getProjectPageZipPath, getProjectZipPath } from "./pencil-exporter";
@@ -107,6 +107,22 @@ const app = new Elysia({
     body: t.Object({
       planId: t.String(),
       provider: t.Optional(t.String())
+    })
+  })
+  .post("/api/billing/webhooks/xpay", ({ body }) => {
+    const result = handlePaymentWebhook({ provider: "xpay", body });
+    return result.accepted ? "success" : "fail";
+  }, {
+    body: t.Object({
+      pid: t.String(),
+      trade_no: t.String(),
+      out_trade_no: t.String(),
+      type: t.String(),
+      name: t.String(),
+      money: t.String(),
+      trade_status: t.String(),
+      sign: t.String(),
+      sign_type: t.String()
     })
   })
   .get("/api/admin/overview", ({ request }) => {

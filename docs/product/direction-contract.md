@@ -92,7 +92,7 @@ Current default delivery does not aim to:
 - turn OCR text into button/card/background reconstruction;
 - perform team collaboration in the first production phase.
 
-The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). Auth/session, project ownership, basic entitlement/usage, provider-neutral payment-order skeleton, and the first landing/account/admin surfaces have started landing; production database/storage, verified payment fulfillment, backup/restore, and deployment are still future 189 stages.
+The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). Auth/session, project ownership, basic entitlement/usage, provider-neutral payment orders, minimal XPay webhook fulfillment, and the first landing/account/admin surfaces have started landing; production database/storage, payment reconciliation/refund/admin repair, backup/restore, and deployment are still future 189 stages.
 
 ## Validation artifact
 
@@ -114,5 +114,5 @@ Revisit this contract if any of these appear:
 - old Draft/Renderer/plugin work is revived without a new active plan and validation gate;
 - manual repair becomes impossible or secondary to automatic ownership.
 - public deployment exposes project APIs without authentication and ownership checks;
-- payment is implemented as a UI-only checkout without server-verified entitlement gates;
+- payment becomes a client-side success flag or bypasses server-verified entitlement fulfillment;
 - AI provider replacement leaks keys, skips usage metering, or bypasses per-user entitlement checks.

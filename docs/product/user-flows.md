@@ -89,16 +89,21 @@ API 检查项目 owner 和 export entitlement
 
 ## 账单与支付订单流程
 
-当前阶段只实现 provider-neutral 订单骨架：
+当前阶段实现 provider-neutral 订单和最小 XPay webhook fulfillment：
 
 ```text
 打开 /billing
 -> 读取 entitlement、usage_events、payment_orders
--> 创建 XPay provider 预留订单
--> payment_orders 写入 pending 订单
+-> 创建 XPay provider 订单
+-> payment_orders 写入 pending 订单；XPay 配置齐全时返回 checkout URL
+-> provider 回调 /api/billing/webhooks/xpay
+-> 服务端验签
+-> 写入 payment_events
+-> 验签成功且状态为 TRADE_SUCCESS/TRADE_FINISHED 时将订单标为 paid
+-> 从本地 plan 表发放 entitlement
 ```
 
-这一步不会发放权益。后续只有服务端验签 webhook 或明确的 admin/manual grant 才能改变 entitlement。
+客户端支付返回页不会发放权益。只有服务端验签 webhook 或明确的 admin/manual grant 才能改变 entitlement。订单查询、退款、取消、对账和人工修复仍是后续 189 工作。
 
 ## 修复路径
 

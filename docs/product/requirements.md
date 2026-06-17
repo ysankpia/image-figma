@@ -43,7 +43,7 @@ P0 能力：
 P1 能力：
 
 - Entitlement/usage skeleton：AI 和导出动作消耗额度并写 `usage_events`。
-- Provider-neutral `payment_orders` skeleton：当前保留 XPay adapter 边界，不通过客户端支付状态发放权益。
+- Provider-neutral `payment_orders`：当前保留 XPay adapter 边界；配置齐全时生成 checkout URL，只有服务端验签 webhook 才能发放权益。
 - OCR editable text layer：在 Pencil package 中添加普通可编辑文字节点。
 - TypeScript M29 physical evidence：默认给 OCR text 提供更紧的 physical bbox，不依赖 Go binary。
 - AI 当前页/全部页画框：模型只返回矩形 bbox，前端转换为普通 slice 并走现有保存路径。
@@ -53,7 +53,7 @@ P1 能力：
 
 P2 后续能力：
 
-- XPay webhook 验签、订单查询/修复、entitlement fulfillment。
+- XPay 订单查询/修复、退款/取消、对账和更完整的 entitlement reconciliation。
 - 更完整的 admin 用户/订单/计划管理。
 - 生产数据库和对象存储 adapter。
 - 更好的 AI 重复运行策略。

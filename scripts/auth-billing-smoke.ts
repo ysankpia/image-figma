@@ -9,6 +9,12 @@ process.env.SLICE_STUDIO_STORAGE_ROOT = root;
 process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL = "owner@example.test";
 process.env.SLICE_STUDIO_LOCAL_OWNER_NAME = "Owner";
 process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD = "owner-password";
+process.env.SLICE_STUDIO_XPAY_BASE_URL = "https://pay.example.test";
+process.env.SLICE_STUDIO_XPAY_PID = "1000";
+process.env.SLICE_STUDIO_XPAY_KEY = "xpay-test-key";
+process.env.SLICE_STUDIO_XPAY_NOTIFY_URL = "https://slice.example.test/api/billing/webhooks/xpay";
+process.env.SLICE_STUDIO_XPAY_RETURN_URL = "https://slice.example.test/billing";
+process.env.SLICE_STUDIO_ALLOW_XPAY_TEST_SIGN = "true";
 
 try {
   const dbModule = await import("../server/db");
@@ -16,6 +22,7 @@ try {
   const auth = await import("../server/auth");
   const billing = await import("../server/billing");
   const projects = await import("../server/projects");
+  const xpay = await import("../server/xpay");
 
   const owner = auth.ensureLocalOwner();
   auth.seedEntitlement(owner.id);
@@ -47,7 +54,39 @@ try {
 
   const order = billing.createPaymentOrder(alice.id, "pro", "xpay");
   assert(order.provider === "xpay" && order.status === "pending", "XPay reserved order should be pending");
+  assert(order.checkoutUrl?.startsWith("https://pay.example.test/submit.php?"), "configured XPay order should include checkout URL");
   assert(billing.listPaymentOrders(alice.id)[0]?.id === order.id, "payment order should be stored");
+  const failedWebhook = billing.handlePaymentWebhook({
+    provider: "xpay",
+    body: {
+      pid: "1000",
+      trade_no: "provider_bad",
+      out_trade_no: order.id,
+      type: "alipay",
+      name: "Pro",
+      money: "99.00",
+      trade_status: "TRADE_SUCCESS",
+      sign: "bad-sign",
+      sign_type: "MD5"
+    }
+  });
+  assert(!failedWebhook.accepted, "bad XPay signature should not be accepted");
+  assert(billing.getEntitlementSummary(alice.id).plan.id === "free", "bad XPay signature should not grant entitlement");
+  const notify = {
+    pid: "1000",
+    trade_no: "provider_123",
+    out_trade_no: order.id,
+    type: "alipay",
+    name: "Pro",
+    money: "99.00",
+    trade_status: "TRADE_SUCCESS",
+    sign: "",
+    sign_type: "MD5"
+  };
+  notify.sign = xpay.signXPayForTest(notify);
+  const paidWebhook = billing.handlePaymentWebhook({ provider: "xpay", body: notify });
+  assert(paidWebhook.accepted && paidWebhook.status === "paid", "valid XPay success webhook should mark order paid");
+  assert(billing.getEntitlementSummary(alice.id).plan.id === "pro", "valid XPay success webhook should grant paid plan");
   assert(billing.getAdminOverview().users >= 3, "admin overview should count users");
 
   console.log("auth-billing smoke passed");
