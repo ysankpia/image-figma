@@ -4,10 +4,17 @@ Slice Studio local runtime data lives in:
 
 ```text
 storage/app.sqlite
-storage/projects/
+storage/users/
 ```
 
 This data is ignored by Git and must not be committed. Back it up before moving app paths, changing storage defaults, running destructive cleanup, or doing production migration work.
+
+Legacy note:
+
+```text
+older local projects may still exist under storage/projects/
+until a later explicit migration, back up both storage/users and storage/projects when present
+```
 
 ## Backup
 
@@ -18,7 +25,8 @@ timestamp="$(date +%Y%m%d-%H%M%S)"
 backup_dir="backups/slice-studio-storage-$timestamp"
 mkdir -p "$backup_dir"
 cp -a storage/app.sqlite "$backup_dir/app.sqlite"
-cp -a storage/projects "$backup_dir/projects"
+test -d storage/users && cp -a storage/users "$backup_dir/users"
+test -d storage/projects && cp -a storage/projects "$backup_dir/projects"
 sqlite3 "$backup_dir/app.sqlite" \
   'select "projects", count(*) from projects union all select "pages", count(*) from pages union all select "slices", count(*) from slices;'
 du -sh "$backup_dir"
@@ -32,8 +40,10 @@ Stop Slice Studio first. Then restore:
 
 ```bash
 cp -a backups/slice-studio-storage-YYYYMMDD-HHMMSS/app.sqlite storage/app.sqlite
+rm -rf storage/users
+test -d backups/slice-studio-storage-YYYYMMDD-HHMMSS/users && cp -a backups/slice-studio-storage-YYYYMMDD-HHMMSS/users storage/users
 rm -rf storage/projects
-cp -a backups/slice-studio-storage-YYYYMMDD-HHMMSS/projects storage/projects
+test -d backups/slice-studio-storage-YYYYMMDD-HHMMSS/projects && cp -a backups/slice-studio-storage-YYYYMMDD-HHMMSS/projects storage/projects
 ```
 
 Start Slice Studio and verify:

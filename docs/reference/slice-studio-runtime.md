@@ -121,13 +121,15 @@ Use `subject` for assets like icons, logos, badges, plus buttons, cart buttons, 
 ```text
 storage/
   app.sqlite
-  projects/{projectId}/originals/page_0001.png
-  projects/{projectId}/exports/assets.zip
-  projects/{projectId}/exports/project.zip
-  projects/{projectId}/exports/pages/{pageId}/project.zip
+  users/{userId}/projects/{projectId}/originals/page_0001.png
+  users/{userId}/projects/{projectId}/exports/assets.zip
+  users/{userId}/projects/{projectId}/exports/project.zip
+  users/{userId}/projects/{projectId}/exports/pages/{pageId}/project.zip
 ```
 
 `storage/` is local runtime data and must not be committed.
+
+For backward compatibility, older local projects may still physically exist under `storage/projects/{projectId}/...`; current runtime continues to read those legacy paths while new writes use the user-scoped storage namespace.
 
 `assets.zip` exports by page order plus optional page display name:
 

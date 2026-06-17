@@ -7,7 +7,7 @@
 1. 确认用户上传的是受支持图片，且没有超过 `SLICE_STUDIO_MAX_UPLOAD_BYTES` 或 batch 上限。
 2. 打开 `/projects`，确认项目、页面、缩略图可读。
 3. 检查 `storage/app.sqlite` 是否存在。
-4. 检查 `storage/projects/{projectId}/originals/` 是否有源图。
+4. 检查 `storage/users/{userId}/projects/{projectId}/originals/` 是否有源图；若是老项目，再检查 `storage/projects/{projectId}/originals/` 兼容路径。
 5. 检查页面和 slices 是否能通过 API 读回。
 6. 如果是 AI 画框问题，检查 `/ai-boxes` response diagnostics、provider 配置、tile/overview 解析和前端 merge/save。
 7. 如果是保存问题，检查 `PUT /api/projects/:projectId/slices` 和 SQLite state。

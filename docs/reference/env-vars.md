@@ -127,6 +127,17 @@ SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
 BAIDU_PADDLE_OCR_TOKEN=
 ```
 
+当前默认 storage key 合同：
+
+```text
+users/{userId}/projects/{projectId}/originals/{pageId}.png
+users/{userId}/projects/{projectId}/exports/assets.zip
+users/{userId}/projects/{projectId}/exports/project.zip
+users/{userId}/projects/{projectId}/exports/pages/{pageId}/project.zip
+```
+
+已有本地旧项目如果仍保存在 `projects/{projectId}/...`，运行时会继续兼容读取；新写入使用 user-scoped 路径。
+
 ## Historical Variable Groups
 
 Use these only when a task explicitly targets old routes.

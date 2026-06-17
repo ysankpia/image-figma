@@ -54,8 +54,15 @@ http://127.0.0.1:3010/projects
 
 ```text
 storage/app.sqlite
-storage/projects/{projectId}/originals/
-storage/projects/{projectId}/exports/
+storage/users/{userId}/projects/{projectId}/originals/
+storage/users/{userId}/projects/{projectId}/exports/
+```
+
+兼容说明：
+
+```text
+已有旧本地项目可能仍在 storage/projects/{projectId}/...
+当前运行时继续兼容读取，新的上传和导出写入 users/{userId}/projects/{projectId}/...
 ```
 
 `storage/` 是运行数据，不提交。不要删除用户正在使用的项目 storage，除非用户明确要求。

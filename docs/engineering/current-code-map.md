@@ -42,8 +42,15 @@ Runtime:
 Next web:  http://127.0.0.1:3010
 Elysia API: http://127.0.0.1:4110
 SQLite:    storage/app.sqlite
-Originals: storage/projects/{projectId}/originals/
-Exports:   storage/projects/{projectId}/exports/
+Originals: storage/users/{userId}/projects/{projectId}/originals/
+Exports:   storage/users/{userId}/projects/{projectId}/exports/
+```
+
+Backward compatibility note:
+
+```text
+legacy local projects may still physically live under storage/projects/{projectId}/...
+runtime keeps reading those paths until a later explicit migration/repack step
 ```
 
 Current API:

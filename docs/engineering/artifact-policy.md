@@ -5,9 +5,9 @@ Current product artifacts belong to Slice Studio.
 ```text
 storage/
   app.sqlite
-  projects/{projectId}/originals/
-  projects/{projectId}/exports/assets.zip
-  projects/{projectId}/exports/project.zip
+  users/{userId}/projects/{projectId}/originals/
+  users/{userId}/projects/{projectId}/exports/assets.zip
+  users/{userId}/projects/{projectId}/exports/project.zip
 ```
 
 Runtime artifacts are useful for local work and validation, but they are not source code and must not be committed unless explicitly curated as fixtures.

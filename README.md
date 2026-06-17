@@ -85,6 +85,15 @@ SLICE_STUDIO_AI_SLICE_TILE_COUNT=6
 SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW=true
 ```
 
+当前 storage key 合同：
+
+```text
+storage/users/{userId}/projects/{projectId}/originals/
+storage/users/{userId}/projects/{projectId}/exports/
+```
+
+旧本地项目如果仍在 `storage/projects/{projectId}/...`，当前运行时会兼容读取；新上传和新导出写入 user-scoped 路径。
+
 ## 189 生产化入口
 
 当前正式上线路线已经打开，浏览器侧通过 Next.js 同源 `/api` 使用后端，脚本和 smoke 仍然可以直连 `SLICE_STUDIO_API_URL`。
