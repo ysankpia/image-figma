@@ -3327,6 +3327,97 @@ h1 {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.adminTableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.adminTable {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.adminTable th,
+.adminTable td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.adminTable th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.adminTable td {
+  color: var(--ink);
+}
+
+.adminTable code {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminTable td span {
+  color: var(--muted);
+}
+
+.adminTable.compact {
+  min-width: 620px;
+}
+
+.statusPill {
+  display: inline-grid;
+  min-height: 24px;
+  place-items: center;
+  border-radius: 9999px;
+  padding: 0 9px;
+  background: #f1f1f3;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.statusPill.paid {
+  background: #e8f7ee;
+  color: #147a3d;
+}
+
+.statusPill.pending {
+  background: #fff7e6;
+  color: #946200;
+}
+
+.statusPill.failed,
+.statusPill.closed,
+.statusPill.refunded {
+  background: #fff1f1;
+  color: var(--danger);
+}
+
+.adminPaymentAction {
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.adminPaymentAction button {
+  width: max-content;
+}
+
+.adminPaymentAction span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 @media (max-width: 760px) {
   .featureGrid {
     grid-template-columns: 1fr;

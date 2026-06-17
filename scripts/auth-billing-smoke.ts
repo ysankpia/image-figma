@@ -102,6 +102,14 @@ try {
   const paidWebhook = billing.handlePaymentWebhook({ provider: "xpay", body: notify });
   assert(paidWebhook.accepted && paidWebhook.status === "paid", "valid XPay success webhook should mark order paid");
   assert(billing.getEntitlementSummary(alice.id).plan.id === "pro", "valid XPay success webhook should grant paid plan");
+  const manualUser = auth.signUpWithEmail("Manual", "manual@example.test", "password-123").user;
+  const manualOrder = billing.createPaymentOrder(manualUser.id, "pro", "xpay");
+  assertThrows(() => billing.manuallyMarkOrderPaid(manualOrder.id, bob), "Admin only");
+  billing.manuallyMarkOrderPaid(manualOrder.id, refreshedOwner);
+  assertThrows(() => billing.manuallyMarkOrderPaid(manualOrder.id, refreshedOwner), "Order is already paid");
+  assert(billing.getEntitlementSummary(manualUser.id).plan.id === "pro", "manual payment repair should grant paid plan");
+  assert(billing.listAdminPaymentOrders().some((item) => item.id === manualOrder.id && item.status === "paid"), "admin payment list should include repaired paid order");
+  assert(billing.listAdminPaymentEvents().some((item) => item.order_id === manualOrder.id && item.event_type === "manual_mark_paid"), "manual payment repair should write payment event");
   assert(billing.getAdminOverview().users >= 3, "admin overview should count users");
 
   console.log("auth-billing smoke passed");

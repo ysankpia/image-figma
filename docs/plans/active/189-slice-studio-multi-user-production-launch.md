@@ -19,7 +19,8 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 - AI and export routes now consume entitlement counters and write `usage_events`; `POST /api/billing/orders` creates a provider-neutral pending XPay order skeleton without granting entitlement.
 - Minimal XPay / 易支付 checkout and webhook fulfillment now exists: configured XPay env vars produce a checkout URL, verified success callbacks write `payment_events`, mark the local order paid, and grant entitlement from the local plan table. Forged callbacks are recorded but do not grant entitlement.
 - Project/page/storage quota gates now exist: project creation checks free/paid project-count limits, page upload checks per-project page count and account original-image storage, page replacement checks projected storage, `/api/me` returns account usage, and `/billing` shows project count, page count, and used storage.
-- Remaining 189 work: payment reconciliation/refund/cancel/admin repair, richer admin operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
+- Admin payment ops now has a minimum repair loop: admins can inspect recent payment orders/events and manually mark repairable pending/failed orders as paid; manual repair writes a `manual_mark_paid` payment event and grants entitlement through the same local plan path.
+- Remaining 189 work: payment provider query/reconciliation/refund/cancel, richer admin user/plan operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
 
 ## Concrete analysis
 

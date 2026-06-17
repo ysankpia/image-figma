@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { CurrentUser } from "./auth";
 import { db, type EntitlementRow, type PlanRow } from "./db";
 import { freeProjectLimit, maxPagesPerProject, paidProjectLimit, storageRoot } from "./config";
 import { httpError } from "./errors";
@@ -277,6 +278,31 @@ export function markOrderPaid(orderId: string): void {
   }
 }
 
+export function manuallyMarkOrderPaid(orderId: string, admin: CurrentUser): void {
+  if (admin.role !== "admin") throw httpError(403, "Admin only");
+  const order = db.query<{ id: string; status: string }, [string]>("SELECT id, status FROM payment_orders WHERE id = ?").get(orderId);
+  if (!order) throw httpError(404, "Payment order not found");
+  if (order.status === "paid") throw httpError(409, "Order is already paid");
+  if (order.status === "refunded" || order.status === "closed") {
+    throw httpError(409, `Cannot mark ${order.status} order as paid`);
+  }
+  markOrderPaid(order.id);
+  db.query(`
+    INSERT INTO payment_events (id, order_id, provider, event_type, signature_valid, payload_json, created_at)
+    VALUES (?, ?, 'admin', 'manual_mark_paid', 1, ?, ?)
+  `).run(
+    `payment_event_${randomHex(8)}`,
+    order.id,
+    JSON.stringify({
+      adminId: admin.id,
+      adminEmail: admin.email,
+      previousStatus: order.status,
+      reason: "admin_manual_repair"
+    }),
+    new Date().toISOString()
+  );
+}
+
 export function listPaymentOrders(userId: string, limit = 20) {
   return db.query<{
     id: string;
@@ -296,6 +322,46 @@ export function listPaymentOrders(userId: string, limit = 20) {
     ORDER BY created_at DESC
     LIMIT ?
   `).all(userId, Math.max(1, Math.min(100, Math.floor(limit))));
+}
+
+export function listAdminPaymentOrders(limit = 50) {
+  return db.query<{
+    id: string;
+    user_id: string;
+    user_email: string;
+    provider: string;
+    provider_order_id: string | null;
+    plan_id: string;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    checkout_url: string | null;
+    created_at: string;
+    updated_at: string;
+  }, [number]>(`
+    SELECT po.id, po.user_id, u.email AS user_email, po.provider, po.provider_order_id, po.plan_id, po.amount_cents, po.currency, po.status, po.checkout_url, po.created_at, po.updated_at
+    FROM payment_orders po
+    INNER JOIN users u ON u.id = po.user_id
+    ORDER BY po.created_at DESC
+    LIMIT ?
+  `).all(Math.max(1, Math.min(100, Math.floor(limit))));
+}
+
+export function listAdminPaymentEvents(limit = 50) {
+  return db.query<{
+    id: string;
+    order_id: string | null;
+    provider: string;
+    event_type: string;
+    signature_valid: number;
+    payload_json: string;
+    created_at: string;
+  }, [number]>(`
+    SELECT id, order_id, provider, event_type, signature_valid, payload_json, created_at
+    FROM payment_events
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(Math.max(1, Math.min(100, Math.floor(limit))));
 }
 
 export function getAdminOverview() {

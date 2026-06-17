@@ -16,7 +16,19 @@ import {
   signUpWithEmail
 } from "./auth";
 import { initDatabase } from "./db";
-import { createPaymentOrder, getAccountUsage, getAdminOverview, getEntitlementSummary, handlePaymentWebhook, listPaymentOrders, listPlans, listUsageEvents } from "./billing";
+import {
+  createPaymentOrder,
+  getAccountUsage,
+  getAdminOverview,
+  getEntitlementSummary,
+  handlePaymentWebhook,
+  listAdminPaymentEvents,
+  listAdminPaymentOrders,
+  listPaymentOrders,
+  listPlans,
+  listUsageEvents,
+  manuallyMarkOrderPaid
+} from "./billing";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage, getProjectPageZipPath, getProjectZipPath } from "./pencil-exporter";
@@ -132,6 +144,18 @@ const app = new Elysia({
       user,
       totals: getAdminOverview()
     };
+  })
+  .get("/api/admin/payments", ({ request }) => {
+    requireAdmin(request);
+    return {
+      orders: listAdminPaymentOrders(50),
+      events: listAdminPaymentEvents(50)
+    };
+  })
+  .post("/api/admin/payment-orders/:orderId/mark-paid", ({ request, params }) => {
+    const admin = requireAdmin(request);
+    manuallyMarkOrderPaid(params.orderId, admin);
+    return { ok: true };
   })
   .get("/api/ai-slice-settings", () => ({ ok: true, batchConcurrency: aiSliceBatchConcurrency }))
   .get("/api/projects", ({ request }) => {

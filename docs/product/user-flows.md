@@ -87,7 +87,7 @@ API 检查项目 owner 和 export entitlement
 - Save state：自动保存中、已保存、保存失败。
 - Settings：当前账号、角色、状态。
 - Billing：当前计划、剩余额度、最近用量、订单。
-- Admin：管理员查看 users/projects/pages/slices/usage/payment order 计数。
+- Admin：管理员查看 users/projects/pages/slices/usage/payment order 计数、最近支付订单、最近支付事件，并可人工确认丢失回调的 pending/failed 订单。
 
 ## 账单与支付订单流程
 
@@ -105,7 +105,20 @@ API 检查项目 owner 和 export entitlement
 -> 从本地 plan 表发放 entitlement
 ```
 
-客户端支付返回页不会发放权益。只有服务端验签 webhook 或明确的 admin/manual grant 才能改变 entitlement。订单查询、退款、取消、对账和人工修复仍是后续 189 工作。
+Admin 人工确认流程：
+
+```text
+打开 /admin
+-> 查看最近 payment_orders 和 payment_events
+-> 对 provider 回调丢失或异常的 pending/failed 订单点击人工确认
+-> API 检查 admin session
+-> 拒绝 already paid / closed / refunded 订单
+-> 标记订单 paid
+-> 从本地 plan 表发放 entitlement
+-> 写入 manual_mark_paid payment_event
+```
+
+客户端支付返回页不会发放权益。订单查询、退款、取消、对账和 provider 状态 reconciliation 仍是后续 189 工作。
 
 ## 修复路径
 
