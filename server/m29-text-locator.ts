@@ -253,7 +253,11 @@ function physicalTextBoxIsTooBroad(ocrBBox: BBox, physicalBBox: BBox): boolean {
   const widthRatio = physicalBBox.width / Math.max(1, ocrBBox.width);
   const heightRatio = physicalBBox.height / Math.max(1, ocrBBox.height);
   const areaRatio = physicalArea / ocrArea;
+  const topOvershoot = ocrBBox.y - physicalBBox.y;
+  const bottomOvershoot = (physicalBBox.y + physicalBBox.height) - (ocrBBox.y + ocrBBox.height);
+  const verticalOvershoot = Math.max(topOvershoot, bottomOvershoot);
 
+  if (heightRatio >= 1.45 && areaRatio >= 1.55 && verticalOvershoot >= Math.max(6, ocrBBox.height * 0.45)) return true;
   if (heightRatio >= 1.32 && areaRatio >= 1.85) return true;
   if (widthRatio >= 1.85 && heightRatio >= 1.12) return true;
   if (widthRatio >= 2.4) return true;

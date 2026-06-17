@@ -275,7 +275,7 @@ function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: numb
       if (sourceData[offset + 3] < 200) continue;
       const pixel = { r: sourceData[offset], g: sourceData[offset + 1], b: sourceData[offset + 2] };
       if (foreground
-        ? !isForegroundTextPixelNearColor(pixel, foreground, background)
+        ? !isForegroundTextPixelNearColor(pixel, foreground, background) && !isForegroundTextPixel(pixel, background)
         : !isForegroundTextPixel(pixel, background)
       ) continue;
       const localIndex = (y - rect.top) * rect.width + (x - rect.left);

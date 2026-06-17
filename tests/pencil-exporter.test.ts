@@ -200,6 +200,28 @@ describe("pencil exporter", () => {
     expect(raw.data[darkShadow + 3]).toBe(255);
   });
 
+  it("erases text by local contrast when the sampled foreground color is wrong", async () => {
+    const width = 80;
+    const height = 40;
+    const rgba = Buffer.alloc(width * height * 4);
+    fillRawRect(rgba, width, { x: 0, y: 0, width, height }, [255, 255, 255]);
+    fillRawRect(rgba, width, { x: 20, y: 16, width: 40, height: 6 }, [150, 150, 150]);
+    const source = await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+
+    const png = await createRemainderPng(source, [], [{
+      bbox: { x: 18, y: 12, width: 44, height: 14 },
+      foregroundColor: "#050505",
+      provenance: "ocr_text"
+    }]);
+    const raw = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const erasedText = (18 * width + 38) * 4;
+
+    expect(raw.data[erasedText]).toBeGreaterThan(230);
+    expect(raw.data[erasedText + 1]).toBeGreaterThan(230);
+    expect(raw.data[erasedText + 2]).toBeGreaterThan(230);
+    expect(raw.data[erasedText + 3]).toBe(255);
+  });
+
   it("preserves colored button surfaces when knocking out editable button text", async () => {
     const source = await sharp({
       create: {
@@ -426,7 +448,7 @@ describe("pencil exporter", () => {
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>
         <rect x="108" y="28" width="84" height="36" rx="18" fill="#18a64a"/>
-        <rect x="134" y="39" width="46" height="13" fill="#ffffff"/>
+        <rect x="122" y="39" width="58" height="13" fill="#ffffff"/>
       </svg>
     `)).png().toBuffer();
 
@@ -1348,6 +1370,51 @@ describe("pencil exporter", () => {
     expect(reconstruction.layers[1].fontSize).toBeLessThan(16);
   });
 
+  it("falls back when an M29 physical text box swallows a neighboring vertical line", async () => {
+    const imageBuffer = await sharp({
+      create: {
+        width: 420,
+        height: 180,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const ocrLine = { text: "请多选，选择您提供的服务类别", bbox: { x: 72, y: 88, width: 270, height: 22 }, confidence: 99, wordCount: 1 };
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width: 420,
+      height: 180,
+      imageBuffer,
+      slices: [],
+      locator: () => locateTextLinesFromM29([ocrLine], {
+        schemaName: "M29PhysicalEvidence",
+        primitives: [{
+          id: "prim_title_and_hint",
+          primitiveType: "text_region",
+          bbox: { x: 76, y: 68, width: 264, height: 41 },
+          source: {
+            kind: "physical",
+            ocrBlockId: "ocr_0001",
+            text: ocrLine.text
+          }
+        }]
+      }),
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [ocrLine]
+      }
+    });
+
+    expect(reconstruction.layers).toHaveLength(1);
+    expect(reconstruction.layers[0].metadata.bboxSource).toBe("ocr");
+    expect(reconstruction.layers[0].metadata.bboxFallbackReason).toBe("m29_bbox_too_broad_for_ocr_line");
+    expect(reconstruction.layers[0].textRenderBBox.y).toBeGreaterThanOrEqual(82);
+  });
+
   it("falls back to OCR bbox when physical evidence does not match", async () => {
     const imageBuffer = await sharp({
       create: {
@@ -1898,6 +1965,7 @@ describe("pencil exporter", () => {
     expect(String(layer.metadata.bboxFallbackReason)).toContain("local_foreground_matched_owner_surface");
     expect(layer.textRenderBBox.y).toBeGreaterThanOrEqual(surface.bbox.y);
     expect(layer.textRenderBBox.y + layer.textRenderBBox.height).toBeLessThanOrEqual(surface.bbox.y + surface.bbox.height);
+    expect(Math.abs((layer.textRenderBBox.x + layer.textRenderBBox.width / 2) - (surface.bbox.x + surface.bbox.width / 2))).toBeLessThanOrEqual(1);
   });
 
   it("uses measured psdlike text style when the resolver returns one", async () => {
@@ -1974,6 +2042,63 @@ describe("pencil exporter", () => {
     expect(layer.color).toBe("#fcfdfc");
     expect(layer.metadata.textStyleSource).toBe("psdlike");
     expect(layer.metadata.textStyleMeasured).toEqual({ width: 62, height: 34 });
+  });
+
+  it("rejects measured text styles that cannot fit a single-line Pencil text box", async () => {
+    const width = 260;
+    const height = 100;
+    const imageBuffer = await sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const reconstruction = await reconstructTextLayers({
+      pageId: "page_0001",
+      width,
+      height,
+      imageBuffer,
+      slices: [],
+      locator: () => ({
+        status: "ok",
+        source: "ocr",
+        lines: [{
+          line: { text: "联系客服", bbox: { x: 80, y: 42, width: 82, height: 18 }, confidence: 99, wordCount: 1 },
+          bbox: { x: 80, y: 42, width: 82, height: 18 },
+          bboxSource: "ocr"
+        }]
+      }),
+      textStyleResolver: async () => [{
+        fontSize: 32,
+        fontWeight: "500",
+        fontFamily: "PingFang SC",
+        color: "#111111",
+        lineHeight: 32,
+        textAlign: "left",
+        measured: { width: 126, height: 34 },
+        source: "psdlike"
+      }],
+      ocr: {
+        provider: "baidu_ppocrv5",
+        status: "ok",
+        language: "zh+en",
+        model: "PP-OCRv5",
+        lines: [
+          { text: "联系客服", bbox: { x: 80, y: 42, width: 82, height: 18 }, confidence: 99, wordCount: 1 }
+        ]
+      }
+    });
+
+    const layer = reconstruction.layers[0];
+    expect(layer.metadata.textStyleSource).toBe("fallback");
+    expect(layer.metadata.textStyleRejected).toMatchObject({
+      fontSize: 32,
+      reason: "measured_style_exceeds_single_line_bounds"
+    });
+    expect(layer.fontSize).toBeLessThan(20);
   });
 
   it("falls back to local font estimates when measured text style is unavailable", async () => {

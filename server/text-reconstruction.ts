@@ -78,6 +78,7 @@ type EditableTextCandidate = {
   ownershipReason: string;
   ownerSurface?: TextOwnerSurface;
   layoutOwnerSurface?: TextOwnerSurface;
+  layoutBBox?: BBox;
   fallbackColor: string;
   backgroundColor: string;
 };
@@ -122,16 +123,17 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
             bboxFallbackReason: appendReason(located.bboxFallbackReason, "local_foreground_matched_owner_surface")
           }
         : located;
-      const layoutOwnerSurface = ownerSurface
-        && (located.bboxSource !== "local_foreground" || localForegroundIsOwnerSurface)
-        && canUseOwnerSurfaceForLayout(ownerSurface, textLocated.line.bbox)
-        ? ownerSurface
+      const layoutCandidate = ownerSurface
+        && (located.bboxSource !== "local_foreground" || localForegroundIsOwnerSurface || ownerSurface.reason === "outlined_control_surface")
+        ? ownerSurfaceLayout(ownerSurface, textLocated.line.bbox, blockers)
         : undefined;
+      const layoutOwnerSurface = layoutCandidate?.ownerSurface;
       editableCandidates.push({
         located: textLocated,
         ownershipReason: ownership.reason,
         ownerSurface,
         layoutOwnerSurface,
+        layoutBBox: layoutCandidate?.layoutBBox,
         fallbackColor: sampleTextColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface),
         backgroundColor: sampleTextBackgroundColor(raw.data, raw.info.width, raw.info.height, textLocated.line.bbox, ownerSurface)
       });
@@ -150,6 +152,7 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
         ownershipReason: candidate.ownershipReason,
         ownerSurface: candidate.ownerSurface,
         layoutOwnerSurface: candidate.layoutOwnerSurface,
+        layoutBBox: candidate.layoutBBox,
         textStyle: measuredStyles?.[candidateIndex] || undefined
       }));
     }
@@ -236,20 +239,31 @@ function makeTextLayer(input: {
   ownershipReason: string;
   ownerSurface?: TextOwnerSurface;
   layoutOwnerSurface?: TextOwnerSurface;
+  layoutBBox?: BBox;
   textStyle?: TextStyleBatchResult;
 }): TextLayer {
   const line = input.located.line;
   const script = scriptForText(line.text);
   const isPhysicalBBox = input.located.bboxSource === "m29_foreground" || input.located.bboxSource === "local_foreground";
   const renderSourceBBox = isPhysicalBBox ? { ...input.located.bbox } : { ...line.bbox };
+  const layoutBBox = input.layoutBBox || input.layoutOwnerSurface?.bbox;
   const fitBBox = input.layoutOwnerSurface
     ? renderSourceBBox
     : singleLinePlacementBBox(renderSourceBBox, line.bbox, input.pageWidth, input.pageHeight);
-  const fontSize = input.textStyle?.fontSize ?? fitFontSize(line.text, fitBBox, input.layoutOwnerSurface, isPhysicalBBox);
+  const fallbackFontSize = fitFontSize(line.text, fitBBox, input.layoutOwnerSurface, isPhysicalBBox, layoutBBox);
+  const measuredTextStyle = acceptedTextStyle(
+    input.textStyle,
+    line.text,
+    line.bbox,
+    layoutBBox,
+    fallbackFontSize,
+    script
+  );
+  const fontSize = measuredTextStyle?.fontSize ?? fallbackFontSize;
   const placementBBox = input.layoutOwnerSurface
-    ? ownerAwareTextBBox(line.text, renderSourceBBox, input.layoutOwnerSurface.bbox, fontSize, script, input.pageWidth, input.pageHeight)
+    ? ownerAwareTextBBox(line.text, renderSourceBBox, layoutBBox || input.layoutOwnerSurface.bbox, fontSize, script, input.pageWidth, input.pageHeight)
     : renderSourceBBox;
-  const textRenderBBox = textRenderBounds(line.text, placementBBox, input.layoutOwnerSurface?.bbox, fontSize, script, input.pageWidth, input.pageHeight);
+  const textRenderBBox = textRenderBounds(line.text, placementBBox, layoutBBox, fontSize, script, input.pageWidth, input.pageHeight);
   const safeBBox = expandedTextBounds(placementBBox, input.pageWidth, input.pageHeight, fontSize, script);
   const rawKnockoutBBox = textKnockoutBounds(line.bbox, renderSourceBBox, input.pageWidth, input.pageHeight, fontSize);
   const knockoutBBox = input.layoutOwnerSurface
@@ -261,11 +275,11 @@ function makeTextLayer(input: {
       ? { ...input.located.bbox }
       : undefined
   );
-  const layerFontFamily = input.textStyle?.fontFamily || fontFamily;
-  const layerFontWeight = input.textStyle?.fontWeight ?? fontWeight;
-  const layerColor = chooseReadableTextColor(input.textStyle?.color, input.color, input.backgroundColor);
-  const rejectedMeasuredColor = input.textStyle?.color && layerColor !== input.textStyle.color
-    ? input.textStyle.color
+  const layerFontFamily = measuredTextStyle?.fontFamily || fontFamily;
+  const layerFontWeight = measuredTextStyle?.fontWeight ?? fontWeight;
+  const layerColor = chooseReadableTextColor(measuredTextStyle?.color, input.color, input.backgroundColor);
+  const rejectedMeasuredColor = measuredTextStyle?.color && layerColor !== measuredTextStyle.color
+    ? measuredTextStyle.color
     : undefined;
   return {
     id: `${input.pageId}__text_${String(input.index + 1).padStart(4, "0")}`,
@@ -305,16 +319,21 @@ function makeTextLayer(input: {
       textOwnershipPolicy: "slice_studio_text_ownership.v1",
       textOwnershipDecision: "editable_text",
       textOwnershipReason: input.ownershipReason,
-      textStyleSource: input.textStyle?.source || "fallback",
-      textStyleMeasured: input.textStyle ? { ...input.textStyle.measured } : undefined,
+      textStyleSource: measuredTextStyle?.source || "fallback",
+      textStyleMeasured: measuredTextStyle ? { ...measuredTextStyle.measured } : undefined,
+      textStyleRejected: input.textStyle && !measuredTextStyle ? {
+        measured: { ...input.textStyle.measured },
+        fontSize: input.textStyle.fontSize,
+        reason: "measured_style_exceeds_single_line_bounds"
+      } : undefined,
       textStyleColorRejected: rejectedMeasuredColor ? {
         measuredColor: rejectedMeasuredColor,
         fallbackColor: input.color,
         backgroundColor: input.backgroundColor,
         reason: "low_contrast_against_local_background"
       } : undefined,
-      textStyleLineHeight: input.textStyle?.lineHeight,
-      textStyleTextAlign: input.textStyle?.textAlign,
+      textStyleLineHeight: measuredTextStyle?.lineHeight,
+      textStyleTextAlign: measuredTextStyle?.textAlign,
       textOwnerSurface: input.ownerSurface ? {
         bbox: input.ownerSurface.bbox,
         fill: input.ownerSurface.fill,
@@ -333,9 +352,32 @@ function makeTextLayer(input: {
         fillRatio: input.layoutOwnerSurface.fillRatio,
         edgeCoverage: input.layoutOwnerSurface.edgeCoverage
       } : undefined,
+      textLayoutBBox: layoutBBox ? { ...layoutBBox } : undefined,
       zRole: "editable_text"
     }
   };
+}
+
+function acceptedTextStyle(
+  textStyle: TextStyleBatchResult | undefined,
+  text: string,
+  ocrBBox: BBox,
+  ownerBBox: BBox | undefined,
+  fallbackFontSize: number,
+  script: string
+): TextStyleBatchResult | undefined {
+  if (!textStyle) return undefined;
+  const ownerPad = ownerBBox ? Math.max(4, Math.round(ownerBBox.height * 0.18)) : 0;
+  const maxWidth = ownerBBox
+    ? Math.max(ocrBBox.width, ownerBBox.width - ownerPad * 2)
+    : Math.max(ocrBBox.width, noWrapTextWidth(text, fallbackFontSize, script));
+  const maxHeight = ownerBBox
+    ? Math.min(ownerBBox.height, Math.max(ocrBBox.height * 1.18, fallbackFontSize * 1.45))
+    : Math.max(ocrBBox.height * 1.18, fallbackFontSize * 1.45);
+
+  if (textStyle.measured.width > maxWidth) return undefined;
+  if (textStyle.measured.height > maxHeight) return undefined;
+  return textStyle;
 }
 
 function textKnockoutBounds(ocrBBox: BBox, renderSourceBBox: BBox, pageWidth: number, pageHeight: number, fontSize: number): BBox {
@@ -363,12 +405,66 @@ function unionBox(a: BBox, b: BBox): BBox {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+function ownerSurfaceLayout(
+  ownerSurface: TextOwnerSurface,
+  sourceBBox: BBox,
+  blockers: BBox[]
+): { ownerSurface: TextOwnerSurface; layoutBBox: BBox } | undefined {
+  if (!canUseOwnerSurfaceForLayout(ownerSurface, sourceBBox)) return undefined;
+  if (ownerSurface.reason === "filled_control_surface") {
+    return { ownerSurface, layoutBBox: { ...ownerSurface.bbox } };
+  }
+
+  const slot = outlinedControlTextSlot(ownerSurface.bbox, sourceBBox, blockers);
+  if (!slot) return undefined;
+  return { ownerSurface, layoutBBox: slot };
+}
+
 function canUseOwnerSurfaceForLayout(ownerSurface: TextOwnerSurface, sourceBBox: BBox): boolean {
-  if (ownerSurface.reason !== "filled_control_surface") return false;
+  if (ownerSurface.reason !== "filled_control_surface" && ownerSurface.reason !== "outlined_control_surface") return false;
   if (ownerSurface.bbox.width < sourceBBox.width * 0.92) return false;
   if (ownerSurface.bbox.height < sourceBBox.height * 0.92) return false;
   if (ownerSurface.bbox.width > sourceBBox.width * 8 && ownerSurface.bbox.height > sourceBBox.height * 3.4) return false;
   return true;
+}
+
+function outlinedControlTextSlot(ownerBBox: BBox, sourceBBox: BBox, blockers: BBox[]): BBox | undefined {
+  const inlineBlockers = blockers
+    .map((blocker) => ({ blocker, overlap: intersectionBox(ownerBBox, blocker) }))
+    .filter((item): item is { blocker: BBox; overlap: BBox } => {
+      if (!item.overlap) return false;
+      const area = item.overlap.width * item.overlap.height;
+      if (area < 16) return false;
+      if (item.blocker.width > ownerBBox.height * 1.45 || item.blocker.height > ownerBBox.height * 1.45) return false;
+      const centerYValue = item.blocker.y + item.blocker.height / 2;
+      return centerYValue >= ownerBBox.y && centerYValue <= ownerBBox.y + ownerBBox.height;
+    });
+  if (!inlineBlockers.length) return undefined;
+
+  const gap = Math.max(6, Math.round(ownerBBox.height * 0.16));
+  const padX = Math.max(8, Math.round(ownerBBox.height * 0.28));
+  const padY = Math.max(3, Math.round(ownerBBox.height * 0.12));
+  let left = ownerBBox.x + padX;
+  let right = ownerBBox.x + ownerBBox.width - padX;
+  const sourceCenterX = sourceBBox.x + sourceBBox.width / 2;
+  for (const { blocker } of inlineBlockers) {
+    const blockerCenterX = blocker.x + blocker.width / 2;
+    if (blockerCenterX >= sourceCenterX) {
+      right = Math.min(right, blocker.x - gap);
+    } else {
+      left = Math.max(left, blocker.x + blocker.width + gap);
+    }
+  }
+  if (right - left < Math.max(24, sourceBBox.width * 0.62)) {
+    left = ownerBBox.x + padX;
+    right = ownerBBox.x + ownerBBox.width - padX;
+  }
+  return {
+    x: Math.round(left),
+    y: Math.round(ownerBBox.y + padY),
+    width: Math.max(1, Math.round(right - left)),
+    height: Math.max(1, Math.round(ownerBBox.height - padY * 2))
+  };
 }
 
 function localForegroundLooksLikeOwnerSurface(localBBox: BBox, ownerBBox: BBox): boolean {
@@ -501,7 +597,11 @@ function textBoxIsTooBroadForLine(ocrBBox: BBox, physicalBBox: BBox): boolean {
   const widthRatio = physicalBBox.width / Math.max(1, ocrBBox.width);
   const heightRatio = physicalBBox.height / Math.max(1, ocrBBox.height);
   const areaRatio = physicalArea / ocrArea;
+  const topOvershoot = ocrBBox.y - physicalBBox.y;
+  const bottomOvershoot = (physicalBBox.y + physicalBBox.height) - (ocrBBox.y + ocrBBox.height);
+  const verticalOvershoot = Math.max(topOvershoot, bottomOvershoot);
 
+  if (heightRatio >= 1.18 && verticalOvershoot >= Math.max(5, ocrBBox.height * 0.25)) return true;
   if (heightRatio >= 1.32 && areaRatio >= 1.85) return true;
   if (widthRatio >= 1.85 && heightRatio >= 1.12) return true;
   if (widthRatio >= 2.4) return true;
@@ -519,7 +619,7 @@ export function textGeometryLooksEditable(line: OcrLine, pageWidth: number): boo
   return true;
 }
 
-function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, isPhysicalBBox = false): number {
+function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, isPhysicalBBox = false, layoutBBox?: BBox): number {
   const value = text.trim();
   if (!value || bbox.width <= 0 || bbox.height <= 0) return 8;
 
@@ -528,19 +628,20 @@ function fitFontSize(text: string, bbox: BBox, ownerSurface?: TextOwnerSurface, 
   let targetHeight = Math.max(1, Math.round(bbox.height * (isPhysicalBBox ? 0.86 : 0.98)));
 
   if (ownerSurface) {
-    const horizontalPadding = Math.max(4, Math.round(ownerSurface.bbox.height * 0.28));
-    const verticalPadding = Math.max(3, Math.round(ownerSurface.bbox.height * 0.18));
-    const availableWidth = Math.max(1, ownerSurface.bbox.width - horizontalPadding * 2);
-    const availableHeight = Math.max(1, ownerSurface.bbox.height - verticalPadding * 2);
-    const ownerHeightTarget = Math.max(1, Math.round(availableHeight * 0.72));
-    maxSize = Math.max(maxSize, clamp(Math.round(availableHeight * 0.72), 8, 55));
+    const ownerBox = layoutBBox || ownerSurface.bbox;
+    const horizontalPadding = layoutBBox ? 0 : Math.max(4, Math.round(ownerSurface.bbox.height * 0.28));
+    const verticalPadding = layoutBBox ? 0 : Math.max(3, Math.round(ownerSurface.bbox.height * 0.12));
+    const availableWidth = Math.max(1, ownerBox.width - horizontalPadding * 2);
+    const availableHeight = Math.max(1, ownerBox.height - verticalPadding * 2);
+    const ownerHeightTarget = Math.max(1, Math.round(availableHeight * 0.86));
+    maxSize = Math.min(maxSize, clamp(Math.round(availableHeight * 0.72), 8, 55));
     if (bbox.width >= ownerSurface.bbox.width * 0.30) {
       targetWidth = Math.min(
         Math.max(targetWidth, Math.round(availableWidth * 0.96)),
-        Math.max(1, Math.round(ownerSurface.bbox.width * 0.88))
+        Math.max(1, Math.round(availableWidth * 0.98))
       );
     }
-    targetHeight = Math.max(targetHeight, ownerHeightTarget);
+    targetHeight = Math.min(targetHeight, ownerHeightTarget);
   }
 
   for (let size = maxSize; size >= 8; size -= 1) {
@@ -579,7 +680,7 @@ function ownerAwareTextBBox(
   const horizontalPadding = Math.max(4, Math.round(ownerBBox.height * 0.20));
   const maxWidth = Math.max(1, ownerBBox.width - horizontalPadding * 2);
   const expectedWidth = Math.max(1, Math.min(maxWidth, Math.max(Math.round(sourceBBox.width), measured.width)));
-  const centerX = sourceBBox.x + sourceBBox.width / 2;
+  const centerX = ownerBBox.x + ownerBBox.width / 2;
   const centerY = ownerBBox.y + ownerBBox.height / 2;
   const minX = ownerBBox.x + horizontalPadding;
   const maxX = ownerBBox.x + ownerBBox.width - horizontalPadding - expectedWidth;
