@@ -65,9 +65,15 @@ Slice Studio 默认读取根目录 `.env.local`，不要把密钥提交到仓库
 关键变量：
 
 ```text
-NEXT_PUBLIC_SLICE_STUDIO_API_URL=http://127.0.0.1:4110
+NEXT_PUBLIC_SLICE_STUDIO_API_URL=
 SLICE_STUDIO_API_URL=http://127.0.0.1:4110
 SLICE_STUDIO_API_PORT=4110
+SLICE_STUDIO_AUTH_COOKIE_NAME=slice_studio_session
+SLICE_STUDIO_AUTH_SESSION_TTL_DAYS=30
+SLICE_STUDIO_AUTH_SECURE_COOKIES=false
+SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
+SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
+SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
 SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence
@@ -78,6 +84,20 @@ SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
 SLICE_STUDIO_AI_SLICE_TILE_COUNT=6
 SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW=true
 ```
+
+## 189 生产化入口
+
+当前正式上线路线已经打开，浏览器侧通过 Next.js 同源 `/api` 使用后端，脚本和 smoke 仍然可以直连 `SLICE_STUDIO_API_URL`。
+
+已出现的正式入口：
+
+- `/` landing page
+- `/login` 登录/注册
+- `/projects` 登录后项目列表
+- `/projects/:projectId/review` 受保护 review 工作台
+- `/settings` 账号设置
+- `/billing` 额度与账单
+- `/admin` 管理概览
 
 ## 验证
 

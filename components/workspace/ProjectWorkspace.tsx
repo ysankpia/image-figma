@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Check, FileImage, Grid3X3, LayoutList, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, FileImage, Grid3X3, LayoutList, LogOut, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { apiBaseUrl, apiDelete, apiGet, apiPatch, apiPost } from "@/components/api";
+import { apiDelete, apiGet, apiPatch, apiPost, apiUrl } from "@/components/api";
 import type { ProjectListItem, ProjectSummary } from "@/shared/types";
 
 type ProjectFilter = "recent" | "all" | "withSlices";
@@ -28,10 +28,25 @@ export function ProjectWorkspace() {
   const [editingName, setEditingName] = useState("");
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ProjectCardModel | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [account, setAccount] = useState<{ email: string; name: string } | null>(null);
 
   useEffect(() => {
+    void loadSession();
     void loadProjects();
   }, []);
+
+  async function loadSession() {
+    try {
+      const data = await apiGet<{ user: { email: string; name: string } | null }>("/api/auth/session");
+      if (!data.user) {
+        window.location.href = "/login";
+        return;
+      }
+      setAccount(data.user);
+    } catch {
+      window.location.href = "/login";
+    }
+  }
 
   async function loadProjects() {
     try {
@@ -87,6 +102,11 @@ export function ProjectWorkspace() {
     await loadProjects();
   }
 
+  async function signOut() {
+    await apiPost("/api/auth/sign-out", {});
+    window.location.href = "/";
+  }
+
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const result = projects.filter((project) => {
@@ -110,10 +130,19 @@ export function ProjectWorkspace() {
             <span>Slice Studio</span>
             <strong>{filter === "withSlices" ? "With assets" : filter === "all" ? "All projects" : "Recents"}</strong>
           </div>
-          <button type="button" className="newProjectButton" onClick={() => setCreateDialogOpen(true)}>
-            <Plus aria-hidden="true" />
-            新建项目
-          </button>
+          <div className="workspaceAccount">
+            {account ? <span>{account.name || account.email}</span> : null}
+            <Link href="/settings">设置</Link>
+            <Link href="/billing">账单</Link>
+            <Link href="/admin">管理</Link>
+            <button type="button" aria-label="退出登录" onClick={() => void signOut()}>
+              <LogOut aria-hidden="true" />
+            </button>
+            <button type="button" className="newProjectButton" onClick={() => setCreateDialogOpen(true)}>
+              <Plus aria-hidden="true" />
+              新建项目
+            </button>
+          </div>
         </header>
 
         <div className="workspaceContent">
@@ -242,7 +271,7 @@ export function ProjectWorkspace() {
 
 function resolveApiUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path;
-  return `${apiBaseUrl}${path}`;
+  return apiUrl(path);
 }
 
 function ProjectCard({

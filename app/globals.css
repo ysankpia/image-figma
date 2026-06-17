@@ -3108,3 +3108,232 @@ h1 {
     display: none;
   }
 }
+
+.authShell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  gap: 24px;
+  padding: 32px;
+  background: var(--bg);
+}
+
+.landingShell {
+  align-content: center;
+}
+
+.authCard {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px;
+  background: var(--surface);
+}
+
+.landingHero {
+  width: min(760px, 100%);
+}
+
+.eyebrow {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.authLead {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.authTabs {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  background: var(--surface-alt);
+}
+
+.authTabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.authTabs button.active {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.authForm {
+  display: grid;
+  gap: 14px;
+}
+
+.authForm label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.authForm input {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--ink);
+}
+
+.inlineLink,
+.secondaryButton {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.landingActions,
+.workspaceAccount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.featureGrid {
+  width: min(920px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.featureCard {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.featureCard span,
+.workspaceAccount span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workspaceAccount button[aria-label="退出登录"] {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.workspaceAccount a {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.workspaceAccount a:hover {
+  color: var(--blue);
+}
+
+.workspaceAccount svg {
+  width: 17px;
+  height: 17px;
+}
+
+.accountShell {
+  min-height: 100dvh;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 28px;
+  background: var(--bg);
+}
+
+.accountNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.accountNav a {
+  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.accountPanel {
+  width: min(980px, 100%);
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px;
+  background: var(--surface);
+}
+
+.accountFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.accountFacts div,
+.planCard {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface-alt);
+}
+
+.accountFacts dt,
+.planCard small,
+.simpleList span,
+.billingAction span,
+.accountNote {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.accountFacts dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+.planGrid,
+.simpleList,
+.billingAction {
+  display: grid;
+  gap: 10px;
+}
+
+.planGrid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+@media (max-width: 760px) {
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceAccount {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}

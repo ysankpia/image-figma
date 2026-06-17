@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, GripHorizontal, Grid2X2, Hand, Images, Lock, Minus, MousePointer2, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Search, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import { apiBaseUrl, apiGet, apiPost, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
+import { apiGet, apiPost, apiUrl, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
 import { mergeAiBoxesIntoSlices } from "@/shared/ai-slices";
 import { draftToBox, normalizeBox } from "@/shared/bbox";
 import type { BBox, CutMode, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
@@ -598,7 +598,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   async function hydratePage(page: ProjectDetail["pages"][number]): Promise<WorkbenchPage> {
     return {
       ...page,
-      image: await loadImage(`${apiBaseUrl}${page.sourceUrl}`)
+      image: await loadImage(apiUrl(page.sourceUrl))
     };
   }
 
@@ -799,7 +799,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await flushPageRename();
       await saveNow();
       const result = await apiPost<{ ok: true; assetCount: number; url: string }>(`/api/projects/${projectId}/export-assets`, {});
-      window.location.href = `${apiBaseUrl}${result.url}`;
+      window.location.href = apiUrl(result.url);
       setStatus(formatMessage(text.exportedAssets, { count: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
@@ -811,7 +811,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await flushPageRename();
       await saveNow();
       const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, {});
-      window.location.href = `${apiBaseUrl}${result.url}`;
+      window.location.href = apiUrl(result.url);
       setStatus(formatMessage(text.exportedProject, { pages: result.pageCount, assets: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
@@ -824,7 +824,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await flushPageRename();
       await saveNow();
       const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/pages/${activePage.id}/export-project`, {});
-      window.location.href = `${apiBaseUrl}${result.url}`;
+      window.location.href = apiUrl(result.url);
       setStatus(formatMessage(text.exportedPage, { assets: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
@@ -1428,7 +1428,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               }}>
                 <span className="pageThumbOrdinal">{index + 1}</span>
                 <span className="pageThumbImage">
-                  <img src={`${apiBaseUrl}${page.sourceUrl}`} alt="" />
+                  <img src={apiUrl(page.sourceUrl)} alt="" />
                 </span>
                 <span className="pageThumbBody">
                   <span className="pageThumbName">{page.displayName || page.originalName}</span>
@@ -1973,7 +1973,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 function slicePreviewUrl(projectId: string, slice: SliceRecord, previewRevision: number): string {
   const box = slice.bbox;
   const version = [slice.cutMode, box.x, box.y, box.width, box.height, slice.name, previewRevision].join("-");
-  return `${apiBaseUrl}/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`;
+  return apiUrl(`/api/projects/${projectId}/slices/${encodeURIComponent(slice.id)}/preview.png?v=${encodeURIComponent(version)}`);
 }
 
 function cutModeLabel(mode: CutMode, text: ReviewText): string {
