@@ -30,6 +30,76 @@ The concrete object is the repository-root Slice Studio app: a Next.js + React w
 - Current API has CORS origin configuration but no user session, route auth, project ownership, quota, billing entitlement, or admin boundary.
 - Current AI slice boxes already use an OpenAI-compatible provider configuration family: `SLICE_STUDIO_AI_SLICE_BASE_URL`, `SLICE_STUDIO_AI_SLICE_API_KEY`, `SLICE_STUDIO_AI_SLICE_MODEL`, and `SLICE_STUDIO_AI_SLICE_WIRE_API`.
 - Current product docs mark auth, billing, cloud sync, team collaboration, and formal SaaS multi-tenancy as non-goals for the local delivery phase. This plan intentionally changes the next phase.
+- CodeGraph audit on 2026-06-17 confirmed the current reachable Next app routes are only:
+
+  ```text
+  /
+  /projects
+  /projects/:projectId/review
+  ```
+
+  `app/page.tsx` redirects `/` to `/projects`, so the current app has no public landing page.
+- CodeGraph audit on 2026-06-17 confirmed the current Elysia API is an unauthenticated local API for project CRUD, page upload/replace/order/delete/source, AI boxes, slice save, slice preview, assets export, full project export, and page-scoped project export.
+- CodeGraph audit on 2026-06-17 confirmed the current SQLite schema only has `projects`, `pages`, and `slices`. There are no current mainline `users`, `sessions`, `auth_accounts`, `usage_events`, `plans`, `subscriptions`, `payment_orders`, `payment_events`, `redeem_codes`, `redemptions`, admin, or audit tables.
+- CodeGraph audit on 2026-06-17 confirmed `/Users/luhui/pencil.2.figma` is useful as a reference for payment, quota, and admin concepts, not as code to copy directly. Its `p2f` surface has a public product home, admin login, and admin shell with dashboard, support query, user/auth management, card inventory, and system settings. Its broader app also has user payment, subscriptions, profile, orders, payment result, admin payment dashboard, payment plans, payment orders, EasyPay provider, `payment_orders`, and `subscription_plans`.
+- External payment review on 2026-06-17 found `https://x.yhhrun.cn/doc/epay_submit` is an XPay / 易支付 / 码支付 style provider. It is acceptable for the first launch as a provider adapter if Slice Studio remains the source of truth for orders, entitlements, usage, and webhook verification.
+
+### Current missing product surfaces
+
+The current app should be treated as missing all production SaaS pages except the core authenticated workbench candidate.
+
+User-facing pages still missing:
+
+- Public landing page at `/`: product positioning, target users, workflow proof, output artifacts, pricing entry, privacy/support FAQ, and CTA.
+- Pricing/SaaS page: free/trial/paid plan display tied to real entitlement limits.
+- Login/register pages: session creation, registration, password/provider login, logout, and auth error states.
+- Authenticated app shell: navigation for projects, usage, billing, settings, help, and logout.
+- Owned project list: current `/projects` behavior plus user ownership, quotas, and usage state.
+- Protected Review Workbench: current `/projects/:projectId/review` behind auth and owner checks.
+- Account settings page: profile, email, password or provider bindings, language, logout, data deletion/export request entry.
+- Usage/credits page: current plan, remaining credits, AI/export/upload/storage usage, limits, reset/expiry time.
+- Billing/orders page: payment records, order status, paid/failed/processing state, entitlement effect, support reference.
+- Checkout page: creates a server-side payment order and routes to provider.
+- Payment return/result page: displays order state only; it must not grant entitlement.
+- Redeem-code page if XPay starts with external purchase/card-code fulfillment.
+- Help/support page: upload/export usage, Pencil/Figma handoff instructions, common failures, contact path.
+- Legal pages: terms, privacy policy, refund/payment policy.
+
+Admin/operator pages still missing:
+
+- Admin login and role boundary.
+- Admin dashboard: users, projects, page uploads, AI calls, exports, payment/orders, failures.
+- User management: list/search users, suspend/unsuspend, inspect usage, manually grant/revoke entitlement.
+- Project management: inspect project metadata and export failures by owner.
+- Plan/entitlement management: configure plans, limits, free quota, manual grants.
+- Payment order management: order list, provider ids, status, amount, user, retry/repair path.
+- Payment event/webhook log: raw callback payloads, signature result, idempotency and failure reason.
+- Redeem-code/card inventory management for the first XPay/manual fulfillment path.
+- AI provider settings: OpenRouter/OpenAI-compatible base URL, model, key presence, timeout/concurrency.
+- System settings: site copy, support contact, CORS/domain, upload limits, feature flags.
+- Audit log: destructive actions, admin grants, payment repairs, entitlement changes.
+
+### Current missing backend product capabilities
+
+Missing backend capabilities:
+
+- Authentication and session model.
+- User/project ownership on every project-scoped route.
+- Authorization middleware for source image, preview, assets.zip, project.zip, and page project.zip downloads.
+- Entitlement model and server-side gates.
+- Usage events for AI calls, uploads, exports, storage, and manual grants.
+- Plan model and limit dimensions.
+- Payment order model independent of any provider.
+- Verified payment webhook handler and raw event log.
+- Idempotent entitlement fulfillment.
+- Redeem-code fulfillment path for early external purchase/card-code operation.
+- Admin role and admin-only API boundary.
+- Audit events for destructive or financial operations.
+- Production database migration path.
+- Production storage adapter and authenticated/signed file access.
+- Backup/restore and deployment operations.
+
+The critical point is that payment is downstream of entitlement. A payment page without server-side entitlement checks does not make the app safe or monetizable.
 
 ### Unverified assumptions
 - The first public launch can start as individual-user SaaS, not team workspace SaaS.

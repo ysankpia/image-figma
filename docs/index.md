@@ -152,6 +152,7 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 - 环境变量：[reference/env-vars.md](reference/env-vars.md)
 - AI prompt 策略：[reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md)
 - 外部接口：[reference/external-apis.md](reference/external-apis.md)
+- XPay / 易支付候选支付 provider：[reference/payment-provider-xpay.md](reference/payment-provider-xpay.md)
 - 术语表：[reference/glossary.md](reference/glossary.md)
 - Codia golden samples：[reference/codia-samples/](reference/codia-samples/)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)
