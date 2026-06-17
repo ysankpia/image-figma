@@ -1,10 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import { consumeExport } from "./billing";
-import { projectsRoot } from "./config";
 import { httpError } from "./errors";
-import { getPageOriginalPath, getProjectDetail } from "./projects";
+import { getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
+import { storage } from "./storage";
 import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
@@ -13,9 +11,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   consumeExport(userId, projectId, "export.assets", { assetCount });
-
-  const exportDir = path.join(projectsRoot, projectId, "exports");
-  fs.mkdirSync(exportDir, { recursive: true });
+  storage.ensureProjectDirectories(projectId);
 
   const exportedAt = new Date().toISOString();
   const manifest = buildExportManifest(detail, exportedAt);
@@ -32,7 +28,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
 
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = fs.readFileSync(getPageOriginalPath(userId, projectId, page.id));
+    const originalBuffer = storage.read(storage.projectOriginalImageKey(projectId, page.id), "Original image not found");
     files.push({
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer
@@ -46,7 +42,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
     }
   }
 
-  fs.writeFileSync(path.join(exportDir, "assets.zip"), createZipBuffer(files));
+  storage.write(storage.assetsZipKey(projectId), createZipBuffer(files));
   return {
     ok: true,
     assetCount,
@@ -55,5 +51,5 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
 }
 
 export function getAssetsZipPath(projectId: string): string {
-  return path.join(projectsRoot, projectId, "exports", "assets.zip");
+  return storage.absolutePath(storage.assetsZipKey(projectId));
 }

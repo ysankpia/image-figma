@@ -196,6 +196,8 @@ BAIDU_PADDLE_OCR_TIMEOUT_SECONDS=120
 
 The browser client normally uses same-origin `/api`, and Next.js rewrites that to `SLICE_STUDIO_API_URL`. Set `NEXT_PUBLIC_SLICE_STUDIO_API_URL` only when deliberately bypassing the same-origin proxy. `SLICE_STUDIO_API_URL` is used by Next rewrites, server-rendered account pages, and scripts such as `bun run smoke`.
 
+Current mainline storage now goes through a single `server/storage.ts` local adapter. The default adapter still writes into `SLICE_STUDIO_STORAGE_ROOT` on the local filesystem, but project originals, slice previews, AI source reads, and export ZIP reads/writes already use storage keys instead of each module assembling local paths independently.
+
 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency. It carries OCR text-mask lineage in the same spirit as the older Go M29 pipeline, but it does not let OCR boxes directly become physical text placement. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 
 `SLICE_STUDIO_TEXT_STYLE_PROVIDER` accepts `psdlike` or `fallback`. Normal runtime defaults to `psdlike`; test runtime defaults to `fallback` unless explicitly overridden so unit tests do not depend on a local HTTP service.

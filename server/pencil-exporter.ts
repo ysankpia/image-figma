@@ -1,7 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
 import { consumeExport } from "./billing";
-import { projectsRoot } from "./config";
 import { httpError } from "./errors";
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
 import {
@@ -12,10 +9,11 @@ import {
   type PencilPageTextManifest,
   type PencilSlicePlacementManifest
 } from "./pencil-package";
-import { getPageOriginalPath, getProjectDetail } from "./projects";
+import { getProjectDetail } from "./projects";
 import { buildPageRenderPlan } from "./render-plan-builder";
 import type { ControlSurfaceLayer } from "./render-plan";
 import { cropSliceToPng } from "./shape-cutout";
+import { storage } from "./storage";
 import { runOcr } from "./text-ocr";
 import { reconstructTextLayers, type TextLayer, type TextReconstruction } from "./text-reconstruction";
 import { pageExportDirectory } from "../shared/manifest";
@@ -29,14 +27,12 @@ export async function exportPencilProject(userId: string, projectId: string): Pr
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   consumeExport(userId, projectId, "export.project", { assetCount, pageCount: detail.pages.length });
-
-  const exportDir = path.join(projectsRoot, projectId, "exports");
-  fs.mkdirSync(exportDir, { recursive: true });
+  storage.ensureProjectDirectories(projectId);
 
   return exportPencilDetail({
     userId,
     detail,
-    exportDir,
+    zipKey: storage.projectZipKey(projectId),
     zipFilename: "project.zip",
     url: `/api/projects/${projectId}/project.zip`
   });
@@ -57,13 +53,12 @@ export async function exportPencilProjectPage(userId: string, projectId: string,
     },
     pages: [page]
   };
-  const exportDir = path.join(projectsRoot, projectId, "exports", "pages", pageId);
-  fs.mkdirSync(exportDir, { recursive: true });
+  storage.ensureProjectDirectories(projectId);
 
   return exportPencilDetail({
     userId,
     detail: pageDetail,
-    exportDir,
+    zipKey: storage.projectPageZipKey(projectId, pageId),
     zipFilename: "project.zip",
     url: `/api/projects/${projectId}/pages/${pageId}/project.zip`
   });
@@ -72,7 +67,7 @@ export async function exportPencilProjectPage(userId: string, projectId: string,
 async function exportPencilDetail(input: {
   userId: string;
   detail: ProjectDetail;
-  exportDir: string;
+  zipKey: string;
   zipFilename: string;
   url: string;
 }): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
@@ -94,7 +89,7 @@ async function exportPencilDetail(input: {
   );
   validatePencilPackage(document, files);
 
-  fs.writeFileSync(path.join(input.exportDir, input.zipFilename), createZipBuffer(files));
+  storage.write(input.zipKey, createZipBuffer(files));
   return {
     ok: true,
     assetCount,
@@ -104,11 +99,11 @@ async function exportPencilDetail(input: {
 }
 
 export function getProjectZipPath(projectId: string): string {
-  return path.join(projectsRoot, projectId, "exports", "project.zip");
+  return storage.absolutePath(storage.projectZipKey(projectId));
 }
 
 export function getProjectPageZipPath(projectId: string, pageId: string): string {
-  return path.join(projectsRoot, projectId, "exports", "pages", pageId, "project.zip");
+  return storage.absolutePath(storage.projectPageZipKey(projectId, pageId));
 }
 
 async function buildPencilDocument(
@@ -127,7 +122,7 @@ async function buildPencilDocument(
   const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = fs.readFileSync(getPageOriginalPath(userId, detail.project.id, page.id));
+    const originalBuffer = storage.read(storage.projectOriginalImageKey(detail.project.id, page.id), "Original image not found");
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));

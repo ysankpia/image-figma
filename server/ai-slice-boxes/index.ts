@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import sharp from "sharp";
 import {
   aiSliceJpegQuality,
@@ -12,6 +11,7 @@ import {
 import { consumeAiCall } from "../billing";
 import { httpError } from "../errors";
 import { getPageOriginalPath, getProjectDetail } from "../projects";
+import { storage } from "../storage";
 import type { AiSliceBoxesResponse } from "../../shared/types";
 import { filterAiBoxes, parseAiBoxResponse } from "./boxes";
 import { callAiSliceOverviewProvider, callAiSliceProvider } from "./provider";
@@ -26,8 +26,8 @@ export async function generateAiSliceBoxes(userId: string, projectId: string, pa
   if (!page) throw httpError(404, "Page not found");
   consumeAiCall(userId, projectId, { pageId, provider: aiSliceProvider });
 
-  const originalPath = getPageOriginalPath(userId, projectId, pageId);
-  const imageBuffer = fs.readFileSync(originalPath);
+  getPageOriginalPath(userId, projectId, pageId);
+  const imageBuffer = storage.read(storage.projectOriginalImageKey(projectId, pageId), "Original image not found");
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
   const width = metadata.width || page.width;
   const height = metadata.height || page.height;

@@ -1,11 +1,11 @@
 import fs from "node:fs";
-import path from "node:path";
 import sharp from "sharp";
 import { assertCanAddPages, assertCanCreateProject, assertCanReplacePage, recordUsageEvent } from "./billing";
 import { db, transaction, type PageRow, type ProjectRow, type SliceRow } from "./db";
-import { maxBatchUploadBytes, maxUploadBytes, projectsRoot, storageRoot } from "./config";
+import { maxBatchUploadBytes, maxUploadBytes } from "./config";
 import { httpError } from "./errors";
-import { assertInside, randomHex, sanitizeFileName, sanitizeName } from "./utils";
+import { randomHex, sanitizeFileName, sanitizeName } from "./utils";
+import { storage } from "./storage";
 import { defaultSliceName, isDefaultSliceName, normalizeDefaultSliceNames } from "../shared/slice-names";
 import { assertSafeId, assertSafeSliceId, normalizeCutMode, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
 import type { PageRecord, ProjectDetail, ProjectListItem, ProjectSummary, SaveSlicesRequest, SliceRecord } from "../shared/types";
@@ -48,8 +48,7 @@ export function createProject(userId: string, payload: { name?: string }): Proje
     INSERT INTO projects (id, user_id, name, created_at, updated_at, page_count, slice_count)
     VALUES (?, ?, ?, ?, ?, 0, 0)
   `).run(id, userId, name, now, now);
-  fs.mkdirSync(path.join(projectsRoot, id, "originals"), { recursive: true });
-  fs.mkdirSync(path.join(projectsRoot, id, "exports"), { recursive: true });
+  storage.ensureProjectDirectories(id);
   const project = getProjectSummary(userId, id);
   if (!project) throw httpError(500, "Project was not created");
   recordUsageEvent({ userId, projectId: id, eventType: "project.create" });
@@ -83,7 +82,7 @@ export function deleteProject(userId: string, projectId: string): void {
   transaction(() => {
     db.query("DELETE FROM projects WHERE id = ? AND user_id = ?").run(projectId, userId);
   });
-  fs.rmSync(path.join(projectsRoot, projectId), { recursive: true, force: true });
+  storage.deleteProject(projectId);
 }
 
 export async function addPages(userId: string, projectId: string, files: File | File[] | undefined): Promise<PageRecord[]> {
@@ -96,8 +95,7 @@ export async function addPages(userId: string, projectId: string, files: File | 
   const existingCount = Number(db.query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM pages WHERE project_id = ?").get(projectId)?.count || 0);
   const nextPageIdNumber = getNextPageIdNumber(projectId);
   const now = new Date().toISOString();
-  const originalsDir = path.join(projectsRoot, projectId, "originals");
-  fs.mkdirSync(originalsDir, { recursive: true });
+  storage.ensureProjectDirectories(projectId);
 
   const normalizedFiles: Array<{
     pageIndex: number;
@@ -131,10 +129,8 @@ export async function addPages(userId: string, projectId: string, files: File | 
   const pages: PageRecord[] = [];
   transaction(() => {
     for (const file of normalizedFiles) {
-      const relativePath = `projects/${projectId}/originals/${file.pageId}.png`;
-      const absolutePath = path.join(storageRoot, relativePath);
-      assertInside(storageRoot, absolutePath);
-      fs.writeFileSync(absolutePath, file.buffer);
+      const relativePath = storage.projectOriginalImageKey(projectId, file.pageId);
+      storage.write(relativePath, file.buffer);
       db.query(`
         INSERT INTO pages (id, project_id, page_index, original_name, display_name, original_path, width, height, created_at)
         VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)
@@ -170,8 +166,7 @@ export function deletePage(userId: string, projectId: string, pageId: string): P
   assertSafeId(pageId, "pageId");
   assertProjectExists(userId, projectId);
   const page = getPageRow(projectId, pageId);
-  const absolutePath = path.join(storageRoot, page.original_path);
-  assertInside(storageRoot, absolutePath);
+  const absolutePath = storage.absolutePath(page.original_path);
   const trashPath = `${absolutePath}.deleted-${Date.now()}`;
   let moved = false;
   if (fs.existsSync(absolutePath)) {
@@ -227,14 +222,12 @@ export async function replacePage(userId: string, projectId: string, pageId: str
   const buffer = await sharp(inputBuffer, { failOn: "none" }).png().toBuffer();
   const metadata = await sharp(buffer).metadata();
   if (!metadata.width || !metadata.height) throw httpError(400, "invalid image");
-  const currentPath = path.join(storageRoot, page.original_path);
-  assertInside(storageRoot, currentPath);
+  const currentPath = storage.absolutePath(page.original_path);
   const currentBytes = fs.existsSync(currentPath) ? fs.statSync(currentPath).size : 0;
   assertCanReplacePage({ userId, projectId, currentBytes, incomingBytes: buffer.length });
 
   const relativePath = page.original_path;
-  const absolutePath = path.join(storageRoot, relativePath);
-  assertInside(storageRoot, absolutePath);
+  const absolutePath = storage.absolutePath(relativePath);
   const replacementPath = `${absolutePath}.replacement-${Date.now()}`;
   const backupPath = `${absolutePath}.backup-${Date.now()}`;
   fs.writeFileSync(replacementPath, buffer);
@@ -346,20 +339,19 @@ export function getPageOriginalPath(userId: string, projectId: string, pageId: s
   assertProjectExists(userId, projectId);
   const row = db.query<Pick<PageRow, "original_path">, [string, string]>("SELECT original_path FROM pages WHERE project_id = ? AND id = ?").get(projectId, pageId);
   if (!row) throw httpError(404, "Page not found");
-  const absolutePath = path.join(storageRoot, row.original_path);
-  assertInside(storageRoot, absolutePath);
+  const absolutePath = storage.absolutePath(row.original_path);
   if (!fs.existsSync(absolutePath)) throw httpError(404, "Original image not found");
   return absolutePath;
 }
 
-export function getSliceForPreview(userId: string, projectId: string, sliceId: string): { originalPath: string; slice: SliceRecord } {
+export function getSliceForPreview(userId: string, projectId: string, sliceId: string): { originalKey: string; slice: SliceRecord } {
   assertSafeId(projectId, "projectId");
   assertSafeSliceId(sliceId);
   assertProjectExists(userId, projectId);
   const slice = db.query<SliceRow, [string, string]>("SELECT * FROM slices WHERE project_id = ? AND id = ?").get(projectId, sliceId);
   if (!slice) throw httpError(404, "Slice not found");
   return {
-    originalPath: getPageOriginalPath(userId, projectId, slice.page_id),
+    originalKey: storage.projectOriginalImageKey(projectId, slice.page_id),
     slice: formatSlice(slice)
   };
 }

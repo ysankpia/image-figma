@@ -20,7 +20,8 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 - Minimal XPay / 易支付 checkout and webhook fulfillment now exists: configured XPay env vars produce a checkout URL, verified success callbacks write `payment_events`, mark the local order paid, and grant entitlement from the local plan table. Forged callbacks are recorded but do not grant entitlement.
 - Project/page/storage quota gates now exist: project creation checks free/paid project-count limits, page upload checks per-project page count and account original-image storage, page replacement checks projected storage, `/api/me` returns account usage, and `/billing` shows project count, page count, and used storage.
 - Admin payment ops now has a minimum repair loop: admins can inspect recent payment orders/events and manually mark repairable pending/failed orders as paid; manual repair writes a `manual_mark_paid` payment event and grants entitlement through the same local plan path.
-- Remaining 189 work: payment provider query/reconciliation/refund/cancel, richer admin user/plan operations, production DB/storage adapter, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
+- Mainline storage access is now routed through `server/storage.ts`: project originals, previews, AI reads, and exported zips use storage keys instead of each module hand-building local filesystem paths. This is still a local adapter, but it creates the seam for future object storage and signed download access.
+- Remaining 189 work: payment provider query/reconciliation/refund/cancel, richer admin user/plan operations, production DB adapter, production object storage/signed access, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
 
 ## Concrete analysis
 

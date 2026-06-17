@@ -1,6 +1,5 @@
 import cors from "@elysiajs/cors";
 import { Elysia, t } from "elysia";
-import fs from "node:fs";
 import { allowedOrigins, apiHost, apiPort } from "./config";
 import {
   buildSessionCookie,
@@ -30,11 +29,12 @@ import {
   manuallyMarkOrderPaid
 } from "./billing";
 import { HttpError, httpError } from "./errors";
-import { exportAssets, getAssetsZipPath } from "./exporter";
-import { exportPencilProject, exportPencilProjectPage, getProjectPageZipPath, getProjectZipPath } from "./pencil-exporter";
+import { exportAssets } from "./exporter";
+import { exportPencilProject, exportPencilProjectPage } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
 import { generateAiSliceBoxes } from "./ai-slice-boxes";
 import { aiSliceBatchConcurrency } from "./config";
+import { storage } from "./storage";
 import {
   addPages,
   createProject,
@@ -208,17 +208,16 @@ const app = new Elysia({
   .post("/api/projects/:projectId/pages/:pageId/ai-boxes", async ({ request, params }) => generateAiSliceBoxes(requireUser(request).id, params.projectId, params.pageId))
   .get("/api/projects/:projectId/pages/:pageId/source", ({ request, params }) => {
     const filePath = getPageOriginalPath(requireUser(request).id, params.projectId, params.pageId);
-    return new Response(Bun.file(filePath), {
-      headers: {
-        "content-type": "image/png",
-        "cache-control": "no-store"
-      }
+    return storage.response(storage.projectOriginalImageKey(params.projectId, params.pageId), {
+      contentType: "image/png",
+      cacheControl: "no-store",
+      notFoundMessage: "Original image not found"
     });
   })
   .put("/api/projects/:projectId/slices", ({ request, params, body }) => ({ ok: true, project: saveSlices(requireUser(request).id, params.projectId, body as SaveSlicesRequest) }))
   .get("/api/projects/:projectId/slices/:sliceId/preview.png", async ({ request, params }) => {
-    const { originalPath, slice } = getSliceForPreview(requireUser(request).id, params.projectId, params.sliceId);
-    const png = await cropSliceToPng(fs.readFileSync(originalPath), slice);
+    const { originalKey, slice } = getSliceForPreview(requireUser(request).id, params.projectId, params.sliceId);
+    const png = await cropSliceToPng(storage.read(originalKey, "Original image not found"), slice);
     const body = new Uint8Array(png);
     return new Response(body, {
       headers: {
@@ -231,13 +230,10 @@ const app = new Elysia({
   .get("/api/projects/:projectId/assets.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    const zipPath = getAssetsZipPath(params.projectId);
-    if (!fs.existsSync(zipPath)) throw httpError(404, "assets.zip has not been generated");
-    return new Response(Bun.file(zipPath), {
-      headers: {
-        "content-type": "application/zip",
-        "content-disposition": `attachment; filename="${params.projectId}-assets.zip"`
-      }
+    return storage.response(storage.assetsZipKey(params.projectId), {
+      contentType: "application/zip",
+      contentDisposition: `attachment; filename="${params.projectId}-assets.zip"`,
+      notFoundMessage: "assets.zip has not been generated"
     });
   })
   .post("/api/projects/:projectId/export-project", async ({ request, params }) => exportPencilProject(requireUser(request).id, params.projectId))
@@ -245,25 +241,19 @@ const app = new Elysia({
   .get("/api/projects/:projectId/pages/:pageId/project.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    const zipPath = getProjectPageZipPath(params.projectId, params.pageId);
-    if (!fs.existsSync(zipPath)) throw httpError(404, "page project.zip has not been generated");
-    return new Response(Bun.file(zipPath), {
-      headers: {
-        "content-type": "application/zip",
-        "content-disposition": `attachment; filename="${params.projectId}-${params.pageId}-project.zip"`
-      }
+    return storage.response(storage.projectPageZipKey(params.projectId, params.pageId), {
+      contentType: "application/zip",
+      contentDisposition: `attachment; filename="${params.projectId}-${params.pageId}-project.zip"`,
+      notFoundMessage: "page project.zip has not been generated"
     });
   })
   .get("/api/projects/:projectId/project.zip", ({ request, params }) => {
     const user = requireUser(request);
     assertProjectExists(user.id, params.projectId);
-    const zipPath = getProjectZipPath(params.projectId);
-    if (!fs.existsSync(zipPath)) throw httpError(404, "project.zip has not been generated");
-    return new Response(Bun.file(zipPath), {
-      headers: {
-        "content-type": "application/zip",
-        "content-disposition": `attachment; filename="${params.projectId}-project.zip"`
-      }
+    return storage.response(storage.projectZipKey(params.projectId), {
+      contentType: "application/zip",
+      contentDisposition: `attachment; filename="${params.projectId}-project.zip"`,
+      notFoundMessage: "project.zip has not been generated"
     });
   })
   .listen({

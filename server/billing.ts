@@ -1,10 +1,9 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { CurrentUser } from "./auth";
 import { db, type EntitlementRow, type PlanRow } from "./db";
-import { freeProjectLimit, maxPagesPerProject, paidProjectLimit, storageRoot } from "./config";
+import { freeProjectLimit, maxPagesPerProject, paidProjectLimit } from "./config";
 import { httpError } from "./errors";
-import { assertInside, randomHex } from "./utils";
+import { randomHex } from "./utils";
+import { storage } from "./storage";
 import { createXPayOrder, isXPaySuccessStatus, verifyXPayNotify, type XPayNotify } from "./xpay";
 
 export type UsageEventType =
@@ -381,10 +380,7 @@ export function getAdminOverview() {
 
 function storageFileSize(relativePath: string): number {
   try {
-    const absolutePath = path.join(storageRoot, relativePath);
-    assertInside(storageRoot, absolutePath);
-    const stat = fs.existsSync(absolutePath) ? fs.statSync(absolutePath) : null;
-    return stat?.isFile() ? stat.size : 0;
+    return storage.size(relativePath);
   } catch {
     return 0;
   }
