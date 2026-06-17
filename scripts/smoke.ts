@@ -1,8 +1,11 @@
 const apiBaseUrl = process.env.SLICE_STUDIO_API_URL || "http://127.0.0.1:4110";
+let sessionCookie = "";
 
 async function main() {
   const health = await request<{ ok: true }>("/api/health");
   if (!health.ok) throw new Error("health failed");
+  await assertAnonymousBlocked();
+  await signIn();
 
   const created = await request<{ project: { id: string } }>("/api/projects", {
     method: "POST",
@@ -66,7 +69,7 @@ async function main() {
 
     const exported = await request<{ assetCount: number; url: string }>(`/api/projects/${projectId}/export-assets`, { method: "POST" });
     if (exported.assetCount !== 1) throw new Error(`expected 1 asset, got ${exported.assetCount}`);
-    const zip = await fetch(`${apiBaseUrl}${exported.url}`);
+    const zip = await fetchWithSession(`${apiBaseUrl}${exported.url}`);
     if (!zip.ok) throw new Error(`zip download failed ${zip.status}`);
     const zipBuffer = Buffer.from(await zip.arrayBuffer());
     const entries = readZipEntryNames(zipBuffer);
@@ -89,7 +92,7 @@ async function main() {
     const projectExport = await request<{ assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, { method: "POST" });
     if (projectExport.assetCount !== 1) throw new Error(`expected 1 project asset, got ${projectExport.assetCount}`);
     if (projectExport.pageCount !== 2) throw new Error(`expected 2 project pages, got ${projectExport.pageCount}`);
-    const projectZip = await fetch(`${apiBaseUrl}${projectExport.url}`);
+    const projectZip = await fetchWithSession(`${apiBaseUrl}${projectExport.url}`);
     if (!projectZip.ok) throw new Error(`project.zip download failed ${projectZip.status}`);
     const projectZipBuffer = Buffer.from(await projectZip.arrayBuffer());
     const projectEntries = readZipEntryNames(projectZipBuffer);
@@ -128,11 +131,38 @@ async function main() {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init);
+  const response = await fetchWithSession(`${apiBaseUrl}${path}`, init);
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
   if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
   return data as T;
+}
+
+async function assertAnonymousBlocked(): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/projects`);
+  if (response.status !== 401) throw new Error(`anonymous project list should be blocked, got ${response.status}`);
+}
+
+async function signIn(): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/auth/sign-in`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL || "local@slicestudio.dev",
+      password: process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD || "slice-studio-local-owner"
+    })
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`sign in failed: ${text}`);
+  const cookie = response.headers.get("set-cookie")?.split(";")[0] || "";
+  if (!cookie) throw new Error("sign in did not return a session cookie");
+  sessionCookie = cookie;
+}
+
+async function fetchWithSession(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (sessionCookie) headers.set("cookie", sessionCookie);
+  return fetch(url, { ...init, headers });
 }
 
 function createTinyPng(): Uint8Array {

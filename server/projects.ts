@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { recordUsageEvent } from "./billing";
 import { db, transaction, type PageRow, type ProjectRow, type SliceRow } from "./db";
 import { maxBatchUploadBytes, maxUploadBytes, projectsRoot, storageRoot } from "./config";
 import { httpError } from "./errors";
@@ -9,25 +10,28 @@ import { defaultSliceName, isDefaultSliceName, normalizeDefaultSliceNames } from
 import { assertSafeId, assertSafeSliceId, normalizeCutMode, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
 import type { PageRecord, ProjectDetail, ProjectListItem, ProjectSummary, SaveSlicesRequest, SliceRecord } from "../shared/types";
 
-export function listProjects(): ProjectSummary[] {
-  return db.query<ProjectRow, []>(`
+export function listProjects(userId: string): ProjectSummary[] {
+  return db.query<ProjectRow, [string]>(`
     SELECT id, name, created_at, updated_at, page_count, slice_count
     FROM projects
+    WHERE user_id = ?
     ORDER BY updated_at DESC
-  `).all().map(formatProject);
+  `).all(userId).map(formatProject);
 }
 
-export function listProjectCards(): ProjectListItem[] {
-  const projects = listProjects();
-  const firstPages = db.query<PageRow, []>(`
+export function listProjectCards(userId: string): ProjectListItem[] {
+  const projects = listProjects(userId);
+  const firstPages = db.query<PageRow, [string]>(`
     SELECT p.*
     FROM pages p
+    INNER JOIN projects pr ON pr.id = p.project_id
     INNER JOIN (
       SELECT project_id, MIN(page_index) AS first_page_index
       FROM pages
       GROUP BY project_id
     ) first ON first.project_id = p.project_id AND first.first_page_index = p.page_index
-  `).all();
+    WHERE pr.user_id = ?
+  `).all(userId);
   const firstPageByProject = new Map(firstPages.map((page) => [page.project_id, formatPage(page)]));
   return projects.map((project) => ({
     ...project,
@@ -35,34 +39,35 @@ export function listProjectCards(): ProjectListItem[] {
   }));
 }
 
-export function createProject(payload: { name?: string }): ProjectSummary {
+export function createProject(userId: string, payload: { name?: string }): ProjectSummary {
   const now = new Date().toISOString();
   const id = `project_${Date.now().toString(36)}_${randomHex(4)}`;
   const name = sanitizeName(payload.name, "未命名项目");
   db.query(`
-    INSERT INTO projects (id, name, created_at, updated_at, page_count, slice_count)
-    VALUES (?, ?, ?, ?, 0, 0)
-  `).run(id, name, now, now);
+    INSERT INTO projects (id, user_id, name, created_at, updated_at, page_count, slice_count)
+    VALUES (?, ?, ?, ?, ?, 0, 0)
+  `).run(id, userId, name, now, now);
   fs.mkdirSync(path.join(projectsRoot, id, "originals"), { recursive: true });
   fs.mkdirSync(path.join(projectsRoot, id, "exports"), { recursive: true });
-  const project = getProjectSummary(id);
+  const project = getProjectSummary(userId, id);
   if (!project) throw httpError(500, "Project was not created");
+  recordUsageEvent({ userId, projectId: id, eventType: "project.create" });
   return project;
 }
 
-export function renameProject(projectId: string, name: string): ProjectSummary {
+export function renameProject(userId: string, projectId: string, name: string): ProjectSummary {
   assertSafeId(projectId, "projectId");
-  assertProjectExists(projectId);
-  db.query("UPDATE projects SET name = ?, updated_at = ? WHERE id = ?").run(sanitizeName(name, "未命名项目"), new Date().toISOString(), projectId);
-  const project = getProjectSummary(projectId);
+  assertProjectExists(userId, projectId);
+  db.query("UPDATE projects SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?").run(sanitizeName(name, "未命名项目"), new Date().toISOString(), projectId, userId);
+  const project = getProjectSummary(userId, projectId);
   if (!project) throw httpError(404, "Project not found");
   return project;
 }
 
-export function renamePage(projectId: string, pageId: string, displayName: string): PageRecord {
+export function renamePage(userId: string, projectId: string, pageId: string, displayName: string): PageRecord {
   assertSafeId(projectId, "projectId");
   assertSafeId(pageId, "pageId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   const now = new Date().toISOString();
   db.query("UPDATE pages SET display_name = ? WHERE project_id = ? AND id = ?").run(sanitizeName(displayName, ""), projectId, pageId);
   db.query("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, projectId);
@@ -71,18 +76,18 @@ export function renamePage(projectId: string, pageId: string, displayName: strin
   return formatPage(page);
 }
 
-export function deleteProject(projectId: string): void {
+export function deleteProject(userId: string, projectId: string): void {
   assertSafeId(projectId, "projectId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   transaction(() => {
-    db.query("DELETE FROM projects WHERE id = ?").run(projectId);
+    db.query("DELETE FROM projects WHERE id = ? AND user_id = ?").run(projectId, userId);
   });
   fs.rmSync(path.join(projectsRoot, projectId), { recursive: true, force: true });
 }
 
-export async function addPages(projectId: string, files: File | File[] | undefined): Promise<PageRecord[]> {
+export async function addPages(userId: string, projectId: string, files: File | File[] | undefined): Promise<PageRecord[]> {
   assertSafeId(projectId, "projectId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   const fileList = Array.isArray(files) ? files : files ? [files] : [];
   if (!fileList.length) throw httpError(400, "files must be provided");
 
@@ -145,13 +150,22 @@ export async function addPages(projectId: string, files: File | File[] | undefin
     }
     updateProjectCounts(projectId);
   });
+  recordUsageEvent({
+    userId,
+    projectId,
+    eventType: "page.upload",
+    quantity: pages.length,
+    metadata: {
+      totalBytes: fileList.reduce((sum, file) => sum + file.size, 0)
+    }
+  });
   return pages;
 }
 
-export function deletePage(projectId: string, pageId: string): ProjectDetail {
+export function deletePage(userId: string, projectId: string, pageId: string): ProjectDetail {
   assertSafeId(projectId, "projectId");
   assertSafeId(pageId, "pageId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   const page = getPageRow(projectId, pageId);
   const absolutePath = path.join(storageRoot, page.original_path);
   assertInside(storageRoot, absolutePath);
@@ -172,12 +186,12 @@ export function deletePage(projectId: string, pageId: string): ProjectDetail {
     throw error;
   }
   if (moved) fs.rmSync(trashPath, { force: true });
-  return getProjectDetail(projectId);
+  return getProjectDetail(userId, projectId);
 }
 
-export function reorderPages(projectId: string, pageIds: string[]): ProjectDetail {
+export function reorderPages(userId: string, projectId: string, pageIds: string[]): ProjectDetail {
   assertSafeId(projectId, "projectId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   if (!Array.isArray(pageIds) || !pageIds.length) throw httpError(400, "pageIds must be a non-empty array");
   const pages = db.query<PageRow, [string]>("SELECT * FROM pages WHERE project_id = ?").all(projectId);
   const existingIds = pages.map((page) => page.id).sort();
@@ -194,13 +208,13 @@ export function reorderPages(projectId: string, pageIds: string[]): ProjectDetai
     }
     db.query("UPDATE projects SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), projectId);
   });
-  return getProjectDetail(projectId);
+  return getProjectDetail(userId, projectId);
 }
 
-export async function replacePage(projectId: string, pageId: string, file: File | undefined): Promise<ProjectDetail> {
+export async function replacePage(userId: string, projectId: string, pageId: string, file: File | undefined): Promise<ProjectDetail> {
   assertSafeId(projectId, "projectId");
   assertSafeId(pageId, "pageId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   if (!file) throw httpError(400, "file must be provided");
   if (!file.type.startsWith("image/")) throw httpError(400, "uploaded file must be an image");
   assertUploadLimits([file]);
@@ -244,12 +258,12 @@ export async function replacePage(projectId: string, pageId: string, file: File 
     throw error;
   }
   if (hasBackup) fs.rmSync(backupPath, { force: true });
-  return getProjectDetail(projectId);
+  return getProjectDetail(userId, projectId);
 }
 
-export function saveSlices(projectId: string, payload: SaveSlicesRequest): ProjectSummary {
+export function saveSlices(userId: string, projectId: string, payload: SaveSlicesRequest): ProjectSummary {
   assertSafeId(projectId, "projectId");
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   if (!Array.isArray(payload.pages)) throw httpError(400, "pages must be an array");
 
   const pageRows = db.query<PageRow, [string]>("SELECT * FROM pages WHERE project_id = ?").all(projectId);
@@ -293,14 +307,14 @@ export function saveSlices(projectId: string, payload: SaveSlicesRequest): Proje
     updateProjectCounts(projectId);
   });
 
-  const project = getProjectSummary(projectId);
+  const project = getProjectSummary(userId, projectId);
   if (!project) throw httpError(404, "Project not found");
   return project;
 }
 
-export function getProjectDetail(projectId: string): ProjectDetail {
+export function getProjectDetail(userId: string, projectId: string): ProjectDetail {
   assertSafeId(projectId, "projectId");
-  const project = getProjectSummary(projectId);
+  const project = getProjectSummary(userId, projectId);
   if (!project) throw httpError(404, "Project not found");
   const pages = db.query<PageRow, [string]>("SELECT * FROM pages WHERE project_id = ? ORDER BY page_index ASC").all(projectId);
   const slices = db.query<SliceRow, [string]>("SELECT * FROM slices WHERE project_id = ? ORDER BY page_id ASC, slice_index ASC").all(projectId);
@@ -319,9 +333,10 @@ export function getProjectDetail(projectId: string): ProjectDetail {
   };
 }
 
-export function getPageOriginalPath(projectId: string, pageId: string): string {
+export function getPageOriginalPath(userId: string, projectId: string, pageId: string): string {
   assertSafeId(projectId, "projectId");
   assertSafeId(pageId, "pageId");
+  assertProjectExists(userId, projectId);
   const row = db.query<Pick<PageRow, "original_path">, [string, string]>("SELECT original_path FROM pages WHERE project_id = ? AND id = ?").get(projectId, pageId);
   if (!row) throw httpError(404, "Page not found");
   const absolutePath = path.join(storageRoot, row.original_path);
@@ -330,14 +345,14 @@ export function getPageOriginalPath(projectId: string, pageId: string): string {
   return absolutePath;
 }
 
-export function getSliceForPreview(projectId: string, sliceId: string): { originalPath: string; slice: SliceRecord } {
+export function getSliceForPreview(userId: string, projectId: string, sliceId: string): { originalPath: string; slice: SliceRecord } {
   assertSafeId(projectId, "projectId");
   assertSafeSliceId(sliceId);
-  assertProjectExists(projectId);
+  assertProjectExists(userId, projectId);
   const slice = db.query<SliceRow, [string, string]>("SELECT * FROM slices WHERE project_id = ? AND id = ?").get(projectId, sliceId);
   if (!slice) throw httpError(404, "Slice not found");
   return {
-    originalPath: getPageOriginalPath(projectId, slice.page_id),
+    originalPath: getPageOriginalPath(userId, projectId, slice.page_id),
     slice: formatSlice(slice)
   };
 }
@@ -348,13 +363,13 @@ function getPageRow(projectId: string, pageId: string): PageRow {
   return page;
 }
 
-export function getProjectSummary(projectId: string): ProjectSummary | null {
-  const row = db.query<ProjectRow, [string]>("SELECT * FROM projects WHERE id = ?").get(projectId);
+export function getProjectSummary(userId: string, projectId: string): ProjectSummary | null {
+  const row = db.query<ProjectRow, [string, string]>("SELECT * FROM projects WHERE id = ? AND user_id = ?").get(projectId, userId);
   return row ? formatProject(row) : null;
 }
 
-export function assertProjectExists(projectId: string): void {
-  if (!getProjectSummary(projectId)) throw httpError(404, "Project not found");
+export function assertProjectExists(userId: string, projectId: string): void {
+  if (!getProjectSummary(userId, projectId)) throw httpError(404, "Project not found");
 }
 
 export function updateProjectCounts(projectId: string): void {

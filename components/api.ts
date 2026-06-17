@@ -1,6 +1,8 @@
 import type { AiSliceBoxesResponse, AiSliceSettingsResponse, PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_SLICE_STUDIO_API_URL || "http://127.0.0.1:4110";
+export function apiUrl(path: string): string {
+  return path;
+}
 
 export async function apiGet<T>(path: string): Promise<T> {
   return request<T>(path, { method: "GET" });
@@ -77,7 +79,10 @@ export async function replacePage(projectId: string, pageId: string, file: File)
 }
 
 export async function request<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init);
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
+    ...init
+  });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
   if (!response.ok) {

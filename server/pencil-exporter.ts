@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { consumeExport } from "./billing";
 import { projectsRoot } from "./config";
 import { httpError } from "./errors";
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
@@ -23,15 +24,17 @@ import { createZipBuffer, type ZipFile } from "../shared/zip";
 
 const penVersion = "2.11";
 
-export async function exportPencilProject(projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
-  const detail = getProjectDetail(projectId);
+export async function exportPencilProject(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
+  const detail = getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
+  consumeExport(userId, projectId, "export.project", { assetCount, pageCount: detail.pages.length });
 
   const exportDir = path.join(projectsRoot, projectId, "exports");
   fs.mkdirSync(exportDir, { recursive: true });
 
   return exportPencilDetail({
+    userId,
     detail,
     exportDir,
     zipFilename: "project.zip",
@@ -39,10 +42,12 @@ export async function exportPencilProject(projectId: string): Promise<{ ok: true
   });
 }
 
-export async function exportPencilProjectPage(projectId: string, pageId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
-  const detail = getProjectDetail(projectId);
+export async function exportPencilProjectPage(userId: string, projectId: string, pageId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
+  const detail = getProjectDetail(userId, projectId);
   const page = detail.pages.find((candidate) => candidate.id === pageId);
   if (!page) throw httpError(404, "Page not found");
+  if (page.slices.length === 0) throw httpError(409, "No slices selected");
+  consumeExport(userId, projectId, "export.project_page", { assetCount: page.slices.length, pageId });
 
   const pageDetail: ProjectDetail = {
     project: {
@@ -56,6 +61,7 @@ export async function exportPencilProjectPage(projectId: string, pageId: string)
   fs.mkdirSync(exportDir, { recursive: true });
 
   return exportPencilDetail({
+    userId,
     detail: pageDetail,
     exportDir,
     zipFilename: "project.zip",
@@ -64,6 +70,7 @@ export async function exportPencilProjectPage(projectId: string, pageId: string)
 }
 
 async function exportPencilDetail(input: {
+  userId: string;
   detail: ProjectDetail;
   exportDir: string;
   zipFilename: string;
@@ -78,7 +85,7 @@ async function exportPencilDetail(input: {
     pages: input.detail.pages
   };
   const files: ZipFile[] = [];
-  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.detail, files, exportedAt);
+  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.userId, input.detail, files, exportedAt);
 
   files.unshift(
     { name: "design.pen", data: Buffer.from(JSON.stringify(document, null, 2)) },
@@ -105,6 +112,7 @@ export function getProjectPageZipPath(projectId: string, pageId: string): string
 }
 
 async function buildPencilDocument(
+  userId: string,
   detail: ProjectDetail,
   files: ZipFile[],
   exportedAt: string
@@ -119,7 +127,7 @@ async function buildPencilDocument(
   const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = fs.readFileSync(getPageOriginalPath(detail.project.id, page.id));
+    const originalBuffer = fs.readFileSync(getPageOriginalPath(userId, detail.project.id, page.id));
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));

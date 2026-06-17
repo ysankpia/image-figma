@@ -10,6 +10,12 @@ export const projectsRoot = path.join(storageRoot, "projects");
 export const databasePath = path.join(storageRoot, "app.sqlite");
 export const publicApiBaseUrl = process.env.SLICE_STUDIO_PUBLIC_API_URL || `http://${apiHost}:${apiPort}`;
 export const allowedOrigins = normalizeAllowedOrigins(process.env.SLICE_STUDIO_ALLOWED_ORIGIN);
+export const authCookieName = process.env.SLICE_STUDIO_AUTH_COOKIE_NAME || "slice_studio_session";
+export const authSessionTtlDays = normalizeNumber(process.env.SLICE_STUDIO_AUTH_SESSION_TTL_DAYS, 30);
+export const authSecureCookies = normalizeBool(process.env.SLICE_STUDIO_AUTH_SECURE_COOKIES, process.env.NODE_ENV === "production");
+export const localOwnerEmail = normalizeEmail(process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL || "local@slicestudio.dev");
+export const localOwnerName = process.env.SLICE_STUDIO_LOCAL_OWNER_NAME || "Local Owner";
+export const localOwnerPassword = process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD || "slice-studio-local-owner";
 export const maxUploadBytes = Number(process.env.SLICE_STUDIO_MAX_UPLOAD_BYTES || 20 * 1024 * 1024);
 export const maxBatchUploadBytes = Number(process.env.SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES || 300 * 1024 * 1024);
 export const ocrProvider = process.env.SLICE_STUDIO_OCR_PROVIDER || "baidu_ppocrv5";
@@ -127,4 +133,8 @@ function normalizeNumber(value: string | undefined, fallback: number): number {
 
 function trimTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/, "");
+}
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
 }

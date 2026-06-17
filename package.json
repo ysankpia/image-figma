@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check": "bun run typecheck && bun run test",
-    "smoke": "bun scripts/smoke.ts"
+    "smoke": "bun scripts/smoke.ts",
+    "smoke:auth-billing": "bun scripts/auth-billing-smoke.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",

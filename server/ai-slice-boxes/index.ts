@@ -9,6 +9,7 @@ import {
   aiSliceTileCount,
   aiSliceTileOverlap
 } from "../config";
+import { consumeAiCall } from "../billing";
 import { httpError } from "../errors";
 import { getPageOriginalPath, getProjectDetail } from "../projects";
 import type { AiSliceBoxesResponse } from "../../shared/types";
@@ -17,14 +18,15 @@ import { callAiSliceOverviewProvider, callAiSliceProvider } from "./provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "./tiles";
 import type { RawAiBox } from "./types";
 
-export async function generateAiSliceBoxes(projectId: string, pageId: string): Promise<AiSliceBoxesResponse> {
+export async function generateAiSliceBoxes(userId: string, projectId: string, pageId: string): Promise<AiSliceBoxesResponse> {
   if (aiSliceProvider === "disabled") throw httpError(400, "AI slice provider is disabled");
 
-  const detail = getProjectDetail(projectId);
+  const detail = getProjectDetail(userId, projectId);
   const page = detail.pages.find((item) => item.id === pageId);
   if (!page) throw httpError(404, "Page not found");
+  consumeAiCall(userId, projectId, { pageId, provider: aiSliceProvider });
 
-  const originalPath = getPageOriginalPath(projectId, pageId);
+  const originalPath = getPageOriginalPath(userId, projectId, pageId);
   const imageBuffer = fs.readFileSync(originalPath);
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
   const width = metadata.width || page.width;

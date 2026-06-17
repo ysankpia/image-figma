@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { consumeExport } from "./billing";
 import { projectsRoot } from "./config";
 import { httpError } from "./errors";
 import { getPageOriginalPath, getProjectDetail } from "./projects";
@@ -7,10 +8,11 @@ import { cropSliceToPng } from "./shape-cutout";
 import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
-export async function exportAssets(projectId: string): Promise<{ ok: true; assetCount: number; url: string }> {
-  const detail = getProjectDetail(projectId);
+export async function exportAssets(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; url: string }> {
+  const detail = getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
+  consumeExport(userId, projectId, "export.assets", { assetCount });
 
   const exportDir = path.join(projectsRoot, projectId, "exports");
   fs.mkdirSync(exportDir, { recursive: true });
@@ -30,7 +32,7 @@ export async function exportAssets(projectId: string): Promise<{ ok: true; asset
 
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = fs.readFileSync(getPageOriginalPath(projectId, page.id));
+    const originalBuffer = fs.readFileSync(getPageOriginalPath(userId, projectId, page.id));
     files.push({
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer
