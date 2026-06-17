@@ -1,6 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 import { db, type EntitlementRow, type PlanRow } from "./db";
+import { freeProjectLimit, maxPagesPerProject, paidProjectLimit, storageRoot } from "./config";
 import { httpError } from "./errors";
-import { randomHex } from "./utils";
+import { assertInside, randomHex } from "./utils";
 import { createXPayOrder, isXPaySuccessStatus, verifyXPayNotify, type XPayNotify } from "./xpay";
 
 export type UsageEventType =
@@ -45,6 +48,25 @@ export function listUsageEvents(userId: string, limit = 25) {
   `).all(userId, Math.max(1, Math.min(100, Math.floor(limit))));
 }
 
+export function getAccountUsage(userId: string): {
+  projectCount: number;
+  pageCount: number;
+  storageBytes: number;
+} {
+  const projectCount = Number(db.query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM projects WHERE user_id = ?").get(userId)?.count || 0);
+  const pageCount = Number(db.query<{ count: number }, [string]>(`
+    SELECT COUNT(*) AS count
+    FROM pages p
+    INNER JOIN projects pr ON pr.id = p.project_id
+    WHERE pr.user_id = ?
+  `).get(userId)?.count || 0);
+  return {
+    projectCount,
+    pageCount,
+    storageBytes: getUserStorageBytes(userId)
+  };
+}
+
 export function recordUsageEvent(input: {
   userId: string;
   projectId?: string | null;
@@ -84,6 +106,68 @@ export function consumeExport(userId: string, projectId: string, eventType: Extr
   if (current.exports_remaining <= 0) throw httpError(402, "Export quota exhausted");
   db.query("UPDATE entitlements SET exports_remaining = exports_remaining - 1, updated_at = ? WHERE user_id = ?").run(new Date().toISOString(), userId);
   recordUsageEvent({ userId, projectId, eventType, metadata });
+}
+
+export function assertCanCreateProject(userId: string): void {
+  const { entitlement } = getEntitlementSummary(userId);
+  if (!["free", "trial", "active", "manual_grant"].includes(entitlement.status)) {
+    throw httpError(402, "Current plan does not allow new projects");
+  }
+  const limit = entitlement.status === "active" || entitlement.status === "manual_grant" ? paidProjectLimit : freeProjectLimit;
+  const count = Number(db.query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM projects WHERE user_id = ?").get(userId)?.count || 0);
+  if (count >= limit) throw httpError(402, `Project quota exhausted (${limit})`);
+}
+
+export function assertCanAddPages(input: {
+  userId: string;
+  projectId: string;
+  incomingPageCount: number;
+  incomingBytes: number;
+}): void {
+  const { entitlement } = getEntitlementSummary(input.userId);
+  if (!["free", "trial", "active", "manual_grant"].includes(entitlement.status)) {
+    throw httpError(402, "Current plan does not allow uploads");
+  }
+  const existingPageCount = Number(db.query<{ count: number }, [string]>("SELECT COUNT(*) AS count FROM pages WHERE project_id = ?").get(input.projectId)?.count || 0);
+  if (existingPageCount + input.incomingPageCount > maxPagesPerProject) {
+    throw httpError(402, `Project page quota exhausted (${maxPagesPerProject})`);
+  }
+  const usedBytes = getUserStorageBytes(input.userId);
+  const limitBytes = entitlement.storage_mb * 1024 * 1024;
+  if (usedBytes + input.incomingBytes > limitBytes) {
+    throw httpError(402, `Storage quota exhausted (${entitlement.storage_mb}MB)`);
+  }
+}
+
+export function assertCanReplacePage(input: {
+  userId: string;
+  projectId: string;
+  currentBytes: number;
+  incomingBytes: number;
+}): void {
+  const { entitlement } = getEntitlementSummary(input.userId);
+  if (!["free", "trial", "active", "manual_grant"].includes(entitlement.status)) {
+    throw httpError(402, "Current plan does not allow uploads");
+  }
+  const usedBytes = getUserStorageBytes(input.userId);
+  const projectedBytes = Math.max(0, usedBytes - input.currentBytes) + input.incomingBytes;
+  if (projectedBytes > entitlement.storage_mb * 1024 * 1024) {
+    throw httpError(402, `Storage quota exhausted (${entitlement.storage_mb}MB)`);
+  }
+}
+
+export function getUserStorageBytes(userId: string): number {
+  const rows = db.query<{ original_path: string }, [string]>(`
+    SELECT p.original_path
+    FROM pages p
+    INNER JOIN projects pr ON pr.id = p.project_id
+    WHERE pr.user_id = ?
+  `).all(userId);
+  let total = 0;
+  for (const row of rows) {
+    total += storageFileSize(row.original_path);
+  }
+  return total;
 }
 
 export function createPaymentOrder(userId: string, planId: string, provider = "xpay") {
@@ -227,4 +311,15 @@ export function getAdminOverview() {
     paidPaymentOrders: scalar("SELECT COUNT(*) AS count FROM payment_orders WHERE status = 'paid'"),
     paymentEvents: scalar("SELECT COUNT(*) AS count FROM payment_events")
   };
+}
+
+function storageFileSize(relativePath: string): number {
+  try {
+    const absolutePath = path.join(storageRoot, relativePath);
+    assertInside(storageRoot, absolutePath);
+    const stat = fs.existsSync(absolutePath) ? fs.statSync(absolutePath) : null;
+    return stat?.isFile() ? stat.size : 0;
+  } catch {
+    return 0;
+  }
 }

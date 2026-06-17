@@ -63,6 +63,8 @@ AI boxes consume AI entitlement and write a `usage_events` row before provider e
 
 Export routes consume export entitlement and write a `usage_events` row before ZIP materialization starts.
 
+Project creation checks the current user's project quota. Page upload and page replacement check per-project page count plus account storage quota before writing source files. `/api/me` returns project count, page count, and current original-image storage bytes for the account billing surface.
+
 `POST /api/billing/orders` creates a provider-neutral local `payment_orders` row. When XPay env vars are configured, it also returns a checkout URL built from the local order id. Creating the order never grants entitlement.
 
 `POST /api/billing/webhooks/xpay` accepts XPay / 易支付 style payment notifications, verifies the MD5 signature server-side, writes a raw `payment_events` row, and marks the order paid only for verified success events. Paid orders update the user's entitlement from the local plan table. Forged callbacks must return `fail` and must not grant entitlement.

@@ -16,7 +16,7 @@ import {
   signUpWithEmail
 } from "./auth";
 import { initDatabase } from "./db";
-import { createPaymentOrder, getAdminOverview, getEntitlementSummary, handlePaymentWebhook, listPaymentOrders, listPlans, listUsageEvents } from "./billing";
+import { createPaymentOrder, getAccountUsage, getAdminOverview, getEntitlementSummary, handlePaymentWebhook, listPaymentOrders, listPlans, listUsageEvents } from "./billing";
 import { HttpError, httpError } from "./errors";
 import { exportAssets, getAssetsZipPath } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage, getProjectPageZipPath, getProjectZipPath } from "./pencil-exporter";
@@ -69,6 +69,7 @@ const app = new Elysia({
     return {
       user,
       entitlement: getEntitlementSummary(user.id),
+      accountUsage: getAccountUsage(user.id),
       usage: listUsageEvents(user.id, 20),
       paymentOrders: listPaymentOrders(user.id, 10)
     };

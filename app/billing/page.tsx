@@ -32,6 +32,7 @@ export default async function BillingPage() {
           renews_at: string | null;
         };
       };
+      accountUsage: { projectCount: number; pageCount: number; storageBytes: number };
       usage: Array<{ id: string; event_type: string; quantity: number; created_at: string }>;
       paymentOrders: Array<{ id: string; plan_id: string; amount_cents: number; currency: string; status: string; created_at: string }>;
     }>("/api/me", cookie),
@@ -55,6 +56,9 @@ export default async function BillingPage() {
           <div><dt>AI 剩余额度</dt><dd>{me.entitlement.entitlement.ai_calls_remaining}</dd></div>
           <div><dt>导出剩余额度</dt><dd>{me.entitlement.entitlement.exports_remaining}</dd></div>
           <div><dt>存储上限</dt><dd>{me.entitlement.entitlement.storage_mb} MB</dd></div>
+          <div><dt>项目数</dt><dd>{me.accountUsage.projectCount}</dd></div>
+          <div><dt>页面数</dt><dd>{me.accountUsage.pageCount}</dd></div>
+          <div><dt>已用存储</dt><dd>{formatBytes(me.accountUsage.storageBytes)}</dd></div>
         </dl>
         {paidPlan ? <BillingActions planId={paidPlan.id} /> : null}
       </section>
@@ -88,4 +92,9 @@ export default async function BillingPage() {
       </section>
     </main>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

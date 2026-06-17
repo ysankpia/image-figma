@@ -33,6 +33,9 @@
 | `SLICE_STUDIO_XPAY_RETURN_URL` | XPay 支付完成返回 URL | 空 | XPay 联调时需要 |
 | `SLICE_STUDIO_STORAGE_ROOT` | Slice Studio storage 根目录 | `./storage` | 否 |
 | `SLICE_STUDIO_ALLOWED_ORIGIN` | 允许的 Web origin | `http://127.0.0.1:3010` | 否 |
+| `SLICE_STUDIO_FREE_PROJECT_LIMIT` | free/trial/manual-grant 以外非 active 用户项目数上限 | `20` | 否 |
+| `SLICE_STUDIO_PAID_PROJECT_LIMIT` | active/manual-grant 用户项目数上限 | `200` | 否 |
+| `SLICE_STUDIO_MAX_PAGES_PER_PROJECT` | 单项目页面数上限 | `100` | 否 |
 | `SLICE_STUDIO_MAX_UPLOAD_BYTES` | 单文件上传上限 | `20971520` | 否 |
 | `SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES` | 批量上传总上限 | `314572800` | 否 |
 

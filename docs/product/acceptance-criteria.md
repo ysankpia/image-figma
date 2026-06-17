@@ -10,7 +10,9 @@
 - `/settings`、`/billing`、`/admin` 路由存在。
 - 项目列表按登录用户归属隔离。
 - 可以新建项目。
+- 新建项目会受项目数 entitlement gate 保护。
 - 可以上传多张页面图片。
+- 单项目页数和账号存储使用会受 entitlement gate 保护。
 - 项目刷新后页面和 slices 仍存在。
 - 可以手动画框、选择、移动、缩放、删除、重命名。
 - 可以选择 `rect | subject | card` cut mode。
@@ -28,6 +30,7 @@
 - assets/project 导出前检查 entitlement，并记录 usage。
 - `/billing` 能创建 provider-neutral 的 payment order；XPay 配置齐全时返回 checkout URL。
 - XPay webhook 验签通过后才能把订单标记为 paid 并发放本地 entitlement；伪造签名不能发放权益。
+- `/billing` 能展示项目数、页面数和已用存储。
 - AI 当前页能生成普通 rect slices，并保存进现有 slice state。
 - AI 全部页能逐页处理，失败页不影响已完成页面。
 - AI 结果与已有 slices 高重叠时不会大量重复追加。

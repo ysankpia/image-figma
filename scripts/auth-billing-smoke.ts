@@ -9,6 +9,8 @@ process.env.SLICE_STUDIO_STORAGE_ROOT = root;
 process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL = "owner@example.test";
 process.env.SLICE_STUDIO_LOCAL_OWNER_NAME = "Owner";
 process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD = "owner-password";
+process.env.SLICE_STUDIO_FREE_PROJECT_LIMIT = "1";
+process.env.SLICE_STUDIO_MAX_PAGES_PER_PROJECT = "1";
 process.env.SLICE_STUDIO_XPAY_BASE_URL = "https://pay.example.test";
 process.env.SLICE_STUDIO_XPAY_PID = "1000";
 process.env.SLICE_STUDIO_XPAY_KEY = "xpay-test-key";
@@ -42,6 +44,19 @@ try {
   assert(projects.listProjectCards(alice.id).some((item) => item.id === project.id), "owner should list own project");
   assert(projects.listProjectCards(bob.id).length === 0, "other user should not list owner project");
   assertThrows(() => projects.getProjectDetail(bob.id, project.id), "Project not found");
+  const quotaProject = projects.createProject(bob.id, { name: "Quota project" });
+  assertThrows(() => projects.createProject(bob.id, { name: "Second project" }), "Project quota exhausted");
+  dbModule.db.query("UPDATE entitlements SET storage_mb = 0 WHERE user_id = ?").run(bob.id);
+  await assertRejects(
+    () => projects.addPages(bob.id, quotaProject.id, [makeUpload("quota.png")]),
+    "Storage quota exhausted"
+  );
+  dbModule.db.query("UPDATE entitlements SET status = 'active' WHERE user_id = ?").run(alice.id);
+  const singlePageProject = projects.createProject(alice.id, { name: "Page quota project" });
+  await assertRejects(
+    () => projects.addPages(alice.id, singlePageProject.id, [makeUpload("p1.png"), makeUpload("p2.png")]),
+    "Project page quota exhausted"
+  );
 
   const before = billing.getEntitlementSummary(alice.id).entitlement;
   billing.consumeAiCall(alice.id, project.id, { pageId: "page_0001" });
@@ -107,4 +122,29 @@ function assertThrows(fn: () => unknown, message: string): void {
     throw error;
   }
   throw new Error(`Expected error: ${message}`);
+}
+
+async function assertRejects(fn: () => Promise<unknown>, message: string): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(message)) return;
+    throw error;
+  }
+  throw new Error(`Expected error: ${message}`);
+}
+
+function makeUpload(name: string): File {
+  return new File([arrayBufferFromBytes(createTinyPng())], name, { type: "image/png" });
+}
+
+function createTinyPng(): Uint8Array {
+  return Uint8Array.from(Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAI0lEQVR42mP8z8Dwn4GKgImaho0aNmjYoGGDho0bFAAAoO0CH2pX1EAAAAAASUVORK5CYII=",
+    "base64"
+  ));
+}
+
+function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }

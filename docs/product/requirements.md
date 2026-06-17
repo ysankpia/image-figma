@@ -30,6 +30,7 @@ P0 能力：
 - 本地/bootstrap 管理员账号。
 - 项目归属到 `users.id`，项目 API 按 owner 过滤。
 - `/settings`、`/billing`、`/admin` 最小生产化入口。
+- 项目数、每项目页数、存储使用受 entitlement/usage gate 保护。
 - 创建、重命名、删除本地项目。
 - 上传多张页面图片。
 - 页面缩略图、页面切换、页面重命名、替换、删除、拖拽重排。
@@ -42,7 +43,7 @@ P0 能力：
 
 P1 能力：
 
-- Entitlement/usage skeleton：AI 和导出动作消耗额度并写 `usage_events`。
+- Entitlement/usage：AI、导出、建项目、上传、替换页都消耗或检查额度并写 `usage_events`。
 - Provider-neutral `payment_orders`：当前保留 XPay adapter 边界；配置齐全时生成 checkout URL，只有服务端验签 webhook 才能发放权益。
 - OCR editable text layer：在 Pencil package 中添加普通可编辑文字节点。
 - TypeScript M29 physical evidence：默认给 OCR text 提供更紧的 physical bbox，不依赖 Go binary。

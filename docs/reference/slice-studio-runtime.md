@@ -56,7 +56,7 @@ Account surfaces:
 
 ```text
 /settings: current account and role
-/billing: entitlement, remaining AI/export credits, usage events, payment orders
+/billing: entitlement, remaining AI/export credits, project/page/storage usage, usage events, payment orders
 /admin: admin-only totals for users, projects, pages, slices, usage, and orders
 ```
 
@@ -174,6 +174,9 @@ SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
+SLICE_STUDIO_FREE_PROJECT_LIMIT=20
+SLICE_STUDIO_PAID_PROJECT_LIMIT=200
+SLICE_STUDIO_MAX_PAGES_PER_PROJECT=100
 SLICE_STUDIO_MAX_UPLOAD_BYTES=20971520
 SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
@@ -201,4 +204,4 @@ AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. 
 
 ## Scope
 
-v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement, login/register, project ownership, basic entitlement/usage records, provider-neutral payment orders, minimal XPay webhook fulfillment, account settings, billing, and admin overview. YOLO, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/admin repair, and cloud sync remain out of scope.
+v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement, login/register, project ownership, project/page/storage quota gates, basic entitlement/usage records, provider-neutral payment orders, minimal XPay webhook fulfillment, account settings, billing, and admin overview. YOLO, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/admin repair, and cloud sync remain out of scope.

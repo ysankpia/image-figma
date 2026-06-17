@@ -5,7 +5,7 @@ async function main() {
   const health = await request<{ ok: true }>("/api/health");
   if (!health.ok) throw new Error("health failed");
   await assertAnonymousBlocked();
-  await signIn();
+  await signUpSmokeUser();
 
   const created = await request<{ project: { id: string } }>("/api/projects", {
     method: "POST",
@@ -143,19 +143,21 @@ async function assertAnonymousBlocked(): Promise<void> {
   if (response.status !== 401) throw new Error(`anonymous project list should be blocked, got ${response.status}`);
 }
 
-async function signIn(): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/sign-in`, {
+async function signUpSmokeUser(): Promise<void> {
+  const suffix = Date.now().toString(36);
+  const response = await fetch(`${apiBaseUrl}/api/auth/sign-up`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      email: process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL || "local@slicestudio.dev",
-      password: process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD || "slice-studio-local-owner"
+      name: "Smoke User",
+      email: `smoke-${suffix}@example.test`,
+      password: `smoke-password-${suffix}`
     })
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`sign in failed: ${text}`);
+  if (!response.ok) throw new Error(`sign up failed: ${text}`);
   const cookie = response.headers.get("set-cookie")?.split(";")[0] || "";
-  if (!cookie) throw new Error("sign in did not return a session cookie");
+  if (!cookie) throw new Error("sign up did not return a session cookie");
   sessionCookie = cookie;
 }
 

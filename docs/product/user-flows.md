@@ -26,8 +26,10 @@ local@slicestudio.dev / slice-studio-local-owner
 ```text
 登录后打开 /projects
 -> 新建项目
+-> API 检查项目数 entitlement
 -> 进入 Review Workbench
 -> 上传一张或多张页面图片
+-> API 检查页面数和存储 entitlement
 -> 页面显示在左侧缩略图 rail
 -> 在画布中手动画框或运行 AI 当前页/全部页
 -> 调整、删除、命名 slices

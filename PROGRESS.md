@@ -3,11 +3,11 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Resume Slice Studio production launch work after completing the PSD-like editable-text style service.
+Continue plan 189: move Slice Studio toward a multi-user production SaaS without regressing the current Slice Studio export workflow.
 
 ## Active plan
 - Prior text/slice coordination plan still active for closeout context: `docs/plans/active/193-pencil-export-text-slice-coordination.md`
-- Production launch plan paused: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
+- Production launch plan active: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Most recently completed:
   - `docs/plans/completed/195-current-psdlike-text-style-service.md`
   - `docs/plans/completed/194-psdlike-text-style-evidence-gate.md`
@@ -15,9 +15,10 @@ Resume Slice Studio production launch work after completing the PSD-like editabl
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Slice Studio multi-user production launch planning
+Slice Studio multi-user production launch implementation
 
 ## Now
+- 2026-06-17: advanced plan 189 entitlement gates beyond AI/export. Project creation now checks free/paid project-count limits; page upload checks per-project page count and account original-image storage; page replacement checks projected storage after replacing the current original. `/api/me` now returns `accountUsage`, and `/billing` displays project count, page count, and used storage. Validation passed: `pnpm run typecheck`, `bun run smoke:auth-billing`, `pnpm run smoke`, `pnpm run check`, `pnpm run build`, and `git diff --check`.
 - 2026-06-17: advanced plan 189 payment fulfillment from pending-order skeleton to a minimal XPay / 易支付 adapter. `POST /api/billing/orders` can generate an XPay checkout URL when provider env vars are set; `POST /api/billing/webhooks/xpay` verifies MD5 callback signatures, records `payment_events`, marks verified success callbacks as paid, and grants the local plan entitlement. Forged callbacks are recorded but do not grant entitlement. Remaining payment work is production reconciliation, refund/cancel states, provider order query, and admin repair operations.
 - 2026-06-17: current 189 stage 1 verification passed on the real worktree. The local SQLite migration now rebuilds stale `usage_events` and `payment_events` tables instead of only adding columns, `bun run smoke:auth-billing` passes, `pnpm run smoke` passes against the current owner session, `pnpm run check` and `pnpm run build` pass, `git diff --check` passes, and browser smoke on `/login`, `/projects`, `/billing`, and `/admin` passes with anonymous `/projects` redirecting to `/login`.
 - 2026-06-17: Plan 189 Stage 1 foundation advanced. Slice Studio now has landing/login surfaces, server-backed email/password sessions, repeatable bootstrap local admin, project ownership, protected project APIs/downloads, protected Next `/projects` and review entries, `/settings`, `/billing`, `/admin` shells, entitlement/usage tables, AI/export quota consumption, provider-neutral pending XPay order skeleton, same-origin `/api` browser proxy, and auth/billing Bun smoke coverage. Remaining 189 work is verified XPay/webhook fulfillment, richer admin/user/plan operations, production DB/storage, legal/help/deploy/backup docs, and final real-flow validation.
