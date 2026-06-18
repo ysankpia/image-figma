@@ -1,0 +1,107 @@
+name: Deploy Slice Studio
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: slice-studio-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cloudflared
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+          sudo dpkg -i /tmp/cloudflared.deb
+          cloudflared --version
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/racknerd_deploy
+          chmod 600 ~/.ssh/racknerd_deploy
+
+      - name: Start RackNerd SSH bridge
+        run: |
+          set -euo pipefail
+          nohup cloudflared access tcp \
+            --hostname racknerd.245162.xyz \
+            --url 127.0.0.1:22222 \
+            > /tmp/cloudflared-racknerd.log 2>&1 &
+          for _ in $(seq 1 30); do
+            nc -z 127.0.0.1 22222 && exit 0
+            sleep 1
+          done
+          cat /tmp/cloudflared-racknerd.log
+          exit 1
+
+      - name: Sync release to server
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_USER:?DEPLOY_USER secret is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/racknerd_deploy -p 22222 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            --exclude='.git' \
+            --exclude='.codegraph' \
+            --exclude='.next' \
+            --exclude='node_modules' \
+            --exclude='storage' \
+            --exclude='archive' \
+            --exclude='*.sqlite' \
+            --exclude='*.db' \
+            --exclude='*.zip' \
+            --exclude='*.pen' \
+            ./ "${DEPLOY_USER}@127.0.0.1:${DEPLOY_PATH}.new/"
+
+      - name: Build and restart services
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh \
+            -i ~/.ssh/racknerd_deploy \
+            -p 22222 \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "${DEPLOY_USER}@127.0.0.1" \
+            "DEPLOY_PATH='${DEPLOY_PATH}' bash -s" <<'EOF'
+          set -euo pipefail
+          rm -rf "${DEPLOY_PATH}.old"
+          if [ -d "${DEPLOY_PATH}" ]; then mv "${DEPLOY_PATH}" "${DEPLOY_PATH}.old"; fi
+          mv "${DEPLOY_PATH}.new" "${DEPLOY_PATH}"
+          cd "${DEPLOY_PATH}"
+          corepack enable
+          corepack prepare pnpm@10.33.2 --activate
+          pnpm install --frozen-lockfile
+          pnpm run build
+          cd "${DEPLOY_PATH}/services/psdlike-text-style"
+          if [ ! -x .venv/bin/uvicorn ]; then
+            python3 -m venv .venv
+            . .venv/bin/activate
+            pip install --upgrade pip
+            pip install .
+          fi
+          systemctl restart slice-studio-text-style.service slice-studio-api.service slice-studio-web.service
+          sleep 3
+          systemctl is-active slice-studio-text-style.service slice-studio-api.service slice-studio-web.service
+          curl -fsS http://127.0.0.1:4120/health
+          curl -fsS http://127.0.0.1:4110/api/health
+          curl -fsSI http://127.0.0.1:3010 >/dev/null
+          EOF

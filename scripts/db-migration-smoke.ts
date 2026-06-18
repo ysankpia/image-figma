@@ -15,7 +15,7 @@ try {
   const { schemaMigrations } = await import("../server/db-migrations");
   const createdAt = "2026-06-17T00:00:00.000Z";
 
-  dbModule.db.exec(`
+  await dbModule.db.exec(`
     CREATE TABLE projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -131,68 +131,56 @@ try {
     );
   `);
 
-  dbModule.db.query(`
+  await dbModule.db.run(`
     INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
     VALUES (?, ?, ?, 'user', ?, ?)
-  `).run("user_1", "legacy@example.test", "legacy-hash", createdAt, createdAt);
-  dbModule.db.query(`
+  `, ["user_1", "legacy@example.test", "legacy-hash", createdAt, createdAt]);
+  await dbModule.db.run(`
     INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run("session_1", "user_1", "token-hash", createdAt, createdAt);
-  dbModule.db.query(`
+  `, ["session_1", "user_1", "token-hash", createdAt, createdAt]);
+  await dbModule.db.run(`
     INSERT INTO projects (id, name, created_at, updated_at, page_count, slice_count)
     VALUES (?, ?, ?, ?, 1, 1)
-  `).run("project_1", "Legacy project", createdAt, createdAt);
-  dbModule.db.query(`
+  `, ["project_1", "Legacy project", createdAt, createdAt]);
+  await dbModule.db.run(`
     INSERT INTO pages (id, project_id, page_index, original_name, original_path, width, height, created_at)
     VALUES (?, ?, 1, ?, ?, 1200, 800, ?)
-  `).run("page_1", "project_1", "P1.png", "projects/project_1/originals/page_1.png", createdAt);
-  dbModule.db.query(`
+  `, ["page_1", "project_1", "P1.png", "projects/project_1/originals/page_1.png", createdAt]);
+  await dbModule.db.run(`
     INSERT INTO slices (id, project_id, page_id, slice_index, name, kind, cut_mode, x, y, width, height, created_at, updated_at)
     VALUES (?, ?, ?, 1, ?, 'icon', 'shape', 10, 20, 30, 40, ?, ?)
-  `).run("slice_1", "project_1", "page_1", "CTA", createdAt, createdAt);
-  dbModule.db.query(`
+  `, ["slice_1", "project_1", "page_1", "CTA", createdAt, createdAt]);
+  await dbModule.db.run(`
     INSERT INTO plans (id, name, monthly_ai_calls, monthly_exports, storage_mb, price_cents, currency, active, created_at)
     VALUES ('free', 'Free', 20, 20, 512, 0, 'CNY', 1, ?)
-  `).run(createdAt);
-  dbModule.db.query(`
+  `, [createdAt]);
+  await dbModule.db.run(`
     INSERT INTO usage_events (id, user_id, project_id, action, units, metadata_json, created_at)
     VALUES (?, ?, ?, ?, 2, ?, ?)
-  `).run("usage_1", "user_1", "project_1", "ai.boxes", "{\"pageId\":\"page_1\"}", createdAt);
-  dbModule.db.query(`
+  `, ["usage_1", "user_1", "project_1", "ai.boxes", "{\"pageId\":\"page_1\"}", createdAt]);
+  await dbModule.db.run(`
     INSERT INTO entitlements (user_id, plan_id, status, ai_calls_remaining, exports_remaining, storage_mb, renews_at, updated_at)
     VALUES (?, 'free', 'free', 20, 20, 512, NULL, ?)
-  `).run("user_1", createdAt);
-  dbModule.db.query(`
+  `, ["user_1", createdAt]);
+  await dbModule.db.run(`
     INSERT INTO payment_orders (id, user_id, provider, provider_order_id, plan_id, amount_cents, currency, status, checkout_url, created_at, updated_at)
     VALUES (?, ?, 'legacy_provider', ?, 'free', 0, 'CNY', 'pending', ?, ?, ?)
-  `).run("order_1", "user_1", "provider_1", "https://pay.example.test/order_1", createdAt, createdAt);
-  dbModule.db.query(`
+  `, ["order_1", "user_1", "provider_1", "https://pay.example.test/order_1", createdAt, createdAt]);
+  await dbModule.db.run(`
     INSERT INTO payment_events (id, order_id, provider, provider_event_id, verified, payload_json, received_at)
     VALUES (?, ?, 'legacy_provider', ?, 1, ?, ?)
-  `).run("payment_event_1", "order_1", "provider_evt_1", "{\"trade_status\":\"TRADE_SUCCESS\"}", createdAt);
+  `, ["payment_event_1", "order_1", "provider_evt_1", "{\"trade_status\":\"TRADE_SUCCESS\"}", createdAt]);
 
-  dbModule.initDatabase();
+  await dbModule.initDatabase();
 
-  const migrationIds = dbModule.db
-    .query<{ id: string }, []>("SELECT id FROM schema_migrations ORDER BY id")
-    .all()
+  const migrationIds = (await dbModule.db.all<{ id: string }>("SELECT id FROM schema_migrations ORDER BY id"))
     .map((row) => row.id);
-  const session = dbModule.db
-    .query<{ last_seen_at: string }, []>("SELECT last_seen_at FROM sessions WHERE id = 'session_1'")
-    .get();
-  const user = dbModule.db
-    .query<{ name: string; status: string }, []>("SELECT name, status FROM users WHERE id = 'user_1'")
-    .get();
-  const project = dbModule.db
-    .query<{ user_id: string | null }, []>("SELECT user_id FROM projects WHERE id = 'project_1'")
-    .get();
-  const page = dbModule.db
-    .query<{ display_name: string }, []>("SELECT display_name FROM pages WHERE id = 'page_1'")
-    .get();
-  const slice = dbModule.db
-    .query<{ kind: string; cut_mode: string }, []>("SELECT kind, cut_mode FROM slices WHERE id = 'slice_1'")
-    .get();
+  const session = await dbModule.db.get<{ last_seen_at: string }>("SELECT last_seen_at FROM sessions WHERE id = 'session_1'");
+  const user = await dbModule.db.get<{ name: string; status: string }>("SELECT name, status FROM users WHERE id = 'user_1'");
+  const project = await dbModule.db.get<{ user_id: string | null }>("SELECT user_id FROM projects WHERE id = 'project_1'");
+  const page = await dbModule.db.get<{ display_name: string }>("SELECT display_name FROM pages WHERE id = 'page_1'");
+  const slice = await dbModule.db.get<{ kind: string; cut_mode: string }>("SELECT kind, cut_mode FROM slices WHERE id = 'slice_1'");
 
   assertEqual(migrationIds, schemaMigrations.map((migration) => migration.id), "schema migrations should be fully recorded");
   assert(session?.last_seen_at === createdAt, "legacy sessions should backfill last_seen_at");
@@ -201,11 +189,11 @@ try {
   assertEqual(page, { display_name: "" }, "legacy pages should receive display_name column");
   assertEqual(slice, { kind: "image", cut_mode: "subject" }, "legacy slices should be normalized");
   for (const table of ["usage_events", "plans", "entitlements", "payment_orders", "payment_events"]) {
-    assert(!tableExists(dbModule.db, table), `${table} should be dropped by user-only cleanup migration`);
+    assert(!(await tableExists(dbModule.db, table)), `${table} should be dropped by user-only cleanup migration`);
   }
 
   console.log("db-migration smoke passed");
-  dbModule.db.close(false);
+  await dbModule.db.close();
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }
@@ -220,8 +208,6 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
   }
 }
 
-function tableExists(db: typeof import("../server/db").db, tableName: string): boolean {
-  return Boolean(db.query<{ name: string }, [string]>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
-  ).get(tableName));
+async function tableExists(db: typeof import("../server/db").db, tableName: string): Promise<boolean> {
+  return db.tableExists(tableName);
 }

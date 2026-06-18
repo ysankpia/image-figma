@@ -15,7 +15,8 @@
     "test": "vitest run",
     "check": "bun run typecheck && bun run test",
     "smoke": "bun scripts/smoke.ts",
-    "smoke:db-migrations": "bun scripts/db-migration-smoke.ts"
+    "smoke:db-migrations": "bun scripts/db-migration-smoke.ts",
+    "smoke:postgres": "bun scripts/postgres-smoke.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
@@ -28,11 +29,15 @@
     "konva": "^10.0.12",
     "lucide-react": "^1.17.0",
     "next": "^16.0.10",
+    "pg": "^8.21.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-konva": "^19.0.12",
     "sharp": "^0.34.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
   }
 }

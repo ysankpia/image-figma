@@ -22,7 +22,7 @@ import { createZipBuffer, type ZipFile } from "../shared/zip";
 const penVersion = "2.11";
 
 export async function exportPencilProject(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
-  const detail = getProjectDetail(userId, projectId);
+  const detail = await getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   storage.ensureProjectDirectories(userId, projectId);
@@ -37,7 +37,7 @@ export async function exportPencilProject(userId: string, projectId: string): Pr
 }
 
 export async function exportPencilProjectPage(userId: string, projectId: string, pageId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
-  const detail = getProjectDetail(userId, projectId);
+  const detail = await getProjectDetail(userId, projectId);
   const page = detail.pages.find((candidate) => candidate.id === pageId);
   if (!page) throw httpError(404, "Page not found");
   if (page.slices.length === 0) throw httpError(409, "No slices selected");
@@ -123,7 +123,7 @@ async function buildPencilDocument(
   const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(getPageOriginalKey(userId, detail.project.id, page.id), "Original image not found");
+    const originalBuffer = storage.read(await getPageOriginalKey(userId, detail.project.id, page.id), "Original image not found");
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));

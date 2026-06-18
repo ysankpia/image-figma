@@ -16,7 +16,7 @@ repository root
 -> source images stored under storage/
 -> user-drawn or AI-assisted rect slices
 -> optional rect/subject/card cut modes
--> SQLite-backed project state
+-> SQLite or Postgres-backed project state
 -> assets.zip for frontend assets
 -> project.zip / design.pen for Pencil/Figma handoff
 ```
@@ -74,6 +74,8 @@ SLICE_STUDIO_AUTH_SECURE_COOKIES=false
 SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
+SLICE_STUDIO_DATABASE_PROVIDER=sqlite
+SLICE_STUDIO_DATABASE_URL=
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid
 SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence

@@ -12,59 +12,59 @@ export type CurrentUser = {
   status: "active" | "suspended";
 };
 
-export function ensureLocalOwner(): CurrentUser {
-  const existing = getUserByEmail(localOwnerEmail);
+export async function ensureLocalOwner(): Promise<CurrentUser> {
+  const existing = await getUserByEmail(localOwnerEmail);
   const now = new Date().toISOString();
   const passwordHash = hashPassword(localOwnerPassword);
   if (existing) {
-    db.query(`
+    await db.run(`
       UPDATE users
       SET name = ?, password_hash = ?, role = 'admin', status = 'active', updated_at = ?
       WHERE id = ?
-    `).run(localOwnerName, passwordHash, now, existing.id);
-    const refreshed = getUserByEmail(localOwnerEmail);
+    `, [localOwnerName, passwordHash, now, existing.id]);
+    const refreshed = await getUserByEmail(localOwnerEmail);
     if (!refreshed) throw httpError(500, "Local owner refresh failed");
     return formatUser(refreshed);
   }
   const id = `user_${randomHex(8)}`;
-  db.query(`
+  await db.run(`
     INSERT INTO users (id, email, name, password_hash, role, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'admin', 'active', ?, ?)
-  `).run(id, localOwnerEmail, localOwnerName, passwordHash, now, now);
+  `, [id, localOwnerEmail, localOwnerName, passwordHash, now, now]);
   return { id, email: localOwnerEmail, name: localOwnerName, role: "admin", status: "active" };
 }
 
-export function createSession(userId: string): { token: string; expiresAt: string } {
+export async function createSession(userId: string): Promise<{ token: string; expiresAt: string }> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + authSessionTtlDays * 24 * 60 * 60 * 1000);
   const token = randomHex(32);
   const tokenHash = hashToken(token);
   const id = `session_${randomHex(8)}`;
-  db.query(`
+  await db.run(`
     INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, userId, tokenHash, expiresAt.toISOString(), now.toISOString(), now.toISOString());
+  `, [id, userId, tokenHash, expiresAt.toISOString(), now.toISOString(), now.toISOString()]);
   return { token, expiresAt: expiresAt.toISOString() };
 }
 
-export function getCurrentUser(request: globalThis.Request): CurrentUser | null {
+export async function getCurrentUser(request: globalThis.Request): Promise<CurrentUser | null> {
   const token = readSessionToken(request);
   if (!token) return null;
-  const session = getSessionByToken(token);
+  const session = await getSessionByToken(token);
   if (!session) return null;
   if (Date.parse(session.expires_at) <= Date.now()) {
-    db.query("DELETE FROM sessions WHERE id = ?").run(session.id);
+    await db.run("DELETE FROM sessions WHERE id = ?", [session.id]);
     return null;
   }
-  const user = getUserById(session.user_id);
+  const user = await getUserById(session.user_id);
   if (!user) return null;
   if (user.status !== "active") return null;
-  db.query("UPDATE sessions SET last_seen_at = ? WHERE id = ?").run(new Date().toISOString(), session.id);
+  await db.run("UPDATE sessions SET last_seen_at = ? WHERE id = ?", [new Date().toISOString(), session.id]);
   return formatUser(user);
 }
 
-export function requireUser(request: globalThis.Request): CurrentUser {
-  const user = getCurrentUser(request);
+export async function requireUser(request: globalThis.Request): Promise<CurrentUser> {
+  const user = await getCurrentUser(request);
   if (!user) throw httpError(401, "Authentication required");
   return user;
 }
@@ -99,51 +99,51 @@ export function clearSessionCookie(): string {
   return parts.join("; ");
 }
 
-export function signInWithEmail(email: string, password: string): { user: CurrentUser; token: string; expiresAt: string } {
+export async function signInWithEmail(email: string, password: string): Promise<{ user: CurrentUser; token: string; expiresAt: string }> {
   const normalizedEmail = normalizeEmail(email);
-  const user = getUserByEmail(normalizedEmail);
+  const user = await getUserByEmail(normalizedEmail);
   if (!user || !verifyPassword(password, user.password_hash)) {
     throw httpError(401, "Invalid email or password");
   }
   if (user.status !== "active") throw httpError(403, "Account is suspended");
-  const session = createSession(user.id);
+  const session = await createSession(user.id);
   return { user: formatUser(user), token: session.token, expiresAt: session.expiresAt };
 }
 
-export function signUpWithEmail(name: string, email: string, password: string): { user: CurrentUser; token: string; expiresAt: string } {
+export async function signUpWithEmail(name: string, email: string, password: string): Promise<{ user: CurrentUser; token: string; expiresAt: string }> {
   const normalizedEmail = normalizeEmail(email);
-  if (getUserByEmail(normalizedEmail)) throw httpError(409, "Email already exists");
+  if (await getUserByEmail(normalizedEmail)) throw httpError(409, "Email already exists");
   const now = new Date().toISOString();
   const id = `user_${randomHex(8)}`;
   const passwordHash = hashPassword(password);
-  db.query(`
+  await db.run(`
     INSERT INTO users (id, email, name, password_hash, role, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'user', 'active', ?, ?)
-  `).run(id, normalizedEmail, sanitizeDisplayName(name), passwordHash, now, now);
-  const session = createSession(id);
-  const user = getUserById(id);
+  `, [id, normalizedEmail, sanitizeDisplayName(name), passwordHash, now, now]);
+  const session = await createSession(id);
+  const user = await getUserById(id);
   if (!user) throw httpError(500, "User creation failed");
   return { user: formatUser(user), token: session.token, expiresAt: session.expiresAt };
 }
 
-export function signOut(request: globalThis.Request): void {
+export async function signOut(request: globalThis.Request): Promise<void> {
   const token = readSessionToken(request);
   if (!token) return;
   const tokenHash = hashToken(token);
-  db.query("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
+  await db.run("DELETE FROM sessions WHERE token_hash = ?", [tokenHash]);
 }
 
-export function claimUnownedProjects(userId: string): number {
-  const result = db.query("UPDATE projects SET user_id = ? WHERE user_id IS NULL").run(userId);
+export async function claimUnownedProjects(userId: string): Promise<number> {
+  const result = await db.run("UPDATE projects SET user_id = ? WHERE user_id IS NULL", [userId]);
   return result.changes;
 }
 
-export function getUserById(id: string): UserRow | undefined {
-  return db.query<UserRow, [string]>("SELECT * FROM users WHERE id = ?").get(id) || undefined;
+export async function getUserById(id: string): Promise<UserRow | undefined> {
+  return await db.get<UserRow>("SELECT * FROM users WHERE id = ?", [id]);
 }
 
-export function getUserByEmail(email: string): UserRow | undefined {
-  return db.query<UserRow, [string]>("SELECT * FROM users WHERE email = ?").get(normalizeEmail(email)) || undefined;
+export async function getUserByEmail(email: string): Promise<UserRow | undefined> {
+  return await db.get<UserRow>("SELECT * FROM users WHERE email = ?", [normalizeEmail(email)]);
 }
 
 export function hashPassword(password: string): string {
@@ -165,8 +165,8 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function getSessionByToken(token: string): SessionRow | undefined {
-  return db.query<SessionRow, [string]>("SELECT * FROM sessions WHERE token_hash = ?").get(hashToken(token)) || undefined;
+async function getSessionByToken(token: string): Promise<SessionRow | undefined> {
+  return await db.get<SessionRow>("SELECT * FROM sessions WHERE token_hash = ?", [hashToken(token)]);
 }
 
 function normalizeEmail(value: string): string {

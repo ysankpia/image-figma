@@ -12,6 +12,7 @@ Storage path: /opt/slice-studio/storage
 Env file: /opt/slice-studio/env/slice-studio.env
 API service: slice-studio-api
 Web service: slice-studio-web
+Text style service: slice-studio-text-style
 Reverse proxy: existing Docker Caddy container sub2api-caddy
 Caddyfile: /opt/caddy/Caddyfile
 ```
@@ -26,17 +27,28 @@ Browser
 -> 127.0.0.1:3010 Next standalone server
 -> same-origin /api rewrite
 -> 127.0.0.1:4110 Elysia API
--> /opt/slice-studio/storage/app.sqlite
+-> existing jianzhi-postgres container on 127.0.0.1:15432
+-> dedicated Postgres database slice_studio
 -> /opt/slice-studio/storage/users/{userId}/projects/{projectId}/...
+
+Pencil export text style:
+
+```text
+Elysia API
+-> SLICE_STUDIO_TEXT_STYLE_PROVIDER=psdlike
+-> 127.0.0.1:4120 slice-studio-text-style
+-> services/psdlike-text-style FastAPI app
+```
 ```
 
 System services:
 
 ```bash
-systemctl status slice-studio-api slice-studio-web --no-pager
+systemctl status slice-studio-text-style slice-studio-api slice-studio-web --no-pager
+journalctl -u slice-studio-text-style -n 100 --no-pager
 journalctl -u slice-studio-api -n 100 --no-pager
 journalctl -u slice-studio-web -n 100 --no-pager
-systemctl restart slice-studio-api slice-studio-web
+systemctl restart slice-studio-text-style slice-studio-api slice-studio-web
 ```
 
 Caddy commands:
@@ -49,25 +61,24 @@ docker logs --tail 120 sub2api-caddy
 
 ## Database Fact
 
-Current Slice Studio code uses SQLite through `bun:sqlite`:
+Current production uses the already-running `jianzhi-postgres` container, but not the existing `jianzhi` application database. Slice Studio owns a separate database in the same container:
 
 ```text
-server/db.ts -> bun:sqlite
-server/config.ts -> SLICE_STUDIO_STORAGE_ROOT/app.sqlite
+jianzhi-postgres: 127.0.0.1:15432
+database: slice_studio
+owner/user: jianzhi
 ```
 
-There is no Postgres adapter, no `DATABASE_URL` path, and no ORM abstraction in the current mainline. Therefore the existing PGSQL service on the server cannot be used by configuration alone.
+The `jianzhi` database already contains unrelated production tables such as `public.users` and `public.schema_migrations`, so do not put Slice Studio tables there. Keep Slice Studio in `slice_studio`.
 
-Do not create a new PGSQL database for the current code. If Postgres becomes required, that is a code migration task:
+Current app env:
 
 ```text
-add DB abstraction or Postgres adapter
-port migrations to Postgres SQL
-update query call sites
-select the existing PGSQL database/user to reuse
-migrate SQLite data if needed
-run real smoke before cutover
+SLICE_STUDIO_DATABASE_PROVIDER=postgres
+SLICE_STUDIO_DATABASE_URL=postgres://...@127.0.0.1:15432/slice_studio
 ```
+
+Local/dev still defaults to SQLite unless those variables are set.
 
 ## Environment
 
@@ -89,9 +100,12 @@ SLICE_STUDIO_PUBLIC_API_URL=https://image.figma.245162.xyz
 SLICE_STUDIO_ALLOWED_ORIGIN=https://image.figma.245162.xyz,http://127.0.0.1:3010
 SLICE_STUDIO_STORAGE_ROOT=/opt/slice-studio/storage
 SLICE_STUDIO_AUTH_SECURE_COOKIES=true
+SLICE_STUDIO_DATABASE_PROVIDER=postgres
+SLICE_STUDIO_TEXT_STYLE_PROVIDER=psdlike
+SLICE_STUDIO_TEXT_STYLE_BASE_URL=http://127.0.0.1:4120
 ```
 
-Text-style measurement currently runs in fallback mode on the server because the production host does not have the PSD-like Python service/`uv` path installed. The site remains usable; editable text export uses the TypeScript fallback estimator.
+The env file also contains secrets such as `SLICE_STUDIO_DATABASE_URL`, owner password, download signing secret, OCR token, and AI provider API key. Never print the raw file in logs.
 
 ## Manual Deploy Procedure
 
@@ -114,7 +128,8 @@ The production services are already installed; do not recreate them unless the s
 Inside-out validation commands:
 
 ```bash
-ssh racknerd 'systemctl is-active slice-studio-api slice-studio-web'
+ssh racknerd 'systemctl is-active slice-studio-text-style slice-studio-api slice-studio-web'
+ssh racknerd 'curl -fsS http://127.0.0.1:4120/health'
 ssh racknerd 'curl -fsS http://127.0.0.1:4110/api/health'
 ssh racknerd 'curl -fsSI http://127.0.0.1:3010 | sed -n "1,12p"'
 curl -fsSI http://image.figma.245162.xyz
@@ -122,16 +137,17 @@ curl -fsSI https://image.figma.245162.xyz
 curl -fsS https://image.figma.245162.xyz/api/health
 ```
 
-The 2026-06-19 production smoke passed:
+The 2026-06-19 production smoke after Postgres/PSD-like cutover passed:
 
 ```text
+PSD-like text style service active
 API service active
 Web service active
+127.0.0.1:4120 /health -> {"ok":true}
 127.0.0.1:4110 /api/health -> {"ok":true}
 127.0.0.1:3010 -> HTTP 200
-http://image.figma.245162.xyz -> HTTP 308 to HTTPS
-https://image.figma.245162.xyz -> HTTP 200
-https://image.figma.245162.xyz/api/health -> {"ok":true}
+source-origin HTTPS with --resolve -> HTTP 200 and /api/health {"ok":true}
+server-local real app smoke -> passed against Postgres
 ```
 
 Real app smoke also passed on the server:
@@ -145,6 +161,8 @@ export assets.zip
 export project.zip / design.pen
 delete temporary project
 ```
+
+During cutover, Cloudflare-proxied public HTTPS briefly returned TLS handshake failures while direct source-origin HTTPS with `--resolve image.figma.245162.xyz:443:192.236.242.152` worked. Caddy then completed certificate issuance/propagation and normal public HTTPS recovered. If this recurs, first compare normal DNS vs `--resolve` source-origin access; when source-origin works and Cloudflare fails, investigate Cloudflare SSL/TLS mode, edge certificate status, DNS proxy state, and whether the domain should temporarily be DNS-only while using the Caddy origin certificate.
 
 ## HTTPS
 
@@ -170,20 +188,28 @@ Do not install nginx or certbot for this site unless the reverse-proxy strategy 
 
 ## Current CD Status
 
-There is no active GitHub Actions CD workflow in this repository.
+GitHub Actions CD exists at:
 
-The server deploy directory is not a git clone:
+```text
+.github/workflows/deploy.yml
+```
+
+It uses the RackNerd Cloudflare Access TCP bridge, a dedicated deploy SSH key in GitHub Secrets, and `rsync` to upload the checked-out repository to `/opt/slice-studio/app.new`. The server app directory is still not a git clone:
 
 ```text
 /opt/slice-studio/app has no .git directory
 ```
 
-Therefore a `git pull && systemctl restart` workflow will not work today. The next CD step must choose one of these explicit routes:
+Therefore the workflow does not run `git pull` on the server. It uploads a release directory, swaps it into place, runs `pnpm install --frozen-lockfile`, builds Next standalone, ensures the PSD-like venv exists, restarts `slice-studio-text-style`, `slice-studio-api`, and `slice-studio-web`, then checks local service health.
 
-1. Archive/rsync upload from GitHub Actions to `/opt/slice-studio/app`, then install/build/restart.
-2. Configure a server deploy key or token, turn `/opt/slice-studio/app` into a private repo checkout, then use a `git pull` workflow.
+Required repo secrets:
 
-Do not copy a personal SSH private key into GitHub Secrets without explicit operator approval. Prefer a dedicated deploy key.
+```text
+DEPLOY_USER=root
+DEPLOY_PATH=/opt/slice-studio/app
+DEPLOY_SSH_KEY=<dedicated RackNerd deploy key>
+SERVICE_NAME=slice-studio-api
+```
 
 ## Production Gaps
 

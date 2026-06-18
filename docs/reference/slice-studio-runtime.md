@@ -27,10 +27,12 @@ Storage path: /opt/slice-studio/storage
 API service: slice-studio-api on 127.0.0.1:4110
 Web service: slice-studio-web on 127.0.0.1:3010
 Reverse proxy: existing Docker Caddy container sub2api-caddy
+Database: existing jianzhi-postgres container, dedicated slice_studio database
+Text style service: slice-studio-text-style on 127.0.0.1:4120
 Runbook: docs/runbooks/slice-studio-production-deploy.md
 ```
 
-Production currently uses the same SQLite storage contract as local runtime: `/opt/slice-studio/storage/app.sqlite`. The code does not currently support PostgreSQL by configuration alone.
+Production currently uses Postgres for user/project/page/slice/session metadata and local filesystem storage for originals and exports. Local development defaults to SQLite unless `SLICE_STUDIO_DATABASE_PROVIDER=postgres` or `SLICE_STUDIO_DATABASE_URL` is set.
 
 ## Product Flow
 
@@ -39,7 +41,7 @@ Production currently uses the same SQLite storage contract as local runtime: `/o
 -> project workspace
 -> originals saved to storage
 -> manual image slices
--> SQLite metadata
+-> SQLite/Postgres metadata
 -> assets.zip for frontend assets
 -> project.zip / design.pen for Pencil handoff
 ```
@@ -188,6 +190,8 @@ SLICE_STUDIO_AUTH_SECURE_COOKIES=false
 SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
+SLICE_STUDIO_DATABASE_PROVIDER=sqlite
+SLICE_STUDIO_DATABASE_URL=
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_MAX_UPLOAD_BYTES=20971520
 SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
@@ -210,7 +214,7 @@ The browser client normally uses same-origin `/api`, and Next.js rewrites that t
 
 Current mainline storage now goes through a single `server/storage.ts` local adapter. The default adapter still writes into `SLICE_STUDIO_STORAGE_ROOT` on the local filesystem, but project originals, slice previews, AI source reads, and export ZIP reads/writes already use storage keys instead of each module assembling local paths independently.
 
-Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the local SQLite schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc `ALTER TABLE`/rebuild side effects. The current migration contract targets local SQLite user/project/page/slice/session data and includes a compatibility migration that drops obsolete billing, payment, entitlement, and usage tables from old local databases without deleting users, projects, pages, or slices.
+Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the selected provider schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc side effects. SQLite remains the default local provider. Postgres is supported for the current user-only Slice Studio tables and is enabled by `SLICE_STUDIO_DATABASE_PROVIDER=postgres` plus `SLICE_STUDIO_DATABASE_URL`. The compatibility migration still drops obsolete billing, payment, entitlement, and usage tables from old databases without deleting users, projects, pages, or slices.
 
 Current mainline download delivery is also separated from raw file paths. Export APIs now return short-lived signed URLs under `/api/storage-download?token=...`; the token resolves to a local storage key plus response metadata and expires after a configured TTL. The current byte source is still local filesystem storage, but this download contract is the seam intended for a later object-storage backend with real provider-signed downloads.
 
@@ -222,4 +226,4 @@ AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. 
 
 ## Scope
 
-v1 supports manual slicing, AI-assisted rectangular slicing, local YOLO as an experimental AI box provider, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement when available, login/register, project ownership, user-scoped local storage, signed downloads, production `systemd` deployment, and account settings. Billing, admin operations, entitlement counters, usage events, payment orders, XPay, automatic semantic UI ownership, Figma import, team collaboration, PostgreSQL, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync are out of the current runtime scope.
+v1 supports manual slicing, AI-assisted rectangular slicing, local YOLO as an experimental AI box provider, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement when available, login/register, project ownership, user-scoped local storage, signed downloads, SQLite local metadata, Postgres production metadata, production `systemd` deployment, and account settings. Billing, admin operations, entitlement counters, usage events, payment orders, XPay, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync are out of the current runtime scope.

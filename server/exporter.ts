@@ -6,7 +6,7 @@ import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
 export async function exportAssets(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; url: string }> {
-  const detail = getProjectDetail(userId, projectId);
+  const detail = await getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   storage.ensureProjectDirectories(userId, projectId);
@@ -26,7 +26,7 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
 
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(getPageOriginalKey(userId, projectId, page.id), "Original image not found");
+    const originalBuffer = storage.read(await getPageOriginalKey(userId, projectId, page.id), "Original image not found");
     files.push({
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer

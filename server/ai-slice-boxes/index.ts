@@ -21,12 +21,12 @@ import { detectYoloSliceBoxes } from "./yolo-local";
 export async function generateAiSliceBoxes(userId: string, projectId: string, pageId: string): Promise<AiSliceBoxesResponse> {
   if (aiSliceProvider === "disabled") throw httpError(400, "AI slice provider is disabled");
 
-  const detail = getProjectDetail(userId, projectId);
+  const detail = await getProjectDetail(userId, projectId);
   const page = detail.pages.find((item) => item.id === pageId);
   if (!page) throw httpError(404, "Page not found");
 
-  getPageOriginalPath(userId, projectId, pageId);
-  const imageBuffer = storage.read(getPageOriginalKey(userId, projectId, pageId), "Original image not found");
+  await getPageOriginalPath(userId, projectId, pageId);
+  const imageBuffer = storage.read(await getPageOriginalKey(userId, projectId, pageId), "Original image not found");
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
   const width = metadata.width || page.width;
   const height = metadata.height || page.height;

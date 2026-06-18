@@ -29,6 +29,8 @@
 | `SLICE_STUDIO_LOCAL_OWNER_NAME` | 本地/bootstrap owner 昵称 | `Local Owner` | 否 |
 | `SLICE_STUDIO_LOCAL_OWNER_PASSWORD` | 本地/bootstrap owner 密码；生产必须覆盖 | `slice-studio-local-owner` | 否 |
 | `SLICE_STUDIO_STORAGE_ROOT` | Slice Studio storage 根目录 | `./storage` | 否 |
+| `SLICE_STUDIO_DATABASE_PROVIDER` | 数据库 provider；`sqlite` 或 `postgres`。为空时有 `SLICE_STUDIO_DATABASE_URL` 自动视为 `postgres`，否则为 `sqlite` | `sqlite` | 否 |
+| `SLICE_STUDIO_DATABASE_URL` | Postgres 连接串；只在 Postgres provider 下使用 | 空 | Postgres 需要 |
 | `SLICE_STUDIO_ALLOWED_ORIGIN` | 允许的 Web origin | `http://127.0.0.1:3010` | 否 |
 | `SLICE_STUDIO_MAX_UPLOAD_BYTES` | 单文件上传上限 | `20971520` | 否 |
 | `SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES` | 批量上传总上限 | `314572800` | 否 |
@@ -119,6 +121,8 @@ SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_STORAGE_ROOT=./storage
+SLICE_STUDIO_DATABASE_PROVIDER=sqlite
+SLICE_STUDIO_DATABASE_URL=
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_TEXT_BBOX_SOURCE=m29_ocr_hybrid

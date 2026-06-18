@@ -8,6 +8,9 @@ export const apiPort = Number(process.env.SLICE_STUDIO_API_PORT || 4110);
 export const storageRoot = path.resolve(process.env.SLICE_STUDIO_STORAGE_ROOT || path.join(process.cwd(), "storage"));
 export const projectsRoot = path.join(storageRoot, "projects");
 export const databasePath = path.join(storageRoot, "app.sqlite");
+export const databaseUrl = process.env.SLICE_STUDIO_DATABASE_URL || "";
+export type DatabaseProvider = "sqlite" | "postgres";
+export const databaseProvider = normalizeDatabaseProvider(process.env.SLICE_STUDIO_DATABASE_PROVIDER, databaseUrl);
 export const publicApiBaseUrl = process.env.SLICE_STUDIO_PUBLIC_API_URL || `http://${apiHost}:${apiPort}`;
 export const allowedOrigins = normalizeAllowedOrigins(process.env.SLICE_STUDIO_ALLOWED_ORIGIN);
 export const authCookieName = process.env.SLICE_STUDIO_AUTH_COOKIE_NAME || "slice_studio_session";
@@ -148,4 +151,10 @@ function trimTrailingSlash(value: string): string {
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function normalizeDatabaseProvider(value: string | undefined, url: string): DatabaseProvider {
+  if (value === "postgres") return "postgres";
+  if (value === "sqlite") return "sqlite";
+  return url ? "postgres" : "sqlite";
 }
