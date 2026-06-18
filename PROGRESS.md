@@ -3,21 +3,25 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Continue plan 189: move Slice Studio toward a multi-user production SaaS without regressing the current Slice Studio export workflow.
+Plan 196 is implemented and under final handoff: Slice Studio has been simplified back to a user-only surface by removing admin, billing, payment, entitlement, usage, order, quota, and XPay side chains while preserving login/register, owned projects, review workbench, AI-assisted boxes, saved slices, signed downloads, and exports.
 
 ## Active plan
+- Production history/context plan retained: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Prior text/slice coordination plan still active for closeout context: `docs/plans/active/193-pencil-export-text-slice-coordination.md`
-- Production launch plan active: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Most recently completed:
+  - `docs/plans/completed/196-user-only-surface-simplification.md`
   - `docs/plans/completed/195-current-psdlike-text-style-service.md`
   - `docs/plans/completed/194-psdlike-text-style-evidence-gate.md`
   - `docs/plans/completed/191-repository-legacy-code-physical-archive.md`
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Slice Studio multi-user production launch implementation
+Post-196 validation and handoff
 
 ## Now
+- 2026-06-18: executing plan 196 user-only surface simplification. Scope is to remove the admin, billing, payment, quota, entitlement, usage, order, and XPay side chain while preserving login/register, owned projects, review workbench, AI-assisted boxes, saved slices, user-scoped storage, signed downloads, and export outputs. Existing local project/source/slice/user/session data must not be deleted.
+- 2026-06-18: the current runtime has been narrowed to `/`, `/login`, `/register`, `/projects`, `/projects/:projectId/review`, and `/settings`. `/billing`, `/admin`, `/api/me`, `/api/billing/*`, and `/api/admin/*` are removed from the active runtime; the remaining work is validation and documentation cleanup.
+- 2026-06-18: plan 196 validation passed. `pnpm run check` passed with 12 test files / 107 tests; `pnpm run build` passed and the Next route table contains only `/`, `/_not-found`, `/login`, `/register`, `/projects`, `/projects/[projectId]/review`, and `/settings`; `bun run smoke` passed against current API with signed assets/project exports; `bun run smoke:db-migrations` passed; `git diff --check` passed. Removed API checks returned 404 for `/api/me`, `/api/billing/plans`, and `/api/admin/overview`.
 - 2026-06-18: advanced plan 189 product shell收口完成一轮。Landing、登录/注册、`/projects`、`/settings`、`/billing`、`/admin` 和公共首页都已经收成正式 SaaS 页面：顶部壳层、左侧导航、账号区、账单/设置/管理信息结构都从调试面板收成了可直接面对用户的产品壳。支付实现没有继续推进，当前明确暂停，先保留账单与订单结构，等后续接新的 provider 再回填购买链路。
 - 2026-06-17: advanced plan 189 admin operations beyond payment repair. `/api/admin/users` now exposes admin-only user and entitlement inventory with project/page/storage usage summaries; admins can toggle user active/suspended status and manually reset a user's plan plus entitlement status through new admin routes. `/admin` now renders a user-and-entitlement operations table beside payment ops, so the product has a minimal real operations surface for account suspension, manual grants, and entitlement correction instead of only payment-order repair.
 - 2026-06-17: advanced plan 189 storage ownership contract from project-only paths to user-scoped keys. New uploads and exports now write under `storage/users/{userId}/projects/{projectId}/...`, while project source reads, AI page reads, slice previews, source-image routes, and zip download routes stop reconstructing originals from raw `projectId/pageId` and instead use DB-tracked `original_path` or user/project-qualified export keys. Runtime keeps a compatibility read path for legacy local data still living under `storage/projects/{projectId}/...`, so existing local projects remain usable without a risky bulk migration. This is still local filesystem storage, not object storage, but it closes a real multi-user ownership gap in the storage contract.

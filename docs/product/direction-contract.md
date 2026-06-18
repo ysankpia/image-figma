@@ -2,13 +2,13 @@
 
 This document is the current project direction contract. It overrides historical Draft, Codia, and older Pencil-assisted plans when they conflict with the current code and documentation.
 
-The local Slice Studio delivery contract remains valid. Plan 189 adds the next formal production contract for turning the same product into a multi-user web service with auth, ownership, entitlement, provider-neutral payment, production storage, and deployment.
+The local Slice Studio delivery contract remains valid. Plan 189 added the broader production analysis, but plan 196 is the current runtime boundary: Slice Studio is being closed down to a pure user-side product with auth, ownership, project workspace, review workbench, settings, signed downloads, AI-assisted boxes, and exports. Admin, billing, payment, entitlement, usage, order, quota, and XPay code are deferred.
 
 ## Real user outcome
 
 Users can upload one or more UI screenshots/design images, quickly create or AI-assist rectangular asset boxes, manually adjust the result, and export a package that can be opened in Pencil and continued in Figma, plus a frontend asset ZIP.
 
-For the production launch phase, anonymous visitors first see a landing page, then register or log in, then work only inside authenticated projects they own. Expensive AI, storage, and export actions are gated by entitlement and usage limits.
+For the production launch phase, anonymous visitors first see a landing page, then register or log in, then work only inside authenticated projects they own.
 
 ## Final artifact
 
@@ -30,10 +30,8 @@ The production product additionally requires:
 landing page
 login/register
 authenticated project workspace
-account/billing page
+account settings page
 user-owned project data
-usage and entitlement records
-provider-neutral payment/subscription records
 production deployment, backup, and restore runbooks
 ```
 
@@ -56,7 +54,7 @@ The SQLite-backed Slice Studio project state is the live editing truth. Saved `S
 
 For exported packages, `manifest.json` with schema `manual_ui_slices.v1` is the artifact truth. AI slice boxes, M29 physical evidence, OCR output, and old automatic candidates are evidence only.
 
-For production SaaS work, authenticated user identity and project ownership become part of the truth source. Every project, page, slice, source image, preview, export, AI call, and usage event must be reachable only through the owning user or an explicit operator/admin path.
+For production SaaS work, authenticated user identity and project ownership become part of the truth source. Every project, page, slice, source image, preview, export, and AI call must be reachable only through the owning user.
 
 ## Evidence and candidate sources
 
@@ -92,7 +90,7 @@ Current default delivery does not aim to:
 - turn OCR text into button/card/background reconstruction;
 - perform team collaboration in the first production phase.
 
-The old local-phase exclusions for auth, billing, cloud deployment, and formal multi-user operation are superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md). Auth/session, project ownership, basic entitlement/usage, provider-neutral payment orders, minimal XPay webhook fulfillment, and the first landing/account/admin surfaces have started landing; production database/storage, payment reconciliation/refund/admin repair, backup/restore, and deployment are still future 189 stages.
+The old local-phase exclusion for auth is superseded by [../plans/active/189-slice-studio-multi-user-production-launch.md](../plans/active/189-slice-studio-multi-user-production-launch.md) and [../plans/completed/196-user-only-surface-simplification.md](../plans/completed/196-user-only-surface-simplification.md). Auth/session, project ownership, user-scoped storage, signed downloads, landing/login/register, project workspace, review workbench, and settings are current. Billing, admin, entitlement, usage, payment orders, and XPay are explicitly deferred by plan 196.
 
 ## Validation artifact
 
@@ -114,5 +112,5 @@ Revisit this contract if any of these appear:
 - old Draft/Renderer/plugin work is revived without a new active plan and validation gate;
 - manual repair becomes impossible or secondary to automatic ownership.
 - public deployment exposes project APIs without authentication and ownership checks;
-- payment becomes a client-side success flag or bypasses server-verified entitlement fulfillment;
-- AI provider replacement leaks keys, skips usage metering, or bypasses per-user entitlement checks.
+- payment/admin/entitlement code is reintroduced without a new active plan and validation gate;
+- AI provider replacement leaks keys or bypasses project ownership checks.

@@ -41,7 +41,7 @@ content grid: Figma-like project cards with first-page previews
 card actions: inline rename, delete confirmation
 ```
 
-The public surface now starts at `/`. Anonymous users can view the landing page and `/login`; project list, review workspace, source image, previews, exports, `/settings`, `/billing`, and `/admin` require a session.
+The public surface now starts at `/`. Anonymous users can view the landing page, `/login`, and `/register`; project list, review workspace, source image, previews, exports, and `/settings` require a session.
 
 Local bootstrap login:
 
@@ -52,12 +52,10 @@ password: slice-studio-local-owner
 
 Override this with `SLICE_STUDIO_LOCAL_OWNER_EMAIL` and `SLICE_STUDIO_LOCAL_OWNER_PASSWORD` before a real deployment.
 
-Account surfaces:
+Account surface:
 
 ```text
-/settings: current account and role
-/billing: entitlement, remaining AI/export credits, project/page/storage usage, usage events, payment orders
-/admin: admin-only totals plus recent payment orders/events and manual paid-order repair
+/settings: current account profile plus sign out
 ```
 
 ## Review Workbench
@@ -176,9 +174,6 @@ SLICE_STUDIO_LOCAL_OWNER_EMAIL=local@slicestudio.dev
 SLICE_STUDIO_LOCAL_OWNER_NAME=Local Owner
 SLICE_STUDIO_LOCAL_OWNER_PASSWORD=slice-studio-local-owner
 SLICE_STUDIO_ALLOWED_ORIGIN=http://127.0.0.1:3010
-SLICE_STUDIO_FREE_PROJECT_LIMIT=20
-SLICE_STUDIO_PAID_PROJECT_LIMIT=200
-SLICE_STUDIO_MAX_PAGES_PER_PROJECT=100
 SLICE_STUDIO_MAX_UPLOAD_BYTES=20971520
 SLICE_STUDIO_MAX_BATCH_UPLOAD_BYTES=314572800
 SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
@@ -200,7 +195,7 @@ The browser client normally uses same-origin `/api`, and Next.js rewrites that t
 
 Current mainline storage now goes through a single `server/storage.ts` local adapter. The default adapter still writes into `SLICE_STUDIO_STORAGE_ROOT` on the local filesystem, but project originals, slice previews, AI source reads, and export ZIP reads/writes already use storage keys instead of each module assembling local paths independently.
 
-Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the local SQLite schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc `ALTER TABLE`/rebuild side effects. The current migration contract still targets local SQLite, but auth, billing, quota, and export schema repair now has stable named stages and a repeatable `bun run smoke:db-migrations` legacy-upgrade proof.
+Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the local SQLite schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc `ALTER TABLE`/rebuild side effects. The current migration contract targets local SQLite user/project/page/slice/session data and includes a compatibility migration that drops obsolete billing, payment, entitlement, and usage tables from old local databases without deleting users, projects, pages, or slices.
 
 Current mainline download delivery is also separated from raw file paths. Export APIs now return short-lived signed URLs under `/api/storage-download?token=...`; the token resolves to a local storage key plus response metadata and expires after a configured TTL. The current byte source is still local filesystem storage, but this download contract is the seam intended for a later object-storage backend with real provider-signed downloads.
 
@@ -212,4 +207,4 @@ AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. 
 
 ## Scope
 
-v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement, login/register, project ownership, project/page/storage quota gates, basic entitlement/usage records, provider-neutral payment orders, minimal XPay webhook fulfillment, account settings, billing, and admin payment ops with manual paid-order repair. YOLO, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync remain out of scope.
+v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement, login/register, project ownership, user-scoped local storage, signed downloads, and account settings. Billing, admin operations, entitlement counters, usage events, payment orders, XPay, YOLO, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync are out of the current runtime scope.

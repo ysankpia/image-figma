@@ -1,4 +1,3 @@
-import { consumeExport } from "./billing";
 import { httpError } from "./errors";
 import { getPageOriginalKey, getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
@@ -10,7 +9,6 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
   const detail = getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
-  consumeExport(userId, projectId, "export.assets", { assetCount });
   storage.ensureProjectDirectories(userId, projectId);
 
   const exportedAt = new Date().toISOString();

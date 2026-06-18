@@ -13,10 +13,8 @@ describe("schema migrations metadata", () => {
       "001_base_current_schema",
       "002_projects_user_ownership",
       "003_auth_profile_columns",
-      "004_usage_events_contract",
-      "005_payment_events_contract",
       "006_pages_and_slices_contract",
-      "007_seed_default_plans"
+      "008_drop_billing_payment_tables"
     ]);
   });
 });

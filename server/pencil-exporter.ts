@@ -1,4 +1,3 @@
-import { consumeExport } from "./billing";
 import { httpError } from "./errors";
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
 import {
@@ -26,7 +25,6 @@ export async function exportPencilProject(userId: string, projectId: string): Pr
   const detail = getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
-  consumeExport(userId, projectId, "export.project", { assetCount, pageCount: detail.pages.length });
   storage.ensureProjectDirectories(userId, projectId);
 
   return exportPencilDetail({
@@ -43,7 +41,6 @@ export async function exportPencilProjectPage(userId: string, projectId: string,
   const page = detail.pages.find((candidate) => candidate.id === pageId);
   if (!page) throw httpError(404, "Page not found");
   if (page.slices.length === 0) throw httpError(409, "No slices selected");
-  consumeExport(userId, projectId, "export.project_page", { assetCount: page.slices.length, pageId });
 
   const pageDetail: ProjectDetail = {
     project: {

@@ -172,3 +172,4 @@
 - [190 Slice Studio Prelaunch Codebase Hardening](190-slice-studio-prelaunch-codebase-hardening.md) — `completed`
 - [191 Repository Legacy Code Physical Archive](191-repository-legacy-code-physical-archive.md) — `completed`
 - [192 Promote Slice Studio To Repository Root](192-promote-slice-studio-to-repository-root.md) — `completed`
+- [196 User-Only Surface Simplification](196-user-only-surface-simplification.md) — `completed`

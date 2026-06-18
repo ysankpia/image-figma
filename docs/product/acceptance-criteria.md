@@ -7,12 +7,12 @@
 - ` / ` landing page 可打开。
 - `/login` 能登录/注册并设置会话 cookie。
 - `/projects` 和 `/projects/:projectId/review` 对匿名用户不可访问。
-- `/settings`、`/billing`、`/admin` 路由存在。
+- `/settings` 路由存在。
+- `/billing` 和 `/admin` 不存在。
 - 项目列表按登录用户归属隔离。
 - 可以新建项目。
-- 新建项目会受项目数 entitlement gate 保护。
 - 可以上传多张页面图片。
-- 单项目页数和账号存储使用会受 entitlement gate 保护。
+- 上传会受单文件和批量文件大小技术限制保护。
 - 项目刷新后页面和 slices 仍存在。
 - 可以手动画框、选择、移动、缩放、删除、重命名。
 - 可以选择 `rect | subject | card` cut mode。
@@ -25,13 +25,6 @@
 
 ## P1 Should Pass
 
-- `/api/me` 能返回 entitlement、usage、paymentOrders。
-- AI 当前页前检查 entitlement，并记录 usage。
-- assets/project 导出前检查 entitlement，并记录 usage。
-- `/billing` 能创建 provider-neutral 的 payment order；XPay 配置齐全时返回 checkout URL。
-- XPay webhook 验签通过后才能把订单标记为 paid 并发放本地 entitlement；伪造签名不能发放权益。
-- `/billing` 能展示项目数、页面数和已用存储。
-- `/admin` 能查看最近 payment orders/payment events，并能用 admin-only 人工确认 pending/failed 订单；人工确认必须写 `manual_mark_paid` payment event。
 - AI 当前页能生成普通 rect slices，并保存进现有 slice state。
 - AI 全部页能逐页处理，失败页不影响已完成页面。
 - AI 结果与已有 slices 高重叠时不会大量重复追加。
@@ -76,11 +69,6 @@
 - 旧 Figma plugin render 通过。
 - YOLO/M29/OCR/AI 自动 ownership 完全正确。
 - 商业化账号、权限、额度、支付。
-
-189 当前阶段已经开始覆盖的内容除外：
-
-- 账号/会话；
-- 项目归属；
-- landing / login / settings / billing / admin 最小入口；
-- entitlement/usage skeleton；
-- provider-neutral payment order 与最小 XPay webhook fulfillment。
+- 管理后台和运营纠偏。
+- entitlement/usage skeleton。
+- provider-neutral payment order 或 XPay webhook fulfillment。

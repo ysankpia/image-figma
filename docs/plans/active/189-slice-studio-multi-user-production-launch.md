@@ -1,22 +1,35 @@
 # Plan 189: Slice Studio Multi-User Production Launch
 
 ## Status
-Active.
+Active as production-history context. Current runtime scope is superseded by [../completed/196-user-only-surface-simplification.md](../completed/196-user-only-surface-simplification.md) where this plan mentions billing, admin, payment, entitlement, usage, orders, quotas, or XPay.
 
 ## Objective
-Turn Slice Studio from a local/private UI slicing tool into a formal multi-user web product that can accept real users, protect uploaded design material, meter expensive AI work, and support paid access through a replaceable payment provider.
+Turn Slice Studio from a local/private UI slicing tool into a formal user-facing web product that can accept real users and protect uploaded design material. Payment/admin/entitlement work was explored in this plan, but it is no longer part of the current implementation scope after plan 196.
 
 This plan is not a warning to avoid the work. The work is in scope. The point is to make the production contract explicit so Codex can implement quickly without mixing local-tool assumptions into a public product.
 
 ## Implementation progress
 
+2026-06-18 plan 196 intentionally removed the admin, billing, payment, entitlement, usage, order, quota, and XPay side chain from the active runtime. The current product surface is:
+
+```text
+/
+/login
+/register
+/projects
+/projects/:projectId/review
+/settings
+```
+
+The active backend surface is auth/session, signed storage download, project/page/slice CRUD, AI-assisted boxes, asset export, and Pencil project export. Do not continue the older payment/admin items below without a new active plan.
+
 2026-06-18 the product shell is now in a usable SaaS shape:
 
 - Landing page now acts as a real product home instead of a redirect stub.
 - `/login` and `/register` now share a proper auth surface.
-- `/projects`, `/settings`, `/billing`, and `/admin` now sit under one console shell with consistent navigation and account identity.
-- Billing keeps plan/usage/order structure visible, but the payment flow is intentionally paused and not presented as the current user action.
-- The current focus is on keeping the product shell coherent for real usage while leaving payment reintegration for a later provider decision.
+- `/projects` and `/settings` are the current authenticated user pages.
+- `/billing` and `/admin` have been removed by plan 196.
+- The current focus is keeping the user workflow coherent: project management, review, save, AI boxes, and export.
 
 2026-06-17 Stage 1 foundation is in progress:
 
@@ -32,7 +45,7 @@ This plan is not a warning to avoid the work. The work is in scope. The point is
 - Download delivery is now moving toward the production storage contract too: assets/project exports no longer need to expose only fixed protected zip routes. Export APIs now return short-lived signed download URLs backed by a new local token resolver endpoint, so future object storage/signed-URL backends can replace the byte source without changing Review Workbench export behavior again.
 - New writes now also use a user-scoped local storage key convention: `users/{userId}/projects/{projectId}/...`. Existing local projects stored under legacy `projects/{projectId}/...` remain readable through the compatibility path, so the storage ownership contract is stronger without forcing an unsafe bulk move of local runtime data.
 - Production DB migration contract is now explicit instead of implicit. `server/db.ts` only opens SQLite and calls the migration runner; ordered migrations now persist in `schema_migrations`, and the old one-shot inline repair logic moved into named stages in `server/db-migrations.ts`. Real legacy upgrade proof now exists through `bun run smoke:db-migrations`.
-- Remaining 189 work: payment provider query/reconciliation/refund/cancel, richer admin user/plan operations, production DB adapter beyond local SQLite, real object storage backend behind the current signed-download contract, legal/help pages, backup/restore/deploy runbooks, and final real-flow validation.
+- Remaining current work: production DB adapter beyond local SQLite, real object storage backend behind the current signed-download contract, legal/help pages if needed, backup/restore/deploy runbooks, and final real-flow validation. Payment provider query/reconciliation/refund/cancel and richer admin operations are deferred, not current tasks.
 
 ## Concrete analysis
 

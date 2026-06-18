@@ -94,7 +94,7 @@ storage/users/{userId}/projects/{projectId}/exports/
 
 旧本地项目如果仍在 `storage/projects/{projectId}/...`，当前运行时会兼容读取；新上传和新导出写入 user-scoped 路径。
 
-## 189 生产化入口
+## 当前用户端入口
 
 当前正式上线路线已经打开，浏览器侧通过 Next.js 同源 `/api` 使用后端，脚本和 smoke 仍然可以直连 `SLICE_STUDIO_API_URL`。
 
@@ -105,8 +105,8 @@ storage/users/{userId}/projects/{projectId}/exports/
 - `/projects` 登录后项目列表
 - `/projects/:projectId/review` 受保护 review 工作台
 - `/settings` 账号设置
-- `/billing` 额度与账单
-- `/admin` 管理概览
+
+Plan 196 已经移除 `/billing`、`/admin`、支付、额度、权益、用量和订单侧链。当前产品只保留用户端主链路。
 
 ## 验证
 

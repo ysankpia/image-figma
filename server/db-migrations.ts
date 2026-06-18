@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import type { Database } from "bun:sqlite";
 
 export type SchemaMigration = {
@@ -6,27 +5,6 @@ export type SchemaMigration = {
   description: string;
   up: (db: Database) => void;
 };
-
-const defaultPlans = [
-  {
-    id: "free",
-    name: "Free",
-    monthlyAiCalls: 20,
-    monthlyExports: 20,
-    storageMb: 512,
-    priceCents: 0,
-    currency: "CNY"
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    monthlyAiCalls: 1000,
-    monthlyExports: 500,
-    storageMb: 10240,
-    priceCents: 9900,
-    currency: "CNY"
-  }
-] as const;
 
 export const schemaMigrations: SchemaMigration[] = [
   {
@@ -64,70 +42,6 @@ export const schemaMigrations: SchemaMigration[] = [
           created_at TEXT NOT NULL,
           last_seen_at TEXT NOT NULL,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS usage_events (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          project_id TEXT,
-          event_type TEXT NOT NULL,
-          quantity INTEGER NOT NULL DEFAULT 1,
-          metadata_json TEXT NOT NULL DEFAULT '{}',
-          created_at TEXT NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS plans (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          monthly_ai_calls INTEGER NOT NULL,
-          monthly_exports INTEGER NOT NULL,
-          storage_mb INTEGER NOT NULL,
-          price_cents INTEGER NOT NULL DEFAULT 0,
-          currency TEXT NOT NULL DEFAULT 'CNY',
-          active INTEGER NOT NULL DEFAULT 1,
-          created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS entitlements (
-          user_id TEXT PRIMARY KEY,
-          plan_id TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'trial', 'active', 'past_due', 'paused', 'canceled', 'expired', 'refunded', 'manual_grant')),
-          ai_calls_remaining INTEGER NOT NULL,
-          exports_remaining INTEGER NOT NULL,
-          storage_mb INTEGER NOT NULL,
-          renews_at TEXT,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (plan_id) REFERENCES plans(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS payment_orders (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          provider TEXT NOT NULL,
-          provider_order_id TEXT,
-          plan_id TEXT NOT NULL,
-          amount_cents INTEGER NOT NULL,
-          currency TEXT NOT NULL DEFAULT 'CNY',
-          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'closed', 'refunded')),
-          checkout_url TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (plan_id) REFERENCES plans(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS payment_events (
-          id TEXT PRIMARY KEY,
-          order_id TEXT,
-          provider TEXT NOT NULL,
-          event_type TEXT NOT NULL,
-          signature_valid INTEGER NOT NULL DEFAULT 0,
-          payload_json TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          FOREIGN KEY (order_id) REFERENCES payment_orders(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS pages (
@@ -182,20 +96,6 @@ export const schemaMigrations: SchemaMigration[] = [
     }
   },
   {
-    id: "004_usage_events_contract",
-    description: "Rebuild legacy usage_events rows into the explicit event_type/quantity contract.",
-    up: (db) => {
-      migrateUsageEventsColumns(db);
-    }
-  },
-  {
-    id: "005_payment_events_contract",
-    description: "Rebuild legacy payment_events rows into the explicit webhook event contract.",
-    up: (db) => {
-      migratePaymentEventsColumns(db);
-    }
-  },
-  {
     id: "006_pages_and_slices_contract",
     description: "Repair page display names plus the modern slice cut_mode contract.",
     up: (db) => {
@@ -208,26 +108,16 @@ export const schemaMigrations: SchemaMigration[] = [
     }
   },
   {
-    id: "007_seed_default_plans",
-    description: "Ensure the built-in free and pro plans exist for auth, quota, and billing flows.",
+    id: "008_drop_billing_payment_tables",
+    description: "Remove obsolete billing, payment, entitlement, and usage tables from user-only Slice Studio.",
     up: (db) => {
-      const now = new Date().toISOString();
-      const insert = db.query(`
-        INSERT OR IGNORE INTO plans (id, name, monthly_ai_calls, monthly_exports, storage_mb, price_cents, currency, active, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+      db.exec(`
+        DROP TABLE IF EXISTS payment_events;
+        DROP TABLE IF EXISTS payment_orders;
+        DROP TABLE IF EXISTS entitlements;
+        DROP TABLE IF EXISTS plans;
+        DROP TABLE IF EXISTS usage_events;
       `);
-      for (const plan of defaultPlans) {
-        insert.run(
-          plan.id,
-          plan.name,
-          plan.monthlyAiCalls,
-          plan.monthlyExports,
-          plan.storageMb,
-          plan.priceCents,
-          plan.currency,
-          now
-        );
-      }
     }
   }
 ];
@@ -315,125 +205,4 @@ function migrateCutModeConstraint(db: Database): void {
     DROP TABLE slices;
     ALTER TABLE slices_next RENAME TO slices;
   `);
-}
-
-function migrateUsageEventsColumns(db: Database): void {
-  const columns = db.query<{ name: string }, []>("PRAGMA table_info(usage_events)").all().map((column) => column.name);
-  const sql = tableSql(db, "usage_events");
-  const targetColumns = ["id", "user_id", "project_id", "event_type", "quantity", "metadata_json", "created_at"];
-  const needsRebuild =
-    targetColumns.some((column) => !columns.includes(column)) ||
-    columns.includes("action") ||
-    columns.includes("units") ||
-    !sql.includes("event_type TEXT NOT NULL") ||
-    !sql.includes("quantity INTEGER NOT NULL DEFAULT 1");
-
-  if (!needsRebuild) return;
-
-  const rows = db.query<Record<string, unknown>, []>("SELECT * FROM usage_events").all();
-  const now = new Date().toISOString();
-
-  db.exec(`
-    DROP TABLE IF EXISTS usage_events_next;
-    CREATE TABLE usage_events_next (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      project_id TEXT,
-      event_type TEXT NOT NULL,
-      quantity INTEGER NOT NULL DEFAULT 1,
-      metadata_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-    );
-  `);
-
-  const insert = db.query(`
-    INSERT INTO usage_events_next (id, user_id, project_id, event_type, quantity, metadata_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const row of rows) {
-    const userId = stringValue(row.user_id);
-    if (!userId) continue;
-    insert.run(
-      stringValue(row.id) || `usage_${crypto.randomUUID()}`,
-      userId,
-      stringValue(row.project_id) || null,
-      stringValue(row.event_type) || stringValue(row.action) || "unknown",
-      numberValue(row.quantity) ?? numberValue(row.units) ?? 1,
-      stringValue(row.metadata_json) || "{}",
-      stringValue(row.created_at) || now
-    );
-  }
-
-  db.exec(`
-    DROP TABLE usage_events;
-    ALTER TABLE usage_events_next RENAME TO usage_events;
-  `);
-}
-
-function migratePaymentEventsColumns(db: Database): void {
-  const columns = db.query<{ name: string }, []>("PRAGMA table_info(payment_events)").all().map((column) => column.name);
-  const sql = tableSql(db, "payment_events");
-  const targetColumns = ["id", "order_id", "provider", "event_type", "signature_valid", "payload_json", "created_at"];
-  const needsRebuild =
-    targetColumns.some((column) => !columns.includes(column)) ||
-    columns.includes("provider_event_id") ||
-    columns.includes("received_at") ||
-    columns.includes("verified") ||
-    !sql.includes("event_type TEXT NOT NULL") ||
-    !sql.includes("signature_valid INTEGER NOT NULL DEFAULT 0");
-
-  if (!needsRebuild) return;
-
-  const rows = db.query<Record<string, unknown>, []>("SELECT * FROM payment_events").all();
-  const now = new Date().toISOString();
-
-  db.exec(`
-    DROP TABLE IF EXISTS payment_events_next;
-    CREATE TABLE payment_events_next (
-      id TEXT PRIMARY KEY,
-      order_id TEXT,
-      provider TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      signature_valid INTEGER NOT NULL DEFAULT 0,
-      payload_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (order_id) REFERENCES payment_orders(id) ON DELETE SET NULL
-    );
-  `);
-
-  const insert = db.query(`
-    INSERT INTO payment_events_next (id, order_id, provider, event_type, signature_valid, payload_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const row of rows) {
-    insert.run(
-      stringValue(row.id) || `payment_event_${crypto.randomUUID()}`,
-      stringValue(row.order_id) || null,
-      stringValue(row.provider) || "unknown",
-      stringValue(row.event_type) || stringValue(row.provider_event_id) || "unknown",
-      numberValue(row.signature_valid) ?? numberValue(row.verified) ?? 0,
-      stringValue(row.payload_json) || "{}",
-      stringValue(row.created_at) || stringValue(row.received_at) || now
-    );
-  }
-
-  db.exec(`
-    DROP TABLE payment_events;
-    ALTER TABLE payment_events_next RENAME TO payment_events;
-  `);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function numberValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }

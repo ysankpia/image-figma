@@ -82,26 +82,3 @@ export type SessionRow = {
   created_at: string;
   last_seen_at: string;
 };
-
-export type PlanRow = {
-  id: string;
-  name: string;
-  monthly_ai_calls: number;
-  monthly_exports: number;
-  storage_mb: number;
-  price_cents: number;
-  currency: string;
-  active: number;
-  created_at: string;
-};
-
-export type EntitlementRow = {
-  user_id: string;
-  plan_id: string;
-  status: "free" | "trial" | "active" | "past_due" | "paused" | "canceled" | "expired" | "refunded" | "manual_grant";
-  ai_calls_remaining: number;
-  exports_remaining: number;
-  storage_mb: number;
-  renews_at: string | null;
-  updated_at: string;
-};

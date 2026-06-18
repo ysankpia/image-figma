@@ -47,21 +47,27 @@ GET    /api/auth/session
 POST   /api/auth/sign-up
 POST   /api/auth/sign-in
 POST   /api/auth/sign-out
-GET    /api/me
-GET    /api/billing/plans
-POST   /api/billing/orders
-GET    /api/admin/overview
+GET    /api/storage-download?token=...
+GET    /api/ai-slice-settings
 GET    /api/projects
 POST   /api/projects
 GET    /api/projects/:projectId
+PATCH  /api/projects/:projectId
+DELETE /api/projects/:projectId
 POST   /api/projects/:projectId/pages
-PUT    /api/projects/:projectId/slices
+PATCH  /api/projects/:projectId/pages/order
+PATCH  /api/projects/:projectId/pages/:pageId
+POST   /api/projects/:projectId/pages/:pageId/replace
+DELETE /api/projects/:projectId/pages/:pageId
 POST   /api/projects/:projectId/pages/:pageId/ai-boxes
+GET    /api/projects/:projectId/pages/:pageId/source
+PUT    /api/projects/:projectId/slices
+GET    /api/projects/:projectId/slices/:sliceId/preview.png
 POST   /api/projects/:projectId/export-assets
 GET    /api/projects/:projectId/assets.zip
 POST   /api/projects/:projectId/export-project
-GET    /api/projects/:projectId/project.zip
 POST   /api/projects/:projectId/pages/:pageId/export-project
+GET    /api/projects/:projectId/project.zip
 GET    /api/projects/:projectId/pages/:pageId/project.zip
 ```
 
@@ -73,8 +79,6 @@ Primary contracts:
 - `assets.zip`: frontend asset output;
 - `project.zip/design.pen`: Pencil/Figma handoff output;
 - AI boxes: transient suggestions converted into normal slices;
-- entitlement/usage rows: cost-control truth for AI and export gates;
-- payment orders: provider-neutral payment intent truth;
 - OCR/M29: editable text evidence only.
 
 ## Active Production Plans
@@ -82,6 +86,8 @@ Primary contracts:
 Completed prelaunch hardening work is tracked in [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md).
 
 Formal multi-user production-readiness work is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md).
+
+Current user-only cleanup is tracked in [plans/completed/196-user-only-surface-simplification.md](plans/completed/196-user-only-surface-simplification.md). Plan 196 deliberately removes the admin, billing, payment, entitlement, usage, order, quota, and XPay side chain from the current runtime. Do not reintroduce those surfaces from older 189 notes without a new active plan.
 
 Plan 190 should run before disruptive production implementation:
 
@@ -93,7 +99,7 @@ protect existing local storage
 -> run repeatable smoke validation
 ```
 
-Current Stage 1 implementation has landed same-origin `/api` browser access, custom session auth, repeatable local bootstrap admin, project ownership, `/settings`, `/billing`, `/admin`, entitlement/usage skeleton, and pending XPay payment-order skeleton. Verified webhook fulfillment, production storage/database, and operations runbooks remain later 189 stages.
+Current implementation has landed same-origin `/api` browser access, custom session auth, repeatable local bootstrap owner, project ownership, `/settings`, user-scoped local storage keys, signed downloads, AI-assisted boxes, and assets/Pencil exports. Billing/admin/payment/entitlement work is no longer part of the current runtime after plan 196.
 
 This plan changes the next phase from local/private tool hardening to formal multi-user product launch planning:
 
@@ -102,12 +108,10 @@ landing page
 -> login/register
 -> authenticated project workspace
 -> user-owned projects/pages/slices/exports
--> entitlement-gated AI/export/storage
--> provider-neutral payment/subscription
 -> production deployment and backup/restore
 ```
 
-Payment provider selection is intentionally unresolved. The internal subscription, entitlement, usage, and verified-webhook contracts must be provider-neutral.
+Payment provider selection is intentionally deferred. The current product can later point users to an external purchase link or add a new provider behind a separate plan, but no payment/admin/entitlement code is active today.
 
 AI provider selection is also replaceable. OpenRouter or another OpenAI-compatible provider can be evaluated through the AI provider configuration boundary without changing the saved-slice/export truth source.
 
@@ -115,7 +119,8 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 
 - Slice Studio UI/API/export work: read [../README.md](../README.md), [reference/slice-studio-runtime.md](reference/slice-studio-runtime.md), [architecture/overview.md](architecture/overview.md), [architecture/api-contracts.md](architecture/api-contracts.md), [engineering/validation.md](engineering/validation.md).
 - Prelaunch codebase hardening: read [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md), [engineering/current-code-map.md](engineering/current-code-map.md), [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md), and [reference/env-vars.md](reference/env-vars.md).
-- Multi-user production launch work: read [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md), [product/direction-contract.md](product/direction-contract.md), [product/requirements.md](product/requirements.md), [product/user-flows.md](product/user-flows.md), [reference/env-vars.md](reference/env-vars.md), and [engineering/validation.md](engineering/validation.md).
+- Multi-user/user-only production work: read [plans/completed/196-user-only-surface-simplification.md](plans/completed/196-user-only-surface-simplification.md), [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md), [product/direction-contract.md](product/direction-contract.md), [product/requirements.md](product/requirements.md), [product/user-flows.md](product/user-flows.md), [reference/env-vars.md](reference/env-vars.md), and [engineering/validation.md](engineering/validation.md). Treat 196 as the current runtime boundary where it conflicts with older 189 payment/admin notes.
+- Frontend redesign handoff: read [reference/slice-studio-frontend-function-inventory.md](reference/slice-studio-frontend-function-inventory.md) for the current page, feature, field, API, and boundary inventory. This is a function contract, not a UX or visual direction document.
 - AI slice boxes: read [reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md), [plans/completed/182-slice-studio-ai-rect-slice-assist.md](plans/completed/182-slice-studio-ai-rect-slice-assist.md), [plans/completed/183-slice-studio-ai-tile-merge-and-progress.md](plans/completed/183-slice-studio-ai-tile-merge-and-progress.md).
 - OCR / editable text / M29 physical evidence: read [plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md](plans/completed/177-slice-studio-pencil-editable-text-layer-v1.md), [plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md](plans/completed/178-slice-studio-baidu-ocr-provider-and-text-quality-gate.md), [plans/completed/181-slice-studio-m29-physical-evidence-ts.md](plans/completed/181-slice-studio-m29-physical-evidence-ts.md).
 - Old code classification or cleanup: read [engineering/legacy-code-inventory.md](engineering/legacy-code-inventory.md) first; do not delete or revive old directories by default.
@@ -164,9 +169,10 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 ## Reference
 
 - 环境变量：[reference/env-vars.md](reference/env-vars.md)
+- 前端重做功能清单：[reference/slice-studio-frontend-function-inventory.md](reference/slice-studio-frontend-function-inventory.md)
 - AI prompt 策略：[reference/slice-studio-ai-slice-prompt-strategies.md](reference/slice-studio-ai-slice-prompt-strategies.md)
 - 外部接口：[reference/external-apis.md](reference/external-apis.md)
-- XPay / 易支付候选支付 provider：[reference/payment-provider-xpay.md](reference/payment-provider-xpay.md)
+- 历史支付候选 reference（非当前 runtime）：[reference/payment-provider-xpay.md](reference/payment-provider-xpay.md)
 - 术语表：[reference/glossary.md](reference/glossary.md)
 - Codia golden samples：[reference/codia-samples/](reference/codia-samples/)
 - 历史草稿：[reference/legacy/index.md](reference/legacy/index.md)

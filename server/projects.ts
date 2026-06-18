@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import sharp from "sharp";
-import { assertCanAddPages, assertCanCreateProject, assertCanReplacePage, recordUsageEvent } from "./billing";
 import { db, transaction, type PageRow, type ProjectRow, type SliceRow } from "./db";
 import { maxBatchUploadBytes, maxUploadBytes } from "./config";
 import { httpError } from "./errors";
@@ -40,7 +39,6 @@ export function listProjectCards(userId: string): ProjectListItem[] {
 }
 
 export function createProject(userId: string, payload: { name?: string }): ProjectSummary {
-  assertCanCreateProject(userId);
   const now = new Date().toISOString();
   const id = `project_${Date.now().toString(36)}_${randomHex(4)}`;
   const name = sanitizeName(payload.name, "未命名项目");
@@ -51,7 +49,6 @@ export function createProject(userId: string, payload: { name?: string }): Proje
   storage.ensureProjectDirectories(userId, id);
   const project = getProjectSummary(userId, id);
   if (!project) throw httpError(500, "Project was not created");
-  recordUsageEvent({ userId, projectId: id, eventType: "project.create" });
   return project;
 }
 
@@ -123,8 +120,6 @@ export async function addPages(userId: string, projectId: string, files: File | 
       height: metadata.height
     });
   }
-  const incomingBytes = normalizedFiles.reduce((sum, file) => sum + file.buffer.length, 0);
-  assertCanAddPages({ userId, projectId, incomingPageCount: normalizedFiles.length, incomingBytes });
 
   const pages: PageRecord[] = [];
   transaction(() => {
@@ -148,15 +143,6 @@ export async function addPages(userId: string, projectId: string, files: File | 
       }));
     }
     updateProjectCounts(projectId);
-  });
-  recordUsageEvent({
-    userId,
-    projectId,
-    eventType: "page.upload",
-    quantity: pages.length,
-    metadata: {
-      totalBytes: fileList.reduce((sum, file) => sum + file.size, 0)
-    }
   });
   return pages;
 }
@@ -222,9 +208,6 @@ export async function replacePage(userId: string, projectId: string, pageId: str
   const buffer = await sharp(inputBuffer, { failOn: "none" }).png().toBuffer();
   const metadata = await sharp(buffer).metadata();
   if (!metadata.width || !metadata.height) throw httpError(400, "invalid image");
-  const currentPath = storage.absolutePath(page.original_path);
-  const currentBytes = fs.existsSync(currentPath) ? fs.statSync(currentPath).size : 0;
-  assertCanReplacePage({ userId, projectId, currentBytes, incomingBytes: buffer.length });
 
   const relativePath = page.original_path;
   const absolutePath = storage.absolutePath(relativePath);

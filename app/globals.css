@@ -3658,7 +3658,7 @@ h1 {
   height: 17px;
 }
 
-.accountShell {
+.settingsPage {
   min-height: 100dvh;
   display: grid;
   align-content: start;
@@ -3667,166 +3667,37 @@ h1 {
   background: var(--bg);
 }
 
-.consoleShell {
-  min-height: 100dvh;
-  background: #f4f6fa;
+.settingsHeader,
+.settingsPanel {
+  width: min(980px, 100%);
 }
 
-.consoleHeaderBand {
-  border-bottom: 1px solid rgba(210, 210, 215, 0.8);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
-}
-
-.consoleHeaderInner {
+.settingsHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: end;
-  width: min(1560px, calc(100% - 56px));
-  margin: 0 auto;
-  padding: 22px 0;
+  gap: 18px;
 }
 
-.consoleTitleBlock {
-  display: grid;
-  gap: 16px;
-}
-
-.consoleHeading {
-  display: grid;
-  gap: 8px;
-}
-
-.consoleHeading h1 {
+.settingsHeader h1 {
+  margin: 0 0 8px;
   font-size: 34px;
   line-height: 1.08;
 }
 
-.consoleHeading p {
-  max-width: 72ch;
+.settingsHeader p {
+  margin: 0;
+  max-width: 62ch;
   color: var(--muted);
   line-height: 1.7;
 }
 
-.consoleUserPanel {
+.settingsPanel {
   display: grid;
-  justify-items: end;
-  gap: 10px;
-}
-
-.consoleUserMeta {
-  display: grid;
-  gap: 2px;
-  text-align: right;
-}
-
-.consoleUserMeta strong {
-  font-size: 14px;
-}
-
-.consoleUserMeta span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.consoleUserBadges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.consoleBody {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 28px;
-  width: min(1560px, calc(100% - 56px));
-  margin: 0 auto;
-  padding: 28px 0 36px;
-}
-
-.consoleSidebar {
-  display: grid;
-  align-content: start;
-  gap: 18px;
-  position: sticky;
-  top: 28px;
-  align-self: start;
-}
-
-.consoleSidebarSurface {
-  padding: 10px;
-  border: 1px solid rgba(210, 210, 215, 0.82);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-}
-
-.consoleNav {
-  display: grid;
-  gap: 6px;
-}
-
-.consoleNavLink {
-  display: inline-grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 10px;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.consoleNavLink:hover {
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--ink);
-}
-
-.consoleNavLink.active {
-  background: #fff;
-  color: var(--ink);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-}
-
-.consoleNavLink svg,
-.consoleSidebarNote svg,
-.signOutButton svg {
-  width: 16px;
-  height: 16px;
-}
-
-.consoleSidebarNote {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 10px;
-  padding: 14px 12px;
+  gap: 16px;
+  border: 1px solid rgba(210, 210, 215, 0.9);
   border-radius: 12px;
-  border: 1px solid rgba(210, 210, 215, 0.82);
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--muted);
-}
-
-.consoleSidebarNote strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.consoleSidebarNote span,
-.consoleFooterNote {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.consoleContent {
-  display: grid;
-  gap: 30px;
-  min-width: 0;
-  align-content: start;
+  padding: 22px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
 }
 
 .consoleSection {
@@ -3861,10 +3732,6 @@ h1 {
   gap: 18px;
 }
 
-.dashboardTopSplit {
-  align-items: stretch;
-}
-
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -3876,27 +3743,16 @@ h1 {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
-.metricCard,
-.planCard,
-.toolSurface,
-.tableSurface,
-.calloutSurface,
-.billingPlaceholder {
+.metricCard {
   border: 1px solid rgba(210, 210, 215, 0.9);
   border-radius: 12px;
   background: #fff;
-}
-
-.metricCard,
-.planCard {
   display: grid;
   gap: 8px;
   padding: 16px;
 }
 
-.metricCard dt,
-.planCard small,
-.billingPlaceholder p {
+.metricCard dt {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
@@ -3913,143 +3769,10 @@ h1 {
   font-size: 24px;
 }
 
-.toolSurface,
-.tableSurface,
-.calloutSurface,
-.billingPlaceholder {
-  display: grid;
-  gap: 16px;
-  padding: 20px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
-}
-
-.calloutSurface strong,
-.billingPlaceholderHeader strong {
-  font-size: 15px;
-}
-
-.calloutSurface p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.calloutSurface.emphasis {
-  border-color: rgba(0, 102, 204, 0.16);
-  background:
-    linear-gradient(180deg, rgba(0, 102, 204, 0.04), rgba(0, 102, 204, 0.01)),
-    #fff;
-}
-
-.billingPlaceholderHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.billingPlaceholderHeader span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.planDeck {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.planCardHeader {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.planCard.active {
-  border-color: rgba(0, 102, 204, 0.26);
-  box-shadow: 0 12px 26px rgba(0, 102, 204, 0.08);
-}
-
-.planCard strong {
-  font-size: 18px;
-}
-
-.activityList {
-  display: grid;
-  gap: 10px;
-}
-
-.activityRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(210, 210, 215, 0.72);
-}
-
-.activityRow:last-child {
-  border-bottom: 0;
-}
-
-.activityRow strong {
-  font-size: 14px;
-}
-
-.activityRow span,
-.activityRow time {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.activityRow.stacked {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-}
-
-.activityRow.stacked > div {
-  display: grid;
-  gap: 4px;
-}
-
-.orderRow {
-  gap: 18px;
-}
-
-.cellStack {
-  display: grid;
-  gap: 4px;
-}
-
-.cellStack strong {
-  font-size: 14px;
-}
-
-.cellStack span {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.cellStack code {
-  display: inline-block;
-  max-width: 260px;
-}
-
 .inlineActionRow {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.detailList {
-  display: grid;
-  gap: 10px;
-  padding-left: 18px;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
-  text-wrap: pretty;
 }
 
 .signOutButton {
@@ -4065,141 +3788,6 @@ h1 {
   padding: 0;
 }
 
-.statusPill.neutral {
-  background: #f1f3f6;
-  color: var(--ink);
-}
-
-.accountNav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.accountNav a {
-  min-height: 34px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 9999px;
-  padding: 0 14px;
-  background: var(--surface);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.accountPanel {
-  width: min(980px, 100%);
-  display: grid;
-  gap: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 22px;
-  background: var(--surface);
-}
-
-.accountFacts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.accountFacts div,
-.planCard {
-  display: grid;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  background: var(--surface-alt);
-}
-
-.accountFacts dt,
-.planCard small,
-.simpleList span,
-.billingAction span,
-.accountNote {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.accountFacts dd {
-  margin: 0;
-  font-weight: 650;
-}
-
-.planGrid,
-.simpleList,
-.billingAction {
-  display: grid;
-  gap: 10px;
-}
-
-.planGrid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.adminTableWrap {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.denseTableSurface {
-  padding: 14px 16px;
-}
-
-.adminTable {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.adminTable.modern {
-  min-width: 100%;
-}
-
-.adminTable.wide {
-  min-width: 1180px;
-}
-
-.adminTable th,
-.adminTable td {
-  border-bottom: 1px solid var(--border);
-  padding: 10px 8px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.adminTable th {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.adminTable td {
-  color: var(--ink);
-}
-
-.adminTable code {
-  display: block;
-  max-width: 220px;
-  overflow: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.adminTable td span {
-  color: var(--muted);
-}
-
-.adminTable.compact {
-  min-width: 620px;
-}
-
 .statusPill {
   display: inline-grid;
   min-height: 24px;
@@ -4211,84 +3799,9 @@ h1 {
   font-weight: 650;
 }
 
-.statusPill.paid {
-  background: #e8f7ee;
-  color: #147a3d;
-}
-
-.statusPill.pending {
-  background: #fff7e6;
-  color: #946200;
-}
-
-.statusPill.failed,
-.statusPill.closed,
-.statusPill.refunded {
-  background: #fff1f1;
-  color: var(--danger);
-}
-
-.adminPaymentAction {
-  display: grid;
-  gap: 6px;
-  min-width: 150px;
-}
-
-.adminPaymentAction button {
-  width: max-content;
-}
-
-.adminPaymentAction span {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.adminUserAction {
-  display: grid;
-  gap: 8px;
-  min-width: 260px;
-}
-
-.adminInlineForm {
-  display: grid;
-  gap: 6px;
-}
-
-.adminInlineForm select,
-.adminInlineForm button {
-  width: 100%;
-}
-
-.adminUserAction span {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.summarySurface {
-  align-content: center;
-}
-
-.summaryRows {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.summaryRows div {
-  display: grid;
-  gap: 6px;
-}
-
-.summaryRows span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.summaryRows strong {
-  font-size: 28px;
-  line-height: 1;
+.signOutButton svg {
+  width: 16px;
+  height: 16px;
 }
 
 @media (max-width: 760px) {
@@ -4303,8 +3816,8 @@ h1 {
 
   .marketingSection,
   .siteHeader,
-  .consoleHeaderInner,
-  .consoleBody {
+  .settingsHeader,
+  .settingsPanel {
     width: min(100%, calc(100% - 40px));
   }
 
@@ -4313,44 +3826,28 @@ h1 {
   .surfaceGrid,
   .deliverableRow,
   .sectionSplit,
-  .authPage,
-  .consoleBody,
-  .consoleHeaderInner {
+  .authPage {
     grid-template-columns: 1fr;
   }
 
-  .siteHeader,
-  .consoleHeaderInner {
+  .siteHeader {
     padding-inline: 0;
   }
 
   .siteHeader,
-  .consoleUserPanel,
-  .billingPlaceholderHeader,
   .sectionHeader {
     align-items: start;
   }
 
   .siteHeader,
   .siteHeaderNav,
-  .consoleUserBadges,
   .landingActions {
     flex-wrap: wrap;
   }
 
-  .consoleBody,
   .marketingBand,
   .authPanel {
     padding: 20px 0;
-  }
-
-  .consoleUserMeta {
-    text-align: left;
-  }
-
-  .consoleSidebar {
-    position: static;
-    order: 2;
   }
 
   .authPage {
@@ -4362,10 +3859,6 @@ h1 {
   }
 
   .featureGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .summaryRows {
     grid-template-columns: 1fr;
   }
 

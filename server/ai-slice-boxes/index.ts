@@ -8,7 +8,6 @@ import {
   aiSliceTileCount,
   aiSliceTileOverlap
 } from "../config";
-import { consumeAiCall } from "../billing";
 import { httpError } from "../errors";
 import { getPageOriginalKey, getPageOriginalPath, getProjectDetail } from "../projects";
 import { storage } from "../storage";
@@ -24,7 +23,6 @@ export async function generateAiSliceBoxes(userId: string, projectId: string, pa
   const detail = getProjectDetail(userId, projectId);
   const page = detail.pages.find((item) => item.id === pageId);
   if (!page) throw httpError(404, "Page not found");
-  consumeAiCall(userId, projectId, { pageId, provider: aiSliceProvider });
 
   getPageOriginalPath(userId, projectId, pageId);
   const imageBuffer = storage.read(getPageOriginalKey(userId, projectId, pageId), "Original image not found");

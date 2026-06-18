@@ -17,11 +17,7 @@ GET    /api/auth/session
 POST   /api/auth/sign-up
 POST   /api/auth/sign-in
 POST   /api/auth/sign-out
-GET    /api/me
-GET    /api/billing/plans
-POST   /api/billing/orders
-POST   /api/billing/webhooks/xpay
-GET    /api/admin/overview
+GET    /api/storage-download?token=...
 GET    /api/ai-slice-settings
 GET    /api/projects
 POST   /api/projects
@@ -49,9 +45,8 @@ GET    /api/projects/:projectId/pages/:pageId/project.zip
 
 Authentication rules:
 
-- `/api/health`, `/api/auth/session`, `/api/auth/sign-up`, `/api/auth/sign-in`, `/api/auth/sign-out`, `/api/billing/plans`, and `/api/billing/webhooks/xpay` are public or session-discovery routes. The webhook route is public only because the provider cannot send a session cookie; it must verify the provider signature before fulfillment.
-- `/api/me`, project APIs, source image download, slice preview, assets zip download, project zip download, AI boxes, and exports require an authenticated session.
-- `/api/admin/overview`, `/api/admin/payments`, and `/api/admin/payment-orders/:orderId/mark-paid` require an authenticated admin user.
+- `/api/health`, `/api/auth/session`, `/api/auth/sign-up`, `/api/auth/sign-in`, and `/api/auth/sign-out` are public or session-discovery routes.
+- Project APIs, source image download, slice preview, assets zip download, project zip download, AI boxes, exports, and signed storage downloads require an authenticated session or a valid short-lived signed download token.
 - Every project-scoped route must authorize through `projects.user_id`; unguessable project ids are not an authorization boundary.
 - Browser requests should normally go through Next.js same-origin `/api` rewrite so the `slice_studio_session` cookie is first-party.
 
@@ -59,17 +54,7 @@ Saved projects, pages, and slices are the live truth source. Export reads persis
 
 AI boxes are a calculation result from `/ai-boxes`. The route does not write database state. The Review Workbench converts accepted boxes into ordinary `SliceRecord` entries and saves them through `PUT /api/projects/:projectId/slices`.
 
-AI boxes consume AI entitlement and write a `usage_events` row before provider execution starts.
-
-Export routes consume export entitlement and write a `usage_events` row before ZIP materialization starts.
-
-Project creation checks the current user's project quota. Page upload and page replacement check per-project page count plus account storage quota before writing source files. `/api/me` returns project count, page count, and current original-image storage bytes for the account billing surface.
-
-`POST /api/billing/orders` creates a provider-neutral local `payment_orders` row. When XPay env vars are configured, it also returns a checkout URL built from the local order id. Creating the order never grants entitlement.
-
-`POST /api/billing/webhooks/xpay` accepts XPay / 易支付 style payment notifications, verifies the MD5 signature server-side, writes a raw `payment_events` row, and marks the order paid only for verified success events. Paid orders update the user's entitlement from the local plan table. Forged callbacks must return `fail` and must not grant entitlement.
-
-`GET /api/admin/payments` exposes recent payment orders and payment events to admins. `POST /api/admin/payment-orders/:orderId/mark-paid` is the explicit manual repair path for missing provider callbacks: it rejects non-admin users, refuses already-paid/closed/refunded orders, marks the order paid, grants entitlement through the same local plan path, and writes a `manual_mark_paid` payment event. It is not a client return-page success path.
+AI boxes and export routes do not write a second proposal, usage, billing, or entitlement state. They execute only after project ownership checks pass.
 
 OCR and M29 evidence only affect Pencil text overlays in `project.zip`. They must not modify saved slice boxes or visible raster asset ownership.
 

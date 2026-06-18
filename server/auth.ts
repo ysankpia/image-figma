@@ -69,12 +69,6 @@ export function requireUser(request: globalThis.Request): CurrentUser {
   return user;
 }
 
-export function requireAdmin(request: globalThis.Request): CurrentUser {
-  const user = requireUser(request);
-  if (user.role !== "admin") throw httpError(403, "Admin only");
-  return user;
-}
-
 export function readSessionToken(request: globalThis.Request): string | null {
   const cookie = request.headers.get("cookie") || "";
   const token = cookie.split(";").map((part: string) => part.trim()).find((part: string) => part.startsWith(`${authCookieName}=`))?.slice(authCookieName.length + 1);
@@ -126,7 +120,6 @@ export function signUpWithEmail(name: string, email: string, password: string): 
     INSERT INTO users (id, email, name, password_hash, role, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'user', 'active', ?, ?)
   `).run(id, normalizedEmail, sanitizeDisplayName(name), passwordHash, now, now);
-  seedEntitlement(id);
   const session = createSession(id);
   const user = getUserById(id);
   if (!user) throw httpError(500, "User creation failed");
@@ -138,18 +131,6 @@ export function signOut(request: globalThis.Request): void {
   if (!token) return;
   const tokenHash = hashToken(token);
   db.query("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
-}
-
-export function seedEntitlement(userId: string): void {
-  const existing = db.query<{ user_id: string }, [string]>("SELECT user_id FROM entitlements WHERE user_id = ?").get(userId);
-  if (existing) return;
-  const plan = db.query<{ id: string; monthly_ai_calls: number; monthly_exports: number; storage_mb: number }, []>("SELECT id, monthly_ai_calls, monthly_exports, storage_mb FROM plans WHERE id = 'free'").get();
-  if (!plan) throw httpError(500, "Default plan missing");
-  const now = new Date().toISOString();
-  db.query(`
-    INSERT INTO entitlements (user_id, plan_id, status, ai_calls_remaining, exports_remaining, storage_mb, renews_at, updated_at)
-    VALUES (?, ?, 'free', ?, ?, ?, NULL, ?)
-  `).run(userId, plan.id, plan.monthly_ai_calls, plan.monthly_exports, plan.storage_mb, now);
 }
 
 export function claimUnownedProjects(userId: string): number {

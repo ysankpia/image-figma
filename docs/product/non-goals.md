@@ -11,7 +11,7 @@
 - 团队协作；
 - 云同步；
 - 生产数据库 / 对象存储的最终供应商锁定；
-- XPay/webhook 的最终收款闭环；
+- billing、admin、entitlement、usage、payment order、XPay/webhook 当前实现；
 - 计划编辑器、订单修复工具、用户后台 CRUD；
 - 长期在线任务队列。
 - 质量评分看板。

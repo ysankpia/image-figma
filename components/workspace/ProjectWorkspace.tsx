@@ -133,8 +133,6 @@ export function ProjectWorkspace() {
           <div className="workspaceAccount">
             {account ? <span>{account.name || account.email}</span> : null}
             <Link href="/settings">设置</Link>
-            <Link href="/billing">账单</Link>
-            <Link href="/admin">管理</Link>
             <button type="button" aria-label="退出登录" onClick={() => void signOut()}>
               <LogOut aria-hidden="true" />
             </button>

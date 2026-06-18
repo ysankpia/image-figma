@@ -7,30 +7,12 @@ import {
   claimUnownedProjects,
   ensureLocalOwner,
   getCurrentUser,
-  requireAdmin,
   requireUser,
-  seedEntitlement,
   signInWithEmail,
   signOut,
   signUpWithEmail
 } from "./auth";
 import { initDatabase } from "./db";
-import {
-  adminSetUserEntitlement,
-  adminSetUserStatus,
-  createPaymentOrder,
-  getAccountUsage,
-  getAdminOverview,
-  getEntitlementSummary,
-  handlePaymentWebhook,
-  listAdminUsers,
-  listAdminPaymentEvents,
-  listAdminPaymentOrders,
-  listPaymentOrders,
-  listPlans,
-  listUsageEvents,
-  manuallyMarkOrderPaid
-} from "./billing";
 import { HttpError, httpError } from "./errors";
 import { exportAssets } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage } from "./pencil-exporter";
@@ -62,7 +44,6 @@ const longExportIdleTimeoutSeconds = 255;
 
 initDatabase();
 const localOwner = ensureLocalOwner();
-seedEntitlement(localOwner.id);
 claimUnownedProjects(localOwner.id);
 
 const app = new Elysia({
@@ -71,7 +52,11 @@ const app = new Elysia({
   }
 })
   .use(cors({ origin: allowedOrigins, credentials: true }))
-  .onError(({ error, set }) => {
+  .onError(({ code, error, set }) => {
+    if (code === "NOT_FOUND") {
+      set.status = 404;
+      return { error: "Not found" };
+    }
     if (error instanceof HttpError) {
       set.status = error.statusCode;
       return { error: error.message };
@@ -89,16 +74,6 @@ const app = new Elysia({
     })
   })
   .get("/api/auth/session", ({ request }) => ({ user: getCurrentUser(request) }))
-  .get("/api/me", ({ request }) => {
-    const user = requireUser(request);
-    return {
-      user,
-      entitlement: getEntitlementSummary(user.id),
-      accountUsage: getAccountUsage(user.id),
-      usage: listUsageEvents(user.id, 20),
-      paymentOrders: listPaymentOrders(user.id, 10)
-    };
-  })
   .post("/api/auth/sign-up", ({ body, set }) => {
     const session = signUpWithEmail(body.name, body.email, body.password);
     set.headers["set-cookie"] = buildSessionCookie(session.token, session.expiresAt);
@@ -123,92 +98,6 @@ const app = new Elysia({
   .post("/api/auth/sign-out", ({ request, set }) => {
     signOut(request);
     set.headers["set-cookie"] = clearSessionCookie();
-    return { ok: true };
-  })
-  .get("/api/billing/plans", () => ({ plans: listPlans() }))
-  .post("/api/billing/orders", ({ request, body }) => {
-    const user = requireUser(request);
-    return { order: createPaymentOrder(user.id, body.planId, body.provider) };
-  }, {
-    body: t.Object({
-      planId: t.String(),
-      provider: t.Optional(t.String())
-    })
-  })
-  .post("/api/billing/webhooks/xpay", ({ body }) => {
-    const result = handlePaymentWebhook({ provider: "xpay", body });
-    return result.accepted ? "success" : "fail";
-  }, {
-    body: t.Object({
-      pid: t.String(),
-      trade_no: t.String(),
-      out_trade_no: t.String(),
-      type: t.String(),
-      name: t.String(),
-      money: t.String(),
-      trade_status: t.String(),
-      sign: t.String(),
-      sign_type: t.String()
-    })
-  })
-  .get("/api/admin/overview", ({ request }) => {
-    const user = requireAdmin(request);
-    return {
-      user,
-      totals: getAdminOverview()
-    };
-  })
-  .get("/api/admin/payments", ({ request }) => {
-    requireAdmin(request);
-    return {
-      orders: listAdminPaymentOrders(50),
-      events: listAdminPaymentEvents(50)
-    };
-  })
-  .get("/api/admin/users", ({ request }) => {
-    requireAdmin(request);
-    return {
-      users: listAdminUsers(100),
-      plans: listPlans()
-    };
-  })
-  .patch("/api/admin/users/:userId/status", ({ request, params, body }) => {
-    const admin = requireAdmin(request);
-    adminSetUserStatus(params.userId, body.status, admin);
-    return { ok: true };
-  }, {
-    body: t.Object({
-      status: t.Union([t.Literal("active"), t.Literal("suspended")])
-    })
-  })
-  .patch("/api/admin/users/:userId/entitlement", ({ request, params, body }) => {
-    const admin = requireAdmin(request);
-    adminSetUserEntitlement({
-      userId: params.userId,
-      planId: body.planId,
-      status: body.status,
-      admin
-    });
-    return { ok: true };
-  }, {
-    body: t.Object({
-      planId: t.String(),
-      status: t.Union([
-        t.Literal("free"),
-        t.Literal("trial"),
-        t.Literal("active"),
-        t.Literal("past_due"),
-        t.Literal("paused"),
-        t.Literal("canceled"),
-        t.Literal("expired"),
-        t.Literal("refunded"),
-        t.Literal("manual_grant")
-      ])
-    })
-  })
-  .post("/api/admin/payment-orders/:orderId/mark-paid", ({ request, params }) => {
-    const admin = requireAdmin(request);
-    manuallyMarkOrderPaid(params.orderId, admin);
     return { ok: true };
   })
   .get("/api/ai-slice-settings", () => ({ ok: true, batchConcurrency: aiSliceBatchConcurrency }))

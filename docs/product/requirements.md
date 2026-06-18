@@ -27,10 +27,9 @@ P0 能力：
 
 - Landing page。
 - 登录/注册、会话 cookie、登出。
-- 本地/bootstrap 管理员账号。
+- 本地/bootstrap owner 账号。
 - 项目归属到 `users.id`，项目 API 按 owner 过滤。
-- `/settings`、`/billing`、`/admin` 最小生产化入口。
-- 项目数、每项目页数、存储使用受 entitlement/usage gate 保护。
+- `/settings` 极简账号入口。
 - 创建、重命名、删除本地项目。
 - 上传多张页面图片。
 - 页面缩略图、页面切换、页面重命名、替换、删除、拖拽重排。
@@ -43,9 +42,6 @@ P0 能力：
 
 P1 能力：
 
-- Entitlement/usage：AI、导出、建项目、上传、替换页都消耗或检查额度并写 `usage_events`。
-- Provider-neutral `payment_orders`：当前保留 XPay adapter 边界；配置齐全时生成 checkout URL，只有服务端验签 webhook 才能发放权益。
-- Admin payment ops：管理员可查看最近 payment orders/payment events，并通过显式人工确认修复丢失回调的 pending/failed 订单；修复必须写 `payment_events`。
 - OCR editable text layer：在 Pencil package 中添加普通可编辑文字节点。
 - TypeScript M29 physical evidence：默认给 OCR text 提供更紧的 physical bbox，不依赖 Go binary。
 - AI 当前页/全部页画框：模型只返回矩形 bbox，前端转换为普通 slice 并走现有保存路径。
@@ -55,9 +51,8 @@ P1 能力：
 
 P2 后续能力：
 
-- XPay 订单查询、退款/取消、对账和更完整的 entitlement reconciliation。
-- 更完整的 admin 用户/订单/计划管理。
 - 生产数据库和对象存储 adapter。
+- 可选支付 provider、订单、额度、用量和管理后台；必须走新 active plan，不从旧 189 直接恢复。
 - 更好的 AI 重复运行策略。
 - 可选“干净模式/全切模式”AI prompt 策略 UI。
 - Slice Studio 部署 runbook。

@@ -55,15 +55,15 @@ Figma Plugin API 属于历史/延后 Draft plugin route。当前 Slice Studio ha
 - Backend 不调用 Figma Plugin API。
 - Plugin UI iframe 不直接调用 Figma API。
 
-## XPay / 易支付 Payment Candidate
+## Historical XPay / 易支付 Payment Candidate
 
-The current early-launch payment candidate is an XPay / 易支付 style provider:
+XPay / 易支付 was reviewed as an early-launch payment candidate, but plan 196 removed payment, entitlement, billing, and admin code from the current runtime:
 
 ```text
 https://x.yhhrun.cn/doc/epay_submit
 ```
 
-Use it only behind Slice Studio's own provider-neutral payment and entitlement contract. The provider may collect money and call back, but Slice Studio must own:
+Do not wire this provider into the current product without a new active plan. If payment returns later, use it only behind Slice Studio's own server-side order and fulfillment contract. The provider may collect money and call back, but Slice Studio must own:
 
 - local payment order creation;
 - webhook signature verification;

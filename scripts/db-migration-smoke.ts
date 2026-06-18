@@ -52,6 +52,29 @@ try {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE plans (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      monthly_ai_calls INTEGER NOT NULL,
+      monthly_exports INTEGER NOT NULL,
+      storage_mb INTEGER NOT NULL,
+      price_cents INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'CNY',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE entitlements (
+      user_id TEXT PRIMARY KEY,
+      plan_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'free',
+      ai_calls_remaining INTEGER NOT NULL,
+      exports_remaining INTEGER NOT NULL,
+      storage_mb INTEGER NOT NULL,
+      renews_at TEXT,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE payment_orders (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -129,16 +152,24 @@ try {
     VALUES (?, ?, ?, 1, ?, 'icon', 'shape', 10, 20, 30, 40, ?, ?)
   `).run("slice_1", "project_1", "page_1", "CTA", createdAt, createdAt);
   dbModule.db.query(`
+    INSERT INTO plans (id, name, monthly_ai_calls, monthly_exports, storage_mb, price_cents, currency, active, created_at)
+    VALUES ('free', 'Free', 20, 20, 512, 0, 'CNY', 1, ?)
+  `).run(createdAt);
+  dbModule.db.query(`
     INSERT INTO usage_events (id, user_id, project_id, action, units, metadata_json, created_at)
     VALUES (?, ?, ?, ?, 2, ?, ?)
   `).run("usage_1", "user_1", "project_1", "ai.boxes", "{\"pageId\":\"page_1\"}", createdAt);
   dbModule.db.query(`
+    INSERT INTO entitlements (user_id, plan_id, status, ai_calls_remaining, exports_remaining, storage_mb, renews_at, updated_at)
+    VALUES (?, 'free', 'free', 20, 20, 512, NULL, ?)
+  `).run("user_1", createdAt);
+  dbModule.db.query(`
     INSERT INTO payment_orders (id, user_id, provider, provider_order_id, plan_id, amount_cents, currency, status, checkout_url, created_at, updated_at)
-    VALUES (?, ?, 'xpay', ?, 'pro', 9900, 'CNY', 'pending', ?, ?, ?)
+    VALUES (?, ?, 'legacy_provider', ?, 'free', 0, 'CNY', 'pending', ?, ?, ?)
   `).run("order_1", "user_1", "provider_1", "https://pay.example.test/order_1", createdAt, createdAt);
   dbModule.db.query(`
     INSERT INTO payment_events (id, order_id, provider, provider_event_id, verified, payload_json, received_at)
-    VALUES (?, ?, 'xpay', ?, 1, ?, ?)
+    VALUES (?, ?, 'legacy_provider', ?, 1, ?, ?)
   `).run("payment_event_1", "order_1", "provider_evt_1", "{\"trade_status\":\"TRADE_SUCCESS\"}", createdAt);
 
   dbModule.initDatabase();
@@ -150,38 +181,28 @@ try {
   const session = dbModule.db
     .query<{ last_seen_at: string }, []>("SELECT last_seen_at FROM sessions WHERE id = 'session_1'")
     .get();
-  const usage = dbModule.db
-    .query<{ event_type: string; quantity: number; metadata_json: string }, []>(
-      "SELECT event_type, quantity, metadata_json FROM usage_events WHERE id = 'usage_1'"
-    )
+  const user = dbModule.db
+    .query<{ name: string; status: string }, []>("SELECT name, status FROM users WHERE id = 'user_1'")
     .get();
-  const paymentEvent = dbModule.db
-    .query<{ event_type: string; signature_valid: number; created_at: string }, []>(
-      "SELECT event_type, signature_valid, created_at FROM payment_events WHERE id = 'payment_event_1'"
-    )
+  const project = dbModule.db
+    .query<{ user_id: string | null }, []>("SELECT user_id FROM projects WHERE id = 'project_1'")
+    .get();
+  const page = dbModule.db
+    .query<{ display_name: string }, []>("SELECT display_name FROM pages WHERE id = 'page_1'")
     .get();
   const slice = dbModule.db
     .query<{ kind: string; cut_mode: string }, []>("SELECT kind, cut_mode FROM slices WHERE id = 'slice_1'")
     .get();
-  const plans = dbModule.db
-    .query<{ id: string }, []>("SELECT id FROM plans ORDER BY id")
-    .all()
-    .map((row) => row.id);
 
   assertEqual(migrationIds, schemaMigrations.map((migration) => migration.id), "schema migrations should be fully recorded");
   assert(session?.last_seen_at === createdAt, "legacy sessions should backfill last_seen_at");
-  assertEqual(usage, {
-    event_type: "ai.boxes",
-    quantity: 2,
-    metadata_json: "{\"pageId\":\"page_1\"}"
-  }, "legacy usage_events should be rebuilt");
-  assertEqual(paymentEvent, {
-    event_type: "provider_evt_1",
-    signature_valid: 1,
-    created_at: createdAt
-  }, "legacy payment_events should be rebuilt");
+  assertEqual(user, { name: "User", status: "active" }, "legacy users should receive current auth profile columns");
+  assert(project && "user_id" in project, "legacy projects should receive user_id column");
+  assertEqual(page, { display_name: "" }, "legacy pages should receive display_name column");
   assertEqual(slice, { kind: "image", cut_mode: "subject" }, "legacy slices should be normalized");
-  assertEqual(plans, ["free", "pro"], "default plans should be seeded");
+  for (const table of ["usage_events", "plans", "entitlements", "payment_orders", "payment_events"]) {
+    assert(!tableExists(dbModule.db, table), `${table} should be dropped by user-only cleanup migration`);
+  }
 
   console.log("db-migration smoke passed");
   dbModule.db.close(false);
@@ -197,4 +218,10 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`${message}\nactual: ${JSON.stringify(actual)}\nexpected: ${JSON.stringify(expected)}`);
   }
+}
+
+function tableExists(db: typeof import("../server/db").db, tableName: string): boolean {
+  return Boolean(db.query<{ name: string }, [string]>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
+  ).get(tableName));
 }

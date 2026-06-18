@@ -15,7 +15,6 @@
     "test": "vitest run",
     "check": "bun run typecheck && bun run test",
     "smoke": "bun scripts/smoke.ts",
-    "smoke:auth-billing": "bun scripts/auth-billing-smoke.ts",
     "smoke:db-migrations": "bun scripts/db-migration-smoke.ts"
   },
   "dependencies": {
