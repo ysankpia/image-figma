@@ -16,6 +16,7 @@ import { filterAiBoxes, parseAiBoxResponse } from "./boxes";
 import { callAiSliceOverviewProvider, callAiSliceProvider } from "./provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "./tiles";
 import type { RawAiBox } from "./types";
+import { detectYoloSliceBoxes } from "./yolo-local";
 
 export async function generateAiSliceBoxes(userId: string, projectId: string, pageId: string): Promise<AiSliceBoxesResponse> {
   if (aiSliceProvider === "disabled") throw httpError(400, "AI slice provider is disabled");
@@ -29,6 +30,26 @@ export async function generateAiSliceBoxes(userId: string, projectId: string, pa
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
   const width = metadata.width || page.width;
   const height = metadata.height || page.height;
+  if (aiSliceProvider === "yolo_local") {
+    const rawBoxes = await detectYoloSliceBoxes(imageBuffer);
+    const filtered = filterAiBoxes({
+      boxes: rawBoxes,
+      existingSlices: page.slices,
+      bounds: { width, height },
+      maxBoxes: aiSliceMaxBoxesPerPage
+    });
+    return {
+      ok: true,
+      pageId,
+      boxes: filtered.boxes,
+      diagnostics: {
+        tileCount: 1,
+        rawBoxCount: rawBoxes.length,
+        acceptedBoxCount: filtered.boxes.length,
+        rejectedBoxCount: filtered.rejectedCount
+      }
+    };
+  }
   const tiles = generateTiles({ width, height }, aiSliceTileCount, aiSliceTileOverlap);
   const tileResults = await Promise.all(tiles.map(async (tile) => {
     const prepared = await prepareTileImage({

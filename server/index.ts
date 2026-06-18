@@ -1,6 +1,6 @@
 import cors from "@elysiajs/cors";
 import { Elysia, t } from "elysia";
-import { allowedOrigins, apiHost, apiPort } from "./config";
+import { aiSliceBatchConcurrency, aiSliceProvider, aiSliceYoloClasses, allowedOrigins, apiHost, apiPort } from "./config";
 import {
   buildSessionCookie,
   clearSessionCookie,
@@ -18,7 +18,6 @@ import { exportAssets } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
 import { generateAiSliceBoxes } from "./ai-slice-boxes";
-import { aiSliceBatchConcurrency } from "./config";
 import { storage } from "./storage";
 import { resolveSignedStorageDownload } from "./storage-download";
 import {
@@ -100,7 +99,12 @@ const app = new Elysia({
     set.headers["set-cookie"] = clearSessionCookie();
     return { ok: true };
   })
-  .get("/api/ai-slice-settings", () => ({ ok: true, batchConcurrency: aiSliceBatchConcurrency }))
+  .get("/api/ai-slice-settings", () => ({
+    ok: true,
+    provider: aiSliceProvider,
+    batchConcurrency: aiSliceBatchConcurrency,
+    yoloClasses: aiSliceProvider === "yolo_local" ? aiSliceYoloClasses : undefined
+  }))
   .get("/api/projects", ({ request }) => {
     const user = requireUser(request);
     return { projects: listProjectCards(user.id) };

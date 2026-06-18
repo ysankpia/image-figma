@@ -3,9 +3,10 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Plan 196 is implemented and under final handoff: Slice Studio has been simplified back to a user-only surface by removing admin, billing, payment, entitlement, usage, order, quota, and XPay side chains while preserving login/register, owned projects, review workbench, AI-assisted boxes, saved slices, signed downloads, and exports.
+Plan 198 is in implementation: make Slice Studio usable when upstream AI quality is inconsistent by hardening the manual box workflow, keeping local YOLO as a formal experimental provider, and improving save/recovery confidence without reviving admin, billing, payment, entitlement, usage, quota, or management surfaces.
 
 ## Active plan
+- Current execution plan: `docs/plans/active/198-slice-studio-manual-workflow-hardening.md`
 - Production history/context plan retained: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Prior text/slice coordination plan still active for closeout context: `docs/plans/active/193-pencil-export-text-slice-coordination.md`
 - Most recently completed:
@@ -16,9 +17,15 @@ Plan 196 is implemented and under final handoff: Slice Studio has been simplifie
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Post-196 validation and handoff
+Plan 198 validation and handoff
 
 ## Now
+- 2026-06-18: plan 198 validation passed on the local worktree. `pnpm exec vitest run tests/ai-slice-boxes.test.ts` passed; `pnpm run check` passed with 12 test files / 108 tests; `pnpm run build` passed and the Next route table remains `/`, `/_not-found`, `/login`, `/register`, `/projects`, `/projects/[projectId]/review`, and `/settings`; `git diff --check` passed.
+- 2026-06-18: real browser smoke for plan 198 passed on the current dev stack. A temporary project was created, pages were uploaded through the API, review workbench manual workflow was validated with copy/paste, multi-select, Arrow and Shift+Arrow nudges, Enter quick rename focus, bbox draft persistence, save/refresh restore, and project/assets export. The temporary project was deleted after validation. The UI no longer produces a transient preview 404 for pasted slices; pending previews are shown as placeholders until the save completes.
+- 2026-06-18: export verification confirmed the existing `project.zip` is the project backup package, not a new backup API: it returns signed downloads and already contains `project.json`, `manifest.json`, `design.pen`, originals, remainder assets, and slice assets.
+- 2026-06-18: executing plan 198 manual workflow hardening. Scope is user-side runtime only: review workbench manual box speed/recovery and local YOLO experimental provider. UI redesign, admin, billing, payment, entitlement, usage, quota, and management surfaces remain deferred and must not be reintroduced in this plan.
+- 2026-06-18: local YOLO provider is now formalized behind `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local` with configurable model path, class whitelist, confidence, and image size. Default whitelist is `Image,BackgroundImage,Map,Icon,Modal,Drawer`; `Card` is intentionally not default because it captures containers and text/buttons together. YOLO candidates preserve provenance as `reason: yolo:<ClassName>`.
+- 2026-06-18: review workbench manual editing now supports selected-slice copy/paste, multi-select delete, Cmd/Ctrl-click additive selection, Shift-click range selection, arrow-key nudge, Shift+arrow large nudge, conservative drag/resize snapping to image and slice edges, list/gallery selection centering the canvas on the slice, Enter/F2 quick rename, stable bbox draft inputs committed on blur/Enter, visible save status, save retry, and unload protection while saving or failed. Existing full `project.zip` is the project backup package because it already contains `project.json`, `manifest.json`, `design.pen`, original PNGs, visible remainders, and slice PNGs.
 - 2026-06-18: executing plan 196 user-only surface simplification. Scope is to remove the admin, billing, payment, quota, entitlement, usage, order, and XPay side chain while preserving login/register, owned projects, review workbench, AI-assisted boxes, saved slices, user-scoped storage, signed downloads, and export outputs. Existing local project/source/slice/user/session data must not be deleted.
 - 2026-06-18: the current runtime has been narrowed to `/`, `/login`, `/register`, `/projects`, `/projects/:projectId/review`, and `/settings`. `/billing`, `/admin`, `/api/me`, `/api/billing/*`, and `/api/admin/*` are removed from the active runtime; the remaining work is validation and documentation cleanup.
 - 2026-06-18: plan 196 validation passed. `pnpm run check` passed with 12 test files / 107 tests; `pnpm run build` passed and the Next route table contains only `/`, `/_not-found`, `/login`, `/register`, `/projects`, `/projects/[projectId]/review`, and `/settings`; `bun run smoke` passed against current API with signed assets/project exports; `bun run smoke:db-migrations` passed; `git diff --check` passed. Removed API checks returned 404 for `/api/me`, `/api/billing/plans`, and `/api/admin/overview`.

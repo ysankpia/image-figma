@@ -35,7 +35,7 @@ export type TextStyleProvider = "psdlike" | "fallback";
 export const textStyleProvider = normalizeTextStyleProvider(process.env.SLICE_STUDIO_TEXT_STYLE_PROVIDER);
 export const textStyleBaseUrl = trimTrailingSlash(process.env.SLICE_STUDIO_TEXT_STYLE_BASE_URL || "http://127.0.0.1:4120");
 export const textStyleTimeoutSeconds = normalizeNumber(process.env.SLICE_STUDIO_TEXT_STYLE_TIMEOUT_SECONDS, 8);
-export type AiSliceProvider = "openai_responses" | "disabled";
+export type AiSliceProvider = "openai_responses" | "yolo_local" | "disabled";
 export const aiSliceProvider = normalizeAiSliceProvider(process.env.SLICE_STUDIO_AI_SLICE_PROVIDER);
 export const aiSliceBaseUrl = trimTrailingSlash(process.env.SLICE_STUDIO_AI_SLICE_BASE_URL || "https://api.openai.com");
 export const aiSliceApiKey = process.env.SLICE_STUDIO_AI_SLICE_API_KEY || "";
@@ -53,6 +53,10 @@ export const aiSliceMaxTileSide = normalizeNumber(process.env.SLICE_STUDIO_AI_SL
 export const aiSliceJpegQuality = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_JPEG_QUALITY, 75);
 export const aiSliceMaxBoxesPerPage = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE, 80);
 export const aiSliceOverviewReview = normalizeBool(process.env.SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW, true);
+export const aiSliceYoloModelPath = process.env.SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH || "";
+export const aiSliceYoloConfidence = Number(process.env.SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE || 0.35);
+export const aiSliceYoloImageSize = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE, 1024);
+export const aiSliceYoloClasses = normalizeCsv(process.env.SLICE_STUDIO_AI_SLICE_YOLO_CLASSES || "Image,BackgroundImage,Map,Icon,Modal,Drawer");
 
 function loadLocalEnv(): void {
   if (process.env.SLICE_STUDIO_LOAD_LOCAL_ENV === "false") return;
@@ -90,6 +94,7 @@ function normalizeTextStyleProvider(value: string | undefined): TextStyleProvide
 
 function normalizeAiSliceProvider(value: string | undefined): AiSliceProvider {
   if (value === "disabled") return "disabled";
+  if (value === "yolo_local" || value === "yolo-local" || value === "yolo") return "yolo_local";
   return "openai_responses";
 }
 
@@ -131,6 +136,10 @@ function normalizeBool(value: string | undefined, fallback: boolean): boolean {
 function normalizeNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeCsv(value: string): string[] {
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
 }
 
 function trimTrailingSlash(value: string): string {

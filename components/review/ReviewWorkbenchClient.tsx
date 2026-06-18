@@ -6,7 +6,7 @@ import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "reac
 import type Konva from "konva";
 import { apiGet, apiPost, apiUrl, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
 import { mergeAiBoxesIntoSlices } from "@/shared/ai-slices";
-import { draftToBox, normalizeBox } from "@/shared/bbox";
+import { clamp, draftToBox, normalizeBox } from "@/shared/bbox";
 import type { BBox, CutMode, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
 
 type WorkbenchPage = PageRecord & {
@@ -19,6 +19,8 @@ type DragState =
   | { type: "pan"; startClient: Point; originalPosition: Point };
 
 type Point = { x: number; y: number };
+type BBoxField = keyof BBox;
+type BBoxDraft = Record<BBoxField, string>;
 
 type UndoSnapshot = {
   label: string;
@@ -49,6 +51,8 @@ type AiProgress = {
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
 const reviewLanguageStorageKey = "sliceStudio.reviewLanguage.v1";
+const boxSnapThreshold = 6;
+const emptyBboxDraft: BBoxDraft = { x: "", y: "", width: "", height: "" };
 const defaultBoxColors = {
   slice: "#0066cc",
   active: "#ff2d55"
@@ -76,7 +80,7 @@ const reviewI18n = {
     aiAll: "AI 全部",
     assetsZip: "资产包",
     pageZip: "当前页包",
-    projectZip: "项目包",
+    projectZip: "项目备份包",
     language: "界面语言",
     chinese: "中文",
     english: "英文",
@@ -146,6 +150,12 @@ const reviewI18n = {
     off: "关闭",
     lockedMissingInterface: "缺少接口：SliceRecord 目前没有 locked 字段",
     deleteCurrentAsset: "删除当前资产",
+    deleteSelectedAssets: "删除选中资产",
+    copiedAssets: "已复制 {count} 个资产。",
+    pastedAssets: "已粘贴 {count} 个资产。",
+    movedAssets: "已移动 {count} 个资产。",
+    retrySave: "重试保存",
+    unsavedEditsHeld: "保存失败，当前编辑仍保留在页面中。",
     pageStartHint: "顶部按钮可上传 1..N 张图片。",
     createAssetHint: "使用框选工具创建资产，再用选择工具调整。",
     canvasReadyHint: "画布已准备好接收源图。",
@@ -194,7 +204,7 @@ const reviewI18n = {
     pageNameSaveFailed: "页面名称保存失败：{error}",
     exportedAssets: "已导出 {count} 个切图。",
     exportedPage: "已导出当前页 Pencil 项目：{assets} 个图层资产。",
-    exportedProject: "已导出 Pencil 项目：{pages} 页，{assets} 个图层资产。",
+    exportedProject: "已导出项目备份包：{pages} 页，{assets} 个图层资产。",
     exportFailed: "导出失败：{error}",
     newAssetsWillUseMode: "后续新建资产将使用{mode}模式。",
     currentPageAlreadyMode: "当前页已是{mode}模式。",
@@ -223,6 +233,9 @@ const reviewI18n = {
     undoEditAsset: "编辑资产",
     undoChangePageCropMode: "批量切换裁切模式",
     undoDeleteAsset: "删除资产",
+    undoDeleteAssets: "删除多个资产",
+    undoPasteAssets: "粘贴资产",
+    undoMoveAssets: "移动资产",
     undoResizeAsset: "调整资产尺寸",
     undoMoveAsset: "移动资产",
     undoReorderPages: "页面排序",
@@ -250,7 +263,7 @@ const reviewI18n = {
     aiAll: "AI All",
     assetsZip: "Assets.zip",
     pageZip: "Current page",
-    projectZip: "Project.zip",
+    projectZip: "Project backup",
     language: "Interface language",
     chinese: "Chinese",
     english: "English",
@@ -320,6 +333,12 @@ const reviewI18n = {
     off: "Off",
     lockedMissingInterface: "Missing interface: SliceRecord has no locked field yet",
     deleteCurrentAsset: "Delete current asset",
+    deleteSelectedAssets: "Delete selected assets",
+    copiedAssets: "Copied {count} asset(s).",
+    pastedAssets: "Pasted {count} asset(s).",
+    movedAssets: "Moved {count} asset(s).",
+    retrySave: "Retry save",
+    unsavedEditsHeld: "Save failed. Current edits are still kept on this page.",
     pageStartHint: "Upload 1..N images from the top bar.",
     createAssetHint: "Use Draw to create assets, then Select to adjust them.",
     canvasReadyHint: "The canvas is ready for a source image.",
@@ -368,7 +387,7 @@ const reviewI18n = {
     pageNameSaveFailed: "Page name save failed: {error}",
     exportedAssets: "Exported {count} assets.",
     exportedPage: "Exported current page Pencil project: {assets} layer assets.",
-    exportedProject: "Exported Pencil project: {pages} pages, {assets} layer assets.",
+    exportedProject: "Exported project backup: {pages} pages, {assets} layer assets.",
     exportFailed: "Export failed: {error}",
     newAssetsWillUseMode: "New assets will use {mode} mode.",
     currentPageAlreadyMode: "Current page already uses {mode} mode.",
@@ -397,6 +416,9 @@ const reviewI18n = {
     undoEditAsset: "Edit asset",
     undoChangePageCropMode: "Change page crop mode",
     undoDeleteAsset: "Delete asset",
+    undoDeleteAssets: "Delete assets",
+    undoPasteAssets: "Paste assets",
+    undoMoveAssets: "Move assets",
     undoResizeAsset: "Resize asset",
     undoMoveAsset: "Move asset",
     undoReorderPages: "Reorder pages",
@@ -415,6 +437,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [pages, setPages] = useState<WorkbenchPage[]>([]);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
+  const [selectedSliceIds, setSelectedSliceIds] = useState<string[]>([]);
   const [tool, setTool] = useState<ToolMode>("select");
   const [scale, setScale] = useState(1);
   const [stagePosition, setStagePosition] = useState<Point>({ x: 80, y: 80 });
@@ -436,9 +459,12 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
   const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
+  const [pendingPreviewSliceIds, setPendingPreviewSliceIds] = useState<Set<string>>(() => new Set());
+  const [bboxDraft, setBboxDraft] = useState<BBoxDraft>(emptyBboxDraft);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
+  const activeNameInputRef = useRef<HTMLInputElement | null>(null);
   const languageRef = useRef<LanguageCode>("zh");
   const sliceNodeRefs = useRef<Record<string, Konva.Rect | null>>({});
   const assetItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -449,6 +475,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const pendingPageRenameRef = useRef<{ pageId: string; displayName: string } | null>(null);
   const pageRenameUndoRef = useRef<string | null>(null);
   const sliceEditUndoRef = useRef<string | null>(null);
+  const copiedSlicesRef = useRef<SliceRecord[]>([]);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const text = reviewI18n[language];
 
@@ -569,17 +596,37 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
         }
         return;
       }
-      if (event.key.toLowerCase() === "v") setTool("select");
-      if (event.key.toLowerCase() === "b") setTool("draw");
-      if (event.key.toLowerCase() === "h") setTool("pan");
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         void restoreUndo();
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        copySelectedSlices();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        pasteCopiedSlices();
+        return;
+      }
+      if (event.key.toLowerCase() === "v") setTool("select");
+      if (event.key.toLowerCase() === "b") setTool("draw");
+      if (event.key.toLowerCase() === "h") setTool("pan");
+      if (isArrowKey(event.key)) {
+        event.preventDefault();
+        nudgeSelectedSlices(arrowDelta(event.key, event.shiftKey ? 10 : 1));
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "F2") && activeSliceId) {
+        event.preventDefault();
+        focusActiveAssetName();
+        return;
+      }
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
-        deleteActiveSlice();
+        deleteSelectedSlices();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
@@ -591,9 +638,32 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   });
 
   useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (saveState !== "saving" && saveState !== "error") return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveState]);
+
+  useEffect(() => {
     if (!activeSliceId) return;
     assetItemRefs.current[activeSliceId]?.scrollIntoView({ block: "nearest" });
   }, [activeSliceId]);
+
+  useEffect(() => {
+    if (!activeSlice) {
+      setBboxDraft(emptyBboxDraft);
+      return;
+    }
+    setBboxDraft({
+      x: String(activeSlice.bbox.x),
+      y: String(activeSlice.bbox.y),
+      width: String(activeSlice.bbox.width),
+      height: String(activeSlice.bbox.height)
+    });
+  }, [activeSlice?.id, activeSlice?.bbox.x, activeSlice?.bbox.y, activeSlice?.bbox.width, activeSlice?.bbox.height]);
 
   async function hydratePage(page: ProjectDetail["pages"][number]): Promise<WorkbenchPage> {
     return {
@@ -719,6 +789,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await queuedSave;
       if (saveSequence === saveSequenceRef.current) {
+        setPendingPreviewSliceIds(new Set());
         setSaveState("saved");
         setStatus(text.savedStatus);
       }
@@ -745,6 +816,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     saveQueueRef.current = queuedSave.catch(() => undefined);
     await queuedSave;
     if (saveSequence === saveSequenceRef.current) {
+      setPendingPreviewSliceIds(new Set());
       setSaveState("saved");
       setStatus(text.savedStatus);
     }
@@ -932,6 +1004,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     };
     const nextPages = pages.map((page) => page.id === activePage.id ? { ...page, slices: [...page.slices, slice] } : page);
     selectSlice(slice.id);
+    setPendingPreviewSliceIds((current) => new Set([...current, slice.id]));
     scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoCreateAsset });
   }
 
@@ -979,6 +1052,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       }
       pushUndo(text.undoAiBoxes);
       const nextPages = currentPages.map((page) => page.id === currentPage.id ? { ...page, slices: merged.slices } : page);
+      const previousIds = new Set(currentPage.slices.map((slice) => slice.id));
+      const addedIds = merged.slices.filter((slice) => !previousIds.has(slice.id)).map((slice) => slice.id);
+      setPendingPreviewSliceIds((current) => new Set([...current, ...addedIds]));
       setPages(nextPages);
       selectSlice(merged.lastAddedSliceId);
       await savePagesWithActive(nextPages, currentPage.id);
@@ -1057,10 +1133,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 cutMode: "rect",
                 idSeed: `p${index + 1}_${Date.now().toString(36)}`
               });
-              if (merged.addedCount) {
-                workingPages = workingPages.map((item) => item.id === page.id ? { ...item, slices: merged.slices } : item);
-                setPages(workingPages);
-                await savePagesWithActive(workingPages, activePageId);
+      if (merged.addedCount) {
+        const previousIds = new Set(latestPage.slices.map((slice) => slice.id));
+        const addedIds = merged.slices.filter((slice) => !previousIds.has(slice.id)).map((slice) => slice.id);
+        setPendingPreviewSliceIds((current) => new Set([...current, ...addedIds]));
+        workingPages = workingPages.map((item) => item.id === page.id ? { ...item, slices: merged.slices } : item);
+        setPages(workingPages);
+        await savePagesWithActive(workingPages, activePageId);
               }
               completed += 1;
               addedTotal += merged.addedCount;
@@ -1125,8 +1204,45 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     selectSlice(null);
   }
 
-  function selectSlice(sliceId: string | null) {
+  function selectSlice(sliceId: string | null, options: { additive?: boolean; range?: boolean } = {}) {
     setActiveSliceId(sliceId);
+    if (!sliceId) {
+      setSelectedSliceIds([]);
+      return;
+    }
+    setSelectedSliceIds((current) => {
+      if (!options.additive && !options.range) return [sliceId];
+      if (options.range && activePage) {
+        const anchorId = activeSliceId || current[current.length - 1] || sliceId;
+        const from = activePage.slices.findIndex((slice) => slice.id === anchorId);
+        const to = activePage.slices.findIndex((slice) => slice.id === sliceId);
+        if (from >= 0 && to >= 0) {
+          const [start, end] = from <= to ? [from, to] : [to, from];
+          return activePage.slices.slice(start, end + 1).map((slice) => slice.id);
+        }
+      }
+      return current.includes(sliceId) ? current.filter((id) => id !== sliceId) : [...current, sliceId];
+    });
+  }
+
+  function focusActiveAssetName() {
+    requestAnimationFrame(() => {
+      activeNameInputRef.current?.focus();
+      activeNameInputRef.current?.select();
+    });
+  }
+
+  function centerStageOnSlice(slice: SliceRecord) {
+    if (!activePage) return;
+    setStagePosition({
+      x: Math.round(stageSize.width / 2 - (slice.bbox.x + slice.bbox.width / 2) * scale),
+      y: Math.round(stageSize.height / 2 - (slice.bbox.y + slice.bbox.height / 2) * scale)
+    });
+  }
+
+  function selectSliceFromList(slice: SliceRecord, event?: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) {
+    selectSlice(slice.id, { additive: Boolean(event?.metaKey || event?.ctrlKey), range: Boolean(event?.shiftKey) });
+    centerStageOnSlice(slice);
   }
 
   async function openAssetGallery() {
@@ -1222,6 +1338,141 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoDeleteAsset });
   }
 
+  function selectedIdsForActivePage(): string[] {
+    if (!activePage) return [];
+    const validIds = new Set(activePage.slices.map((slice) => slice.id));
+    const selected = selectedSliceIds.filter((id) => validIds.has(id));
+    if (selected.length) return selected;
+    return activeSliceId && validIds.has(activeSliceId) ? [activeSliceId] : [];
+  }
+
+  function deleteSelectedSlices() {
+    if (!activePage) return;
+    const ids = selectedIdsForActivePage();
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    const nextPages = pages.map((page) => page.id === activePage.id ? {
+      ...page,
+      slices: page.slices.filter((slice) => !idSet.has(slice.id)).map((slice, index) => ({ ...slice, sliceIndex: index + 1 }))
+    } : page);
+    selectSlice(null);
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: ids.length > 1 ? text.undoDeleteAssets : text.undoDeleteAsset });
+  }
+
+  function copySelectedSlices() {
+    if (!activePage) return;
+    const idSet = new Set(selectedIdsForActivePage());
+    const copied = activePage.slices.filter((slice) => idSet.has(slice.id)).map((slice) => ({ ...slice, bbox: { ...slice.bbox } }));
+    if (!copied.length) return;
+    copiedSlicesRef.current = copied;
+    setStatus(formatMessage(text.copiedAssets, { count: copied.length }));
+  }
+
+  function pasteCopiedSlices() {
+    if (!activePage || !copiedSlicesRef.current.length) return;
+    const offset = 12;
+    const existingCount = activePage.slices.length;
+    const pasted = copiedSlicesRef.current.map((slice, index): SliceRecord => ({
+      ...slice,
+      id: `${activePage.id}__slice_${Date.now().toString(36)}_paste_${index + 1}`,
+      projectId,
+      pageId: activePage.id,
+      sliceIndex: existingCount + index + 1,
+      name: nextCopyName(slice.name),
+      bbox: normalizeBox({
+        ...slice.bbox,
+        x: slice.bbox.x + offset,
+        y: slice.bbox.y + offset
+      }, activePage),
+      selected: true
+    }));
+    const pastedIds = pasted.map((slice) => slice.id);
+    const nextPages = pages.map((page) => page.id === activePage.id ? { ...page, slices: [...page.slices, ...pasted] } : page);
+    setActiveSliceId(pastedIds[pastedIds.length - 1] || null);
+    setSelectedSliceIds(pastedIds);
+    setPendingPreviewSliceIds((current) => new Set([...current, ...pastedIds]));
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoPasteAssets });
+    setStatus(formatMessage(text.pastedAssets, { count: pasted.length }));
+  }
+
+  function nudgeSelectedSlices(delta: Point) {
+    if (!activePage) return;
+    const ids = selectedIdsForActivePage();
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    const nextPages = pages.map((page) => page.id === activePage.id ? {
+      ...page,
+      slices: page.slices.map((slice) => idSet.has(slice.id) ? {
+        ...slice,
+        bbox: normalizeBox({
+          ...slice.bbox,
+          x: slice.bbox.x + delta.x,
+          y: slice.bbox.y + delta.y
+        }, activePage)
+      } : slice)
+    } : page);
+    scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoMoveAssets });
+    setStatus(formatMessage(text.movedAssets, { count: ids.length }));
+  }
+
+  function snapMovedBoxToGuides(box: BBox, page: WorkbenchPage, movingSliceId: string): BBox {
+    const normalized = normalizeBox(box, page);
+    const verticalGuides = [0, page.width];
+    const horizontalGuides = [0, page.height];
+    for (const slice of page.slices) {
+      if (slice.id === movingSliceId) continue;
+      verticalGuides.push(slice.bbox.x, slice.bbox.x + slice.bbox.width);
+      horizontalGuides.push(slice.bbox.y, slice.bbox.y + slice.bbox.height);
+    }
+
+    const leftSnap = nearestGuide(normalized.x, verticalGuides);
+    const rightSnap = nearestGuide(normalized.x + normalized.width, verticalGuides);
+    const topSnap = nearestGuide(normalized.y, horizontalGuides);
+    const bottomSnap = nearestGuide(normalized.y + normalized.height, horizontalGuides);
+
+    let x = normalized.x;
+    let y = normalized.y;
+    if (leftSnap !== null) {
+      x = leftSnap;
+    } else if (rightSnap !== null) {
+      x = rightSnap - normalized.width;
+    }
+    if (topSnap !== null) {
+      y = topSnap;
+    } else if (bottomSnap !== null) {
+      y = bottomSnap - normalized.height;
+    }
+
+    return normalizeBox({ ...normalized, x, y }, page);
+  }
+
+  function snapResizedBoxToGuides(box: BBox, page: WorkbenchPage, movingSliceId: string): BBox {
+    const normalized = normalizeBox(box, page, 8);
+    const verticalGuides = [0, page.width];
+    const horizontalGuides = [0, page.height];
+    for (const slice of page.slices) {
+      if (slice.id === movingSliceId) continue;
+      verticalGuides.push(slice.bbox.x, slice.bbox.x + slice.bbox.width);
+      horizontalGuides.push(slice.bbox.y, slice.bbox.y + slice.bbox.height);
+    }
+
+    let left = normalized.x;
+    let right = normalized.x + normalized.width;
+    let top = normalized.y;
+    let bottom = normalized.y + normalized.height;
+    const leftSnap = nearestGuide(left, verticalGuides);
+    const rightSnap = nearestGuide(right, verticalGuides);
+    const topSnap = nearestGuide(top, horizontalGuides);
+    const bottomSnap = nearestGuide(bottom, horizontalGuides);
+
+    if (leftSnap !== null && right - leftSnap >= 8) left = leftSnap;
+    if (rightSnap !== null && rightSnap - left >= 8) right = rightSnap;
+    if (topSnap !== null && bottom - topSnap >= 8) top = topSnap;
+    if (bottomSnap !== null && bottomSnap - top >= 8) bottom = bottomSnap;
+
+    return normalizeBox({ x: left, y: top, width: right - left, height: bottom - top }, page, 8);
+  }
+
   function onTransformEnd(slice: SliceRecord, node: Konva.Rect) {
     if (!activePage) return;
     selectSlice(slice.id);
@@ -1229,13 +1480,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
-    commitSlicePatch(slice.id, {
-      bbox: normalizeBox({
+    const resizedBox = normalizeBox({
         x: node.x(),
         y: node.y(),
         width: Math.max(1, node.width() * scaleX),
         height: Math.max(1, node.height() * scaleY)
-      }, activePage)
+      }, activePage);
+    commitSlicePatch(slice.id, {
+      bbox: snapResizedBoxToGuides(resizedBox, activePage, slice.id)
     }, text.undoResizeAsset);
   }
 
@@ -1311,6 +1563,51 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     }, text.undoEditBbox);
   }
 
+  function updateBboxDraft(field: BBoxField, value: string) {
+    setBboxDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function commitBboxDraft() {
+    if (!activePage || !activeSlice) return;
+    const parsed = {
+      x: Number(bboxDraft.x),
+      y: Number(bboxDraft.y),
+      width: Number(bboxDraft.width),
+      height: Number(bboxDraft.height)
+    };
+    if (!Number.isFinite(parsed.x) || !Number.isFinite(parsed.y) || !Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) {
+      setBboxDraft({
+        x: String(activeSlice.bbox.x),
+        y: String(activeSlice.bbox.y),
+        width: String(activeSlice.bbox.width),
+        height: String(activeSlice.bbox.height)
+      });
+      return;
+    }
+    commitActiveSliceBbox({
+      x: clamp(parsed.x, 0, activePage.width - 1),
+      y: clamp(parsed.y, 0, activePage.height - 1),
+      width: Math.max(1, parsed.width),
+      height: Math.max(1, parsed.height)
+    });
+  }
+
+  function onBboxInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+      return;
+    }
+    if (event.key === "Escape" && activeSlice) {
+      setBboxDraft({
+        x: String(activeSlice.bbox.x),
+        y: String(activeSlice.bbox.y),
+        width: String(activeSlice.bbox.width),
+        height: String(activeSlice.bbox.height)
+      });
+      event.currentTarget.blur();
+    }
+  }
+
   const draftBox = useMemo(() => {
     if (!drag || drag.type !== "draw" || !activePage) return null;
     return draftToBox(drag.start, drag.current, activePage);
@@ -1376,6 +1673,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             <button type="button" className={language === "en" ? "active" : ""} aria-pressed={language === "en"} title={text.english} onClick={() => changeLanguage("en")}>EN</button>
           </div>
           <span className={`saveState ${saveState}`} title={status}>{saveLabel}</span>
+          {saveState === "error" ? (
+            <button className="toolbarButton ghostButton" type="button" title={text.unsavedEditsHeld} onClick={() => void saveNow().catch(() => undefined)}>
+              <span>{text.retrySave}</span>
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -1481,6 +1783,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 {activePage.image && <KonvaImage image={activePage.image} width={activePage.width} height={activePage.height} listening={false} />}
                 {activePage.slices.map((slice, index) => {
                   const isActive = slice.id === activeSliceId;
+                  const isSelected = selectedSliceIds.includes(slice.id);
                   return (
                     <Rect
                       key={slice.id}
@@ -1493,21 +1796,22 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       width={slice.bbox.width}
                       height={slice.bbox.height}
                       stroke={isActive ? boxColors.active : boxColors.slice}
-                      strokeWidth={isActive ? 2 : 1.4}
+                      strokeWidth={isActive || isSelected ? 2 : 1.4}
                       fill={colorWithAlpha(boxColors.slice, tool === "draw" ? 0.02 : 0.08)}
                       draggable={tool === "select"}
                       listening={tool === "select"}
                       onMouseDown={(event) => {
                         if (tool !== "select") return;
                         event.cancelBubble = true;
-                        selectSlice(slice.id);
+                        selectSlice(slice.id, { additive: event.evt.metaKey || event.evt.ctrlKey, range: event.evt.shiftKey });
                       }}
                       onDragStart={() => {
                         if (tool === "select") selectSlice(slice.id);
                       }}
                       onDragEnd={(event) => {
                         selectSlice(slice.id);
-                        commitSlicePatch(slice.id, { bbox: normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage) }, text.undoMoveAsset);
+                        const movedBox = normalizeBox({ ...slice.bbox, x: event.target.x(), y: event.target.y() }, activePage);
+                        commitSlicePatch(slice.id, { bbox: snapMovedBoxToGuides(movedBox, activePage, slice.id) }, text.undoMoveAsset);
                       }}
                       onTransformEnd={(event) => onTransformEnd(slice, event.target as Konva.Rect)}
                     />
@@ -1545,6 +1849,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           <footer className="stageFooter">
             <span>{activePage.width}x{activePage.height}</span>
             <span>{Math.round(scale * 100)}%</span>
+            <span className={`stageStatus ${saveState}`}>{status}</span>
           </footer>
         ) : null}
       </section>
@@ -1593,17 +1898,21 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                     {visibleAssets.map((slice, index) => (
                       <div
                         key={slice.id}
-                        className={`assetItem ${slice.id === activeSliceId ? "active" : ""}`}
+                        className={`assetItem ${slice.id === activeSliceId ? "active" : ""} ${selectedSliceIds.includes(slice.id) ? "selected" : ""}`}
                         ref={(node) => {
                           assetItemRefs.current[slice.id] = node;
                         }}
-                        onClick={() => selectSlice(slice.id)}
+                        onClick={(event) => selectSliceFromList(slice, event)}
                       >
                         <button type="button" className="assetPreviewButton" aria-label={formatMessage(text.selectAsset, { name: slice.name })} onClick={(event) => {
                           event.stopPropagation();
-                          selectSlice(slice.id);
+                          selectSliceFromList(slice, event);
                         }}>
-                          <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
+                          {pendingPreviewSliceIds.has(slice.id) ? (
+                            <span className="assetPreviewPlaceholder" aria-hidden="true">…</span>
+                          ) : (
+                            <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
+                          )}
                         </button>
                         <span className="assetFields">
                           <input
@@ -1737,12 +2046,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       <span>{text.activeAsset}</span>
                       <strong>{activeSlice.name || text.untitled}</strong>
                     </div>
-                    <button className="assetDangerButton" type="button" aria-label={text.deleteCurrentAsset} title={text.deleteCurrentAsset} onClick={() => deleteActiveSlice(activeSlice.id)}>
+                    <button className="assetDangerButton" type="button" aria-label={text.deleteCurrentAsset} title={text.deleteCurrentAsset} onClick={() => deleteSelectedSlices()}>
                       <Trash2 aria-hidden="true" />
                     </button>
                   </div>
                   <div className="activeAssetEditRow">
                     <input
+                      ref={activeNameInputRef}
                       name={`activeSliceName-${activeSlice.id}`}
                       aria-label={text.assetName}
                       value={activeSlice.name}
@@ -1757,19 +2067,19 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                   <div className="detailsGrid">
                     <label>
                       <span>X</span>
-                      <input type="number" value={activeSlice.bbox.x} onChange={(event) => commitActiveSliceBbox({ x: Number(event.target.value) || 0 })} />
+                      <input type="number" value={bboxDraft.x} onChange={(event) => updateBboxDraft("x", event.target.value)} onBlur={commitBboxDraft} onKeyDown={onBboxInputKeyDown} />
                     </label>
                     <label>
                       <span>Y</span>
-                      <input type="number" value={activeSlice.bbox.y} onChange={(event) => commitActiveSliceBbox({ y: Number(event.target.value) || 0 })} />
+                      <input type="number" value={bboxDraft.y} onChange={(event) => updateBboxDraft("y", event.target.value)} onBlur={commitBboxDraft} onKeyDown={onBboxInputKeyDown} />
                     </label>
                     <label>
                       <span>W</span>
-                      <input type="number" value={activeSlice.bbox.width} onChange={(event) => commitActiveSliceBbox({ width: Number(event.target.value) || 1 })} />
+                      <input type="number" min={1} value={bboxDraft.width} onChange={(event) => updateBboxDraft("width", event.target.value)} onBlur={commitBboxDraft} onKeyDown={onBboxInputKeyDown} />
                     </label>
                     <label>
                       <span>H</span>
-                      <input type="number" value={activeSlice.bbox.height} onChange={(event) => commitActiveSliceBbox({ height: Number(event.target.value) || 1 })} />
+                      <input type="number" min={1} value={bboxDraft.height} onChange={(event) => updateBboxDraft("height", event.target.value)} onBlur={commitBboxDraft} onKeyDown={onBboxInputKeyDown} />
                     </label>
                   </div>
                   <label className="detailsSelectRow">
@@ -1793,8 +2103,8 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       {text.off}
                     </button>
                   </div>
-                  <button className="deleteAssetWideButton" type="button" onClick={() => deleteActiveSlice(activeSlice.id)}>
-                    {text.deleteAsset}
+                  <button className="deleteAssetWideButton" type="button" onClick={() => deleteSelectedSlices()}>
+                    {selectedIdsForActivePage().length > 1 ? text.deleteSelectedAssets : text.deleteAsset}
                   </button>
                 </section>
               ) : (
@@ -1920,11 +2230,15 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                       type="button"
                       className="assetGalleryPreview"
                       onClick={() => {
-                        selectSlice(slice.id);
+                        selectSliceFromList(slice);
                         setGalleryOpen(false);
                       }}
                     >
-                      <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
+                      {pendingPreviewSliceIds.has(slice.id) ? (
+                        <span className="assetGalleryPreviewPlaceholder" aria-hidden="true">…</span>
+                      ) : (
+                        <img src={slicePreviewUrl(projectId, slice, previewRevisionBySliceId[slice.id] || 0)} alt="" draggable={false} />
+                      )}
                     </button>
                     <span className="assetGalleryCutModes" role="group" aria-label={formatMessage(text.assetCropMode, { name: slice.name, mode: cutModeLabel(slice.cutMode, text) })}>
                       {(["rect", "subject", "card"] as CutMode[]).map((mode) => (
@@ -1984,6 +2298,34 @@ function cutModeLabel(mode: CutMode, text: ReviewText): string {
 
 function sliceArea(slice: SliceRecord): number {
   return slice.bbox.width * slice.bbox.height;
+}
+
+function nextCopyName(name: string): string {
+  return name.trim() ? `${name.trim()} copy` : "slice copy";
+}
+
+function isArrowKey(key: string): boolean {
+  return key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown";
+}
+
+function arrowDelta(key: string, amount: number): Point {
+  if (key === "ArrowLeft") return { x: -amount, y: 0 };
+  if (key === "ArrowRight") return { x: amount, y: 0 };
+  if (key === "ArrowUp") return { x: 0, y: -amount };
+  return { x: 0, y: amount };
+}
+
+function nearestGuide(value: number, guides: number[]): number | null {
+  let best: number | null = null;
+  let bestDistance = boxSnapThreshold + 1;
+  for (const guide of guides) {
+    const distance = Math.abs(value - guide);
+    if (distance <= boxSnapThreshold && distance < bestDistance) {
+      best = guide;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 function pageStatusLabel(page: WorkbenchPage, isActive: boolean, text: ReviewText): string {

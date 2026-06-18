@@ -73,6 +73,10 @@ OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bb
 | `SLICE_STUDIO_AI_SLICE_JPEG_QUALITY` | tile JPEG quality | `75` | 否 |
 | `SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE` | 单页接受框上限 | `80` | 否 |
 | `SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW` | 是否发送压缩全页 overview 做跨 tile 大资产合并 | `true` | 否 |
+| `SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH` | 本地 YOLO provider 权重路径 | 空 | 使用 `yolo_local` 时需要 |
+| `SLICE_STUDIO_AI_SLICE_YOLO_CLASSES` | 本地 YOLO provider 允许进入候选的类别 CSV | `Image,BackgroundImage,Map,Icon,Modal,Drawer` | 否 |
+| `SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE` | 本地 YOLO provider 置信度阈值 | `0.35` | 否 |
+| `SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE` | 本地 YOLO provider 推理尺寸 | `1024` | 否 |
 
 当前默认 prompt 策略是 `CC = Inclusive-Icons tile + Inclusive-Icons overview`。记录见 [slice-studio-ai-slice-prompt-strategies.md](slice-studio-ai-slice-prompt-strategies.md)。
 
@@ -86,6 +90,18 @@ SLICE_STUDIO_AI_SLICE_WIRE_API=chat_completions
 ```
 
 `chat_completions` keeps the same Slice Studio prompt and output contract. It only changes the provider wire format to `/v1/chat/completions`.
+
+Local YOLO provider example:
+
+```text
+SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local
+SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH=/Volumes/WorkDrive/Datasets/vins_rico_yolov8/VINS-RICO-UPLABS-ANDROID.v2i.yolov8/runs/detect/runs/detect/train/weights/best.pt
+SLICE_STUDIO_AI_SLICE_YOLO_CLASSES=Image,BackgroundImage,Map,Icon,Modal,Drawer
+SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE=0.35
+SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE=1024
+```
+
+`Card` is intentionally excluded from the default YOLO class list because this dataset treats it as a container class that often includes text, buttons, and images together. Use it only for diagnostics or future container-boundary evidence, not as a direct asset slice class.
 
 ## Example `.env.local`
 
@@ -116,6 +132,8 @@ SLICE_STUDIO_AI_SLICE_API_KEY=
 SLICE_STUDIO_AI_SLICE_MODEL=gpt-5.5
 SLICE_STUDIO_AI_SLICE_WIRE_API=responses
 SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
+SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH=
+SLICE_STUDIO_AI_SLICE_YOLO_CLASSES=Image,BackgroundImage,Map,Icon,Modal,Drawer
 BAIDU_PADDLE_OCR_TOKEN=
 ```
 

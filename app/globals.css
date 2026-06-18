@@ -1542,6 +1542,11 @@ h1 {
   background: #fff5f7;
 }
 
+.assetItem.selected:not(.active) {
+  border-color: #89b8ff;
+  background: #f4f8ff;
+}
+
 .assetItem:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
@@ -2084,6 +2089,19 @@ h1 {
   border-left: 1px solid #edf0f4;
 }
 
+.stageFooter .stageStatus {
+  min-width: 180px;
+  max-width: min(480px, 42vw);
+  overflow: hidden;
+  color: #4b5565;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stageFooter .stageStatus.error {
+  color: #d92d20;
+}
+
 .canvasHint {
   color: #8b93a1;
 }
@@ -2296,6 +2314,18 @@ h1 {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.assetPreviewPlaceholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: inherit;
+  background: #edf1f5;
+  color: #8c97a5;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .assetFields {
@@ -3003,6 +3033,16 @@ h1 {
   max-width: 100%;
   max-height: 128px;
   object-fit: contain;
+}
+
+.assetGalleryPreviewPlaceholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: #8c97a5;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .assetGalleryCutModes {

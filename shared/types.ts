@@ -86,7 +86,9 @@ export type AiSliceBoxesResponse = {
 
 export type AiSliceSettingsResponse = {
   ok: true;
+  provider: "openai_responses" | "yolo_local" | "disabled";
   batchConcurrency: number;
+  yoloClasses?: string[];
 };
 
 export type ExportManifest = {

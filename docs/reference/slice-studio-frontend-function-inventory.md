@@ -273,12 +273,14 @@ Core UI state:
 ```ts
 activePageId: string | null
 activeSliceId: string | null
+selectedSliceIds: string[]
 tool: "select" | "draw" | "pan"
 saveState: "idle" | "saving" | "saved" | "error"
 language: "zh" | "en"
 scale: number
 stagePosition: { x: number; y: number }
 undoStack: unknown[]
+bboxDraft: { x: string; y: string; width: string; height: string }
 aiRunning: boolean
 aiProgress: AiProgress | null
 inspectorCollapsed: boolean
@@ -327,11 +329,18 @@ Canvas functions:
 - replace current page source image; replacing clears slices on that page;
 - delete page;
 - select, drag, and transform bbox in `select` mode;
+- additive multi-select with Cmd/Ctrl-click and range multi-select with Shift-click;
 - drag-create bbox in `draw` mode; minimum `8x8`;
+- copy selected slices with `Cmd/Ctrl+C`;
+- paste copied slices with `Cmd/Ctrl+V`;
+- delete all selected slices with Delete/Backspace;
+- nudge selected slices with arrow keys;
+- nudge selected slices by a larger step with Shift+arrow;
+- snap drag/resize commits to image edges and nearby slice edges;
 - move stage in `pan` mode;
 - zoom with buttons and `Cmd/Ctrl + wheel`;
 - fit stage to viewport;
-- delete active slice with Delete/Backspace;
+- focus active asset renaming with Enter or F2;
 - save with `Cmd/Ctrl+S`;
 - undo with `Cmd/Ctrl+Z`;
 - reload project when file-level source operations cannot be undone locally.
@@ -343,6 +352,7 @@ Asset list functions:
 - filter by cut mode;
 - sort by order, name, or area;
 - rename asset;
+- selecting from the list centers the canvas on that slice;
 - change asset cut mode;
 - delete asset;
 - open asset gallery/overview;
@@ -355,6 +365,7 @@ Inspector functions:
 - replace page;
 - delete page;
 - edit active slice bbox numeric fields `X/Y/W/H`;
+- bbox numeric fields use a local draft and commit on blur/Enter so partial typing does not save invalid geometry;
 - edit active slice cut mode;
 - edit normal and active bbox outline colors;
 - persist color preferences in browser local storage.
@@ -363,9 +374,12 @@ AI functions:
 
 - run AI-assisted boxes for current page;
 - run AI-assisted boxes for all pages;
+- AI provider settings are available from `/api/ai-slice-settings`;
 - batch concurrency is returned by backend and clamped to `1..8` in frontend;
 - merge AI results into normal unsaved slices;
 - AI-generated slices default to `cutMode = "rect"`;
+- local YOLO experimental provider may return `reason: "yolo:<ClassName>"`;
+- default local YOLO class whitelist is `Image,BackgroundImage,Map,Icon,Modal,Drawer`; `Card` is intentionally not default because it tends to capture text/buttons/images as a container;
 - AI progress UI tracks:
 
 ```ts
@@ -384,8 +398,9 @@ hidden: boolean
 Export functions:
 
 - export `assets.zip`;
-- export full `project.zip / design.pen`;
+- export full project backup package `project.zip / design.pen`;
 - export current page `project.zip / design.pen`;
+- full project backup package includes `project.json`, `manifest.json`, `design.pen`, original PNGs, visible remainder PNGs, and slice PNGs;
 - download URL is returned by the export API and may be a signed `/api/storage-download?token=...` URL.
 
 APIs:

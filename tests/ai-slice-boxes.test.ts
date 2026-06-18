@@ -12,6 +12,7 @@ import {
   formatProviderError,
   requestUrl
 } from "../server/ai-slice-boxes/provider";
+import { aiSliceProvider, aiSliceYoloClasses } from "../server/config";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "../server/ai-slice-boxes/tiles";
 import type { PageRecord, SliceRecord } from "../shared/types";
 
@@ -131,6 +132,13 @@ describe("AI slice boxes", () => {
     expect(requestUrl("https://api.openai.com/v1", "/responses")).toBe("https://api.openai.com/v1/responses");
     expect(requestUrl("https://openrouter.ai/api/v1", "/chat/completions")).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(requestUrl("https://example.com/v1/chat/completions", "/chat/completions")).toBe("https://example.com/v1/chat/completions");
+  });
+
+  it("keeps the ai slice provider contract open for local yolo provider support", () => {
+    expect(["openai_responses", "yolo_local", "disabled"]).toContain(aiSliceProvider);
+    expect(aiSliceYoloClasses).toContain("Image");
+    expect(aiSliceYoloClasses).toContain("Icon");
+    expect(aiSliceYoloClasses).not.toContain("Card");
   });
 
   it("redacts provider diagnostics before surfacing errors", () => {

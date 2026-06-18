@@ -94,6 +94,7 @@ SLICE_STUDIO_OCR_PROVIDER=baidu_ppocrv5
 SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER=ts_m29_physical_evidence
 SLICE_STUDIO_AI_SLICE_PROVIDER=openai_responses
 SLICE_STUDIO_AI_SLICE_BATCH_CONCURRENCY=4
+SLICE_STUDIO_AI_SLICE_YOLO_CLASSES=Image,BackgroundImage,Map,Icon,Modal,Drawer
 ```
 
 OCR token 和 AI key 只能放在 `.env.local` 或进程环境，不能提交。
