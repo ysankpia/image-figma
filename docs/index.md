@@ -180,4 +180,5 @@ AI provider selection is also replaceable. OpenRouter or another OpenAI-compatib
 ## Runbooks
 
 - [runbooks/local-setup.md](runbooks/local-setup.md)
+- [runbooks/slice-studio-production-deploy.md](runbooks/slice-studio-production-deploy.md)
 - Historical Pencil Python deployment: [runbooks/pencil-python-backend-handoff.md](runbooks/pencil-python-backend-handoff.md), [runbooks/pencil-python-backend-deploy.md](runbooks/pencil-python-backend-deploy.md)

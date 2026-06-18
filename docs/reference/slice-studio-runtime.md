@@ -17,6 +17,21 @@ Elysia API: http://127.0.0.1:4110
 Text style: http://127.0.0.1:4120
 ```
 
+Current production deployment:
+
+```text
+URL: https://image.figma.245162.xyz
+Server: racknerd / 192.236.242.152
+Deploy path: /opt/slice-studio/app
+Storage path: /opt/slice-studio/storage
+API service: slice-studio-api on 127.0.0.1:4110
+Web service: slice-studio-web on 127.0.0.1:3010
+Reverse proxy: existing Docker Caddy container sub2api-caddy
+Runbook: docs/runbooks/slice-studio-production-deploy.md
+```
+
+Production currently uses the same SQLite storage contract as local runtime: `/opt/slice-studio/storage/app.sqlite`. The code does not currently support PostgreSQL by configuration alone.
+
 ## Product Flow
 
 ```text
@@ -207,4 +222,4 @@ AI slice boxes use a separate `SLICE_STUDIO_AI_SLICE_*` provider configuration. 
 
 ## Scope
 
-v1 supports manual slicing, AI-assisted rectangular slicing, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement, login/register, project ownership, user-scoped local storage, signed downloads, and account settings. Billing, admin operations, entitlement counters, usage events, payment orders, XPay, YOLO, automatic semantic UI ownership, Figma import, team collaboration, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync are out of the current runtime scope.
+v1 supports manual slicing, AI-assisted rectangular slicing, local YOLO as an experimental AI box provider, `rect | subject | card` cut modes, assets export, Pencil project export, optional OCR text overlays, optional M29 text bbox evidence, PSD-like editable-text style measurement when available, login/register, project ownership, user-scoped local storage, signed downloads, production `systemd` deployment, and account settings. Billing, admin operations, entitlement counters, usage events, payment orders, XPay, automatic semantic UI ownership, Figma import, team collaboration, PostgreSQL, production object storage, payment reconciliation/refund/cancel/provider-query, and cloud sync are out of the current runtime scope.
