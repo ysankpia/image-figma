@@ -52,6 +52,8 @@ const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
 const reviewLanguageStorageKey = "sliceStudio.reviewLanguage.v1";
 const boxSnapThreshold = 6;
+const aiRevealDelayMinMs = 10_000;
+const aiRevealDelayMaxMs = 15_000;
 const emptyBboxDraft: BBoxDraft = { x: "", y: "", width: "", height: "" };
 const defaultBoxColors = {
   slice: "#0066cc",
@@ -74,8 +76,8 @@ const reviewI18n = {
     zoomIn: "放大",
     nothingToUndo: "没有可撤销操作",
     redoUnavailable: "当前没有可重做记录",
-    aiRunning: "AI 运行中",
-    batchRunning: "批量运行中",
+    aiRunning: "处理中",
+    batchRunning: "批量处理中",
     aiCurrent: "AI 当前页",
     aiAll: "AI 全部",
     assetsZip: "资产包",
@@ -214,6 +216,8 @@ const reviewI18n = {
     pageReplaced: "页面已替换，该页已有切图已清空。",
     pageActionFailed: "{action}页面失败：{error}",
     aiDetecting: "AI 正在检测 {label}",
+    aiPreparingResults: "正在整理 {label} 的候选框",
+    aiBatchPreparingPage: "正在整理 {label} 的候选框 · {done}/{total}",
     noNewBoxes: "AI 未新增框，跳过 {skipped} 个。",
     noNewAiBoxes: "AI 未新增框。已跳过 {skipped} 个重复或无效框。",
     aiAddedSkipped: "AI 已新增 {added} 个，跳过 {skipped} 个。",
@@ -257,8 +261,8 @@ const reviewI18n = {
     zoomIn: "Zoom in",
     nothingToUndo: "Nothing to undo",
     redoUnavailable: "Redo is not available until a redo stack exists",
-    aiRunning: "AI Running",
-    batchRunning: "Batch Running",
+    aiRunning: "Processing",
+    batchRunning: "Batch Processing",
     aiCurrent: "AI Current",
     aiAll: "AI All",
     assetsZip: "Assets.zip",
@@ -397,6 +401,8 @@ const reviewI18n = {
     pageReplaced: "Page replaced. Existing slices on that page were cleared.",
     pageActionFailed: "{action} page failed: {error}",
     aiDetecting: "AI is detecting {label}",
+    aiPreparingResults: "Preparing candidate boxes for {label}",
+    aiBatchPreparingPage: "Preparing candidate boxes for {label} · {done}/{total}",
     noNewBoxes: "No new boxes. Skipped {skipped}.",
     noNewAiBoxes: "No new AI boxes. Skipped {skipped} duplicate or invalid boxes.",
     aiAddedSkipped: "Added {added}. Skipped {skipped}.",
@@ -477,6 +483,8 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const sliceEditUndoRef = useRef<string | null>(null);
   const copiedSlicesRef = useRef<SliceRecord[]>([]);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const activePageIdRef = useRef<string | null>(null);
+  const pagesRef = useRef<WorkbenchPage[]>([]);
   const text = reviewI18n[language];
 
   const activePage = pages.find((page) => page.id === activePageId) || null;
@@ -536,6 +544,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     languageRef.current = language;
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
   }, [language]);
+
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+
+  useEffect(() => {
+    activePageIdRef.current = activePageId;
+  }, [activePageId]);
 
   useEffect(() => {
     void loadProject().catch((error) => {
@@ -1008,6 +1024,16 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     scheduleSave(nextPages, { pushUndo: true, undoLabel: text.undoCreateAsset });
   }
 
+  function aiRevealDelayMs(): number {
+    return Math.round(aiRevealDelayMinMs + Math.random() * (aiRevealDelayMaxMs - aiRevealDelayMinMs));
+  }
+
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
   async function runAiForCurrentPage() {
     if (!activePage || aiBusy) return;
     const label = `P${pageIndex + 1}`;
@@ -1028,7 +1054,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       const response = await generateAiBoxes(projectId, activePage.id);
-      const currentPages = pages;
+      setAiProgress((current) => current ? {
+        ...current,
+        message: formatMessage(text.aiPreparingResults, { label })
+      } : current);
+      setStatus(`${formatMessage(text.aiPreparingResults, { label })}。`);
+      await wait(aiRevealDelayMs());
+      const currentPages = pagesRef.current;
       const currentPage = currentPages.find((page) => page.id === activePage.id);
       if (!currentPage) return;
       const merged = mergeAiBoxesIntoSlices({
@@ -1055,6 +1087,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       const previousIds = new Set(currentPage.slices.map((slice) => slice.id));
       const addedIds = merged.slices.filter((slice) => !previousIds.has(slice.id)).map((slice) => slice.id);
       setPendingPreviewSliceIds((current) => new Set([...current, ...addedIds]));
+      pagesRef.current = nextPages;
       setPages(nextPages);
       selectSlice(merged.lastAddedSliceId);
       await savePagesWithActive(nextPages, currentPage.id);
@@ -1124,6 +1157,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
           try {
             const response = await generateAiBoxes(projectId, page.id);
             mergeQueue = mergeQueue.catch(() => undefined).then(async () => {
+              setAiProgress((current) => current ? {
+                ...current,
+                currentLabel,
+                message: formatMessage(text.aiBatchPreparingPage, { label: currentLabel, done: completed + failed, total: pages.length })
+              } : current);
+              setStatus(formatMessage(text.aiBatchPreparingPage, { label: currentLabel, done: completed + failed, total: pages.length }));
+              await wait(aiRevealDelayMs());
+              workingPages = pagesRef.current;
               const latestPage = workingPages.find((item) => item.id === page.id);
               if (!latestPage) return;
               const merged = mergeAiBoxesIntoSlices({
@@ -1133,13 +1174,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
                 cutMode: "rect",
                 idSeed: `p${index + 1}_${Date.now().toString(36)}`
               });
-      if (merged.addedCount) {
-        const previousIds = new Set(latestPage.slices.map((slice) => slice.id));
-        const addedIds = merged.slices.filter((slice) => !previousIds.has(slice.id)).map((slice) => slice.id);
-        setPendingPreviewSliceIds((current) => new Set([...current, ...addedIds]));
-        workingPages = workingPages.map((item) => item.id === page.id ? { ...item, slices: merged.slices } : item);
-        setPages(workingPages);
-        await savePagesWithActive(workingPages, activePageId);
+              if (merged.addedCount) {
+                const previousIds = new Set(latestPage.slices.map((slice) => slice.id));
+                const addedIds = merged.slices.filter((slice) => !previousIds.has(slice.id)).map((slice) => slice.id);
+                setPendingPreviewSliceIds((current) => new Set([...current, ...addedIds]));
+                workingPages = workingPages.map((item) => item.id === page.id ? { ...item, slices: merged.slices } : item);
+                pagesRef.current = workingPages;
+                setPages(workingPages);
+                await savePagesWithActive(workingPages, activePageIdRef.current);
               }
               completed += 1;
               addedTotal += merged.addedCount;

@@ -43,11 +43,18 @@ Image,BackgroundImage,Map,Icon,Modal,Drawer
 - Keep destructive page replacement/deletion warnings clear.
 - Add a project backup/export source-data action only if it can use existing export/download contracts without schema changes.
 
+### Stage 4: AI result reveal pacing
+
+- Keep provider execution honest: do not claim the model is still reasoning after the response has returned.
+- After a successful AI boxes response, show a short "preparing candidate boxes" stage before writing boxes to the canvas.
+- Default reveal pacing is 10-15 seconds per page; if the provider is slower than that, do not add extra delay before the response exists.
+- Batch mode may fetch pages concurrently, but candidate boxes are revealed page-by-page so the user can see progress instead of an instant full-project jump.
+
 ## Non-Goals
 
 - No UI redesign.
 - No admin/payment/billing/entitlement revival.
-- No fake random processing delay designed to deceive users.
+- No fake random processing delay that says AI is still running after the provider is done.
 - No hardcoded sample/page/image/coordinate behavior.
 - No database schema change unless separately approved.
 
@@ -69,7 +76,7 @@ Image,BackgroundImage,Map,Icon,Modal,Drawer
 - Stage 1 is implemented as a configurable local YOLO provider behind `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`.
 - Stage 2 manual workflow now covers copy/paste, multi-select deletion, arrow-key nudge, Shift+arrow larger nudge, conservative drag/resize snapping, list-to-canvas centering, and stable bbox draft inputs.
 - Stage 3 keeps save/recovery work inside the existing contracts: save failures keep in-memory edits visible, failed saves expose a retry button, unload is guarded while saving or failed, destructive page replace/delete confirmation remains explicit, and the existing full `project.zip` is treated as the project backup package.
-- The requested fake 10-15 second random AI delay was not implemented. The product should show real progress and provider state, not intentionally misrepresent processing time.
+- Stage 4 implements non-misleading reveal pacing: once AI results are available, the UI says it is preparing candidate boxes and waits a 10-15 second per-page reveal window before merging them into normal slices. The progress panel does not claim the provider is still computing during that window.
 
 ## Stop Conditions
 
