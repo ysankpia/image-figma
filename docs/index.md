@@ -85,7 +85,7 @@ Primary contracts:
 
 Completed prelaunch hardening work is tracked in [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md).
 
-Formal multi-user production-readiness work is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md).
+Formal multi-user production-readiness history is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md). Production Postgres, PSD-like service, and GitHub Actions CD cutover is completed in [plans/completed/199-production-postgres-cd-psdlike.md](plans/completed/199-production-postgres-cd-psdlike.md).
 
 Current user-only cleanup is tracked in [plans/completed/196-user-only-surface-simplification.md](plans/completed/196-user-only-surface-simplification.md). Plan 196 deliberately removes the admin, billing, payment, entitlement, usage, order, quota, and XPay side chain from the current runtime. Do not reintroduce those surfaces from older 189 notes without a new active plan.
 
