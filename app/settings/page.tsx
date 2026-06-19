@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { fetchCurrentUser } from "@/app/server-auth";
 import { SignOutButton } from "@/components/site/SignOutButton";
+import { WorkbenchPreferencesForm } from "@/components/site/WorkbenchPreferencesForm";
 
 export default async function SettingsPage() {
   const user = await fetchCurrentUser().catch(() => null);
@@ -13,7 +14,7 @@ export default async function SettingsPage() {
         <div>
           <p className="eyebrow">Account</p>
           <h1>账号设置</h1>
-          <p>查看当前登录账号，并管理当前会话。</p>
+          <p>查看当前登录账号，并调整这个浏览器上的工作台使用偏好。</p>
         </div>
       </header>
 
@@ -38,6 +39,16 @@ export default async function SettingsPage() {
             <dd>{user.status === "active" ? "正常" : "已暂停"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="settingsPanel">
+        <div className="sectionHeader">
+          <div>
+            <h2>工作台偏好</h2>
+            <p>这些设置只影响当前浏览器，用来把单人切图流程调到最顺手。</p>
+          </div>
+        </div>
+        <WorkbenchPreferencesForm />
       </section>
 
       <section className="settingsPanel">

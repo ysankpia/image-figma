@@ -50,7 +50,7 @@ export function AuthFormCard({
             <p className="eyebrow">Slice Studio</p>
             <h1>把截图直接推进到可编辑资产交付</h1>
             <p>
-              面向设计师、前端独立开发者、外包团队和小程序开发者。先完成项目归属、额度和导出主链路，再把支付与多用户运营收口。
+              面向设计师、前端独立开发者、外包团队和小程序开发者。上传页面、手动画框、AI 辅助识别，然后导出资产包和项目包。
             </p>
           </div>
           <div className="authShowcasePanel">
@@ -58,7 +58,7 @@ export function AuthFormCard({
             <ul className="authFeatureList">
               <li>项目内直接管理原图、切图和导出包</li>
               <li>AI 识别、手动画框、可编辑文字重建在一条主链路里完成</li>
-              <li>额度、账号和管理面已经并入同一套产品壳</li>
+              <li>个人设置可以控制常用工作台偏好</li>
             </ul>
           </div>
         </div>
@@ -69,7 +69,7 @@ export function AuthFormCard({
           <Link className="consoleBrand inline" href="/">Slice Studio</Link>
           <div>
             <h2>{isSignUp ? "创建账号" : "登录账号"}</h2>
-            <p>{isSignUp ? "创建一个账号，直接进入你的项目工作台。" : "继续处理你的项目、额度和导出流程。"}</p>
+            <p>{isSignUp ? "创建一个账号，直接进入你的项目工作台。" : "继续处理你的项目、切图和导出流程。"}</p>
           </div>
         </div>
 

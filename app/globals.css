@@ -3814,7 +3814,83 @@ h1 {
 .inlineActionRow {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.preferenceForm {
+  display: grid;
+  gap: 18px;
+}
+
+.preferenceBlock {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+  border-top: 1px solid #edf0f4;
+  padding-top: 18px;
+}
+
+.preferenceBlock:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.preferenceBlock h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.preferenceBlock p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.preferenceSegmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  background: #f7f8fa;
+}
+
+.preferenceSegmented button {
+  min-width: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-weight: 600;
+}
+
+.preferenceSegmented button.active {
+  background: #ffffff;
+  color: var(--blue);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+.preferenceChecks {
+  display: grid;
+  gap: 10px;
+}
+
+.preferenceChecks label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.preferenceChecks input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue);
 }
 
 .signOutButton {

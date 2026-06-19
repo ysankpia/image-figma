@@ -8,6 +8,8 @@ import { apiGet, apiUrl, createExportJob, deletePage, generateAiBoxes, getAiSlic
 import { mergeAiBoxesIntoSlices } from "@/shared/ai-slices";
 import { clamp, draftToBox, normalizeBox } from "@/shared/bbox";
 import type { BBox, CreateExportJobRequest, CutMode, ExportJobRecord, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
+import { defaultWorkbenchPreferences, readWorkbenchPreferences } from "@/shared/workbench-preferences";
+import type { WorkbenchPreferences } from "@/shared/workbench-preferences";
 
 type WorkbenchPage = PageRecord & {
   slices: SliceRecord[];
@@ -475,8 +477,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [status, setStatus] = useState(reviewI18n.zh.loadingProject);
   const [stageSize, setStageSize] = useState({ width: 1000, height: 700 });
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
-  const [assetListCollapsed, setAssetListCollapsed] = useState(false);
+  const [workbenchPreferences, setWorkbenchPreferences] = useState<WorkbenchPreferences>(defaultWorkbenchPreferences);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(defaultWorkbenchPreferences.inspectorCollapsed);
+  const [assetListCollapsed, setAssetListCollapsed] = useState(defaultWorkbenchPreferences.assetListCollapsed);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetCutModeFilter, setAssetCutModeFilter] = useState<"all" | CutMode>("all");
   const [assetSort, setAssetSort] = useState<"order" | "name" | "size">("order");
@@ -484,7 +487,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [pageConfirmAction, setPageConfirmAction] = useState<PageConfirmAction | null>(null);
   const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
   const [boxColors, setBoxColors] = useState(defaultBoxColors);
-  const [defaultCutMode, setDefaultCutMode] = useState<CutMode>("rect");
+  const [defaultCutMode, setDefaultCutMode] = useState<CutMode>(defaultWorkbenchPreferences.defaultCutMode);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
@@ -524,6 +527,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const pageCutMode = getPageCutMode(activePage, defaultCutMode);
   const aiBusy = aiRunning !== null;
   const exportBusy = exportTarget !== null;
+  const showStageFooter = workbenchPreferences.stageFooterItems.length > 0;
   const visibleAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
     const source = activePage?.slices || [];
@@ -558,6 +562,18 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     selectSlice(null);
     setStatus(hydratedPages.length ? messages.projectRestored : messages.projectCreated);
   }, [projectId]);
+
+  useEffect(() => {
+    try {
+      const storedPreferences = readWorkbenchPreferences(window.localStorage);
+      setWorkbenchPreferences(storedPreferences);
+      setDefaultCutMode(storedPreferences.defaultCutMode);
+      setInspectorCollapsed(storedPreferences.inspectorCollapsed);
+      setAssetListCollapsed(storedPreferences.assetListCollapsed);
+    } catch {
+      setWorkbenchPreferences(defaultWorkbenchPreferences);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -2009,11 +2025,11 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             </Stage>
           )}
         </div>
-        {activePage ? (
+        {activePage && showStageFooter ? (
           <footer className="stageFooter">
-            <span>{activePage.width}x{activePage.height}</span>
-            <span>{Math.round(scale * 100)}%</span>
-            <span className={`stageStatus ${saveState}`}>{status}</span>
+            {workbenchPreferences.stageFooterItems.includes("size") ? <span>{activePage.width}x{activePage.height}</span> : null}
+            {workbenchPreferences.stageFooterItems.includes("zoom") ? <span>{Math.round(scale * 100)}%</span> : null}
+            {workbenchPreferences.stageFooterItems.includes("status") ? <span className={`stageStatus ${saveState}`}>{status}</span> : null}
           </footer>
         ) : null}
       </section>

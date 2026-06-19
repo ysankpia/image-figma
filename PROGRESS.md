@@ -3,11 +3,12 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Slice Studio production export path is now task-based for user-facing downloads; monitor deployment validation and real project usage.
+Slice Studio single-user workbench preference settings completed; next focus remains production usability feedback.
 
 ## Active plan
 - Current execution plan: none.
-- Most recently completed: `docs/plans/completed/202-slice-studio-async-export-jobs.md`
+- Most recently completed: `docs/plans/completed/203-single-user-workbench-preferences.md`
+- Prior completed: `docs/plans/completed/202-slice-studio-async-export-jobs.md`
 - Prior completed: `docs/plans/completed/201-slice-studio-export-cache-and-download-feedback.md`
 - Prior completed: `docs/plans/completed/200-slice-studio-image-loading-performance.md`
 - Prior manual workflow plan retained for closeout context: `docs/plans/active/198-slice-studio-manual-workflow-hardening.md`
@@ -22,9 +23,11 @@ Slice Studio production export path is now task-based for user-facing downloads;
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Awaiting production deploy validation
+Awaiting next usability pass
 
 ## Now
+- 2026-06-20: completed plan 203. `/settings` now includes browser-local Review Workbench preferences for default cut mode, default right inspector collapsed state, default asset list collapsed state, and bottom status bar item visibility. Review Workbench reads those preferences on load; empty bottom status bar preferences hide the footer entirely. Validation passed: `pnpm exec vitest run tests/workbench-preferences.test.ts`, `pnpm run check` (15 files / 120 tests), `pnpm run build`, `git diff --check`, and a local browser smoke proving `/settings` renders the preference controls and Review Workbench applies `assetListCollapsed=true` plus a status-only footer.
+- 2026-06-20: started plan 203 for single-user workbench preferences. Scope is `/settings` plus Review Workbench local UI preferences only: default cut mode, default right-panel collapsed state, default asset-list collapsed state, and configurable canvas bottom status bar items. Payment, admin, quota, entitlement, team, and account-sync settings remain out of scope.
 - 2026-06-19: completed plan 202. Added in-process async export jobs for assets, current-page project package, and full project package while preserving the existing synchronous export endpoints and signed download contracts. Review Workbench export buttons now create jobs, poll status, and download only after the generated zip is ready, so first-time full `project.zip/design.pen` generation no longer depends on one long POST request staying connected. Validation passed: `pnpm exec vitest run tests/export-jobs.test.ts tests/export-cache.test.ts` (8 tests), `pnpm run check` (14 files / 117 tests), `pnpm run build`, `git diff --check`, and a real isolated API smoke that registered a user, created a project, uploaded a PNG, saved a slice, generated/downloaded `assets`, `page_project`, and `project` jobs, and proved a repeated project job returns `cached:true`.
 - 2026-06-19: started plan 202 after production use showed first-time full project package generation remains too slow and can still disconnect. Root cause: full `project.zip/design.pen` export still performs OCR, text reconstruction, remainder generation, slice prep, package validation, and zip creation inside one synchronous POST. Plan 201 cache helps repeated unchanged exports but cannot fix first-time long-running exports. This stage keeps old sync endpoints and adds an async export job API for the Review Workbench buttons.
 - 2026-06-19: completed plan 201. Added `server/export-cache.ts` fingerprint metadata beside generated zip files and wired cache reuse into `assets.zip`, full `project.zip`, and page-scoped `project.zip` exports. Cache hits return fresh signed download URLs without re-cropping, OCR, text reconstruction, remainder generation, Pencil validation, or zip rebuild. Review Workbench now shows explicit export progress, disables concurrent export clicks, reports cache reuse, and downloads via a same-page hidden link instead of navigating to the signed URL. Validation passed: `pnpm exec vitest run tests/export-cache.test.ts` (4 tests), `pnpm run check` (13 files / 113 tests), `pnpm run build`, `git diff --check`, `bun run smoke` against an isolated temp SQLite/storage API, and a real API cache smoke proving second assets/project exports return `cached:true` and a bbox change invalidates the cache.

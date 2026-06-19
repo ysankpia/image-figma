@@ -73,7 +73,7 @@ Override this with `SLICE_STUDIO_LOCAL_OWNER_EMAIL` and `SLICE_STUDIO_LOCAL_OWNE
 Account surface:
 
 ```text
-/settings: current account profile plus sign out
+/settings: current account profile, sign out, and browser-local Review Workbench preferences
 ```
 
 ## Review Workbench
@@ -121,6 +121,8 @@ Cmd/Ctrl + wheel: zoom around cursor
 Undo is session-local. Slice creation, move, resize, delete, rename, page rename, and page ordering are written back after undo. File-level page delete/replace cannot restore the old source image after it has been removed or overwritten; the UI reloads from current disk state and shows a warning instead of pretending the file came back.
 
 Box colors are local Review UI preferences. Use the color controls in the right inspector to change normal and active slice outline colors; the preference is kept in browser local storage and does not affect exported assets.
+
+Workbench preferences live in browser local storage under `sliceStudio.workbenchPreferences.v1`. `/settings` can change the default cut mode, the default collapsed state for the right inspector and asset list, and which items appear in the canvas bottom status bar. These preferences are single-device UI preferences; they do not change saved slices, export manifests, the database schema, or account-level server state.
 
 Each slice supports three export modes:
 

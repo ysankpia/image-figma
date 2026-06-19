@@ -464,7 +464,7 @@ Auth:
 
 Purpose:
 
-- minimal account settings;
+- minimal account settings and browser-local Review Workbench preferences;
 - no admin role display;
 - no billing, payment, usage, quota, or entitlement copy.
 
@@ -480,7 +480,29 @@ Functions:
 
 - show current account identity;
 - show active/suspended status;
+- set default Review Workbench cut mode: `rect`, `subject`, or `card`;
+- set whether the Review Workbench right inspector starts collapsed;
+- set whether the Review Workbench asset list starts collapsed;
+- choose which bottom status bar items are visible: page size, zoom, save/task status;
+- persist those workbench preferences in browser `localStorage`;
 - sign out current session.
+
+Local storage key:
+
+```text
+sliceStudio.workbenchPreferences.v1
+```
+
+Workbench preference shape:
+
+```ts
+{
+  defaultCutMode: "rect" | "subject" | "card"
+  inspectorCollapsed: boolean
+  assetListCollapsed: boolean
+  stageFooterItems: Array<"size" | "zoom" | "status">
+}
+```
 
 APIs:
 
@@ -488,6 +510,8 @@ APIs:
 GET  /api/auth/session
 POST /api/auth/sign-out
 ```
+
+No API is used for workbench preferences in the current runtime.
 
 Future account functions may include password change, data export, and deletion request, but they are not in the current runtime.
 
