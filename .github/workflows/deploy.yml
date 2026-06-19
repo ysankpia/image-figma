@@ -108,6 +108,7 @@ jobs:
           curl -fsS http://127.0.0.1:4120/health
           curl -fsS http://127.0.0.1:4110/api/health
           curl -fsSI http://127.0.0.1:3010 >/dev/null
+          cd "${DEPLOY_PATH}"
           css_asset="$(find .next/static/chunks -maxdepth 1 -name '*.css' -printf '%f\n' | head -n 1)"
           test -n "${css_asset}"
           curl -fsSI "http://127.0.0.1:3010/_next/static/chunks/${css_asset}" >/dev/null
