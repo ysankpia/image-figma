@@ -2,6 +2,7 @@
 
 本索引列出已移出 `docs/plans/active/` 的计划。
 
+- [205 本地流式下载加固](205-local-streaming-download-hardening.md) — `completed`
 - [204 导出任务可观测与卡队列修复](204-export-job-observability-and-stuck-queue.md) — `completed`
 - [203 单人版工作台偏好设置](203-single-user-workbench-preferences.md) — `completed`
 - [202 Slice Studio 异步导出任务](202-slice-studio-async-export-jobs.md) — `completed`

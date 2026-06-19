@@ -18,6 +18,12 @@ function makeStorage() {
   return { root, storage: createLocalStorageAdapter(root) };
 }
 
+function testFileBody(filePath: string, range?: { start: number; end: number }): BodyInit {
+  const bytes = fs.readFileSync(filePath);
+  const sliced = range ? bytes.subarray(range.start, range.end + 1) : bytes;
+  return new Uint8Array(sliced);
+}
+
 describe("storage adapter", () => {
   it("builds stable project storage keys", () => {
     const { storage } = makeStorage();
@@ -67,6 +73,48 @@ describe("storage adapter", () => {
       contentDisposition: 'attachment; filename="project.zip"'
     });
     expect(url.startsWith("/api/storage-download?token=")).toBe(true);
+  });
+
+  it("streams stored files with length and range headers", async () => {
+    const { storage } = makeStorage();
+    storage.write("users/user_1/projects/project_1/exports/project.zip", Buffer.from("0123456789"));
+
+    const full = storage.response("users/user_1/projects/project_1/exports/project.zip", {
+      contentType: "application/zip",
+      fileBody: testFileBody
+    });
+    expect(full.status).toBe(200);
+    expect(full.headers.get("accept-ranges")).toBe("bytes");
+    expect(full.headers.get("content-length")).toBe("10");
+    expect(await full.text()).toBe("0123456789");
+
+    const partial = storage.response("users/user_1/projects/project_1/exports/project.zip", {
+      contentType: "application/zip",
+      range: "bytes=2-5",
+      fileBody: testFileBody
+    });
+    expect(partial.status).toBe(206);
+    expect(partial.headers.get("content-length")).toBe("4");
+    expect(partial.headers.get("content-range")).toBe("bytes 2-5/10");
+    expect(await partial.text()).toBe("2345");
+
+    const suffix = storage.response("users/user_1/projects/project_1/exports/project.zip", {
+      contentType: "application/zip",
+      range: "bytes=-4",
+      fileBody: testFileBody
+    });
+    expect(suffix.status).toBe(206);
+    expect(suffix.headers.get("content-range")).toBe("bytes 6-9/10");
+    expect(await suffix.text()).toBe("6789");
+
+    const unsatisfiable = storage.response("users/user_1/projects/project_1/exports/project.zip", {
+      contentType: "application/zip",
+      range: "bytes=20-30",
+      fileBody: testFileBody
+    });
+    expect(unsatisfiable.status).toBe(416);
+    expect(unsatisfiable.headers.get("content-range")).toBe("bytes */10");
+    expect(unsatisfiable.headers.get("content-length")).toBe("0");
   });
 
   it("resolves fallback legacy keys for existing local projects", () => {

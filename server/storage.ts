@@ -158,15 +158,39 @@ export function createLocalStorageAdapter(root: string) {
       contentDisposition?: string;
       cacheControl?: string;
       notFoundMessage?: string;
+      range?: string | null;
+      fileBody?: (filePath: string, range?: { start: number; end: number }) => BodyInit;
     }): Response {
       const filePath = absolutePath(key);
       if (!fs.existsSync(filePath)) throw httpError(404, input.notFoundMessage || "Storage object not found");
+      const size = fs.statSync(filePath).size;
       const headers: Record<string, string> = {
+        "accept-ranges": "bytes",
+        "content-length": String(size),
         "content-type": input.contentType
       };
       if (input.contentDisposition) headers["content-disposition"] = input.contentDisposition;
       if (input.cacheControl) headers["cache-control"] = input.cacheControl;
-      return new Response(Bun.file(filePath), { headers });
+      const range = parseByteRange(input.range, size);
+      if (range === "unsatisfiable") {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            ...headers,
+            "content-length": "0",
+            "content-range": `bytes */${size}`
+          }
+        });
+      }
+      if (range) {
+        headers["content-length"] = String(range.end - range.start + 1);
+        headers["content-range"] = `bytes ${range.start}-${range.end}/${size}`;
+        return new Response(fileBody(filePath, input.fileBody, range), {
+          status: 206,
+          headers
+        });
+      }
+      return new Response(fileBody(filePath, input.fileBody), { headers });
     },
     downloadUrl(key: string, input: StorageDownloadOptions): string {
       return createSignedStorageDownloadUrl(key, input);
@@ -175,3 +199,33 @@ export function createLocalStorageAdapter(root: string) {
 }
 
 export const storage = createLocalStorageAdapter(storageRoot);
+
+function fileBody(filePath: string, factory?: (filePath: string, range?: { start: number; end: number }) => BodyInit, range?: { start: number; end: number }): BodyInit {
+  if (factory) return factory(filePath, range);
+  const file = Bun.file(filePath);
+  return range ? file.slice(range.start, range.end + 1) : file;
+}
+
+function parseByteRange(value: string | null | undefined, size: number): { start: number; end: number } | "unsatisfiable" | null {
+  if (!value) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
+  if (!match) return null;
+  if (size <= 0) return "unsatisfiable";
+  const [, rawStart, rawEnd] = match;
+  if (!rawStart && !rawEnd) return null;
+  if (!rawStart) {
+    const suffixLength = Number(rawEnd);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return "unsatisfiable";
+    return {
+      start: Math.max(0, size - suffixLength),
+      end: size - 1
+    };
+  }
+  const start = Number(rawStart);
+  const end = rawEnd ? Number(rawEnd) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || start >= size) return "unsatisfiable";
+  return {
+    start,
+    end: Math.min(end, size - 1)
+  };
+}

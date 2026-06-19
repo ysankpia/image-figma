@@ -66,9 +66,12 @@ const app = new Elysia({
     return { error: error instanceof Error ? error.message : "Internal server error" };
   })
   .get("/api/health", () => ({ ok: true }))
-  .get("/api/storage-download", ({ query }) => {
+  .get("/api/storage-download", ({ query, request }) => {
     const download = resolveSignedStorageDownload(query.token);
-    return storage.response(download.key, download.response);
+    return storage.response(download.key, {
+      ...download.response,
+      range: request.headers.get("range")
+    });
   }, {
     query: t.Object({
       token: t.String({ minLength: 1 })
@@ -161,7 +164,8 @@ const app = new Elysia({
     return storage.response(await getPageOriginalKey(user.id, params.projectId, params.pageId), {
       contentType: "image/png",
       cacheControl: "no-store",
-      notFoundMessage: "Original image not found"
+      notFoundMessage: "Original image not found",
+      range: request.headers.get("range")
     });
   })
   .get("/api/projects/:projectId/pages/:pageId/thumbnail", async ({ request, params }) => {
@@ -169,7 +173,8 @@ const app = new Elysia({
     return storage.response(await getPageThumbnailKey(user.id, params.projectId, params.pageId), {
       contentType: "image/png",
       cacheControl: "no-store",
-      notFoundMessage: "Page thumbnail not found"
+      notFoundMessage: "Page thumbnail not found",
+      range: request.headers.get("range")
     });
   })
   .put("/api/projects/:projectId/slices", async ({ request, params, body }) => ({ ok: true, project: await saveSlices((await requireUser(request)).id, params.projectId, body as SaveSlicesRequest) }))
@@ -212,7 +217,8 @@ const app = new Elysia({
     return storage.response(storage.firstExistingKey(storage.assetsZipKeyVariants(user.id, params.projectId), "assets.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-assets.zip"`,
-      notFoundMessage: "assets.zip has not been generated"
+      notFoundMessage: "assets.zip has not been generated",
+      range: request.headers.get("range")
     });
   })
   .post("/api/projects/:projectId/export-project", async ({ request, params }) => exportPencilProject((await requireUser(request)).id, params.projectId))
@@ -223,7 +229,8 @@ const app = new Elysia({
     return storage.response(storage.firstExistingKey(storage.projectPageZipKeyVariants(user.id, params.projectId, params.pageId), "page project.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-${params.pageId}-project.zip"`,
-      notFoundMessage: "page project.zip has not been generated"
+      notFoundMessage: "page project.zip has not been generated",
+      range: request.headers.get("range")
     });
   })
   .get("/api/projects/:projectId/project.zip", async ({ request, params }) => {
@@ -232,7 +239,8 @@ const app = new Elysia({
     return storage.response(storage.firstExistingKey(storage.projectZipKeyVariants(user.id, params.projectId), "project.zip has not been generated"), {
       contentType: "application/zip",
       contentDisposition: `attachment; filename="${params.projectId}-project.zip"`,
-      notFoundMessage: "project.zip has not been generated"
+      notFoundMessage: "project.zip has not been generated",
+      range: request.headers.get("range")
     });
   })
   .listen({
