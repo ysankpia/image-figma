@@ -118,10 +118,11 @@ pnpm run check
 pnpm run build
 git diff --check
 git archive --format=tar HEAD | ssh racknerd 'set -euo pipefail; rm -rf /opt/slice-studio/app.new; mkdir -p /opt/slice-studio/app.new; tar -xf - -C /opt/slice-studio/app.new; rm -rf /opt/slice-studio/app.old; if [ -d /opt/slice-studio/app ]; then mv /opt/slice-studio/app /opt/slice-studio/app.old; fi; mv /opt/slice-studio/app.new /opt/slice-studio/app'
-ssh racknerd 'cd /opt/slice-studio/app && corepack enable && corepack prepare pnpm@10.33.2 --activate && pnpm install --frozen-lockfile && pnpm run build && systemctl restart slice-studio-api slice-studio-web'
+ssh racknerd 'cd /opt/slice-studio/app && corepack enable && corepack prepare pnpm@10.33.2 --activate && pnpm install --frozen-lockfile && pnpm run build && mkdir -p .next/standalone/.next && rm -rf .next/standalone/.next/static .next/standalone/public && cp -a .next/static .next/standalone/.next/static && if [ -d public ]; then cp -a public .next/standalone/public; fi && systemctl restart slice-studio-text-style slice-studio-api slice-studio-web'
 ```
 
 The production services are already installed; do not recreate them unless the service contract changes.
+Because the web service starts `.next/standalone/server.js`, every deploy must copy `.next/static` and `public` into `.next/standalone`. If this step is skipped, pages render as unstyled HTML while `/api/health` can still pass.
 
 ## Validation
 
@@ -132,6 +133,7 @@ ssh racknerd 'systemctl is-active slice-studio-text-style slice-studio-api slice
 ssh racknerd 'curl -fsS http://127.0.0.1:4120/health'
 ssh racknerd 'curl -fsS http://127.0.0.1:4110/api/health'
 ssh racknerd 'curl -fsSI http://127.0.0.1:3010 | sed -n "1,12p"'
+ssh racknerd 'cd /opt/slice-studio/app && css_asset="$(find .next/static/chunks -maxdepth 1 -name "*.css" -printf "%f\n" | head -n 1)" && test -n "$css_asset" && curl -fsSI "http://127.0.0.1:3010/_next/static/chunks/$css_asset" | sed -n "1,12p"'
 curl -fsSI http://image.figma.245162.xyz
 curl -fsSI https://image.figma.245162.xyz
 curl -fsS https://image.figma.245162.xyz/api/health
@@ -202,6 +204,8 @@ It uses the RackNerd Cloudflare Access TCP bridge, a dedicated deploy SSH key in
 
 Therefore the workflow does not run `git pull` on the server. It uploads a release directory, swaps it into place, runs `pnpm install --frozen-lockfile`, builds Next standalone, ensures the PSD-like venv exists, restarts `slice-studio-text-style`, `slice-studio-api`, and `slice-studio-web`, then checks local service health.
 
+The workflow also copies `.next/static` and `public` into `.next/standalone` before restarting the web service. Keep this step with the build; Next standalone does not serve those assets from the repo root.
+
 Required repo secrets:
 
 ```text
@@ -216,10 +220,7 @@ SERVICE_NAME=slice-studio-api
 These are not blockers for the current deployed user-side product, but they are real remaining operations work:
 
 ```text
-GitHub Actions CD workflow
 server backup/restore for /opt/slice-studio/storage and /opt/slice-studio/env
-PSD-like text-style service installation if production-quality text measurement is required
-Postgres migration only if SQLite is no longer acceptable
 object storage backend only if local disk storage is no longer acceptable
 monitoring/alerting beyond systemd and Caddy logs
 ```

@@ -91,6 +91,10 @@ jobs:
           corepack prepare pnpm@10.33.2 --activate
           pnpm install --frozen-lockfile
           pnpm run build
+          mkdir -p .next/standalone/.next
+          rm -rf .next/standalone/.next/static .next/standalone/public
+          cp -a .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -a public .next/standalone/public; fi
           cd "${DEPLOY_PATH}/services/psdlike-text-style"
           if [ ! -x .venv/bin/uvicorn ]; then
             python3 -m venv .venv
@@ -104,4 +108,7 @@ jobs:
           curl -fsS http://127.0.0.1:4120/health
           curl -fsS http://127.0.0.1:4110/api/health
           curl -fsSI http://127.0.0.1:3010 >/dev/null
+          css_asset="$(find .next/static/chunks -maxdepth 1 -name '*.css' -printf '%f\n' | head -n 1)"
+          test -n "${css_asset}"
+          curl -fsSI "http://127.0.0.1:3010/_next/static/chunks/${css_asset}" >/dev/null
           EOF
