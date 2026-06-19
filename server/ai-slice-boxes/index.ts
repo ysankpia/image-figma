@@ -12,7 +12,7 @@ import { httpError } from "../errors";
 import { getPageOriginalKey, getPageOriginalPath, getProjectDetail } from "../projects";
 import { storage } from "../storage";
 import type { AiSliceBoxesResponse } from "../../shared/types";
-import { filterAiBoxes, parseAiBoxResponse } from "./boxes";
+import { filterAiBoxes, filterYoloBoxes, parseAiBoxResponse } from "./boxes";
 import { callAiSliceOverviewProvider, callAiSliceProvider } from "./provider";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "./tiles";
 import type { RawAiBox } from "./types";
@@ -32,9 +32,8 @@ export async function generateAiSliceBoxes(userId: string, projectId: string, pa
   const height = metadata.height || page.height;
   if (aiSliceProvider === "yolo_local") {
     const rawBoxes = await detectYoloSliceBoxes(imageBuffer);
-    const filtered = filterAiBoxes({
+    const filtered = filterYoloBoxes({
       boxes: rawBoxes,
-      existingSlices: page.slices,
       bounds: { width, height },
       maxBoxes: aiSliceMaxBoxesPerPage
     });

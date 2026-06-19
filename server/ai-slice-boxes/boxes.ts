@@ -86,6 +86,42 @@ export function filterAiBoxes(input: {
   return { boxes: accepted, rejectedCount };
 }
 
+export function filterYoloBoxes(input: {
+  boxes: RawAiBox[];
+  bounds: { width: number; height: number };
+  maxBoxes: number;
+}): { boxes: AiSliceBox[]; rejectedCount: number } {
+  const accepted: AiSliceBox[] = [];
+  let rejectedCount = 0;
+  const pageArea = input.bounds.width * input.bounds.height;
+  const candidates = normalizeRawBoxes(input.boxes, input.bounds);
+
+  rejectedCount += input.boxes.length - candidates.length;
+
+  for (const raw of candidates) {
+    const bbox = raw.bbox;
+    if (bbox.width < minBoxSize || bbox.height < minBoxSize) {
+      rejectedCount += 1;
+      continue;
+    }
+    if (bbox.width * bbox.height / pageArea > maxPageAreaRatio) {
+      rejectedCount += 1;
+      continue;
+    }
+    accepted.push({
+      bbox,
+      name: raw.name || undefined,
+      confidence: raw.confidence,
+      reason: raw.reason,
+      sourceTileId: raw.sourceTileId
+    });
+    if (accepted.length >= input.maxBoxes) break;
+  }
+
+  rejectedCount += Math.max(0, input.boxes.length - accepted.length - rejectedCount);
+  return { boxes: accepted, rejectedCount };
+}
+
 function normalizeRawBoxes(boxes: RawAiBox[], bounds: { width: number; height: number }): RawAiBox[] {
   const normalized: RawAiBox[] = [];
   for (const raw of boxes) {

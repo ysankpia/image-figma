@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { mergeAiBoxesIntoSlices } from "../shared/ai-slices";
-import { filterAiBoxes, parseAiBoxResponse } from "../server/ai-slice-boxes/boxes";
+import { filterAiBoxes, filterYoloBoxes, parseAiBoxResponse } from "../server/ai-slice-boxes/boxes";
 import {
   buildChatCompletionsPayload,
   buildOverviewPrompt,
@@ -175,6 +175,24 @@ describe("AI slice boxes", () => {
 
     expect(result.boxes.map((box) => box.bbox)).toEqual([{ x: 220, y: 220, width: 60, height: 60 }]);
     expect(result.rejectedCount).toBe(4);
+  });
+
+  it("keeps local yolo candidates even when they overlap existing or sibling boxes", () => {
+    const result = filterYoloBoxes({
+      bounds: { width: 500, height: 500 },
+      maxBoxes: 10,
+      boxes: [
+        { bbox: { x: 10, y: 10, width: 100, height: 100 }, name: "Image", sourceTileId: "yolo_full_page" },
+        { bbox: { x: 12, y: 12, width: 96, height: 96 }, name: "Image", sourceTileId: "yolo_full_page" },
+        { bbox: { x: 200, y: 200, width: 6, height: 6 }, name: "Icon", sourceTileId: "yolo_full_page" }
+      ]
+    });
+
+    expect(result.boxes.map((box) => box.bbox)).toEqual([
+      { x: 10, y: 10, width: 100, height: 100 },
+      { x: 12, y: 12, width: 96, height: 96 }
+    ]);
+    expect(result.rejectedCount).toBe(1);
   });
 
   it("prefers usable overview boxes over contained tile fragments", () => {

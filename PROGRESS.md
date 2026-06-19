@@ -3,7 +3,7 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Production AI box assist has been cut from the unstable Qwen/OpenAI-compatible upstream to the local YOLO provider from plan 198.
+Production API regression and YOLO candidate-output repair after the initial local YOLO provider cutover.
 
 ## Active plan
 - Current execution plan: none.
@@ -20,9 +20,10 @@ Production AI box assist has been cut from the unstable Qwen/OpenAI-compatible u
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Production YOLO provider cutover complete
+Production API regression repair
 
 ## Now
+- 2026-06-19: investigated reported production 500s after YOLO cutover. Public `page_0001/ai-boxes` for `project_mqklx55m_8796a228` now returns 200 but showed YOLO raw 26 / accepted 23 because the YOLO path still reused VLM duplicate/existing-slice suppression. Public `page_0012/export-project` returned a plain 500 at about 30s, while direct `127.0.0.1:4110` export returned 200 in about 35s and direct function invocation returned 32 assets. Root cause was Caddy routing all `image.figma.245162.xyz` traffic through Next `3010`; `/api/*` now routes directly to Elysia `4110`, and the same public page export returns 200 in about 49s. A disposable production API sweep ran 27 checks across auth, project CRUD, page upload/rename/source/thumbnail/replace/delete/order, AI boxes, slices save/preview, assets export/download, page project export/download, full project export/download, cleanup, and sign-out; all passed.
 - 2026-06-19: completed production YOLO provider cutover. Commit `a3ea5c3` added `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON` so production can run Ultralytics from `/opt/slice-studio/yolo-venv/bin/python` instead of system Python. GitHub Actions deploy run `27812564911` passed. RackNerd now has `/opt/slice-studio/models/yolo-ui-best.pt`, CPU-only PyTorch/Ultralytics in the dedicated venv, and `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`. Public `/api/ai-slice-settings` returns `provider=yolo_local` with classes `Image,BackgroundImage,Map,Icon,Modal,Drawer`. Production `/ai-boxes` smoke passed on a tiny PNG with no 500 and on a real PixPin screenshot with 3 YOLO `Image` candidate boxes.
 - 2026-06-19: investigating production `/ai-boxes` 500s. Public `/api/ai-slice-settings` returned `provider=openai_responses`, and the RackNerd service env still pointed at DashScope/Qwen. The server also had no YOLO model file and no `ultralytics` module, so the failure path is upstream/provider configuration rather than the recent thumbnail image-loading change. Current work is to run YOLO through a dedicated production virtualenv and switch `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`.
 - 2026-06-19: completed plan 200 image-loading performance pass. Slice Studio now keeps original PNGs as the export/cropping truth while adding server-generated 360px page thumbnails for project cards and the review page rail. The review workbench no longer loads and decodes every page `sourceUrl` during project hydration; it loads the active page source image on demand, preserves loaded page images across light project refreshes, and clears/reloads the active image only when a page source is replaced. Upload/replace lazily or eagerly writes thumbnails, delete/replace cleans thumbnail cache, and legacy projects backfill through `/api/projects/:projectId/pages/:pageId/thumbnail`. Validation passed: targeted storage/manifest/AI tests, `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm run check`, `pnpm run build`, `git diff --check`, and a real API smoke where a 1400x900 source stayed original while its thumbnail returned 360x231 and export still produced a signed ZIP URL.

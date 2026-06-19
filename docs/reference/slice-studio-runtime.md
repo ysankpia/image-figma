@@ -27,6 +27,7 @@ Storage path: /opt/slice-studio/storage
 API service: slice-studio-api on 127.0.0.1:4110
 Web service: slice-studio-web on 127.0.0.1:3010
 Reverse proxy: existing Docker Caddy container sub2api-caddy
+Public routing: /api/* -> 127.0.0.1:4110, all other routes -> 127.0.0.1:3010
 Database: existing jianzhi-postgres container, dedicated slice_studio database
 Text style service: slice-studio-text-style on 127.0.0.1:4120
 Runbook: docs/runbooks/slice-studio-production-deploy.md

@@ -24,9 +24,8 @@ The production route is native runtime plus `systemd`, behind the existing Caddy
 ```text
 Browser
 -> Caddy HTTPS :443
--> 127.0.0.1:3010 Next standalone server
--> same-origin /api rewrite
--> 127.0.0.1:4110 Elysia API
+-> /api/* direct reverse proxy to 127.0.0.1:4110 Elysia API
+-> non-API routes reverse proxy to 127.0.0.1:3010 Next standalone server
 -> existing jianzhi-postgres container on 127.0.0.1:15432
 -> dedicated Postgres database slice_studio
 -> /opt/slice-studio/storage/users/{userId}/projects/{projectId}/...
@@ -175,9 +174,12 @@ The Caddy site block is:
 ```caddy
 image.figma.245162.xyz {
     encode zstd gzip
+    reverse_proxy /api/* 127.0.0.1:4110
     reverse_proxy 127.0.0.1:3010
 }
 ```
+
+Do not route `/api/*` through the Next standalone server in production. Long exports can exceed the Next proxy path's practical timeout and return a plain 500 around 30 seconds even though `127.0.0.1:4110` succeeds.
 
 Caddy obtained a Let's Encrypt certificate for `image.figma.245162.xyz` on 2026-06-18 UTC. Certificate renewal is handled by Caddy using its persistent Docker volumes:
 
