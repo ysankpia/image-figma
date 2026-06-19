@@ -57,6 +57,7 @@ export const aiSliceJpegQuality = normalizeNumber(process.env.SLICE_STUDIO_AI_SL
 export const aiSliceMaxBoxesPerPage = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE, 80);
 export const aiSliceOverviewReview = normalizeBool(process.env.SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW, true);
 export const aiSliceYoloModelPath = process.env.SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH || "";
+export const aiSliceYoloPython = process.env.SLICE_STUDIO_AI_SLICE_YOLO_PYTHON || "python3";
 export const aiSliceYoloConfidence = Number(process.env.SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE || 0.35);
 export const aiSliceYoloImageSize = normalizeNumber(process.env.SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE, 1024);
 export const aiSliceYoloClasses = normalizeCsv(process.env.SLICE_STUDIO_AI_SLICE_YOLO_CLASSES || "Image,BackgroundImage,Map,Icon,Modal,Drawer");

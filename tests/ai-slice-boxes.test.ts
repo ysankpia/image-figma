@@ -12,7 +12,7 @@ import {
   formatProviderError,
   requestUrl
 } from "../server/ai-slice-boxes/provider";
-import { aiSliceProvider, aiSliceYoloClasses } from "../server/config";
+import { aiSliceProvider, aiSliceYoloClasses, aiSliceYoloPython } from "../server/config";
 import { generateTiles, mapTileBoxToPage, prepareTileImage } from "../server/ai-slice-boxes/tiles";
 import type { PageRecord, SliceRecord } from "../shared/types";
 
@@ -136,6 +136,7 @@ describe("AI slice boxes", () => {
 
   it("keeps the ai slice provider contract open for local yolo provider support", () => {
     expect(["openai_responses", "yolo_local", "disabled"]).toContain(aiSliceProvider);
+    expect(aiSliceYoloPython.trim()).not.toBe("");
     expect(aiSliceYoloClasses).toContain("Image");
     expect(aiSliceYoloClasses).toContain("Icon");
     expect(aiSliceYoloClasses).not.toContain("Card");

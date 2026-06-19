@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { aiSliceYoloClasses, aiSliceYoloConfidence, aiSliceYoloImageSize, aiSliceYoloModelPath } from "../config";
+import { aiSliceYoloClasses, aiSliceYoloConfidence, aiSliceYoloImageSize, aiSliceYoloModelPath, aiSliceYoloPython } from "../config";
 import { httpError } from "../errors";
 import type { RawAiBox } from "./types";
 
@@ -29,10 +29,13 @@ export async function detectYoloSliceBoxes(imageBuffer: Buffer): Promise<RawAiBo
       "    out.append({'className': name, 'confidence': float(box.conf[0]), 'bbox': {'x': x1, 'y': y1, 'width': x2 - x1, 'height': y2 - y1}})",
       "print(json.dumps({'boxes': out}, ensure_ascii=False))"
     ].join("\n");
-    const result = spawnSync("python3", ["-c", script, aiSliceYoloModelPath, imagePath, String(aiSliceYoloConfidence), String(aiSliceYoloImageSize)], {
+    const result = spawnSync(aiSliceYoloPython, ["-c", script, aiSliceYoloModelPath, imagePath, String(aiSliceYoloConfidence), String(aiSliceYoloImageSize)], {
       encoding: "utf8",
       maxBuffer: 20 * 1024 * 1024
     });
+    if (result.error) {
+      throw httpError(502, `YOLO detection failed to start ${aiSliceYoloPython}: ${result.error.message}`);
+    }
     if (result.status !== 0) {
       throw httpError(502, `YOLO detection failed: ${trimProcessOutput(result.stderr || result.stdout)}`);
     }

@@ -74,6 +74,7 @@ Image,BackgroundImage,Map,Icon,Modal,Drawer
 ## Implementation Notes
 
 - Stage 1 is implemented as a configurable local YOLO provider behind `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`.
+- Stage 1 production hardening also supports `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON`, so deployment can run Ultralytics from an isolated virtualenv instead of relying on system Python packages.
 - Stage 2 manual workflow now covers copy/paste, multi-select deletion, arrow-key nudge, Shift+arrow larger nudge, conservative drag/resize snapping, list-to-canvas centering, and stable bbox draft inputs.
 - Stage 3 keeps save/recovery work inside the existing contracts: save failures keep in-memory edits visible, failed saves expose a retry button, unload is guarded while saving or failed, destructive page replace/delete confirmation remains explicit, and the existing full `project.zip` is treated as the project backup package.
 - Stage 4 implements non-misleading reveal pacing: once AI results are available, the UI says it is preparing candidate boxes and waits a 10-15 second per-page reveal window before merging them into normal slices. The progress panel does not claim the provider is still computing during that window.

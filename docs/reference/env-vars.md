@@ -76,6 +76,7 @@ OCR 是文字内容权威。M29 physical evidence 只用于更准确的文字 bb
 | `SLICE_STUDIO_AI_SLICE_MAX_BOXES_PER_PAGE` | 单页接受框上限 | `80` | 否 |
 | `SLICE_STUDIO_AI_SLICE_OVERVIEW_REVIEW` | 是否发送压缩全页 overview 做跨 tile 大资产合并 | `true` | 否 |
 | `SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH` | 本地 YOLO provider 权重路径 | 空 | 使用 `yolo_local` 时需要 |
+| `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON` | 运行本地 YOLO provider 的 Python 可执行文件 | `python3` | 否；生产建议指向专用 venv |
 | `SLICE_STUDIO_AI_SLICE_YOLO_CLASSES` | 本地 YOLO provider 允许进入候选的类别 CSV | `Image,BackgroundImage,Map,Icon,Modal,Drawer` | 否 |
 | `SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE` | 本地 YOLO provider 置信度阈值 | `0.35` | 否 |
 | `SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE` | 本地 YOLO provider 推理尺寸 | `1024` | 否 |
@@ -98,12 +99,15 @@ Local YOLO provider example:
 ```text
 SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local
 SLICE_STUDIO_AI_SLICE_YOLO_MODEL_PATH=/Volumes/WorkDrive/Datasets/vins_rico_yolov8/VINS-RICO-UPLABS-ANDROID.v2i.yolov8/runs/detect/runs/detect/train/weights/best.pt
+SLICE_STUDIO_AI_SLICE_YOLO_PYTHON=python3
 SLICE_STUDIO_AI_SLICE_YOLO_CLASSES=Image,BackgroundImage,Map,Icon,Modal,Drawer
 SLICE_STUDIO_AI_SLICE_YOLO_CONFIDENCE=0.35
 SLICE_STUDIO_AI_SLICE_YOLO_IMAGE_SIZE=1024
 ```
 
 `Card` is intentionally excluded from the default YOLO class list because this dataset treats it as a container class that often includes text, buttons, and images together. Use it only for diagnostics or future container-boundary evidence, not as a direct asset slice class.
+
+Production should point `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON` at a dedicated virtualenv, for example `/opt/slice-studio/yolo-venv/bin/python`, instead of installing `ultralytics` into the system Python.
 
 ## Example `.env.local`
 
