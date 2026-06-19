@@ -167,10 +167,14 @@ The Review Workbench starts exports through async export jobs instead of waiting
 
 ```text
 POST /api/projects/:projectId/export-jobs
+GET  /api/projects/:projectId/export-jobs
 GET  /api/projects/:projectId/export-jobs/:jobId
+DELETE /api/projects/:projectId/export-jobs/:jobId
 ```
 
-The job endpoint accepts `kind: "assets" | "project" | "page_project"` plus `pageId` for `page_project`. Jobs are kept in the API process memory and execute the same exporter functions as the older synchronous endpoints. This keeps first-time large project package generation out of the browser/Cloudflare request lifecycle while preserving the existing zip format and signed download URL contract. The older synchronous endpoints remain available for scripts and smoke tests.
+The job endpoint accepts `kind: "assets" | "project" | "page_project"` plus `pageId` for `page_project`. Job records expose `id`, `status`, `createdAt`, `updatedAt`, optional `startedAt` / `finishedAt`, and the signed download `url` after success. Jobs are kept in the API process memory and execute the same exporter functions as the older synchronous endpoints. This keeps first-time large project package generation out of the browser/Cloudflare request lifecycle while preserving the existing zip format and signed download URL contract. The older synchronous endpoints remain available for scripts and smoke tests.
+
+Queued jobs can be listed and canceled for the current project. Running jobs are not falsely canceled because the current in-process queue cannot kill a synchronous exporter once it is executing; normal async hangs fail through `SLICE_STUDIO_EXPORT_JOB_TIMEOUT_SECONDS` after 600 seconds by default. A stuck CPU-bound exporter still requires a process restart or a later worker-process queue.
 
 `project.zip` packages the same confirmed slice assets into a Pencil handoff project:
 

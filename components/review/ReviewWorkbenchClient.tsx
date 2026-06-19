@@ -219,8 +219,8 @@ const reviewI18n = {
     exportingAssets: "正在准备资产包。未修改内容会直接复用上次导出。",
     exportingPage: "正在准备当前页项目包。未修改内容会直接复用上次导出。",
     exportingProject: "正在准备项目包。未修改内容会直接复用上次导出。",
-    exportQueued: "导出任务已排队。",
-    exportRunning: "正在生成导出文件，完成后会自动下载。",
+    exportQueued: "导出任务 {jobId} 已排队 {elapsed}。前面可能还有导出任务。",
+    exportRunning: "导出任务 {jobId} 正在生成，已运行 {elapsed}，完成后会自动下载。",
     exportTimedOut: "导出仍在后台处理中，请稍后重试或刷新后再次查看。",
     exporting: "导出中",
     exportFailed: "导出失败：{error}",
@@ -414,8 +414,8 @@ const reviewI18n = {
     exportingAssets: "Preparing assets package. Unchanged content will reuse the previous export.",
     exportingPage: "Preparing current page package. Unchanged content will reuse the previous export.",
     exportingProject: "Preparing project package. Unchanged content will reuse the previous export.",
-    exportQueued: "Export job queued.",
-    exportRunning: "Generating the export. It will download automatically when ready.",
+    exportQueued: "Export job {jobId} queued for {elapsed}. Another export may be running first.",
+    exportRunning: "Export job {jobId} has been running for {elapsed}. It will download automatically when ready.",
     exportTimedOut: "The export is still running in the background. Try again later or refresh and check again.",
     exporting: "Exporting",
     exportFailed: "Export failed: {error}",
@@ -1013,14 +1013,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
 
   async function runExportJob(payload: CreateExportJobRequest): Promise<Required<Pick<ExportJobRecord, "assetCount" | "url">> & Pick<ExportJobRecord, "pageCount" | "cached">> {
     const created = await createExportJob(projectId, payload);
-    setStatus(created.job.status === "queued" ? text.exportQueued : created.job.message || text.exportRunning);
     const startedAt = Date.now();
     let job = created.job;
+    setStatus(formatExportJobStatus(job, startedAt, text));
     while (job.status === "queued" || job.status === "running") {
       if (Date.now() - startedAt > exportJobPollTimeoutMs) throw new Error(text.exportTimedOut);
       await sleep(exportJobPollIntervalMs);
       job = (await getExportJob(projectId, job.id)).job;
-      setStatus(job.status === "queued" ? text.exportQueued : job.message || text.exportRunning);
+      setStatus(formatExportJobStatus(job, startedAt, text));
     }
     if (job.status === "failed") throw new Error(job.error || job.message || "Export failed");
     if (!job.url || typeof job.assetCount !== "number") throw new Error("Export job finished without a download URL");
@@ -2529,6 +2529,21 @@ function formatMessage(template: string, values: Record<string, string | number>
     const value = values[key];
     return value === undefined ? match : String(value);
   });
+}
+
+function formatExportJobStatus(job: ExportJobRecord, startedAt: number, text: ReviewText): string {
+  const elapsed = formatElapsed(Date.now() - startedAt);
+  const jobId = job.id.replace(/^export_job_/, "").slice(-8);
+  if (job.status === "queued") return formatMessage(text.exportQueued, { jobId, elapsed });
+  return formatMessage(text.exportRunning, { jobId, elapsed });
+}
+
+function formatElapsed(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
 }
 
 function getErrorMessage(error: unknown): string {

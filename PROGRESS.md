@@ -3,11 +3,12 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Slice Studio single-user workbench preference settings completed; next focus remains production usability feedback.
+Slice Studio export job observability and stuck-queue recovery completed; next focus remains production usability feedback.
 
 ## Active plan
 - Current execution plan: none.
-- Most recently completed: `docs/plans/completed/203-single-user-workbench-preferences.md`
+- Most recently completed: `docs/plans/completed/204-export-job-observability-and-stuck-queue.md`
+- Prior completed: `docs/plans/completed/203-single-user-workbench-preferences.md`
 - Prior completed: `docs/plans/completed/202-slice-studio-async-export-jobs.md`
 - Prior completed: `docs/plans/completed/201-slice-studio-export-cache-and-download-feedback.md`
 - Prior completed: `docs/plans/completed/200-slice-studio-image-loading-performance.md`
@@ -23,9 +24,10 @@ Slice Studio single-user workbench preference settings completed; next focus rem
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Awaiting next usability pass
+Awaiting next production usability pass
 
 ## Now
+- 2026-06-20: completed plan 204 after production feedback that "download is slow" exposed an export queue observability problem, not a signed download URL problem. Export jobs already had `job.id`; this pass makes that task id visible and operable by adding project-scoped job listing, queued-job cancellation, `startedAt`, `canceled` status, configurable async timeout `SLICE_STUDIO_EXPORT_JOB_TIMEOUT_SECONDS`, and Review Workbench status text with job id fragment plus elapsed queued/running time. Running jobs are not falsely cancelable because the current in-process queue cannot kill an already executing exporter; CPU-bound hangs still require process restart or a future worker-process queue. Validation passed: `pnpm exec vitest run tests/export-jobs.test.ts` (7 tests), `pnpm run typecheck`, `pnpm run check` (15 files / 123 tests), `pnpm run build`, and `git diff --check`.
 - 2026-06-20: completed plan 203. `/settings` now includes browser-local Review Workbench preferences for default cut mode, default right inspector collapsed state, default asset list collapsed state, and bottom status bar item visibility. Review Workbench reads those preferences on load; empty bottom status bar preferences hide the footer entirely. Validation passed: `pnpm exec vitest run tests/workbench-preferences.test.ts`, `pnpm run check` (15 files / 120 tests), `pnpm run build`, `git diff --check`, and a local browser smoke proving `/settings` renders the preference controls and Review Workbench applies `assetListCollapsed=true` plus a status-only footer.
 - 2026-06-20: started plan 203 for single-user workbench preferences. Scope is `/settings` plus Review Workbench local UI preferences only: default cut mode, default right-panel collapsed state, default asset-list collapsed state, and configurable canvas bottom status bar items. Payment, admin, quota, entitlement, team, and account-sync settings remain out of scope.
 - 2026-06-19: completed plan 202. Added in-process async export jobs for assets, current-page project package, and full project package while preserving the existing synchronous export endpoints and signed download contracts. Review Workbench export buttons now create jobs, poll status, and download only after the generated zip is ready, so first-time full `project.zip/design.pen` generation no longer depends on one long POST request staying connected. Validation passed: `pnpm exec vitest run tests/export-jobs.test.ts tests/export-cache.test.ts` (8 tests), `pnpm run check` (14 files / 117 tests), `pnpm run build`, `git diff --check`, and a real isolated API smoke that registered a user, created a project, uploaded a PNG, saved a slice, generated/downloaded `assets`, `page_project`, and `project` jobs, and proved a repeated project job returns `cached:true`.

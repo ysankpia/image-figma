@@ -93,7 +93,7 @@ export type AiSliceSettingsResponse = {
 };
 
 export type ExportJobKind = "assets" | "project" | "page_project";
-export type ExportJobStatus = "queued" | "running" | "succeeded" | "failed";
+export type ExportJobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export type ExportJobRecord = {
   id: string;
@@ -109,6 +109,7 @@ export type ExportJobRecord = {
   error?: string;
   createdAt: string;
   updatedAt: string;
+  startedAt?: string;
   finishedAt?: string;
 };
 
@@ -120,6 +121,11 @@ export type CreateExportJobRequest = {
 export type ExportJobResponse = {
   ok: true;
   job: ExportJobRecord;
+};
+
+export type ExportJobsResponse = {
+  ok: true;
+  jobs: ExportJobRecord[];
 };
 
 export type ExportManifest = {

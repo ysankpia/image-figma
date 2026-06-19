@@ -65,7 +65,9 @@ GET    /api/projects/:projectId/pages/:pageId/thumbnail
 PUT    /api/projects/:projectId/slices
 GET    /api/projects/:projectId/slices/:sliceId/preview.png
 POST   /api/projects/:projectId/export-jobs
+GET    /api/projects/:projectId/export-jobs
 GET    /api/projects/:projectId/export-jobs/:jobId
+DELETE /api/projects/:projectId/export-jobs/:jobId
 POST   /api/projects/:projectId/export-assets
 GET    /api/projects/:projectId/assets.zip
 POST   /api/projects/:projectId/export-project

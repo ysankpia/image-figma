@@ -1,4 +1,5 @@
 import { randomHex } from "./utils";
+import { exportJobTimeoutSeconds } from "./config";
 import { httpError } from "./errors";
 import type { ExportJobKind, ExportJobRecord } from "../shared/types";
 
@@ -58,6 +59,29 @@ export function getExportJob(userId: string, projectId: string, jobId: string): 
   return publicJob(job);
 }
 
+export function listExportJobs(userId: string, projectId: string): ExportJobRecord[] {
+  return [...jobs.values()]
+    .filter((job) => job.userId === userId && job.projectId === projectId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
+    .map(publicJob);
+}
+
+export function cancelExportJob(userId: string, projectId: string, jobId: string): ExportJobRecord {
+  const job = jobs.get(jobId);
+  if (!job || job.userId !== userId || job.projectId !== projectId) throw httpError(404, "Export job not found");
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "canceled") return publicJob(job);
+  if (job.status === "running") throw httpError(409, "Running export jobs cannot be canceled by the in-process queue");
+  updateJob(job, {
+    status: "canceled",
+    message: "Export canceled",
+    finishedAt: new Date().toISOString()
+  });
+  const queuedIndex = queue.indexOf(job.id);
+  if (queuedIndex >= 0) queue.splice(queuedIndex, 1);
+  scheduleQueue();
+  return publicJob(job);
+}
+
 function scheduleQueue(): void {
   queueMicrotask(() => {
     while (runningJobs < maxConcurrentJobs && queue.length) {
@@ -77,10 +101,12 @@ function scheduleQueue(): void {
 async function runJob(job: InternalExportJob): Promise<void> {
   updateJob(job, {
     status: "running",
-    message: runningMessage(job.kind)
+    message: runningMessage(job.kind),
+    startedAt: new Date().toISOString()
   });
   try {
-    const result = await exportRunner(job);
+    const result = await withTimeout(exportRunner(job), exportJobTimeoutSeconds * 1000);
+    if (job.status === "canceled") return;
     updateJob(job, {
       status: "succeeded",
       message: result.cached ? cachedMessage(job.kind) : succeededMessage(job.kind),
@@ -91,6 +117,7 @@ async function runJob(job: InternalExportJob): Promise<void> {
       finishedAt: new Date().toISOString()
     });
   } catch (error) {
+    if (job.status === "canceled") return;
     updateJob(job, {
       status: "failed",
       message: "Export failed",
@@ -133,7 +160,7 @@ function updateJob(job: InternalExportJob, patch: Partial<InternalExportJob>): v
 function trimFinishedJobs(): void {
   if (jobs.size <= maxJobs) return;
   const removable = [...jobs.values()]
-    .filter((job) => job.status === "succeeded" || job.status === "failed")
+    .filter((job) => job.status === "succeeded" || job.status === "failed" || job.status === "canceled")
     .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
   for (const job of removable.slice(0, Math.max(0, jobs.size - maxJobs))) {
     jobs.delete(job.id);
@@ -148,6 +175,20 @@ function publicJob(job: InternalExportJob): ExportJobRecord {
 function normalizeExportJobKind(kind: string): ExportJobKind {
   if (kind === "assets" || kind === "project" || kind === "page_project") return kind;
   throw httpError(400, "Invalid export job kind");
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`Export job timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function queuedMessage(kind: ExportJobKind): string {

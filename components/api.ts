@@ -2,6 +2,7 @@ import type {
   AiSliceBoxesResponse,
   AiSliceSettingsResponse,
   CreateExportJobRequest,
+  ExportJobsResponse,
   ExportJobResponse,
   PageRecord,
   ProjectDetail,
@@ -72,6 +73,14 @@ export async function createExportJob(projectId: string, payload: CreateExportJo
 
 export async function getExportJob(projectId: string, jobId: string): Promise<ExportJobResponse> {
   return apiGet(`/api/projects/${projectId}/export-jobs/${jobId}`);
+}
+
+export async function listExportJobs(projectId: string): Promise<ExportJobsResponse> {
+  return apiGet(`/api/projects/${projectId}/export-jobs`);
+}
+
+export async function cancelExportJob(projectId: string, jobId: string): Promise<ExportJobResponse> {
+  return apiDelete(`/api/projects/${projectId}/export-jobs/${jobId}`);
 }
 
 export async function renamePage(projectId: string, pageId: string, displayName: string): Promise<{ page: PageRecord }> {

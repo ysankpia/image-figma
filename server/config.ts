@@ -18,6 +18,7 @@ export const authSessionTtlDays = normalizeNumber(process.env.SLICE_STUDIO_AUTH_
 export const authSecureCookies = normalizeBool(process.env.SLICE_STUDIO_AUTH_SECURE_COOKIES, process.env.NODE_ENV === "production");
 export const downloadSigningSecret = process.env.SLICE_STUDIO_DOWNLOAD_SIGNING_SECRET || process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD || "slice-studio-download-secret";
 export const downloadUrlTtlSeconds = normalizeNumber(process.env.SLICE_STUDIO_DOWNLOAD_URL_TTL_SECONDS, 600);
+export const exportJobTimeoutSeconds = normalizeNumber(process.env.SLICE_STUDIO_EXPORT_JOB_TIMEOUT_SECONDS, 600);
 export const localOwnerEmail = normalizeEmail(process.env.SLICE_STUDIO_LOCAL_OWNER_EMAIL || "local@slicestudio.dev");
 export const localOwnerName = process.env.SLICE_STUDIO_LOCAL_OWNER_NAME || "Local Owner";
 export const localOwnerPassword = process.env.SLICE_STUDIO_LOCAL_OWNER_PASSWORD || "slice-studio-local-owner";

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  cancelExportJob,
   createExportJob,
   getExportJob,
+  listExportJobs,
   resetExportJobsForTests,
   setExportJobRunnerForTests
 } from "../server/export-jobs";
@@ -79,5 +81,71 @@ describe("export jobs", () => {
 
     expect(() => getExportJob("user_2", "project_1", created.id)).toThrow("Export job not found");
     expect(() => getExportJob("user_1", "project_2", created.id)).toThrow("Export job not found");
+  });
+
+  it("lists jobs for the current user and project", async () => {
+    setExportJobRunnerForTests(async () => ({
+      assetCount: 1,
+      url: "/api/storage-download?token=ok",
+      cached: true
+    }));
+
+    const first = createExportJob("user_1", "project_1", { kind: "assets" });
+    const second = createExportJob("user_1", "project_1", { kind: "project" });
+    createExportJob("user_1", "project_2", { kind: "assets" });
+    createExportJob("user_2", "project_1", { kind: "assets" });
+
+    const jobs = listExportJobs("user_1", "project_1");
+
+    expect(jobs.map((job) => job.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it("cancels queued jobs and removes them from the queue", async () => {
+    let releaseFirst!: () => void;
+    setExportJobRunnerForTests(async (job) => {
+      if (job.kind === "assets") {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      return {
+        assetCount: 1,
+        url: `/api/storage-download?token=${job.id}`,
+        cached: false
+      };
+    });
+
+    const running = createExportJob("user_1", "project_1", { kind: "assets" });
+    const queued = createExportJob("user_1", "project_1", { kind: "project" });
+    await wait(5);
+
+    const canceled = cancelExportJob("user_1", "project_1", queued.id);
+    expect(canceled.status).toBe("canceled");
+
+    releaseFirst();
+    await waitForStatus("user_1", "project_1", running.id, "succeeded");
+    expect(getExportJob("user_1", "project_1", queued.id).status).toBe("canceled");
+  });
+
+  it("does not pretend to cancel running jobs", async () => {
+    let release!: () => void;
+    setExportJobRunnerForTests(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return {
+        assetCount: 1,
+        url: "/api/storage-download?token=ok",
+        cached: false
+      };
+    });
+
+    const running = createExportJob("user_1", "project_1", { kind: "assets" });
+    await wait(5);
+
+    expect(() => cancelExportJob("user_1", "project_1", running.id)).toThrow("Running export jobs cannot be canceled");
+
+    release();
+    await waitForStatus("user_1", "project_1", running.id, "succeeded");
   });
 });

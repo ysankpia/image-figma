@@ -402,6 +402,8 @@ Export functions:
 - export full project package `project.zip / design.pen`;
 - export current page `project.zip / design.pen`;
 - full project package includes `project.json`, `manifest.json`, `design.pen`, original PNGs, visible remainder PNGs, and slice PNGs;
+- Review Workbench export buttons create async export jobs and poll by job id before downloading;
+- export job status shows the job id fragment and elapsed queued/running time;
 - download URL is returned by the export API and may be a signed `/api/storage-download?token=...` URL.
 
 APIs:
@@ -418,6 +420,10 @@ GET    /api/projects/:projectId/pages/:pageId/source
 GET    /api/projects/:projectId/pages/:pageId/thumbnail
 PUT    /api/projects/:projectId/slices
 GET    /api/projects/:projectId/slices/:sliceId/preview.png
+POST   /api/projects/:projectId/export-jobs
+GET    /api/projects/:projectId/export-jobs
+GET    /api/projects/:projectId/export-jobs/:jobId
+DELETE /api/projects/:projectId/export-jobs/:jobId
 POST   /api/projects/:projectId/export-assets
 GET    /api/projects/:projectId/assets.zip
 POST   /api/projects/:projectId/export-project
