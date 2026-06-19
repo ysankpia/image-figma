@@ -3,7 +3,7 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Production API regression and YOLO candidate-output repair after the initial local YOLO provider cutover.
+Production API regression and YOLO candidate-output repair after the initial local YOLO provider cutover is complete.
 
 ## Active plan
 - Current execution plan: none.
@@ -20,9 +20,10 @@ Production API regression and YOLO candidate-output repair after the initial loc
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Production API regression repair
+Production API regression repair complete
 
 ## Now
+- 2026-06-19: completed and deployed the production API regression repair. Commit `0c9d5d9` separates YOLO candidate filtering from VLM filtering so local YOLO keeps overlapping candidates and no longer suppresses existing-slice or duplicate-IoU matches. GitHub Actions deploy run `27813981997` passed. Production validation after deploy passed: public `project_mqklx55m_8796a228/page_0001/ai-boxes` returned `rawBoxCount=26,acceptedBoxCount=26,rejectedBoxCount=0`; public `page_0012/export-project` returned 200 with `assetCount=32,pageCount=1`; `/api/ai-slice-settings` still returns `provider=yolo_local`; all three services are active; Caddy routes `/api/*` directly to `127.0.0.1:4110`; a disposable 27-check public API sweep passed with zero failures.
 - 2026-06-19: investigated reported production 500s after YOLO cutover. Public `page_0001/ai-boxes` for `project_mqklx55m_8796a228` now returns 200 but showed YOLO raw 26 / accepted 23 because the YOLO path still reused VLM duplicate/existing-slice suppression. Public `page_0012/export-project` returned a plain 500 at about 30s, while direct `127.0.0.1:4110` export returned 200 in about 35s and direct function invocation returned 32 assets. Root cause was Caddy routing all `image.figma.245162.xyz` traffic through Next `3010`; `/api/*` now routes directly to Elysia `4110`, and the same public page export returns 200 in about 49s. A disposable production API sweep ran 27 checks across auth, project CRUD, page upload/rename/source/thumbnail/replace/delete/order, AI boxes, slices save/preview, assets export/download, page project export/download, full project export/download, cleanup, and sign-out; all passed.
 - 2026-06-19: completed production YOLO provider cutover. Commit `a3ea5c3` added `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON` so production can run Ultralytics from `/opt/slice-studio/yolo-venv/bin/python` instead of system Python. GitHub Actions deploy run `27812564911` passed. RackNerd now has `/opt/slice-studio/models/yolo-ui-best.pt`, CPU-only PyTorch/Ultralytics in the dedicated venv, and `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`. Public `/api/ai-slice-settings` returns `provider=yolo_local` with classes `Image,BackgroundImage,Map,Icon,Modal,Drawer`. Production `/ai-boxes` smoke passed on a tiny PNG with no 500 and on a real PixPin screenshot with 3 YOLO `Image` candidate boxes.
 - 2026-06-19: investigating production `/ai-boxes` 500s. Public `/api/ai-slice-settings` returned `provider=openai_responses`, and the RackNerd service env still pointed at DashScope/Qwen. The server also had no YOLO model file and no `ultralytics` module, so the failure path is upstream/provider configuration rather than the recent thumbnail image-loading change. Current work is to run YOLO through a dedicated production virtualenv and switch `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`.
