@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { storageRoot } from "./config";
 import { httpError } from "./errors";
 import { createSignedStorageDownloadUrl, type StorageDownloadOptions } from "./storage-download";
@@ -202,8 +203,9 @@ export const storage = createLocalStorageAdapter(storageRoot);
 
 function fileBody(filePath: string, factory?: (filePath: string, range?: { start: number; end: number }) => BodyInit, range?: { start: number; end: number }): BodyInit {
   if (factory) return factory(filePath, range);
+  if (range) return Readable.toWeb(fs.createReadStream(filePath, { start: range.start, end: range.end })) as unknown as BodyInit;
   const file = Bun.file(filePath);
-  return range ? file.slice(range.start, range.end + 1) : file;
+  return file;
 }
 
 function parseByteRange(value: string | null | undefined, size: number): { start: number; end: number } | "unsatisfiable" | null {
