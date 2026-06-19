@@ -3,15 +3,16 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Plan 199 is complete: Slice Studio production now runs on Postgres, PSD-like text-style service, and GitHub Actions CD, while keeping the user-only runtime boundary and not reviving admin, billing, payment, entitlement, usage, quota, or management surfaces.
+Plan 200 is complete: Slice Studio keeps original PNGs as export truth while project cards and review page rails use derived thumbnails, and the canvas loads full source images only on demand.
 
 ## Active plan
 - Current execution plan: none.
-- Most recently completed: `docs/plans/completed/199-production-postgres-cd-psdlike.md`
+- Most recently completed: `docs/plans/completed/200-slice-studio-image-loading-performance.md`
 - Prior manual workflow plan retained for closeout context: `docs/plans/active/198-slice-studio-manual-workflow-hardening.md`
 - Production history/context plan retained: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Prior text/slice coordination plan still active for closeout context: `docs/plans/active/193-pencil-export-text-slice-coordination.md`
 - Most recently completed:
+  - `docs/plans/completed/199-production-postgres-cd-psdlike.md`
   - `docs/plans/completed/196-user-only-surface-simplification.md`
   - `docs/plans/completed/195-current-psdlike-text-style-service.md`
   - `docs/plans/completed/194-psdlike-text-style-evidence-gate.md`
@@ -19,9 +20,10 @@ Plan 199 is complete: Slice Studio production now runs on Postgres, PSD-like tex
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Production Postgres/CD handoff complete
+Image-loading performance pass complete
 
 ## Now
+- 2026-06-19: completed plan 200 image-loading performance pass. Slice Studio now keeps original PNGs as the export/cropping truth while adding server-generated 360px page thumbnails for project cards and the review page rail. The review workbench no longer loads and decodes every page `sourceUrl` during project hydration; it loads the active page source image on demand, preserves loaded page images across light project refreshes, and clears/reloads the active image only when a page source is replaced. Upload/replace lazily or eagerly writes thumbnails, delete/replace cleans thumbnail cache, and legacy projects backfill through `/api/projects/:projectId/pages/:pageId/thumbnail`. Validation passed: targeted storage/manifest/AI tests, `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm run check`, `pnpm run build`, `git diff --check`, and a real API smoke where a 1400x900 source stayed original while its thumbnail returned 360x231 and export still produced a signed ZIP URL.
 - 2026-06-19: advanced plan 199 production cutover. Slice Studio now has a SQLite/Postgres database provider boundary; local/dev defaults to SQLite, and production is configured with `SLICE_STUDIO_DATABASE_PROVIDER=postgres` plus the existing RackNerd `jianzhi-postgres` container on `127.0.0.1:15432`, using a dedicated `slice_studio` database instead of mixing with the existing `jianzhi` business tables. Server Postgres smoke passed with owner bootstrap and project create/list/delete. Production services were cut over and are active: `slice-studio-text-style` on `127.0.0.1:4120`, `slice-studio-api` on `127.0.0.1:4110`, and `slice-studio-web` on `127.0.0.1:3010`. Server-local real app smoke passed against Postgres: owner/session path, temporary project creation, PNG upload, slice save, `assets.zip`, `project.zip/design.pen`, and cleanup. Source-origin HTTPS with `--resolve image.figma.245162.xyz:443:192.236.242.152` passes, normal Cloudflare-proxied public HTTPS recovered and passes, and public real app smoke passed via `SLICE_STUDIO_API_URL=https://image.figma.245162.xyz bun run smoke`. GitHub Actions CD workflow is committed and pushed; final push-triggered deploy run `27780812699` passed, and public smoke after deployment passed.
 - 2026-06-19: first production deployment completed for Slice Studio at `https://image.figma.245162.xyz` on RackNerd `192.236.242.152`. Runtime is native `systemd` plus existing Docker Caddy, with API on `127.0.0.1:4110`, Next standalone web on `127.0.0.1:3010`, app at `/opt/slice-studio/app`, storage at `/opt/slice-studio/storage`, and env at `/opt/slice-studio/env/slice-studio.env`. Caddy issued a Let's Encrypt certificate for the domain. Service, HTTPS, health, and real app smoke passed: owner login, temporary project creation, PNG upload, slice save, assets export, project export, and temporary project cleanup. Current production uses SQLite at `/opt/slice-studio/storage/app.sqlite`; existing PGSQL was not touched because the code has no Postgres adapter or `DATABASE_URL` path. There is no active GitHub Actions CD workflow yet; `/opt/slice-studio/app` is an uploaded archive, not a git clone. Runbook added at `docs/runbooks/slice-studio-production-deploy.md`.
 - 2026-06-18: added non-misleading AI result reveal pacing for the review workbench. After a successful AI boxes response, the UI now enters a 10-15 second per-page "preparing candidate boxes" stage before merging boxes into normal slices; batch mode still fetches pages concurrently but reveals and saves results page-by-page. This deliberately does not claim the provider is still computing after the response has returned, and the merge path reads the latest page state to avoid overwriting manual edits made during the reveal window.

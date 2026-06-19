@@ -27,6 +27,7 @@ import {
   deleteProject,
   getPageOriginalKey,
   getPageOriginalPath,
+  getPageThumbnailKey,
   getProjectDetail,
   getSliceForPreview,
   listProjectCards,
@@ -160,6 +161,14 @@ const app = new Elysia({
       contentType: "image/png",
       cacheControl: "no-store",
       notFoundMessage: "Original image not found"
+    });
+  })
+  .get("/api/projects/:projectId/pages/:pageId/thumbnail", async ({ request, params }) => {
+    const user = await requireUser(request);
+    return storage.response(await getPageThumbnailKey(user.id, params.projectId, params.pageId), {
+      contentType: "image/png",
+      cacheControl: "no-store",
+      notFoundMessage: "Page thumbnail not found"
     });
   })
   .put("/api/projects/:projectId/slices", async ({ request, params, body }) => ({ ok: true, project: await saveSlices((await requireUser(request)).id, params.projectId, body as SaveSlicesRequest) }))

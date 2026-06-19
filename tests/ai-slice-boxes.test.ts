@@ -248,7 +248,8 @@ function pageRecord(): PageRecord {
     displayName: "P1",
     width: 500,
     height: 500,
-    sourceUrl: "/source.png"
+    sourceUrl: "/source.png",
+    thumbnailUrl: "/thumbnail.png"
   };
 }
 

@@ -22,6 +22,7 @@ describe("manifest", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: [{
           id: "slice_1",
           projectId: "project_1",
@@ -62,6 +63,7 @@ describe("manifest", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: [{
           id: "slice_1",
           projectId: "project_1",
@@ -103,6 +105,7 @@ describe("manifest", () => {
           width: 100,
           height: 80,
           sourceUrl: "/source/orders",
+          thumbnailUrl: "/thumbnail/orders",
           slices: [{
             id: "slice_1",
             projectId: "project_1",
@@ -124,6 +127,7 @@ describe("manifest", () => {
           width: 100,
           height: 80,
           sourceUrl: "/source/home",
+          thumbnailUrl: "/thumbnail/home",
           slices: []
         }
       ]
@@ -153,6 +157,7 @@ describe("manifest", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: [
           {
             id: "slice_a",

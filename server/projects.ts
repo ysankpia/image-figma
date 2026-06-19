@@ -9,6 +9,8 @@ import { defaultSliceName, isDefaultSliceName, normalizeDefaultSliceNames } from
 import { assertSafeId, assertSafeSliceId, normalizeCutMode, normalizeSliceBox, normalizeSliceKind } from "../shared/validation";
 import type { PageRecord, ProjectDetail, ProjectListItem, ProjectSummary, SaveSlicesRequest, SliceRecord } from "../shared/types";
 
+const pageThumbnailWidth = 360;
+
 export async function listProjects(userId: string): Promise<ProjectSummary[]> {
   return (await db.all<ProjectRow>(`
     SELECT id, name, created_at, updated_at, page_count, slice_count
@@ -126,6 +128,7 @@ export async function addPages(userId: string, projectId: string, files: File | 
     for (const file of normalizedFiles) {
       const relativePath = storage.projectOriginalImageKey(userId, projectId, file.pageId);
       storage.write(relativePath, file.buffer);
+      await writePageThumbnail(userId, projectId, file.pageId, file.buffer);
       await db.run(`
         INSERT INTO pages (id, project_id, page_index, original_name, display_name, original_path, width, height, created_at)
         VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)
@@ -153,6 +156,7 @@ export async function deletePage(userId: string, projectId: string, pageId: stri
   await assertProjectExists(userId, projectId);
   const page = await getPageRow(projectId, pageId);
   const absolutePath = storage.absolutePath(page.original_path);
+  const thumbnailKey = storage.projectThumbnailImageKey(userId, projectId, pageId);
   const trashPath = `${absolutePath}.deleted-${Date.now()}`;
   let moved = false;
   if (fs.existsSync(absolutePath)) {
@@ -170,6 +174,7 @@ export async function deletePage(userId: string, projectId: string, pageId: stri
     throw error;
   }
   if (moved) fs.rmSync(trashPath, { force: true });
+  storage.remove(thumbnailKey);
   return await getProjectDetail(userId, projectId);
 }
 
@@ -211,16 +216,25 @@ export async function replacePage(userId: string, projectId: string, pageId: str
 
   const relativePath = page.original_path;
   const absolutePath = storage.absolutePath(relativePath);
+  const thumbnailKey = storage.projectThumbnailImageKey(userId, projectId, pageId);
+  const thumbnailPath = storage.absolutePath(thumbnailKey);
   const replacementPath = `${absolutePath}.replacement-${Date.now()}`;
   const backupPath = `${absolutePath}.backup-${Date.now()}`;
+  const thumbnailBackupPath = `${thumbnailPath}.backup-${Date.now()}`;
   fs.writeFileSync(replacementPath, buffer);
   let hasBackup = false;
+  let hasThumbnailBackup = false;
   try {
     if (fs.existsSync(absolutePath)) {
       fs.renameSync(absolutePath, backupPath);
       hasBackup = true;
     }
+    if (fs.existsSync(thumbnailPath)) {
+      fs.renameSync(thumbnailPath, thumbnailBackupPath);
+      hasThumbnailBackup = true;
+    }
     fs.renameSync(replacementPath, absolutePath);
+    await writePageThumbnail(userId, projectId, pageId, buffer);
     await transaction(async () => {
       await db.run("DELETE FROM slices WHERE project_id = ? AND page_id = ?", [projectId, pageId]);
       await db.run(`
@@ -238,9 +252,12 @@ export async function replacePage(userId: string, projectId: string, pageId: str
     } else {
       fs.rmSync(absolutePath, { force: true });
     }
+    fs.rmSync(thumbnailPath, { force: true });
+    if (hasThumbnailBackup) fs.renameSync(thumbnailBackupPath, thumbnailPath);
     throw error;
   }
   if (hasBackup) fs.rmSync(backupPath, { force: true });
+  if (hasThumbnailBackup) fs.rmSync(thumbnailBackupPath, { force: true });
   return await getProjectDetail(userId, projectId);
 }
 
@@ -337,6 +354,15 @@ export async function getPageOriginalKey(userId: string, projectId: string, page
   return row.original_path;
 }
 
+export async function getPageThumbnailKey(userId: string, projectId: string, pageId: string): Promise<string> {
+  const originalKey = await getPageOriginalKey(userId, projectId, pageId);
+  const thumbnailKey = storage.projectThumbnailImageKey(userId, projectId, pageId);
+  if (!storage.exists(thumbnailKey)) {
+    await writePageThumbnail(userId, projectId, pageId, storage.read(originalKey, "Original image not found"));
+  }
+  return thumbnailKey;
+}
+
 export async function getSliceForPreview(userId: string, projectId: string, sliceId: string): Promise<{ originalKey: string; slice: SliceRecord }> {
   assertSafeId(projectId, "projectId");
   assertSafeSliceId(sliceId);
@@ -348,6 +374,14 @@ export async function getSliceForPreview(userId: string, projectId: string, slic
     originalKey: storage.firstExistingKey([page.original_path], "Original image not found"),
     slice: formatSlice(slice)
   };
+}
+
+async function writePageThumbnail(userId: string, projectId: string, pageId: string, originalBuffer: Buffer): Promise<void> {
+  const thumbnail = await sharp(originalBuffer, { failOn: "none" })
+    .resize({ width: pageThumbnailWidth, withoutEnlargement: true })
+    .png({ compressionLevel: 9, palette: true })
+    .toBuffer();
+  storage.write(storage.projectThumbnailImageKey(userId, projectId, pageId), thumbnail);
 }
 
 async function getPageRow(projectId: string, pageId: string): Promise<PageRow> {
@@ -412,6 +446,7 @@ function formatProject(row: ProjectRow): ProjectSummary {
 }
 
 function formatPage(row: PageRow): PageRecord {
+  const thumbnailVersion = encodeURIComponent(`${row.created_at}-${row.width}x${row.height}`);
   return {
     id: row.id,
     projectId: row.project_id,
@@ -420,7 +455,8 @@ function formatPage(row: PageRow): PageRecord {
     displayName: row.display_name,
     width: row.width,
     height: row.height,
-    sourceUrl: `/api/projects/${row.project_id}/pages/${row.id}/source`
+    sourceUrl: `/api/projects/${row.project_id}/pages/${row.id}/source`,
+    thumbnailUrl: `/api/projects/${row.project_id}/pages/${row.id}/thumbnail?v=${thumbnailVersion}`
   };
 }
 

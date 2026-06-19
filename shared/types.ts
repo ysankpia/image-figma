@@ -30,6 +30,7 @@ export type PageRecord = {
   width: number;
   height: number;
   sourceUrl: string;
+  thumbnailUrl: string;
 };
 
 export type SliceRecord = {

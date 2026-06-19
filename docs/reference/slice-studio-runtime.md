@@ -137,6 +137,7 @@ Use `subject` for assets like icons, logos, badges, plus buttons, cart buttons, 
 storage/
   app.sqlite
   users/{userId}/projects/{projectId}/originals/page_0001.png
+  users/{userId}/projects/{projectId}/thumbnails/page_0001.png
   users/{userId}/projects/{projectId}/exports/assets.zip
   users/{userId}/projects/{projectId}/exports/project.zip
   users/{userId}/projects/{projectId}/exports/pages/{pageId}/project.zip

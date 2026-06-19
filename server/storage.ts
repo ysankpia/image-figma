@@ -38,6 +38,10 @@ export function createLocalStorageAdapter(root: string) {
     return `${projectRootKey(userId, projectId)}/originals/${pageId}.png`;
   }
 
+  function projectThumbnailImageKey(userId: string, projectId: string, pageId: string): string {
+    return `${projectRootKey(userId, projectId)}/thumbnails/${pageId}.png`;
+  }
+
   function legacyProjectOriginalImageKey(projectId: string, pageId: string): string {
     return `${legacyProjectRootKey(projectId)}/originals/${pageId}.png`;
   }
@@ -108,6 +112,7 @@ export function createLocalStorageAdapter(root: string) {
     projectRootKey,
     legacyProjectRootKey,
     projectOriginalImageKey,
+    projectThumbnailImageKey,
     projectOriginalImageKeyVariants,
     assetsZipKey,
     assetsZipKeyVariants,
@@ -118,6 +123,7 @@ export function createLocalStorageAdapter(root: string) {
     firstExistingKey,
     ensureProjectDirectories(userId: string, projectId: string): void {
       fs.mkdirSync(absolutePath(`${projectRootKey(userId, projectId)}/originals`), { recursive: true });
+      fs.mkdirSync(absolutePath(`${projectRootKey(userId, projectId)}/thumbnails`), { recursive: true });
       fs.mkdirSync(absolutePath(`${projectRootKey(userId, projectId)}/exports`), { recursive: true });
     },
     deleteProject(userId: string, projectId: string): void {

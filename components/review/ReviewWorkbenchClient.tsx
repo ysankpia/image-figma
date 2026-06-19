@@ -465,6 +465,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
   const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
+  const [pageThumbnailRevisionById, setPageThumbnailRevisionById] = useState<Record<string, number>>({});
   const [pendingPreviewSliceIds, setPendingPreviewSliceIds] = useState<Set<string>>(() => new Set());
   const [bboxDraft, setBboxDraft] = useState<BBoxDraft>(emptyBboxDraft);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
@@ -485,6 +486,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const activePageIdRef = useRef<string | null>(null);
   const pagesRef = useRef<WorkbenchPage[]>([]);
+  const imageLoadRef = useRef<Record<string, Promise<HTMLImageElement>>>({});
   const text = reviewI18n[language];
 
   const activePage = pages.find((page) => page.id === activePageId) || null;
@@ -519,10 +521,14 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const loadProject = useCallback(async () => {
     const messages = reviewI18n[languageRef.current];
     const projectDetail = await apiGet<ProjectDetail>(`/api/projects/${projectId}`);
-    const hydratedPages = await hydratePages(projectDetail.pages);
+    const hydratedPages = hydratePages(projectDetail.pages);
     setDetail(projectDetail);
     setPages(hydratedPages);
-    setActivePageId(hydratedPages[0]?.id || null);
+    const currentPageId = activePageIdRef.current;
+    const nextActivePageId = currentPageId && hydratedPages.some((page) => page.id === currentPageId)
+      ? currentPageId
+      : hydratedPages[0]?.id || null;
+    setActivePageId(nextActivePageId);
     selectSlice(null);
     setStatus(hydratedPages.length ? messages.projectRestored : messages.projectCreated);
   }, [projectId]);
@@ -552,6 +558,13 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   useEffect(() => {
     activePageIdRef.current = activePageId;
   }, [activePageId]);
+
+  useEffect(() => {
+    if (!activePageId || activePage?.image) return;
+    void ensurePageImage(activePageId).catch((error) => {
+      setStatus(formatMessage(reviewI18n[languageRef.current].loadFailed, { error: getErrorMessage(error) }));
+    });
+  }, [activePage?.image, activePageId]);
 
   useEffect(() => {
     void loadProject().catch((error) => {
@@ -681,19 +694,35 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     });
   }, [activeSlice?.id, activeSlice?.bbox.x, activeSlice?.bbox.y, activeSlice?.bbox.width, activeSlice?.bbox.height]);
 
-  async function hydratePage(page: ProjectDetail["pages"][number]): Promise<WorkbenchPage> {
-    return {
-      ...page,
-      image: await loadImage(apiUrl(page.sourceUrl))
-    };
+  function hydratePages(sourcePages: ProjectDetail["pages"], resetImagePageIds = new Set<string>()): WorkbenchPage[] {
+    return sourcePages.map((page) => {
+      const existing = pagesRef.current.find((current) => current.id === page.id);
+      return {
+        ...page,
+        image: !resetImagePageIds.has(page.id) ? existing?.image || null : null
+      };
+    });
   }
 
-  async function hydratePages(sourcePages: ProjectDetail["pages"]): Promise<WorkbenchPage[]> {
-    return Promise.all(sourcePages.map(hydratePage));
+  async function ensurePageImage(pageId: string): Promise<HTMLImageElement | null> {
+    const existingPage = pagesRef.current.find((page) => page.id === pageId);
+    if (!existingPage) return null;
+    if (existingPage.image) return existingPage.image;
+    if (!imageLoadRef.current[pageId]) {
+      imageLoadRef.current[pageId] = loadImage(apiUrl(existingPage.sourceUrl));
+    }
+    try {
+      const image = await imageLoadRef.current[pageId];
+      setPages((current) => current.map((page) => page.id === pageId ? { ...page, image } : page));
+      return image;
+    } catch (error) {
+      delete imageLoadRef.current[pageId];
+      throw error;
+    }
   }
 
-  async function applyProjectDetail(projectDetail: ProjectDetail, nextActivePageId?: string | null, nextActiveSliceId?: string | null) {
-    const hydratedPages = await hydratePages(projectDetail.pages);
+  async function applyProjectDetail(projectDetail: ProjectDetail, nextActivePageId?: string | null, nextActiveSliceId?: string | null, resetImagePageIds = new Set<string>()) {
+    const hydratedPages = hydratePages(projectDetail.pages, resetImagePageIds);
     setDetail(projectDetail);
     setPages(hydratedPages);
     const resolvedPageId = nextActivePageId && hydratedPages.some((page) => page.id === nextActivePageId)
@@ -1582,10 +1611,22 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
       await flushPageRename();
       await saveNow();
       pushUndo(pageConfirmAction.type === "delete" ? text.undoDeletePage : text.undoReplacePage, { sourceFileAction: true });
+      delete imageLoadRef.current[pageConfirmAction.pageId];
       const projectDetail = pageConfirmAction.type === "delete"
         ? await deletePage(projectId, pageConfirmAction.pageId)
         : await replacePage(projectId, pageConfirmAction.pageId, pageConfirmAction.file);
-      await applyProjectDetail(projectDetail, pageConfirmAction.type === "replace" ? pageConfirmAction.pageId : null, null);
+      if (pageConfirmAction.type === "replace") {
+        setPageThumbnailRevisionById((current) => ({
+          ...current,
+          [pageConfirmAction.pageId]: (current[pageConfirmAction.pageId] || 0) + 1
+        }));
+      }
+      await applyProjectDetail(
+        projectDetail,
+        pageConfirmAction.type === "replace" ? pageConfirmAction.pageId : null,
+        null,
+        pageConfirmAction.type === "replace" ? new Set([pageConfirmAction.pageId]) : new Set()
+      );
       setSaveState("saved");
       setStatus(pageConfirmAction.type === "delete" ? text.pageDeleted : text.pageReplaced);
       setPageConfirmAction(null);
@@ -1772,7 +1813,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
               }}>
                 <span className="pageThumbOrdinal">{index + 1}</span>
                 <span className="pageThumbImage">
-                  <img src={apiUrl(page.sourceUrl)} alt="" />
+                  <img src={apiUrl(withClientRevision(page.thumbnailUrl, pageThumbnailRevisionById[page.id] || 0))} alt="" loading="lazy" />
                 </span>
                 <span className="pageThumbBody">
                   <span className="pageThumbName">{page.displayName || page.originalName}</span>
@@ -2434,4 +2475,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("image load failed"));
     image.src = src;
   });
+}
+
+function withClientRevision(path: string, revision: number): string {
+  if (!revision) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}r=${revision}`;
 }

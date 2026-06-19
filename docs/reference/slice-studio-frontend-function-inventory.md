@@ -302,6 +302,7 @@ displayName: string
 width: number
 height: number
 sourceUrl: string
+thumbnailUrl: string
 slices: SliceRecord[]
 ```
 
@@ -414,6 +415,7 @@ POST   /api/projects/:projectId/pages/:pageId/replace
 DELETE /api/projects/:projectId/pages/:pageId
 POST   /api/projects/:projectId/pages/:pageId/ai-boxes
 GET    /api/projects/:projectId/pages/:pageId/source
+GET    /api/projects/:projectId/pages/:pageId/thumbnail
 PUT    /api/projects/:projectId/slices
 GET    /api/projects/:projectId/slices/:sliceId/preview.png
 POST   /api/projects/:projectId/export-assets
@@ -524,6 +526,7 @@ ProjectSummary & {
   width: number
   height: number
   sourceUrl: string
+  thumbnailUrl: string
 }
 ```
 
@@ -664,6 +667,7 @@ POST   /api/projects/:projectId/pages/:pageId/replace
 DELETE /api/projects/:projectId/pages/:pageId
 POST   /api/projects/:projectId/pages/:pageId/ai-boxes
 GET    /api/projects/:projectId/pages/:pageId/source
+GET    /api/projects/:projectId/pages/:pageId/thumbnail
 PUT    /api/projects/:projectId/slices
 GET    /api/projects/:projectId/slices/:sliceId/preview.png
 POST   /api/projects/:projectId/export-assets

@@ -22,6 +22,7 @@ describe("storage adapter", () => {
   it("builds stable project storage keys", () => {
     const { storage } = makeStorage();
     expect(storage.projectOriginalImageKey("user_1", "project_1", "page_0001")).toBe("users/user_1/projects/project_1/originals/page_0001.png");
+    expect(storage.projectThumbnailImageKey("user_1", "project_1", "page_0001")).toBe("users/user_1/projects/project_1/thumbnails/page_0001.png");
     expect(storage.assetsZipKey("user_1", "project_1")).toBe("users/user_1/projects/project_1/exports/assets.zip");
     expect(storage.projectZipKey("user_1", "project_1")).toBe("users/user_1/projects/project_1/exports/project.zip");
     expect(storage.projectPageZipKey("user_1", "project_1", "page_0002")).toBe("users/user_1/projects/project_1/exports/pages/page_0002/project.zip");
@@ -40,9 +41,11 @@ describe("storage adapter", () => {
     const { root, storage } = makeStorage();
     storage.ensureProjectDirectories("user_1", "project_1");
     storage.write(storage.projectOriginalImageKey("user_1", "project_1", "page_0001"), Buffer.from("png-data"));
+    storage.write(storage.projectThumbnailImageKey("user_1", "project_1", "page_0001"), Buffer.from("thumb-data"));
     storage.write(storage.assetsZipKey("user_1", "project_1"), Buffer.from("zip-data"));
 
     expect(storage.read(storage.projectOriginalImageKey("user_1", "project_1", "page_0001")).toString("utf8")).toBe("png-data");
+    expect(storage.read(storage.projectThumbnailImageKey("user_1", "project_1", "page_0001")).toString("utf8")).toBe("thumb-data");
     expect(storage.read(storage.assetsZipKey("user_1", "project_1")).toString("utf8")).toBe("zip-data");
     expect(storage.exists(storage.assetsZipKey("user_1", "project_1"))).toBe(true);
     expect(storage.size(storage.assetsZipKey("user_1", "project_1"))).toBe(8);

@@ -53,7 +53,7 @@ export function ProjectWorkspace() {
       const data = await apiGet<{ projects: ProjectListItem[] }>("/api/projects");
       const enriched = data.projects.map((project) => ({
         ...project,
-        previewUrl: project.firstPage?.sourceUrl ? resolveApiUrl(project.firstPage.sourceUrl) : null,
+        previewUrl: project.firstPage ? resolveApiUrl(project.firstPage.thumbnailUrl || project.firstPage.sourceUrl) : null,
         firstPageName: project.firstPage ? project.firstPage.displayName || project.firstPage.originalName : null,
         firstPageSize: project.firstPage ? `${project.firstPage.width}x${project.firstPage.height}` : null
       }));

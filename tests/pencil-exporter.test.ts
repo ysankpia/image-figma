@@ -676,6 +676,7 @@ describe("pencil exporter", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: [{
           id: "slice_1",
           projectId: "project_1",
@@ -721,6 +722,7 @@ describe("pencil exporter", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: []
       }]
     };
@@ -991,6 +993,7 @@ describe("pencil exporter", () => {
         width: 100,
         height: 80,
         sourceUrl: "/source",
+        thumbnailUrl: "/thumbnail",
         slices: [{
           id: "slice_1",
           projectId: "project_1",
