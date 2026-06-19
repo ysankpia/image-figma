@@ -92,6 +92,36 @@ export type AiSliceSettingsResponse = {
   yoloClasses?: string[];
 };
 
+export type ExportJobKind = "assets" | "project" | "page_project";
+export type ExportJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type ExportJobRecord = {
+  id: string;
+  projectId: string;
+  kind: ExportJobKind;
+  pageId?: string;
+  status: ExportJobStatus;
+  message: string;
+  assetCount?: number;
+  pageCount?: number;
+  url?: string;
+  cached?: boolean;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+};
+
+export type CreateExportJobRequest = {
+  kind: ExportJobKind;
+  pageId?: string;
+};
+
+export type ExportJobResponse = {
+  ok: true;
+  job: ExportJobRecord;
+};
+
 export type ExportManifest = {
   schema: "manual_ui_slices.v1";
   exportedAt: string;

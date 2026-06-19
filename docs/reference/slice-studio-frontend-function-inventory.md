@@ -399,9 +399,9 @@ hidden: boolean
 Export functions:
 
 - export `assets.zip`;
-- export full project backup package `project.zip / design.pen`;
+- export full project package `project.zip / design.pen`;
 - export current page `project.zip / design.pen`;
-- full project backup package includes `project.json`, `manifest.json`, `design.pen`, original PNGs, visible remainder PNGs, and slice PNGs;
+- full project package includes `project.json`, `manifest.json`, `design.pen`, original PNGs, visible remainder PNGs, and slice PNGs;
 - download URL is returned by the export API and may be a signed `/api/storage-download?token=...` URL.
 
 APIs:

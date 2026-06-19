@@ -161,6 +161,15 @@ The exporter reads SQLite slices and original PNG files on disk. It does not cro
 
 `assets.zip` generation uses a local fingerprint cache. If the exported page order, page names, page source file identity, slice names, bbox, and cut modes have not changed, the export API reuses the existing zip and returns a fresh signed download URL instead of re-cropping every slice. The cache metadata lives beside the zip as `assets.zip.cache.json`.
 
+The Review Workbench starts exports through async export jobs instead of waiting on a long POST:
+
+```text
+POST /api/projects/:projectId/export-jobs
+GET  /api/projects/:projectId/export-jobs/:jobId
+```
+
+The job endpoint accepts `kind: "assets" | "project" | "page_project"` plus `pageId` for `page_project`. Jobs are kept in the API process memory and execute the same exporter functions as the older synchronous endpoints. This keeps first-time large project package generation out of the browser/Cloudflare request lifecycle while preserving the existing zip format and signed download URL contract. The older synchronous endpoints remain available for scripts and smoke tests.
+
 `project.zip` packages the same confirmed slice assets into a Pencil handoff project:
 
 ```text

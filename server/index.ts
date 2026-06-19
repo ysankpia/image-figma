@@ -14,6 +14,7 @@ import {
 } from "./auth";
 import { initDatabase } from "./db";
 import { HttpError, httpError } from "./errors";
+import { createExportJob, getExportJob } from "./export-jobs";
 import { exportAssets } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage } from "./pencil-exporter";
 import { cropSliceToPng } from "./shape-cutout";
@@ -182,6 +183,19 @@ const app = new Elysia({
         "cache-control": "no-store"
       }
     });
+  })
+  .post("/api/projects/:projectId/export-jobs", async ({ request, params, body }) => {
+    const user = await requireUser(request);
+    return { ok: true, job: createExportJob(user.id, params.projectId, body) };
+  }, {
+    body: t.Object({
+      kind: t.String({ minLength: 1 }),
+      pageId: t.Optional(t.String())
+    })
+  })
+  .get("/api/projects/:projectId/export-jobs/:jobId", async ({ request, params }) => {
+    const user = await requireUser(request);
+    return { ok: true, job: getExportJob(user.id, params.projectId, params.jobId) };
   })
   .post("/api/projects/:projectId/export-assets", async ({ request, params }) => exportAssets((await requireUser(request)).id, params.projectId))
   .get("/api/projects/:projectId/assets.zip", async ({ request, params }) => {

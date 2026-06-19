@@ -1,4 +1,13 @@
-import type { AiSliceBoxesResponse, AiSliceSettingsResponse, PageRecord, ProjectDetail, ProjectSummary, SaveSlicesRequest } from "@/shared/types";
+import type {
+  AiSliceBoxesResponse,
+  AiSliceSettingsResponse,
+  CreateExportJobRequest,
+  ExportJobResponse,
+  PageRecord,
+  ProjectDetail,
+  ProjectSummary,
+  SaveSlicesRequest
+} from "@/shared/types";
 
 export function apiUrl(path: string): string {
   return path;
@@ -55,6 +64,14 @@ export async function generateAiBoxes(projectId: string, pageId: string): Promis
 
 export async function getAiSliceSettings(): Promise<AiSliceSettingsResponse> {
   return apiGet("/api/ai-slice-settings");
+}
+
+export async function createExportJob(projectId: string, payload: CreateExportJobRequest): Promise<ExportJobResponse> {
+  return apiPost(`/api/projects/${projectId}/export-jobs`, payload);
+}
+
+export async function getExportJob(projectId: string, jobId: string): Promise<ExportJobResponse> {
+  return apiGet(`/api/projects/${projectId}/export-jobs/${jobId}`);
 }
 
 export async function renamePage(projectId: string, pageId: string, displayName: string): Promise<{ page: PageRecord }> {

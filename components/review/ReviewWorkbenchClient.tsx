@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, GripHorizontal, Grid2X2, Hand, Images, Lock, Minus, MousePointer2, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Search, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
 import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import { apiGet, apiPost, apiUrl, deletePage, generateAiBoxes, getAiSliceSettings, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
+import { apiGet, apiUrl, createExportJob, deletePage, generateAiBoxes, getAiSliceSettings, getExportJob, renamePage, reorderPages, replacePage, saveSlices, uploadPages } from "@/components/api";
 import { mergeAiBoxesIntoSlices } from "@/shared/ai-slices";
 import { clamp, draftToBox, normalizeBox } from "@/shared/bbox";
-import type { BBox, CutMode, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
+import type { BBox, CreateExportJobRequest, CutMode, ExportJobRecord, PageRecord, ProjectDetail, SaveState, SliceRecord, ToolMode } from "@/shared/types";
 
 type WorkbenchPage = PageRecord & {
   slices: SliceRecord[];
@@ -49,13 +49,6 @@ type AiProgress = {
 };
 
 type ExportTarget = "assets" | "page" | "project";
-type ExportResponse = {
-  ok: true;
-  assetCount: number;
-  pageCount?: number;
-  url: string;
-  cached?: boolean;
-};
 
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
@@ -63,6 +56,8 @@ const reviewLanguageStorageKey = "sliceStudio.reviewLanguage.v1";
 const boxSnapThreshold = 6;
 const aiRevealDelayMinMs = 10_000;
 const aiRevealDelayMaxMs = 15_000;
+const exportJobPollIntervalMs = 1_000;
+const exportJobPollTimeoutMs = 12 * 60_000;
 const emptyBboxDraft: BBoxDraft = { x: "", y: "", width: "", height: "" };
 const defaultBoxColors = {
   slice: "#0066cc",
@@ -91,7 +86,7 @@ const reviewI18n = {
     aiAll: "AI 全部",
     assetsZip: "资产包",
     pageZip: "当前页包",
-    projectZip: "项目备份包",
+    projectZip: "项目包",
     language: "界面语言",
     chinese: "中文",
     english: "英文",
@@ -217,11 +212,14 @@ const reviewI18n = {
     exportedAssetsCached: "项目未变化，已复用上次资产包：{count} 个切图。",
     exportedPage: "已导出当前页 Pencil 项目：{assets} 个图层资产。",
     exportedPageCached: "当前页未变化，已复用上次 Pencil 项目：{assets} 个图层资产。",
-    exportedProject: "已导出项目备份包：{pages} 页，{assets} 个图层资产。",
-    exportedProjectCached: "项目未变化，已复用上次备份包：{pages} 页，{assets} 个图层资产。",
+    exportedProject: "已导出项目包：{pages} 页，{assets} 个图层资产。",
+    exportedProjectCached: "项目未变化，已复用上次项目包：{pages} 页，{assets} 个图层资产。",
     exportingAssets: "正在准备资产包。未修改内容会直接复用上次导出。",
     exportingPage: "正在准备当前页项目包。未修改内容会直接复用上次导出。",
-    exportingProject: "正在准备项目备份包。未修改内容会直接复用上次导出。",
+    exportingProject: "正在准备项目包。未修改内容会直接复用上次导出。",
+    exportQueued: "导出任务已排队。",
+    exportRunning: "正在生成导出文件，完成后会自动下载。",
+    exportTimedOut: "导出仍在后台处理中，请稍后重试或刷新后再次查看。",
     exporting: "导出中",
     exportFailed: "导出失败：{error}",
     newAssetsWillUseMode: "后续新建资产将使用{mode}模式。",
@@ -283,7 +281,7 @@ const reviewI18n = {
     aiAll: "AI All",
     assetsZip: "Assets.zip",
     pageZip: "Current page",
-    projectZip: "Project backup",
+    projectZip: "Project package",
     language: "Interface language",
     chinese: "Chinese",
     english: "English",
@@ -409,11 +407,14 @@ const reviewI18n = {
     exportedAssetsCached: "Project unchanged. Reused the previous assets package: {count} assets.",
     exportedPage: "Exported current page Pencil project: {assets} layer assets.",
     exportedPageCached: "Current page unchanged. Reused the previous Pencil package: {assets} layer assets.",
-    exportedProject: "Exported project backup: {pages} pages, {assets} layer assets.",
-    exportedProjectCached: "Project unchanged. Reused the previous backup package: {pages} pages, {assets} layer assets.",
+    exportedProject: "Exported project package: {pages} pages, {assets} layer assets.",
+    exportedProjectCached: "Project unchanged. Reused the previous project package: {pages} pages, {assets} layer assets.",
     exportingAssets: "Preparing assets package. Unchanged content will reuse the previous export.",
     exportingPage: "Preparing current page package. Unchanged content will reuse the previous export.",
-    exportingProject: "Preparing project backup. Unchanged content will reuse the previous export.",
+    exportingProject: "Preparing project package. Unchanged content will reuse the previous export.",
+    exportQueued: "Export job queued.",
+    exportRunning: "Generating the export. It will download automatically when ready.",
+    exportTimedOut: "The export is still running in the background. Try again later or refresh and check again.",
     exporting: "Exporting",
     exportFailed: "Export failed: {error}",
     newAssetsWillUseMode: "New assets will use {mode} mode.",
@@ -943,7 +944,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/export-assets`, {});
+      const result = await runExportJob({
+        kind: "assets"
+      });
       triggerDownload(result.url);
       setStatus(formatMessage(result.cached ? text.exportedAssetsCached : text.exportedAssets, { count: result.assetCount }));
     } catch (error) {
@@ -960,7 +963,9 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/export-project`, {});
+      const result = await runExportJob({
+        kind: "project"
+      });
       triggerDownload(result.url);
       setStatus(formatMessage(result.cached ? text.exportedProjectCached : text.exportedProject, { pages: result.pageCount || 0, assets: result.assetCount }));
     } catch (error) {
@@ -977,7 +982,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/pages/${activePage.id}/export-project`, {});
+      const result = await runExportJob({
+        kind: "page_project",
+        pageId: activePage.id
+      });
       triggerDownload(result.url);
       setStatus(formatMessage(result.cached ? text.exportedPageCached : text.exportedPage, { assets: result.assetCount }));
     } catch (error) {
@@ -987,6 +995,27 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     }
   }
 
+  async function runExportJob(payload: CreateExportJobRequest): Promise<Required<Pick<ExportJobRecord, "assetCount" | "url">> & Pick<ExportJobRecord, "pageCount" | "cached">> {
+    const created = await createExportJob(projectId, payload);
+    setStatus(created.job.status === "queued" ? text.exportQueued : created.job.message || text.exportRunning);
+    const startedAt = Date.now();
+    let job = created.job;
+    while (job.status === "queued" || job.status === "running") {
+      if (Date.now() - startedAt > exportJobPollTimeoutMs) throw new Error(text.exportTimedOut);
+      await sleep(exportJobPollIntervalMs);
+      job = (await getExportJob(projectId, job.id)).job;
+      setStatus(job.status === "queued" ? text.exportQueued : job.message || text.exportRunning);
+    }
+    if (job.status === "failed") throw new Error(job.error || job.message || "Export failed");
+    if (!job.url || typeof job.assetCount !== "number") throw new Error("Export job finished without a download URL");
+    return {
+      assetCount: job.assetCount,
+      pageCount: job.pageCount,
+      url: job.url,
+      cached: job.cached
+    };
+  }
+
   function triggerDownload(url: string) {
     const link = document.createElement("a");
     link.href = apiUrl(url);
@@ -994,6 +1023,10 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   function fitPage() {
