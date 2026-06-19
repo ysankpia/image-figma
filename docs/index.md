@@ -84,7 +84,7 @@ Primary contracts:
 
 ## Active Production Plans
 
-Completed prelaunch hardening work is tracked in [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md).
+Completed export-cache hardening work is tracked in [plans/completed/201-slice-studio-export-cache-and-download-feedback.md](plans/completed/201-slice-studio-export-cache-and-download-feedback.md). Completed prelaunch hardening work is tracked in [plans/completed/190-slice-studio-prelaunch-codebase-hardening.md](plans/completed/190-slice-studio-prelaunch-codebase-hardening.md).
 
 Formal multi-user production-readiness history is tracked in [plans/active/189-slice-studio-multi-user-production-launch.md](plans/active/189-slice-studio-multi-user-production-launch.md). Production Postgres, PSD-like service, and GitHub Actions CD cutover is completed in [plans/completed/199-production-postgres-cd-psdlike.md](plans/completed/199-production-postgres-cd-psdlike.md).
 

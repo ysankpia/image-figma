@@ -48,6 +48,15 @@ type AiProgress = {
   hidden: boolean;
 };
 
+type ExportTarget = "assets" | "page" | "project";
+type ExportResponse = {
+  ok: true;
+  assetCount: number;
+  pageCount?: number;
+  url: string;
+  cached?: boolean;
+};
+
 const transformerAnchors = ["top-left", "top-center", "top-right", "middle-right", "bottom-right", "bottom-center", "bottom-left", "middle-left"];
 const reviewColorStorageKey = "sliceStudio.reviewBoxColors.v1";
 const reviewLanguageStorageKey = "sliceStudio.reviewLanguage.v1";
@@ -205,8 +214,15 @@ const reviewI18n = {
     pageNameSaved: "页面名称已保存。",
     pageNameSaveFailed: "页面名称保存失败：{error}",
     exportedAssets: "已导出 {count} 个切图。",
+    exportedAssetsCached: "项目未变化，已复用上次资产包：{count} 个切图。",
     exportedPage: "已导出当前页 Pencil 项目：{assets} 个图层资产。",
+    exportedPageCached: "当前页未变化，已复用上次 Pencil 项目：{assets} 个图层资产。",
     exportedProject: "已导出项目备份包：{pages} 页，{assets} 个图层资产。",
+    exportedProjectCached: "项目未变化，已复用上次备份包：{pages} 页，{assets} 个图层资产。",
+    exportingAssets: "正在准备资产包。未修改内容会直接复用上次导出。",
+    exportingPage: "正在准备当前页项目包。未修改内容会直接复用上次导出。",
+    exportingProject: "正在准备项目备份包。未修改内容会直接复用上次导出。",
+    exporting: "导出中",
     exportFailed: "导出失败：{error}",
     newAssetsWillUseMode: "后续新建资产将使用{mode}模式。",
     currentPageAlreadyMode: "当前页已是{mode}模式。",
@@ -390,8 +406,15 @@ const reviewI18n = {
     pageNameSaved: "Page name saved.",
     pageNameSaveFailed: "Page name save failed: {error}",
     exportedAssets: "Exported {count} assets.",
+    exportedAssetsCached: "Project unchanged. Reused the previous assets package: {count} assets.",
     exportedPage: "Exported current page Pencil project: {assets} layer assets.",
+    exportedPageCached: "Current page unchanged. Reused the previous Pencil package: {assets} layer assets.",
     exportedProject: "Exported project backup: {pages} pages, {assets} layer assets.",
+    exportedProjectCached: "Project unchanged. Reused the previous backup package: {pages} pages, {assets} layer assets.",
+    exportingAssets: "Preparing assets package. Unchanged content will reuse the previous export.",
+    exportingPage: "Preparing current page package. Unchanged content will reuse the previous export.",
+    exportingProject: "Preparing project backup. Unchanged content will reuse the previous export.",
+    exporting: "Exporting",
     exportFailed: "Export failed: {error}",
     newAssetsWillUseMode: "New assets will use {mode} mode.",
     currentPageAlreadyMode: "Current page already uses {mode} mode.",
@@ -464,6 +487,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [aiRunning, setAiRunning] = useState<"page" | "batch" | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
+  const [exportTarget, setExportTarget] = useState<ExportTarget | null>(null);
   const [previewRevisionBySliceId, setPreviewRevisionBySliceId] = useState<Record<string, number>>({});
   const [pageThumbnailRevisionById, setPageThumbnailRevisionById] = useState<Record<string, number>>({});
   const [pendingPreviewSliceIds, setPendingPreviewSliceIds] = useState<Set<string>>(() => new Set());
@@ -498,6 +522,7 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   const pageIndex = activePage ? pages.findIndex((page) => page.id === activePage.id) : -1;
   const pageCutMode = getPageCutMode(activePage, defaultCutMode);
   const aiBusy = aiRunning !== null;
+  const exportBusy = exportTarget !== null;
   const visibleAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
     const source = activePage?.slices || [];
@@ -912,40 +937,63 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
   }
 
   async function exportAssets() {
+    if (exportBusy) return;
+    setExportTarget("assets");
+    setStatus(text.exportingAssets);
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<{ ok: true; assetCount: number; url: string }>(`/api/projects/${projectId}/export-assets`, {});
-      window.location.href = apiUrl(result.url);
-      setStatus(formatMessage(text.exportedAssets, { count: result.assetCount }));
+      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/export-assets`, {});
+      triggerDownload(result.url);
+      setStatus(formatMessage(result.cached ? text.exportedAssetsCached : text.exportedAssets, { count: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
+    } finally {
+      setExportTarget(null);
     }
   }
 
   async function exportProject() {
+    if (exportBusy) return;
+    setExportTarget("project");
+    setStatus(text.exportingProject);
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/export-project`, {});
-      window.location.href = apiUrl(result.url);
-      setStatus(formatMessage(text.exportedProject, { pages: result.pageCount, assets: result.assetCount }));
+      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/export-project`, {});
+      triggerDownload(result.url);
+      setStatus(formatMessage(result.cached ? text.exportedProjectCached : text.exportedProject, { pages: result.pageCount || 0, assets: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
+    } finally {
+      setExportTarget(null);
     }
   }
 
   async function exportCurrentPage() {
-    if (!activePage) return;
+    if (!activePage || exportBusy) return;
+    setExportTarget("page");
+    setStatus(text.exportingPage);
     try {
       await flushPageRename();
       await saveNow();
-      const result = await apiPost<{ ok: true; assetCount: number; pageCount: number; url: string }>(`/api/projects/${projectId}/pages/${activePage.id}/export-project`, {});
-      window.location.href = apiUrl(result.url);
-      setStatus(formatMessage(text.exportedPage, { assets: result.assetCount }));
+      const result = await apiPost<ExportResponse>(`/api/projects/${projectId}/pages/${activePage.id}/export-project`, {});
+      triggerDownload(result.url);
+      setStatus(formatMessage(result.cached ? text.exportedPageCached : text.exportedPage, { assets: result.assetCount }));
     } catch (error) {
       setStatus(formatMessage(text.exportFailed, { error: getErrorMessage(error) }));
+    } finally {
+      setExportTarget(null);
     }
+  }
+
+  function triggerDownload(url: string) {
+    const link = document.createElement("a");
+    link.href = apiUrl(url);
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   function fitPage() {
@@ -1739,17 +1787,17 @@ export function ReviewWorkbenchClient({ projectId }: { projectId: string }) {
             <Bot aria-hidden="true" />
             <span>{aiRunning === "batch" ? text.batchRunning : text.aiAll}</span>
           </button>
-          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportAssets()}>
+          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices || exportBusy} onClick={() => void exportAssets()}>
             <Download aria-hidden="true" />
-            <span>{text.assetsZip}</span>
+            <span>{exportTarget === "assets" ? text.exporting : text.assetsZip}</span>
           </button>
-          <button className="toolbarButton exportButton" type="button" disabled={!activePage} onClick={() => void exportCurrentPage()}>
+          <button className="toolbarButton exportButton" type="button" disabled={!activePage || exportBusy} onClick={() => void exportCurrentPage()}>
             <Download aria-hidden="true" />
-            <span>{text.pageZip}</span>
+            <span>{exportTarget === "page" ? text.exporting : text.pageZip}</span>
           </button>
-          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices} onClick={() => void exportProject()}>
+          <button className="toolbarButton exportButton" type="button" disabled={!hasSlices || exportBusy} onClick={() => void exportProject()}>
             <Download aria-hidden="true" />
-            <span>{text.projectZip}</span>
+            <span>{exportTarget === "project" ? text.exporting : text.projectZip}</span>
           </button>
           <div className="languageToggle" role="group" aria-label={text.language}>
             <button type="button" className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} title={text.chinese} onClick={() => changeLanguage("zh")}>中</button>

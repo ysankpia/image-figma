@@ -2,6 +2,7 @@
 
 本索引列出已移出 `docs/plans/active/` 的计划。
 
+- [201 Slice Studio 导出缓存与下载反馈](201-slice-studio-export-cache-and-download-feedback.md) — `completed`
 - [M29.0.1 Blocked Evidence Enhancement](029-0-1-blocked-evidence-enhancement.md) — `completed`
 - [M29.0.2 Text-Masked Visual Media Audit](029-0-2-text-masked-media-audit.md) — `completed`
 - [M29.0.3.1 Text-Rejected Lineage Feedback Gate](029-0-3-1-text-rejected-lineage-feedback-gate.md) — `completed`

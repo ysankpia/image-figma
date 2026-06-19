@@ -159,6 +159,8 @@ project.json
 
 The exporter reads SQLite slices and original PNG files on disk. It does not crop from frontend thumbnails or canvas state. Export fails when no slices exist.
 
+`assets.zip` generation uses a local fingerprint cache. If the exported page order, page names, page source file identity, slice names, bbox, and cut modes have not changed, the export API reuses the existing zip and returns a fresh signed download URL instead of re-cropping every slice. The cache metadata lives beside the zip as `assets.zip.cache.json`.
+
 `project.zip` packages the same confirmed slice assets into a Pencil handoff project:
 
 ```text
@@ -171,6 +173,8 @@ assets/visible/slices/P1-首页/slice_0001.png
 ```
 
 `POST /api/projects/:projectId/pages/:pageId/export-project` writes the same package shape for only one page under `exports/pages/{pageId}/project.zip`. It exists for fast page-level debugging and delivery; it does not introduce a second Pencil schema.
+
+`project.zip` and page-scoped `project.zip` use the same export fingerprint cache. A cache hit skips the expensive Pencil materialization path, including slice crop preparation, OCR, text reconstruction, remainder generation, package validation, and zip rebuild. Cache misses still produce the same `design.pen`, `manifest.json`, `project.json`, originals, remainders, and visible slice PNGs as before.
 
 `design.pen` contains one clipped frame per exported page. Each frame has a visible `remainder.png` layer, optional OCR-anchored control-surface rectangles, editable OCR text nodes when available, and confirmed slice PNG layers placed at their original source-image coordinates. Export builds a small page render/ownership plan before materialization so remainder text knockouts, control-surface source cleanup, editable text, and confirmed slice z-order come from one contract. Editable text nodes use compact fixed render bounds (`textGrowth: fixed-width-height`) through `textRenderBBox`; expanded `safeBBox` remains metadata/audit evidence instead of the visible Pencil text node box, and the original OCR/physical bbox remains the fit/knockout source. Slice PNGs use the same `rect | subject | card` crop logic as `assets.zip`; there is no second asset pipeline.
 
@@ -219,6 +223,8 @@ Current mainline storage now goes through a single `server/storage.ts` local ada
 Current mainline database startup now goes through an explicit migration runner in `server/db-migrations.ts`. Runtime startup creates/updates the selected provider schema by recording ordered rows in `schema_migrations` instead of relying on one growing `initDatabase()` blob with ad hoc side effects. SQLite remains the default local provider. Postgres is supported for the current user-only Slice Studio tables and is enabled by `SLICE_STUDIO_DATABASE_PROVIDER=postgres` plus `SLICE_STUDIO_DATABASE_URL`. The compatibility migration still drops obsolete billing, payment, entitlement, and usage tables from old databases without deleting users, projects, pages, or slices.
 
 Current mainline download delivery is also separated from raw file paths. Export APIs now return short-lived signed URLs under `/api/storage-download?token=...`; the token resolves to a local storage key plus response metadata and expires after a configured TTL. The current byte source is still local filesystem storage, but this download contract is the seam intended for a later object-storage backend with real provider-signed downloads.
+
+The Review Workbench triggers those signed URLs through a same-page download link after the export API returns. It does not navigate the browser window to the download URL, so export/download no longer tears down the active review state.
 
 `SLICE_STUDIO_PHYSICAL_EVIDENCE_PROVIDER` accepts `ts_m29_physical_evidence`, `go_m29extract`, or `ocr`. The default `ts_m29_physical_evidence` path has no Go binary dependency. It carries OCR text-mask lineage in the same spirit as the older Go M29 pipeline, but it does not let OCR boxes directly become physical text placement. `go_m29extract` uses `SLICE_STUDIO_M29EXTRACT_PATH`; `ocr` disables physical bbox evidence and keeps OCR bboxes.
 

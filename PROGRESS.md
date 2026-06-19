@@ -3,11 +3,12 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Production API regression and YOLO candidate-output repair after the initial local YOLO provider cutover is complete.
+Slice Studio export cache and download feedback hardening complete.
 
 ## Active plan
 - Current execution plan: none.
-- Most recently completed: `docs/plans/completed/200-slice-studio-image-loading-performance.md`
+- Most recently completed: `docs/plans/completed/201-slice-studio-export-cache-and-download-feedback.md`
+- Prior completed: `docs/plans/completed/200-slice-studio-image-loading-performance.md`
 - Prior manual workflow plan retained for closeout context: `docs/plans/active/198-slice-studio-manual-workflow-hardening.md`
 - Production history/context plan retained: `docs/plans/active/189-slice-studio-multi-user-production-launch.md`
 - Prior text/slice coordination plan still active for closeout context: `docs/plans/active/193-pencil-export-text-slice-coordination.md`
@@ -20,9 +21,11 @@ Production API regression and YOLO candidate-output repair after the initial loc
   - `docs/plans/completed/192-promote-slice-studio-to-repository-root.md`
 
 ## Current phase
-Production API regression repair complete
+Export cache and frontend download feedback validation complete
 
 ## Now
+- 2026-06-19: completed plan 201. Added `server/export-cache.ts` fingerprint metadata beside generated zip files and wired cache reuse into `assets.zip`, full `project.zip`, and page-scoped `project.zip` exports. Cache hits return fresh signed download URLs without re-cropping, OCR, text reconstruction, remainder generation, Pencil validation, or zip rebuild. Review Workbench now shows explicit export progress, disables concurrent export clicks, reports cache reuse, and downloads via a same-page hidden link instead of navigating to the signed URL. Validation passed: `pnpm exec vitest run tests/export-cache.test.ts` (4 tests), `pnpm run check` (13 files / 113 tests), `pnpm run build`, `git diff --check`, `bun run smoke` against an isolated temp SQLite/storage API, and a real API cache smoke proving second assets/project exports return `cached:true` and a bbox change invalidates the cache.
+- 2026-06-19: started plan 201. CodeGraph comparison showed `ai-design-assets-manager` has a good single-image download helper but a browser-local multi-file export path that should not be copied. Slice Studio already uses server zip and signed downloads; the current slow path is synchronous zip generation, especially Pencil export with OCR/text/remainder work. This stage keeps the existing public API and adds zip fingerprint caching plus clearer frontend export/download feedback without adding a new database-backed job system.
 - 2026-06-19: completed and deployed the production API regression repair. Commit `0c9d5d9` separates YOLO candidate filtering from VLM filtering so local YOLO keeps overlapping candidates and no longer suppresses existing-slice or duplicate-IoU matches. GitHub Actions deploy run `27813981997` passed. Production validation after deploy passed: public `project_mqklx55m_8796a228/page_0001/ai-boxes` returned `rawBoxCount=26,acceptedBoxCount=26,rejectedBoxCount=0`; public `page_0012/export-project` returned 200 with `assetCount=32,pageCount=1`; `/api/ai-slice-settings` still returns `provider=yolo_local`; all three services are active; Caddy routes `/api/*` directly to `127.0.0.1:4110`; a disposable 27-check public API sweep passed with zero failures.
 - 2026-06-19: investigated reported production 500s after YOLO cutover. Public `page_0001/ai-boxes` for `project_mqklx55m_8796a228` now returns 200 but showed YOLO raw 26 / accepted 23 because the YOLO path still reused VLM duplicate/existing-slice suppression. Public `page_0012/export-project` returned a plain 500 at about 30s, while direct `127.0.0.1:4110` export returned 200 in about 35s and direct function invocation returned 32 assets. Root cause was Caddy routing all `image.figma.245162.xyz` traffic through Next `3010`; `/api/*` now routes directly to Elysia `4110`, and the same public page export returns 200 in about 49s. A disposable production API sweep ran 27 checks across auth, project CRUD, page upload/rename/source/thumbnail/replace/delete/order, AI boxes, slices save/preview, assets export/download, page project export/download, full project export/download, cleanup, and sign-out; all passed.
 - 2026-06-19: completed production YOLO provider cutover. Commit `a3ea5c3` added `SLICE_STUDIO_AI_SLICE_YOLO_PYTHON` so production can run Ultralytics from `/opt/slice-studio/yolo-venv/bin/python` instead of system Python. GitHub Actions deploy run `27812564911` passed. RackNerd now has `/opt/slice-studio/models/yolo-ui-best.pt`, CPU-only PyTorch/Ultralytics in the dedicated venv, and `SLICE_STUDIO_AI_SLICE_PROVIDER=yolo_local`. Public `/api/ai-slice-settings` returns `provider=yolo_local` with classes `Image,BackgroundImage,Map,Icon,Modal,Drawer`. Production `/ai-boxes` smoke passed on a tiny PNG with no 500 and on a real PixPin screenshot with 3 YOLO `Image` candidate boxes.

@@ -1,15 +1,53 @@
 import { httpError } from "./errors";
+import {
+  buildExportFingerprint,
+  exportCacheHit,
+  readExportSourceFile,
+  writeExportCache,
+  type ExportSourceFile
+} from "./export-cache";
 import { getPageOriginalKey, getProjectDetail } from "./projects";
 import { cropSliceToPng } from "./shape-cutout";
 import { storage } from "./storage";
 import { buildExportManifest, pageExportDirectory } from "../shared/manifest";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
-export async function exportAssets(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; url: string }> {
+const assetsExporterVersion = "assets_zip.v2";
+
+export async function exportAssets(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; url: string; cached: boolean }> {
   const detail = await getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
   storage.ensureProjectDirectories(userId, projectId);
+  const zipKey = storage.assetsZipKey(userId, projectId);
+  const sourceFiles: ExportSourceFile[] = [];
+  const originalKeysByPageId = new Map<string, string>();
+  for (const page of detail.pages) {
+    const originalKey = await getPageOriginalKey(userId, projectId, page.id);
+    originalKeysByPageId.set(page.id, originalKey);
+    sourceFiles.push(readExportSourceFile(page.id, originalKey));
+  }
+  const fingerprint = buildExportFingerprint({
+    kind: "assets",
+    exporterVersion: assetsExporterVersion,
+    detail,
+    sourceFiles
+  });
+  if (exportCacheHit({
+    zipKey,
+    kind: "assets",
+    exporterVersion: assetsExporterVersion,
+    fingerprint,
+    assetCount,
+    pageCount: detail.pages.length
+  })) {
+    return {
+      ok: true,
+      assetCount,
+      cached: true,
+      url: assetsDownloadUrl(projectId, zipKey)
+    };
+  }
 
   const exportedAt = new Date().toISOString();
   const manifest = buildExportManifest(detail, exportedAt);
@@ -26,7 +64,9 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
 
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(await getPageOriginalKey(userId, projectId, page.id), "Original image not found");
+    const originalKey = originalKeysByPageId.get(page.id);
+    if (!originalKey) throw httpError(404, "Original image not found");
+    const originalBuffer = storage.read(originalKey, "Original image not found");
     files.push({
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer
@@ -40,19 +80,31 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
     }
   }
 
-  const zipKey = storage.assetsZipKey(userId, projectId);
   storage.write(zipKey, createZipBuffer(files));
+  writeExportCache({
+    zipKey,
+    kind: "assets",
+    exporterVersion: assetsExporterVersion,
+    fingerprint,
+    assetCount,
+    pageCount: detail.pages.length
+  });
   return {
     ok: true,
     assetCount,
-    url: storage.downloadUrl(zipKey, {
-      contentType: "application/zip",
-      contentDisposition: `attachment; filename="${projectId}-assets.zip"`,
-      notFoundMessage: "assets.zip has not been generated"
-    })
+    cached: false,
+    url: assetsDownloadUrl(projectId, zipKey)
   };
 }
 
 export function getAssetsZipPath(userId: string, projectId: string): string {
   return storage.absolutePath(storage.assetsZipKey(userId, projectId));
+}
+
+function assetsDownloadUrl(projectId: string, zipKey: string): string {
+  return storage.downloadUrl(zipKey, {
+    contentType: "application/zip",
+    contentDisposition: `attachment; filename="${projectId}-assets.zip"`,
+    notFoundMessage: "assets.zip has not been generated"
+  });
 }

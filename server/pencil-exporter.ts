@@ -1,4 +1,13 @@
 import { httpError } from "./errors";
+import { ocrMinConfidence, ocrProvider, physicalEvidenceProvider, textBBoxSource, textStyleProvider } from "./config";
+import {
+  buildExportFingerprint,
+  exportCacheHit,
+  readExportSourceFile,
+  writeExportCache,
+  type ExportCacheKind,
+  type ExportSourceFile
+} from "./export-cache";
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
 import {
   buildPencilManifest,
@@ -20,8 +29,16 @@ import type { BBox, ProjectDetail } from "../shared/types";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
 
 const penVersion = "2.11";
+const pencilExporterVersion = [
+  `pencil_project.${penVersion}.v5`,
+  `ocr=${ocrProvider}`,
+  `ocr_min=${ocrMinConfidence}`,
+  `bbox=${textBBoxSource}`,
+  `physical=${physicalEvidenceProvider}`,
+  `style=${textStyleProvider}`
+].join("|");
 
-export async function exportPencilProject(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
+export async function exportPencilProject(userId: string, projectId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string; cached: boolean }> {
   const detail = await getProjectDetail(userId, projectId);
   const assetCount = detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
   if (assetCount === 0) throw httpError(409, "No slices selected");
@@ -32,11 +49,11 @@ export async function exportPencilProject(userId: string, projectId: string): Pr
     detail,
     zipKey: storage.projectZipKey(userId, projectId),
     zipFilename: "project.zip",
-    url: `/api/projects/${projectId}/project.zip`
+    exportKind: "pencil-project"
   });
 }
 
-export async function exportPencilProjectPage(userId: string, projectId: string, pageId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
+export async function exportPencilProjectPage(userId: string, projectId: string, pageId: string): Promise<{ ok: true; assetCount: number; pageCount: number; url: string; cached: boolean }> {
   const detail = await getProjectDetail(userId, projectId);
   const page = detail.pages.find((candidate) => candidate.id === pageId);
   if (!page) throw httpError(404, "Page not found");
@@ -57,7 +74,7 @@ export async function exportPencilProjectPage(userId: string, projectId: string,
     detail: pageDetail,
     zipKey: storage.projectPageZipKey(userId, projectId, pageId),
     zipFilename: "project.zip",
-    url: `/api/projects/${projectId}/pages/${pageId}/project.zip`
+    exportKind: "pencil-page"
   });
 }
 
@@ -66,9 +83,32 @@ async function exportPencilDetail(input: {
   detail: ProjectDetail;
   zipKey: string;
   zipFilename: string;
-  url: string;
-}): Promise<{ ok: true; assetCount: number; pageCount: number; url: string }> {
+  exportKind: ExportCacheKind;
+}): Promise<{ ok: true; assetCount: number; pageCount: number; url: string; cached: boolean }> {
   const assetCount = input.detail.pages.reduce((sum, page) => sum + page.slices.length, 0);
+  const { originalKeysByPageId, sourceFiles } = await resolveExportSources(input.userId, input.detail);
+  const fingerprint = buildExportFingerprint({
+    kind: input.exportKind,
+    exporterVersion: pencilExporterVersion,
+    detail: input.detail,
+    sourceFiles
+  });
+  if (exportCacheHit({
+    zipKey: input.zipKey,
+    kind: input.exportKind,
+    exporterVersion: pencilExporterVersion,
+    fingerprint,
+    assetCount,
+    pageCount: input.detail.pages.length
+  })) {
+    return {
+      ok: true,
+      assetCount,
+      pageCount: input.detail.pages.length,
+      cached: true,
+      url: pencilDownloadUrl(input.zipKey, input.zipFilename)
+    };
+  }
   const exportedAt = new Date().toISOString();
   const projectJson = {
     schema: "slice_studio_pencil_project.v1",
@@ -77,7 +117,7 @@ async function exportPencilDetail(input: {
     pages: input.detail.pages
   };
   const files: ZipFile[] = [];
-  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.userId, input.detail, files, exportedAt);
+  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.detail, files, exportedAt, originalKeysByPageId);
 
   files.unshift(
     { name: "design.pen", data: Buffer.from(JSON.stringify(document, null, 2)) },
@@ -87,15 +127,20 @@ async function exportPencilDetail(input: {
   validatePencilPackage(document, files);
 
   storage.write(input.zipKey, createZipBuffer(files));
+  writeExportCache({
+    zipKey: input.zipKey,
+    kind: input.exportKind,
+    exporterVersion: pencilExporterVersion,
+    fingerprint,
+    assetCount,
+    pageCount: input.detail.pages.length
+  });
   return {
     ok: true,
     assetCount,
     pageCount: input.detail.pages.length,
-    url: storage.downloadUrl(input.zipKey, {
-      contentType: "application/zip",
-      contentDisposition: `attachment; filename="${input.zipFilename}"`,
-      notFoundMessage: `${input.zipFilename} has not been generated`
-    })
+    cached: false,
+    url: pencilDownloadUrl(input.zipKey, input.zipFilename)
   };
 }
 
@@ -108,10 +153,10 @@ export function getProjectPageZipPath(userId: string, projectId: string, pageId:
 }
 
 async function buildPencilDocument(
-  userId: string,
   detail: ProjectDetail,
   files: ZipFile[],
-  exportedAt: string
+  exportedAt: string,
+  originalKeysByPageId: Map<string, string>
 ): Promise<{
   document: PencilDocument;
   textByPageId: Map<string, PencilPageTextManifest>;
@@ -123,7 +168,9 @@ async function buildPencilDocument(
   const frameXs = frameLayoutXPositions(detail.pages);
   for (const [pageIndex, page] of detail.pages.entries()) {
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalBuffer = storage.read(await getPageOriginalKey(userId, detail.project.id, page.id), "Original image not found");
+    const originalKey = originalKeysByPageId.get(page.id);
+    if (!originalKey) throw httpError(404, "Original image not found");
+    const originalBuffer = storage.read(originalKey, "Original image not found");
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
     const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
@@ -251,6 +298,28 @@ async function buildPencilDocument(
     textByPageId,
     slicePlacements
   };
+}
+
+async function resolveExportSources(userId: string, detail: ProjectDetail): Promise<{
+  originalKeysByPageId: Map<string, string>;
+  sourceFiles: ExportSourceFile[];
+}> {
+  const originalKeysByPageId = new Map<string, string>();
+  const sourceFiles: ExportSourceFile[] = [];
+  for (const page of detail.pages) {
+    const originalKey = await getPageOriginalKey(userId, detail.project.id, page.id);
+    originalKeysByPageId.set(page.id, originalKey);
+    sourceFiles.push(readExportSourceFile(page.id, originalKey));
+  }
+  return { originalKeysByPageId, sourceFiles };
+}
+
+function pencilDownloadUrl(zipKey: string, zipFilename: string): string {
+  return storage.downloadUrl(zipKey, {
+    contentType: "application/zip",
+    contentDisposition: `attachment; filename="${zipFilename}"`,
+    notFoundMessage: `${zipFilename} has not been generated`
+  });
 }
 
 function controlSurfaceNode(input: { index: number; surface: ControlSurfaceLayer; z: number }): PencilNode {
