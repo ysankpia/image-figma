@@ -71,8 +71,8 @@ export async function exportAssets(userId: string, projectId: string): Promise<{
       name: `originals/${pageDirectory}.png`,
       data: originalBuffer
     });
-    for (const [sliceIndex, slice] of page.slices.entries()) {
-      const sliceBuffer = await cropSliceToPng(originalBuffer, slice);
+    const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
+    for (const [sliceIndex, sliceBuffer] of slicePngs.entries()) {
       files.push({
         name: `slices/${pageDirectory}/slice_${String(sliceIndex + 1).padStart(4, "0")}.png`,
         data: sliceBuffer

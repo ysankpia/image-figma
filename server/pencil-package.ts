@@ -50,12 +50,12 @@ export async function createRemainderPng(
   originalBuffer: Buffer,
   slices: RemainderSlice[],
   textKnockouts: Array<BBox | TextKnockout> = [],
-  surfaceKnockouts: SurfaceKnockout[] = []
+  surfaceKnockouts: SurfaceKnockout[] = [],
+  preDecoded?: { data: Buffer; width: number; height: number }
 ): Promise<Buffer> {
-  const original = await sharp(originalBuffer)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const original = preDecoded
+    ? { data: preDecoded.data, info: { width: preDecoded.width, height: preDecoded.height } }
+    : await sharp(originalBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const data = Buffer.from(original.data);
   const sourceData = Buffer.from(original.data);
   for (const knockout of textKnockouts) paintTextForeground(data, sourceData, original.info.width, original.info.height, normalizeTextKnockout(knockout));

@@ -139,6 +139,12 @@ export function createLocalStorageAdapter(root: string) {
       if (!fs.existsSync(filePath)) throw httpError(404, notFoundMessage);
       return fs.readFileSync(filePath);
     },
+    async readAsync(key: string, notFoundMessage = "Storage object not found"): Promise<Buffer> {
+      const filePath = absolutePath(key);
+      if (!fs.existsSync(filePath)) throw httpError(404, notFoundMessage);
+      const buf = await Bun.file(filePath).arrayBuffer();
+      return Buffer.from(buf);
+    },
     write(key: string, data: Uint8Array | Buffer): void {
       fs.writeFileSync(ensureParentDirectory(key), data);
     },

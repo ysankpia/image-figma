@@ -1,3 +1,5 @@
+import { crc32 } from "node:zlib";
+
 export type ZipFile = {
   name: string;
   data: Buffer;
@@ -45,15 +47,4 @@ function uint32(value: number): Buffer {
   const buffer = Buffer.alloc(4);
   buffer.writeUInt32LE(value >>> 0);
   return buffer;
-}
-
-function crc32(bytes: Buffer): number {
-  let crc = -1;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let index = 0; index < 8; index += 1) {
-      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-    }
-  }
-  return (crc ^ -1) >>> 0;
 }

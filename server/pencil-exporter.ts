@@ -11,22 +11,22 @@ import {
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
 import {
   buildPencilManifest,
-  createRemainderPng,
   frameLayoutXPositions,
-  preparePencilSliceImage,
   type PencilPageTextManifest,
   type PencilSlicePlacementManifest
 } from "./pencil-package";
 import { getPageOriginalKey, getProjectDetail } from "./projects";
-import { buildPageRenderPlan } from "./render-plan-builder";
 import type { ControlSurfaceLayer } from "./render-plan";
-import { cropSliceToPng } from "./shape-cutout";
+import { readEvidenceCache, writeEvidenceCache } from "./ocr-cache";
+import { locateTextLinesWithM29, type TextLocationResult } from "./m29-text-locator";
+import { createPageWorkerPool } from "./page-worker-pool";
 import { storage } from "./storage";
 import { runOcr } from "./text-ocr";
-import { reconstructTextLayers, type TextLayer, type TextReconstruction } from "./text-reconstruction";
+import { type TextLayer, type TextReconstruction } from "./text-reconstruction";
 import { pageExportDirectory } from "../shared/manifest";
 import type { BBox, ProjectDetail } from "../shared/types";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
+import os from "node:os";
 
 const penVersion = "2.11";
 const pencilExporterVersion = [
@@ -117,7 +117,7 @@ async function exportPencilDetail(input: {
     pages: input.detail.pages
   };
   const files: ZipFile[] = [];
-  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.detail, files, exportedAt, originalKeysByPageId);
+  const { document, textByPageId, slicePlacements } = await buildPencilDocument(input.detail, files, exportedAt, originalKeysByPageId, input.userId, input.detail.project.id);
 
   files.unshift(
     { name: "design.pen", data: Buffer.from(JSON.stringify(document, null, 2)) },
@@ -156,56 +156,75 @@ async function buildPencilDocument(
   detail: ProjectDetail,
   files: ZipFile[],
   exportedAt: string,
-  originalKeysByPageId: Map<string, string>
+  originalKeysByPageId: Map<string, string>,
+  userId: string,
+  projectId: string
 ): Promise<{
   document: PencilDocument;
   textByPageId: Map<string, PencilPageTextManifest>;
   slicePlacements: Map<string, PencilSlicePlacementManifest>;
 }> {
+  const pageData = detail.pages.map((page) => {
+    const originalKey = originalKeysByPageId.get(page.id);
+    if (!originalKey) throw httpError(404, "Original image not found");
+    const originalBuffer = storage.read(originalKey, "Original image not found");
+    return { page, originalKey, originalBuffer };
+  });
+
+  const ocrConcurrency = 3;
+  const ocrResults = await asyncMapLimit(pageData, ocrConcurrency, async ({ page, originalBuffer }) => {
+    const cache = readEvidenceCache(userId, projectId, originalBuffer);
+    if (cache?.ocr) return cache.ocr;
+    const ocr = await runOcr(originalBuffer);
+    writeEvidenceCache(userId, projectId, originalBuffer, { ocr, width: page.width, height: page.height });
+    return ocr;
+  });
+
+  const m29Results = await asyncMapLimit(pageData, ocrConcurrency, async ({ page, originalBuffer }, i) => {
+    const ocr = ocrResults[i];
+    if (ocr.status !== "ok") return null;
+    const cache = readEvidenceCache(userId, projectId, originalBuffer);
+    if (cache?.m29Location) return cache.m29Location;
+    const m29 = await locateTextLinesWithM29({ imageBuffer: originalBuffer, width: page.width, height: page.height, ocr });
+    writeEvidenceCache(userId, projectId, originalBuffer, { ocr, m29Location: m29, width: page.width, height: page.height });
+    return m29;
+  });
+
+  const cpuCores = os.cpus?.()?.length ?? 4;
+  const workerConcurrency = Math.min(detail.pages.length, Math.max(2, Math.ceil(cpuCores / 2) - 1));
+  const pool = createPageWorkerPool(workerConcurrency);
+
+  const pageOutputs = await Promise.all(detail.pages.map((page, pageIndex) =>
+    pool.process({
+      originalBuffer: pageData[pageIndex].originalBuffer,
+      pageId: page.id,
+      width: page.width,
+      height: page.height,
+      pageIndex,
+      displayName: page.displayName,
+      slices: page.slices,
+      ocr: ocrResults[pageIndex],
+      m29Location: m29Results[pageIndex] ?? null
+    })
+  ));
+
+  pool.terminate();
+
   const frames: PencilNode[] = [];
   const textByPageId = new Map<string, PencilPageTextManifest>();
   const slicePlacements = new Map<string, PencilSlicePlacementManifest>();
   const frameXs = frameLayoutXPositions(detail.pages);
+
   for (const [pageIndex, page] of detail.pages.entries()) {
+    const out = pageOutputs[pageIndex];
     const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
-    const originalKey = originalKeysByPageId.get(page.id);
-    if (!originalKey) throw httpError(404, "Original image not found");
-    const originalBuffer = storage.read(originalKey, "Original image not found");
     const originalPath = `assets/originals/${pageDirectory}.png`;
     const remainderPath = `assets/visible/remainders/${pageDirectory}/remainder.png`;
-    const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
-    const pencilSliceImages = await Promise.all(page.slices.map((slice, sliceIndex) => preparePencilSliceImage(
-      slicePngs[sliceIndex],
-      slice.bbox,
-      slice.cutMode
-    )));
-    const textReconstruction = await reconstructTextLayers({
-      pageId: page.id,
-      width: page.width,
-      height: page.height,
-      imageBuffer: originalBuffer,
-      slices: page.slices,
-      ocr: await runOcr(originalBuffer)
-    });
-    const renderPlan = buildPageRenderPlan({
-      pageId: page.id,
-      pageDirectory,
-      width: page.width,
-      height: page.height,
-      textLayers: textReconstruction.layers,
-      slices: page.slices
-    });
+    const { slicePngs, pencilSliceImages, textReconstruction, renderPlan, remainderPng } = out;
+
     textByPageId.set(page.id, textManifest(textReconstruction));
-    files.push({ name: originalPath, data: originalBuffer });
-    files.push({
-      name: remainderPath,
-      data: await createRemainderPng(
-        originalBuffer,
-        page.slices.map((slice, sliceIndex) => ({ ...slice, png: slicePngs[sliceIndex] })),
-        renderPlan.remainder.textKnockouts,
-        renderPlan.remainder.surfaceKnockouts
-      )
-    });
+    files.push({ name: originalPath, data: pageData[pageIndex].originalBuffer });
+    files.push({ name: remainderPath, data: remainderPng });
 
     const children: PencilNode[] = [
       imageNode({
@@ -298,6 +317,21 @@ async function buildPencilDocument(
     textByPageId,
     slicePlacements
   };
+}
+
+async function asyncMapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
+    (async () => {
+      while (cursor < items.length) {
+        const i = cursor++;
+        results[i] = await fn(items[i], i);
+      }
+    })()
+  );
+  await Promise.all(workers);
+  return results;
 }
 
 async function resolveExportSources(userId: string, detail: ProjectDetail): Promise<{

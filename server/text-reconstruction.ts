@@ -60,6 +60,8 @@ type ReconstructOptions = {
   ocr: OcrResult;
   locator?: (input: { imageBuffer: Buffer; width: number; height: number; ocr: OcrResult }) => TextLocationResult | Promise<TextLocationResult>;
   textStyleResolver?: TextStyleResolver;
+  preDecodedRaw?: { data: Buffer; width: number; height: number };
+  preLocated?: TextLocationResult;
 };
 
 const fontFamily = "PingFang SC";
@@ -88,8 +90,10 @@ export async function reconstructTextLayers(options: ReconstructOptions): Promis
   const decisions: Array<{ decision: TextOwnershipDecision; reason: string }> = [];
   let textLocation: TextLocationResult | null = null;
   if (options.ocr.status === "ok") {
-    const raw = await sharp(options.imageBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    textLocation = await (options.locator || locateTextLinesWithM29)({
+    const raw = options.preDecodedRaw
+      ? { data: options.preDecodedRaw.data, info: { width: options.preDecodedRaw.width, height: options.preDecodedRaw.height, channels: 4 } }
+      : await sharp(options.imageBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    textLocation = options.preLocated || await (options.locator || locateTextLinesWithM29)({
       imageBuffer: options.imageBuffer,
       width: options.width,
       height: options.height,
