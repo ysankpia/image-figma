@@ -18,6 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build native pixel-ops
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          . "$HOME/.cargo/env"
+          cd native/pixel-ops
+          cargo build --release
+          cp target/release/libpixel_ops.so ../../server/pixel-ops.node
+
       - name: Install cloudflared
         run: |
           set -euo pipefail
@@ -63,6 +72,7 @@ jobs:
             --exclude='node_modules' \
             --exclude='storage' \
             --exclude='archive' \
+            --exclude='native/pixel-ops/target' \
             --exclude='*.sqlite' \
             --exclude='*.db' \
             --exclude='*.zip' \

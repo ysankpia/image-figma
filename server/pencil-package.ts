@@ -5,6 +5,7 @@ import { normalizeDefaultSliceNames } from "../shared/slice-names";
 import { cropSliceToPng } from "./shape-cutout";
 import type { TextReconstruction } from "./text-reconstruction";
 import type { SurfaceKnockout, TextKnockout } from "./render-plan";
+import { nativePixelOps } from "./native-ops";
 
 const pageFrameGap = 160;
 
@@ -196,6 +197,11 @@ async function clearAlphaBySliceMask(data: Buffer, width: number, height: number
 }
 
 function clearAlphaRect(data: Buffer, width: number, height: number, bbox: BBox): void {
+  if (nativePixelOps) {
+    const box = roundedBox(bbox, width, height);
+    nativePixelOps.clearAlphaRect(data, width, height, box.left, box.top, box.width, box.height);
+    return;
+  }
   const box = roundedBox(bbox, width, height);
   for (let y = box.top; y < box.top + box.height; y += 1) {
     const row = y * width;
@@ -214,6 +220,11 @@ function roundedBox(bbox: BBox, width: number, height: number): { left: number; 
 }
 
 function alphaContentBBox(data: Buffer, width: number, height: number): BBox | null {
+  if (nativePixelOps) {
+    const result = nativePixelOps.alphaContentBbox(data, width, height);
+    if (!result) return null;
+    return { x: result[0], y: result[1], width: result[2], height: result[3] };
+  }
   let left = width;
   let top = height;
   let right = -1;
@@ -292,6 +303,9 @@ function paintTextForeground(targetData: Buffer, sourceData: Buffer, width: numb
 
 function dilateTextMask(mask: Uint8Array, width: number, height: number, radius: number): Uint8Array {
   if (radius <= 0) return mask;
+  if (nativePixelOps) {
+    return nativePixelOps.dilateTextMask(Buffer.from(mask.buffer, mask.byteOffset, mask.byteLength), width, height, radius);
+  }
   const result = new Uint8Array(mask);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -331,6 +345,15 @@ function constrainMaskToClip(
 }
 
 function inpaintTextMask(targetData: Buffer, width: number, height: number, rect: PaintRect, mask: Uint8Array, fallback: Rgb): void {
+  if (nativePixelOps) {
+    nativePixelOps.inpaintTextMask(
+      targetData, width, height,
+      rect.left, rect.top, rect.width, rect.height,
+      Buffer.from(mask.buffer, mask.byteOffset, mask.byteLength),
+      fallback.r, fallback.g, fallback.b
+    );
+    return;
+  }
   const resolved = new Uint8Array(mask.length);
   let unresolved = 0;
   for (let index = 0; index < mask.length; index += 1) {
@@ -570,6 +593,7 @@ function isOwnerBandPixel(pixel: Rgb, fill: Rgb, background: Rgb): boolean {
 }
 
 function pointInsideRoundedRect(localX: number, localY: number, width: number, height: number, radius: number): boolean {
+  if (nativePixelOps) return nativePixelOps.pointInsideRoundedRect(localX, localY, width, height, radius);
   if (radius <= 0) return true;
   if (localX >= radius && localX <= width - radius) return true;
   if (localY >= radius && localY <= height - radius) return true;

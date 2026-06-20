@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import type { BBox, CutMode } from "../shared/types";
+import { nativePixelOps } from "./native-ops";
 
 type CropSlice = {
   bbox: BBox;
@@ -60,6 +61,19 @@ export async function cropSliceToPng(originalBuffer: Buffer, slice: CropSlice): 
 
 export function applyShapeCutout(source: Uint8Array, width: number, height: number, options: ShapeCutoutOptions = {}): Buffer {
   if (width < 4 || height < 4) return Buffer.from(source);
+
+  if (nativePixelOps) {
+    const target = options.targetBox;
+    return nativePixelOps.applyShapeCutout(
+      Buffer.from(source.buffer, source.byteOffset, source.byteLength),
+      width, height,
+      options.mode ?? null,
+      target ? target.left : null,
+      target ? target.top : null,
+      target ? target.width : null,
+      target ? target.height : null
+    );
+  }
 
   const background = estimateBackground(source, width, height);
   const threshold = background.threshold;
