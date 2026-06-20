@@ -11,22 +11,25 @@ import {
 import { validatePencilPackage, type PencilDocument, type PencilNode } from "./pencil-contract";
 import {
   buildPencilManifest,
+  createRemainderPng,
   frameLayoutXPositions,
+  preparePencilSliceImage,
   type PencilPageTextManifest,
   type PencilSlicePlacementManifest
 } from "./pencil-package";
 import { getPageOriginalKey, getProjectDetail } from "./projects";
+import { buildPageRenderPlan } from "./render-plan-builder";
 import type { ControlSurfaceLayer } from "./render-plan";
 import { readEvidenceCache, writeEvidenceCache } from "./ocr-cache";
 import { locateTextLinesWithM29, type TextLocationResult } from "./m29-text-locator";
-import { createPageWorkerPool } from "./page-worker-pool";
+import sharp from "sharp";
+import { cropSliceToPng } from "./shape-cutout";
 import { storage } from "./storage";
 import { runOcr } from "./text-ocr";
-import { type TextLayer, type TextReconstruction } from "./text-reconstruction";
+import { reconstructTextLayers, type TextLayer, type TextReconstruction } from "./text-reconstruction";
 import { pageExportDirectory } from "../shared/manifest";
 import type { BBox, ProjectDetail } from "../shared/types";
 import { createZipBuffer, type ZipFile } from "../shared/zip";
-import os from "node:os";
 
 const penVersion = "2.11";
 const pencilExporterVersion = [
@@ -190,25 +193,42 @@ async function buildPencilDocument(
     return m29;
   });
 
-  const cpuCores = os.cpus?.()?.length ?? 4;
-  const workerConcurrency = Math.min(detail.pages.length, Math.max(2, Math.ceil(cpuCores / 2) - 1));
-  const pool = createPageWorkerPool(workerConcurrency);
-
-  const pageOutputs = await Promise.all(detail.pages.map((page, pageIndex) =>
-    pool.process({
-      originalBuffer: pageData[pageIndex].originalBuffer,
+  const pageOutputs = await Promise.all(detail.pages.map(async (page, pageIndex) => {
+    const originalBuffer = pageData[pageIndex].originalBuffer;
+    const rawOriginal = await sharp(originalBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const preDecodedRaw = { data: rawOriginal.data, width: rawOriginal.info.width, height: rawOriginal.info.height };
+    const slicePngs = await Promise.all(page.slices.map((slice) => cropSliceToPng(originalBuffer, slice)));
+    const pencilSliceImages = await Promise.all(page.slices.map((slice, sliceIndex) => preparePencilSliceImage(
+      slicePngs[sliceIndex], slice.bbox, slice.cutMode
+    )));
+    const textReconstruction = await reconstructTextLayers({
       pageId: page.id,
       width: page.width,
       height: page.height,
-      pageIndex,
-      displayName: page.displayName,
+      imageBuffer: originalBuffer,
       slices: page.slices,
       ocr: ocrResults[pageIndex],
-      m29Location: m29Results[pageIndex] ?? null
-    })
-  ));
-
-  pool.terminate();
+      preDecodedRaw,
+      preLocated: m29Results[pageIndex] ?? undefined
+    });
+    const pageDirectory = pageExportDirectory(page.pageIndex || pageIndex + 1, page.displayName);
+    const renderPlan = buildPageRenderPlan({
+      pageId: page.id,
+      pageDirectory,
+      width: page.width,
+      height: page.height,
+      textLayers: textReconstruction.layers,
+      slices: page.slices
+    });
+    const remainderPng = await createRemainderPng(
+      originalBuffer,
+      page.slices.map((slice, sliceIndex) => ({ ...slice, png: slicePngs[sliceIndex] })),
+      renderPlan.remainder.textKnockouts,
+      renderPlan.remainder.surfaceKnockouts,
+      { data: rawOriginal.data, width: rawOriginal.info.width, height: rawOriginal.info.height }
+    );
+    return { pageId: page.id, pageIndex, slicePngs, pencilSliceImages, textReconstruction, renderPlan, remainderPng };
+  }));
 
   const frames: PencilNode[] = [];
   const textByPageId = new Map<string, PencilPageTextManifest>();
