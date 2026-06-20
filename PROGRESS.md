@@ -3,11 +3,11 @@
 This file is the live execution ledger for Image-to-Figma Design. It does not replace `docs/roadmap.md`, active plans, bug records, or validation docs.
 
 ## Current objective
-Export/download speedup completed: CRC32 native, OCR/evidence caching, OCR page concurrency, Bun Workers for per-page CPU parallelism. Next focus: production validation and timing measurement.
+Export/download speedup completed: CRC32 native, OCR/evidence caching, OCR page concurrency, Promise.all page concurrency, Rust napi-rs native pixel operations. Awaiting production timing feedback.
 
 ## Active plan
 - Current execution plan: none.
-- Most recently completed: `docs/plans/active/206-export-download-speedup.md` (phase 1+2 done)
+- Most recently completed: `docs/plans/completed/206-export-download-speedup.md` (3 phases done: TS quick wins, evidence caching+parallelism, Rust napi-rs)
 - Prior completed: `docs/plans/completed/205-local-streaming-download-hardening.md`
 - Prior completed: `docs/plans/completed/204-export-job-observability-and-stuck-queue.md`
 - Prior completed: `docs/plans/completed/203-single-user-workbench-preferences.md`
@@ -29,14 +29,16 @@ Export/download speedup completed: CRC32 native, OCR/evidence caching, OCR page 
 Awaiting next production usability pass
 
 ## Now
-- 2026-06-20: completed plan 206 export/download speedup phase 1+2. Changes delivered:
+- 2026-06-20: deployed Rust napi-rs native pixel-ops module. `native/pixel-ops/` contains 6 functions compiled to `server/pixel-ops.node` (Linux x86-64 via CI). All per-pixel hot loops (inpaint, dilate, alpha clear/bbox, shape cutout, rounded rect) now run in Rust with JS fallback. CI build verified: ELF 64-bit LSB shared object, 481KB, all symbols load correctly on RackNerd. Awaiting user timing test.
+- 2026-06-20: production feedback showed 7-page project export still slow with Bun Workers.
+- 2026-06-20: completed plan 206 export/download speedup phase 1+2.
   - **F**: `shared/zip.ts` CRC32 → `node:zlib.crc32` (10MB 107ms→1ms, verified equivalent)
   - **G**: `server/storage.ts` added `readAsync()` with `Bun.file().arrayBuffer()`
   - **E**: `server/exporter.ts` slice cropping `for...of`→`Promise.all`
   - **D**: `server/pencil-package.ts` `createRemainderPng` accepts optional `preDecoded` raw to avoid re-decoding
   - **A**: `server/ocr-cache.ts` — OCR/M29 evidence cache keyed by original image content SHA256 + provider version; `server/text-reconstruction.ts` accepts `preDecodedRaw` + `preLocated` params
   - **B**: `server/pencil-exporter.ts` OCR+M29 gathered concurrently across pages (limit 3) with caching, before synthesis
-  - **C**: `server/export-page-worker.ts` (Bun Worker, sharp.concurrency(1)) + `server/page-worker-pool.ts` — per-page CPU synthesis (crop, pencil prep, text reconstruction, remainder, render plan) parallelized across Bun Workers
+  - **C**: Initial attempt used Bun Workers (`server/export-page-worker.ts` + `server/page-worker-pool.ts`) for per-page CPU parallelism, but production testing showed oversubscription on low-core RackNerd VPS and worker module loading overhead outweighed gains. Replaced with `Promise.all` across pages — sharp async operations overlap naturally via libvips thread pool, no worker overhead.
   - Validation: `pnpm run check` (typecheck + 15 files / 124 tests), `pnpm run build`, `git diff --check`. No new native dependencies — Bun Workers zero-install.
   - Files: 6 modified, 4 new. Timing comparison on multi-page projects pending production deployment.
 - 2026-06-20: completed plan 205 for local large-file download hardening without OSS. CodeGraph/code audit confirmed the download path was already streaming with `Bun.file()` and not queued; the slow wait is normally first-time zip generation, while zip materialization still builds a complete buffer before writing to local storage. This pass added `Content-Length`, `Accept-Ranges: bytes`, single-range `206 Partial Content`, and `416` handling to `storage.response()`, passed `Range` through signed downloads, originals, thumbnails, `assets.zip`, current-page `project.zip`, and full `project.zip`, and documented the download/generation boundary. Validation passed: `pnpm exec vitest run tests/storage.test.ts tests/storage-download.test.ts` (9 tests), `pnpm run typecheck`, `pnpm run check` (15 files / 124 tests), `pnpm run build`, and `git diff --check`.
