@@ -7,6 +7,7 @@ export type PluginToMainMessage =
       bytes: ArrayBuffer | Uint8Array | number[];
     }
   | { type: "render-sample" }
+  | { type: "render-slice-studio-dsl"; dslUrl: string }
   | { type: "cancel" };
 
 export type MainToPluginMessage =

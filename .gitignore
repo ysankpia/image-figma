@@ -76,3 +76,5 @@ archive/legacy-code/**/*.db
 
 runs
 native/pixel-ops/target/
+
+.playwright-mcp

@@ -17,6 +17,7 @@ import { HttpError, httpError } from "./errors";
 import { cancelExportJob, createExportJob, getExportJob, listExportJobs } from "./export-jobs";
 import { exportAssets } from "./exporter";
 import { exportPencilProject, exportPencilProjectPage } from "./pencil-exporter";
+import { exportFigmaDsl } from "./export-figma-dsl";
 import { cropSliceToPng } from "./shape-cutout";
 import { generateAiSliceBoxes } from "./ai-slice-boxes";
 import { storage } from "./storage";
@@ -223,6 +224,7 @@ const app = new Elysia({
   })
   .post("/api/projects/:projectId/export-project", async ({ request, params }) => exportPencilProject((await requireUser(request)).id, params.projectId))
   .post("/api/projects/:projectId/pages/:pageId/export-project", async ({ request, params }) => exportPencilProjectPage((await requireUser(request)).id, params.projectId, params.pageId))
+  .get("/api/projects/:projectId/pages/:pageId/figma-dsl", async ({ request, params }) => exportFigmaDsl((await requireUser(request)).id, params.projectId, params.pageId))
   .get("/api/projects/:projectId/pages/:pageId/project.zip", async ({ request, params }) => {
     const user = await requireUser(request);
     await assertProjectExists(user.id, params.projectId);

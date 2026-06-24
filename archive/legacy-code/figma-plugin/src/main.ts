@@ -58,6 +58,11 @@ figma.ui.onmessage = async (message: PluginToMainMessage) => {
       return;
     }
 
+    if (message.type === "render-slice-studio-dsl") {
+      await renderSliceStudioDsl(message.dslUrl);
+      return;
+    }
+
     postToUI({
       type: "status",
       message: "Unsupported plugin action.",
@@ -76,6 +81,25 @@ figma.ui.onmessage = async (message: PluginToMainMessage) => {
 };
 
 postToUI({ type: "plugin-state", state: PLUGIN_STATE });
+
+async function renderSliceStudioDsl(dslUrl: string): Promise<void> {
+  postToUI({ type: "render-started", source: "draft" });
+  postToUI({ type: "status", message: "Fetching DSL from Slice Studio.", tone: "normal" });
+
+  const response = await fetch(dslUrl);
+  if (!response.ok) throw new Error(`Failed to fetch DSL: ${response.status} ${response.statusText}`);
+  const dsl = await response.json();
+
+  const serverBase = new URL(dslUrl).origin;
+  postToUI({ type: "status", message: "Writing design to Figma.", tone: "normal" });
+  const result = await renderDraftRuntimeDesign(dsl, {
+    figma: createFigmaAdapter(figma as never),
+    validate: true,
+    createOriginalReference: false,
+    assetBaseUrl: serverBase
+  });
+  reportRenderResult(result);
+}
 
 async function renderSampleDesign(): Promise<void> {
   postToUI({ type: "render-started", source: "sample" });

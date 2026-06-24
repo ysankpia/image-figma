@@ -306,6 +306,15 @@
           </div>
         </section>
 
+        <section class="upload-card" style="margin-top:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Import from Slice Studio</div>
+          <div class="file-row" style="gap:6px">
+            <input id="dslUrlInput" type="text" placeholder="http://127.0.0.1:4110/api/projects/…/pages/…/figma-dsl"
+              style="flex:1;font:inherit;font-size:11px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;outline:none;color:var(--text);background:var(--bg)" />
+            <button id="importDslButton" class="button button-primary" type="button" style="white-space:nowrap">Import</button>
+          </div>
+        </section>
+
         <section class="warning-card">
           <div id="warningHeader" class="warning-header">Warnings</div>
           <ul id="warningList" class="warning-list">
@@ -387,6 +396,17 @@
         setStatus("Rendering", "Writing the bundled sample to Figma.", "normal");
         setWarnings([]);
         postPluginMessage({ type: "render-sample" });
+      });
+
+      const dslUrlInput = document.getElementById("dslUrlInput");
+      const importDslButton = document.getElementById("importDslButton");
+      importDslButton.addEventListener("click", () => {
+        const url = dslUrlInput.value.trim();
+        if (!url) { setStatus("Failed", "Enter a DSL endpoint URL.", "error"); return; }
+        updateButtons(true);
+        setStatus("Importing", "Fetching DSL from Slice Studio.", "normal");
+        setWarnings([]);
+        postPluginMessage({ type: "render-slice-studio-dsl", dslUrl: url });
       });
 
       closeButton.addEventListener("click", () => {
