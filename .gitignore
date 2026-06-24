@@ -78,3 +78,8 @@ runs
 native/pixel-ops/target/
 
 .playwright-mcp
+
+# Local reconstruction preview artifacts
+/dsl-preview*.png
+/public/preview*.html
+/public/preview*-shot.png

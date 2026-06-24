@@ -59,6 +59,11 @@ Slice Studio API:
 
 ```text
 GET    /api/health
+GET    /api/storage-download?token=...
+GET    /api/auth/session
+POST   /api/auth/sign-up
+POST   /api/auth/sign-in
+POST   /api/auth/sign-out
 GET    /api/ai-slice-settings
 GET    /api/projects
 POST   /api/projects
@@ -72,12 +77,15 @@ POST   /api/projects/:projectId/pages/:pageId/replace
 DELETE /api/projects/:projectId/pages/:pageId
 POST   /api/projects/:projectId/pages/:pageId/ai-boxes
 GET    /api/projects/:projectId/pages/:pageId/source
+GET    /api/projects/:projectId/pages/:pageId/thumbnail
 PUT    /api/projects/:projectId/slices
 GET    /api/projects/:projectId/slices/:sliceId/preview.png
 POST   /api/projects/:projectId/export-assets
 GET    /api/projects/:projectId/assets.zip
 POST   /api/projects/:projectId/export-project
+POST   /api/projects/:projectId/pages/:pageId/export-project
 GET    /api/projects/:projectId/project.zip
+GET    /api/projects/:projectId/pages/:pageId/project.zip
 ```
 
 The older assisted-slice Python endpoints under `/api/pencil/slice-projects/*` are historical/reference unless a task explicitly targets that service. Go Draft `/api/draft-preview`, Python `/api/upload-preview`, Codia-like generation, and Figma plugin/Renderer paths are not the current default delivery route.
