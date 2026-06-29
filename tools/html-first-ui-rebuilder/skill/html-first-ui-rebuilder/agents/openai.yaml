@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTML-first UI Rebuilder"
+  short_description: "Extract assets and rebuild UI as HTML"
+  default_prompt: "Use $html-first-ui-rebuilder to turn a UI screenshot into extracted assets, preview.html, and a validation report."

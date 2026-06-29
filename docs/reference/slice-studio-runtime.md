@@ -20,7 +20,7 @@ Text style: http://127.0.0.1:4120
 Current production deployment:
 
 ```text
-URL: https://image.figma.245162.xyz
+URL: https://image.245162.xyz
 Server: racknerd / 192.236.242.152
 Deploy path: /opt/slice-studio/app
 Storage path: /opt/slice-studio/storage

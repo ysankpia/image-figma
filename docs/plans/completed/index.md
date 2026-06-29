@@ -2,6 +2,11 @@
 
 本索引列出已移出 `docs/plans/active/` 的计划。
 
+- [213 Python M29 locator parity](213-py-m29-locator-parity.md) — `completed`
+- [212 Go M29 standalone minimal locator](212-go-m29-standalone-minimal-locator.md) — `completed`
+- [211 Go M29 standalone physical evidence](211-go-m29-standalone-physical-evidence.md) — `completed`
+- [210 HTML-first full-page Qwen pass](210-html-first-full-page-qwen-pass.md) — `completed`
+- [209 HTML-first UI Rebuilder](209-html-first-ui-rebuilder.md) — `completed`
 - [205 本地流式下载加固](205-local-streaming-download-hardening.md) — `completed`
 - [204 导出任务可观测与卡队列修复](204-export-job-observability-and-stuck-queue.md) — `completed`
 - [203 单人版工作台偏好设置](203-single-user-workbench-preferences.md) — `completed`

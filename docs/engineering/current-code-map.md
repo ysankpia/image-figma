@@ -119,6 +119,49 @@ visible .pen refs must be package-local
 
 ## Reference And Superseded Surfaces
 
+## Standalone Experiments
+
+`tools/html-first-ui-rebuilder/` is an independent Python-first skill/CLI for the new HTML-first route:
+
+```text
+UI screenshot
+-> asset_plan.json
+-> full-page Qwen layers / connected components
+-> clean ROI crops
+-> asset sheets
+-> optional ROI Qwen-Image-Layered retry layers
+-> extracted assets
+-> preview.html / report.md
+```
+
+It is deliberately not wired into Slice Studio, the SQLite project state, `manual_ui_slices.v1`, Go Draft, Renderer, or the historical Figma plugin.
+
+`tools/go-m29-physical-evidence/` is an independent minimal Go M29.0 locator:
+
+```text
+input PNG
+-> foreground mask
+-> connected components
+-> original-image pixel bboxes
+-> m29_locations.v1.json
+-> crops/loc_*.png
+```
+
+It is deliberately not wired into Slice Studio. The current default Slice Studio path remains `server/m29-physical-evidence/`; this standalone module exists for isolated coordinate extraction and matching crop output without editing `archive/legacy-code/services/backend-go/`. It does not include OCR, evidence tokens, Draft, vision, overlays, preview sheets, or relation graph output.
+
+`tools/py-m29-locator/` is an independent Python port of that standalone Go locator:
+
+```text
+input PNG
+-> foreground mask
+-> connected components
+-> original-image pixel bboxes
+-> m29_locations.v1.json
+-> crops/loc_*.png
+```
+
+It is also not wired into Slice Studio. Its acceptance target is matching coordinate JSON and crop output. Small measurement-only floating-point differences from Go around edge-density thresholds are accepted and should not be fixed with image-specific logic.
+
 These directories are retained but are not the default product entrypoint:
 
 | Path | Current status | Rule |

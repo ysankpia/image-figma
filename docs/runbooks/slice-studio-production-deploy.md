@@ -5,7 +5,7 @@ Last verified: 2026-06-19
 ## Current Production Surface
 
 ```text
-Domain: https://image.figma.245162.xyz
+Domain: https://image.245162.xyz
 Server: racknerd / 192.236.242.152
 App path: /opt/slice-studio/app
 Storage path: /opt/slice-studio/storage
@@ -95,8 +95,8 @@ SLICE_STUDIO_LOAD_LOCAL_ENV=false
 SLICE_STUDIO_API_HOST=127.0.0.1
 SLICE_STUDIO_API_PORT=4110
 SLICE_STUDIO_API_URL=http://127.0.0.1:4110
-SLICE_STUDIO_PUBLIC_API_URL=https://image.figma.245162.xyz
-SLICE_STUDIO_ALLOWED_ORIGIN=https://image.figma.245162.xyz,http://127.0.0.1:3010
+SLICE_STUDIO_PUBLIC_API_URL=https://image.245162.xyz
+SLICE_STUDIO_ALLOWED_ORIGIN=https://image.245162.xyz,http://127.0.0.1:3010
 SLICE_STUDIO_STORAGE_ROOT=/opt/slice-studio/storage
 SLICE_STUDIO_AUTH_SECURE_COOKIES=true
 SLICE_STUDIO_DATABASE_PROVIDER=postgres
@@ -133,9 +133,9 @@ ssh racknerd 'curl -fsS http://127.0.0.1:4120/health'
 ssh racknerd 'curl -fsS http://127.0.0.1:4110/api/health'
 ssh racknerd 'curl -fsSI http://127.0.0.1:3010 | sed -n "1,12p"'
 ssh racknerd 'cd /opt/slice-studio/app && css_asset="$(find .next/static/chunks -maxdepth 1 -name "*.css" -printf "%f\n" | head -n 1)" && test -n "$css_asset" && curl -fsSI "http://127.0.0.1:3010/_next/static/chunks/$css_asset" | sed -n "1,12p"'
-curl -fsSI http://image.figma.245162.xyz
-curl -fsSI https://image.figma.245162.xyz
-curl -fsS https://image.figma.245162.xyz/api/health
+curl -fsSI http://image.245162.xyz
+curl -fsSI https://image.245162.xyz
+curl -fsS https://image.245162.xyz/api/health
 ```
 
 The 2026-06-19 production smoke after Postgres/PSD-like cutover passed:
@@ -163,7 +163,7 @@ export project.zip / design.pen
 delete temporary project
 ```
 
-During cutover, Cloudflare-proxied public HTTPS briefly returned TLS handshake failures while direct source-origin HTTPS with `--resolve image.figma.245162.xyz:443:192.236.242.152` worked. Caddy then completed certificate issuance/propagation and normal public HTTPS recovered. If this recurs, first compare normal DNS vs `--resolve` source-origin access; when source-origin works and Cloudflare fails, investigate Cloudflare SSL/TLS mode, edge certificate status, DNS proxy state, and whether the domain should temporarily be DNS-only while using the Caddy origin certificate.
+During cutover, Cloudflare-proxied public HTTPS briefly returned TLS handshake failures while direct source-origin HTTPS with `--resolve image.245162.xyz:443:192.236.242.152` worked. Caddy then completed certificate issuance/propagation and normal public HTTPS recovered. If this recurs, first compare normal DNS vs `--resolve` source-origin access; when source-origin works and Cloudflare fails, investigate Cloudflare SSL/TLS mode, edge certificate status, DNS proxy state, and whether the domain should temporarily be DNS-only while using the Caddy origin certificate.
 
 ## HTTPS
 
@@ -172,7 +172,7 @@ Caddy owns ports 80 and 443 through Docker container `sub2api-caddy` using `netw
 The Caddy site block is:
 
 ```caddy
-image.figma.245162.xyz {
+image.245162.xyz {
     encode zstd gzip
     reverse_proxy /api/* 127.0.0.1:4110
     reverse_proxy 127.0.0.1:3010
@@ -181,7 +181,7 @@ image.figma.245162.xyz {
 
 Do not route `/api/*` through the Next standalone server in production. Long exports can exceed the Next proxy path's practical timeout and return a plain 500 around 30 seconds even though `127.0.0.1:4110` succeeds.
 
-Caddy obtained a Let's Encrypt certificate for `image.figma.245162.xyz` on 2026-06-18 UTC. Certificate renewal is handled by Caddy using its persistent Docker volumes:
+Caddy obtained a Let's Encrypt certificate for `image.245162.xyz` on 2026-06-18 UTC. Certificate renewal is handled by Caddy using its persistent Docker volumes:
 
 ```text
 sub2api_caddy_data

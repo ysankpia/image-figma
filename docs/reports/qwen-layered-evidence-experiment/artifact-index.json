@@ -1,0 +1,100 @@
+{
+  "sample": {
+    "sourceImage": "/Users/luhui/Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/xwechat_files/wxid_bzp8y3r5qua022_8778/temp/RWTemp/2026-06/6c5f250424fe9df975d60577d700a448.jpg",
+    "size": [
+      853,
+      1844
+    ]
+  },
+  "tmpRoot": "/private/tmp/qwen-layered-probe",
+  "reportAssets": [
+    "docs/reports/qwen-layered-evidence-experiment/assets/deki-yolo-overlay.png",
+    "docs/reports/qwen-layered-evidence-experiment/assets/mainline-ai-filtered-overlay.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/mainline-ai-tile-only-overlay.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/psd-like-overlay.png",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-boxed-filtered-no-giant-contact.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-boxed-tile-only-contact.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-full-steps50-contact.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-m29-preprocess-contact.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-roi-hero-contact.jpg",
+    "docs/reports/qwen-layered-evidence-experiment/assets/qwen-roi-recommendation-contact.jpg"
+  ],
+  "runs": {
+    "qwenFullSteps15": "/private/tmp/qwen-layered-probe",
+    "qwenFullSteps50": "/private/tmp/qwen-layered-probe/layers4_steps50",
+    "m29Evidence": "/private/tmp/qwen-layered-probe/m29/m29-physical-evidence.json",
+    "dekiYolo": "/private/tmp/qwen-layered-probe/deki-yolo/deki_yolo_candidates.v1.json",
+    "psdLikeBaseline": "/private/tmp/qwen-layered-probe/psd-like-baseline",
+    "psdLikeV3Deki": "/private/tmp/qwen-layered-probe/psd-like-v3-deki",
+    "mainlineAiBoxes": "/private/tmp/qwen-layered-probe/mainline-ai-boxes",
+    "roiQwen": "/private/tmp/qwen-layered-probe/roi-qwen",
+    "boxedInputQwen": "/private/tmp/qwen-layered-probe/boxed-input-qwen",
+    "m29PreprocessQwen": "/private/tmp/qwen-layered-probe/m29-preprocess-qwen"
+  },
+  "metrics": {
+    "qwenFullSteps15": {
+      "elapsedSec": 34.19,
+      "outputSize": [
+        448,
+        928
+      ],
+      "mae": 8.864,
+      "psnr": 24.35
+    },
+    "qwenFullSteps50": {
+      "elapsedSec": 56.63,
+      "outputSize": [
+        448,
+        928
+      ],
+      "mae": 6.599,
+      "psnr": 25.99
+    },
+    "m29": {
+      "primitiveCount": 465,
+      "symbolRegion": 446,
+      "imageRegion": 6,
+      "rect": 3,
+      "unknownRegion": 3,
+      "line": 7
+    },
+    "dekiYolo": {
+      "candidateCount": 130,
+      "ImageView": 49,
+      "View": 19,
+      "Text": 60,
+      "Line": 2
+    },
+    "psdLikeBaseline": {
+      "raster": 43,
+      "shape": 22,
+      "text": 0,
+      "rejected": 44
+    },
+    "psdLikeV3Deki": {
+      "raster": 43,
+      "shape": 22,
+      "deki": 130,
+      "dekiImageViewRasterAccepted": 0
+    },
+    "mainlineAiBoxes": {
+      "elapsedSec": 118,
+      "tileCount": 7,
+      "rawBoxCount": 42,
+      "acceptedBoxCount": 25,
+      "rejectedBoxCount": 17
+    },
+    "roiQwen": {
+      "categoryStripElapsedSec": 60.8,
+      "recommendationListElapsedSec": 99.09,
+      "heroRegionElapsedSec": 51.19
+    },
+    "boxedInputQwen": {
+      "filteredNoGiantElapsedSec": 58.9,
+      "tileOnlyElapsedSec": 123.51
+    },
+    "m29PreprocessQwen": {
+      "elapsedSec": 33.98
+    }
+  }
+}

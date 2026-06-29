@@ -1,0 +1,11 @@
+[project]
+name = "py-m29-locator"
+version = "0.1.0"
+description = "Python parity port of the standalone Go M29.0 locator."
+requires-python = ">=3.11"
+dependencies = [
+  "Pillow>=10",
+]
+
+[project.scripts]
+py-m29-locate = "py_m29_locator.cli:main"
